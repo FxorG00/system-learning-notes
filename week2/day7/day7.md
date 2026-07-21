@@ -187,7 +187,7 @@ Buffer 的资源会不会泄漏或 double free？
 Buffer(Buffer&& other) noexcept;
 ```
 
-标准库知道移动不会抛异常，就更有信心使用 move 搬运元素。
+标准库知道移动不会抛异常，就**更有信心**使用 move 搬运元素。
 
 如果移动可能抛异常，而 copy 又可用，标准库为了尽量保持原容器状态，可能选择 copy。
 
