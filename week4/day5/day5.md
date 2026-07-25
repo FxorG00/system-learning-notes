@@ -101,7 +101,7 @@ fd 表
 PID、父进程关系、退出状态等内核记录
 ```
 
-程序文件是磁盘上的代码；进程是这份程序的**一次运行**。相同程序可以同时对应多个进程。
+程序文件是磁盘上的代码；进程是这份程序的一次运行。相同程序可以同时对应多个进程。
 
 ### 3.2 PID 与 PPID
 
@@ -996,18 +996,232 @@ cat buffered.txt
 
 ## 10. `return`、`exit`、`_exit` 当前层次对照
 
-| 写法 | 自动离开 `main` 的局部对象 | 用户态 stdio 刷新 | `atexit` 处理 | 进程终止 |
+这三种写法最后都会让进程终止，区别在于：**终止前，用户态的收尾工作做到了哪一步。**
+
+先把表格中的三个词讲清楚：
+
+```text
+main 的局部对象析构：
+main 里创建的 C++ 局部对象，在正常离开作用域时会调用析构函数。
+
+用户态 stdio 刷新：
+printf 的文字可能暂存在 C 标准库的用户态缓冲区中；
+刷新后才会通过 write 之类的系统调用真正交给内核。
+
+atexit 处理：
+std::atexit 可以提前登记一个函数，程序正常终止时调用它做收尾。
+```
+
+再看表格：
+
+| 写法 | `main` 中局部对象正常析构 | 用户态 stdio 刷新 | `atexit` 回调 | 进程终止 |
 |---|---:|---:|---:|---:|
 | `return code;` from `main` | 是 | 是 | 是 | 是 |
-| `std::exit(code);` | 不对普通调用栈做正常展开 | 是 | 是 | 是 |
+| `std::exit(code);` | 否，不正常退出当前调用栈 | 是 | 是 | 是 |
 | `::_exit(code);` | 否 | 否 | 否 | 是 |
 
 当前记忆方式：
 
 ```text
-return from main：正常离开 main
-exit：做用户态正常终止处理再退出
-_exit：绕过用户态收尾，直接让内核终止进程
+return from main：沿正常路径离开 main，再终止程序
+std::exit：不再沿调用栈一层层返回，但仍执行进程级的用户态收尾
+_exit：跳过上述用户态收尾，直接请求内核终止当前进程
+```
+
+### 10.1 先看一个具体调用场景
+
+假设当前执行到：
+
+```text
+main
+  -> 创建局部对象 local
+  -> printf 写了一段还没刷新的文字
+  -> 登记一个 atexit 回调
+  -> 选择一种方式结束
+```
+
+三条路径分别是：
+
+```text
+return from main
+  -> 正常离开 main
+  -> local 析构
+  -> atexit 回调
+  -> 刷新 stdio
+  -> 进程终止
+
+std::exit
+  -> 不再正常离开 main
+  -> local 不析构
+  -> atexit 回调
+  -> 刷新 stdio
+  -> 进程终止
+
+_exit
+  -> local 不析构
+  -> 不调用 atexit
+  -> 不刷新 stdio
+  -> 内核直接终止进程
+```
+
+这里先不用死记 `atexit` 与 stdio 刷新的内部先后；今天需要记住的是它们是否发生。
+
+### 10.2 可运行实验：亲眼看三种退出方式
+
+可选文件：`exit_demo.cpp`
+
+#### 整体功能
+
+程序布置三种可观察状态：
+
+```text
+Tracer local        -> 析构时向 stderr 报告
+atexit_handler      -> 被调用时向 stderr 报告
+printf              -> 向 stdout 写入一段不主动刷新的文字
+```
+
+然后根据参数选择 `return`、`std::exit` 或 `::_exit`。这样一次实验就能观察析构、回调和缓冲区刷新。
+
+#### 完整代码
+
+```cpp
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <unistd.h>
+
+// 把观察信息写到 stderr 并立即刷新。
+// 输入：message 是以 '\0' 结尾的说明文字；无返回值，也不转移资源所有权。
+// 这里显式刷新，是为了让实验只考察 stdout 缓冲区，而不受 stderr 缓冲影响。
+void report(const char* message) {
+    std::fputs(message, stderr);
+    std::fflush(stderr);
+}
+
+class Tracer {
+public:
+    ~Tracer() {
+        report("local destructor ran\n");
+    }
+};
+
+// 这是交给 std::atexit 登记的进程退出回调。
+// 正常终止流程会调用它，::_exit 不会调用它。
+void at_exit_handler() {
+    report("atexit handler ran\n");
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        std::fprintf(stderr, "usage: %s return|exit|_exit\n", argv[0]);
+        return 2;
+    }
+
+    Tracer local;
+
+    if (std::atexit(at_exit_handler) != 0) {
+        std::fprintf(stderr, "atexit registration failed\n");
+        return 1;
+    }
+
+    // 没有换行，也没有 fflush(stdout)。重定向到文件后，
+    // 这段文字通常仍留在 C stdio 的用户态缓冲区中。
+    std::printf("buffered stdout");
+
+    if (std::strcmp(argv[1], "return") == 0) {
+        return 11;
+    }
+
+    if (std::strcmp(argv[1], "exit") == 0) {
+        std::exit(22);
+    }
+
+    if (std::strcmp(argv[1], "_exit") == 0) {
+        ::_exit(33);
+    }
+
+    std::fprintf(stderr, "unknown mode: %s\n", argv[1]);
+    return 2;
+}
+```
+
+代码中的 `local` 看起来“没有被使用”，但它的用途就是观察生命周期：正常离开 `main` 时，析构函数会留下 `local destructor ran`。
+
+### 10.3 编译和分别运行
+
+```bash
+g++ -std=c++17 -Wall -Wextra -g exit_demo.cpp -o exit_demo
+
+./exit_demo return > return.txt
+echo $?
+cat return.txt
+
+./exit_demo exit > exit.txt
+echo $?
+cat exit.txt
+
+./exit_demo _exit > _exit.txt
+echo $?
+cat _exit.txt
+```
+
+`echo $?` 必须紧跟在对应程序之后，它显示上一条命令的退出码。
+
+### 10.4 预期观察
+
+#### `return` 模式
+
+终端上的 `stderr`：
+
+```text
+local destructor ran
+atexit handler ran
+```
+
+退出码是 `11`，`return.txt` 中有：
+
+```text
+buffered stdout
+```
+
+原因：正常离开 `main`，所以局部对象析构；随后正常终止流程调用 `atexit` 回调并刷新 stdio。
+
+#### `exit` 模式
+
+终端上的 `stderr` 只有：
+
+```text
+atexit handler ran
+```
+
+退出码是 `22`，`exit.txt` 中仍有：
+
+```text
+buffered stdout
+```
+
+原因：`std::exit` 不会正常返回并展开当前调用栈，所以 `local` 没有析构；但它仍执行 `atexit` 回调并刷新 stdio。
+
+#### `_exit` 模式
+
+终端上不会出现析构或 `atexit` 的报告。退出码是 `33`，`_exit.txt` 应为空。
+
+原因：`::_exit` 直接请求内核终止进程。那段 `printf` 文字仍在 C 标准库管理的用户态内存中，内核并不知道那里还有待写出的字节。
+
+### 10.5 最容易混淆的一点：关闭 fd 不等于刷新 stdio
+
+`::_exit` 终止进程时，内核会关闭这个进程仍打开的 fd。但是：
+
+```text
+printf 缓冲区：属于用户态 C 标准库
+fd：属于进程访问内核对象的编号
+```
+
+内核关闭 fd 时，只能处理它知道的内核状态；它不会替 C 标准库读取用户态缓冲区，再猜测哪些字节本来准备写入。因此：
+
+```text
+先 fflush(stdout)，再 _exit -> 已刷新的文字可以留下
+直接 _exit              -> 尚在用户态缓冲区的文字会丢失
 ```
 
 不要把“内核最终关闭 fd”与“用户态输出缓冲区得到刷新”混成一件事。`close(fd)` 管的是内核 fd 引用；`fflush`/流刷新管的是用户态尚未提交的数据。

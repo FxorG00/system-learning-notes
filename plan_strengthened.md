@@ -1,8 +1,9 @@
 ﻿# plan.md：C++ 主线系统工程 / AI Infra 准备路线（200 篇面经强化版）
 
-> 版本：2026-07-05  
+> 版本：2026-07-22  
 > 定位：近期去掉 Go，先把 **C++ / Linux / OS / 网络 / 系统项目 / 面试表达** 打硬；中途穿插 MIT 6.S081 和 CMU 15-445，但不让它们抢主线。  
-> 总目标：本科阶段拿到技术密度高的实习 / 工作机会，长期往基础架构、云平台、中间件、数据库/存储、AI Infra 方向延展。
+> 学习者背景：中山大学计算机科学与技术专业，2026 年 7 月处于准大二阶段；按常规四年制节奏对应 2029 届，如实际毕业时间变化再同步调整。
+> 总目标：本科毕业直接就业，主目标为 AI Infra，优先聚焦 LLM inference systems / serving 与 CUDA kernel optimization；C++ 基础设施、中间件和高性能服务端既是必修底座，也是第一段实习与岗位选择的可靠入口。
 
 ---
 
@@ -30,7 +31,7 @@ Linux / OS 主线不变
 网络 / Reactor 主线不变
 Mini Redis 主项目不变
 Go 仍然暂时不回主线
-AI Infra 仍然后置，但保留接口
+AI Infra 不抢当前 C++ / Linux / OS 主线，但不再等到 2028 年才从零启动；按能力门槛分阶段预热和切入
 ```
 
 ### C. 面经雷达机制
@@ -335,15 +336,28 @@ Day1 ~ Day3 你之前都接触过，所以推进快是正常的。后面保持�
 
 ### 1.1 你的个人目标
 
-你当前的目标不是普通 CRUD 后端，而是：
+你当前的明确背景与目标是：
 
 ```text
-本科就业
-优先找技术密度高的实习
-长期往基础架构 / 云平台 / 中间件 / 数据库/存储 / AI Infra 方向延展
+中山大学计算机科学与技术专业
+2026 年 7 月准大二，处于本科能力建设早期
+目标本科毕业直接就业，不以读研作为默认前提
+主目标是 AI Infra，而不是普通 CRUD 后端或纯模型算法研究
+优先寻找技术密度高、能积累 C++ / 系统 / GPU / 推理经验的实习
 ```
 
-所以主线必须以：
+职业方向按优先级收敛为：
+
+```text
+主攻：LLM inference engine / serving system
+主攻：CUDA / Triton kernel 与算子性能优化
+第二层：多 GPU 推理、NCCL 通信、分布式 serving
+可靠入口：C++ 基础设施、高性能后端、中间件、存储与 AI 部署工程
+后置选修：训练系统、AI 编译器、完整 MLOps 平台
+不作为主目标：纯模型算法、论文导向研究、普通业务 CRUD
+```
+
+所以当前主线必须以：
 
 ```text
 C++
@@ -355,7 +369,17 @@ OS
 性能分析
 ```
 
-为核心。
+为核心；之后自然接入：
+
+```text
+Python / NumPy / PyTorch inference
+Tensor / operator / computation graph
+CUDA / GPU architecture / profiling
+Transformer / KV Cache / quantization
+Triton / vLLM / serving / distributed inference
+```
+
+前半段不是“绕远路”。AI Infra 的核心工作最终仍在处理内存、并发、调度、通信、编译、性能和工程可靠性；当前系统底座会被后半段直接复用。
 
 ---
 
@@ -591,7 +615,7 @@ Skynet
 OpenResty WAF
 Firewall / netfilter
 完整 Kafka 实现
-CUDA 过早深入
+readiness gate 未满足时深入 CUDA / Triton
 复杂模板元编程
 15-445 全部 project 硬刷
 6.S081 全部 lab 硬刷
@@ -607,12 +631,17 @@ CUDA 过早深入
 |---|---|---|---|
 | 阶段 0 | 当前第一周 | 环境 + C++ 对象和内存基础 | g++、gdb、cmake、git、指针、引用、const、构造析构、new/delete、RAII |
 | 阶段 1 | 当前 ~ 2026.10 | ACM 主线 + 工程底座 | 现代 C++、Linux 工具链、OS、网络基础、6.S081 核心 lecture、少量面试题 |
-| 阶段 2 | 2026.10 ~ 2027.1 | C++ 系统编程入门项目 | 阻塞队列、线程池、异步日志、TCP Server、epoll、Reactor |
-| 阶段 3 | 2027.1 ~ 2027.4 | 中间件项目主线 | Mini Redis、Redis 原理、MySQL 原理、15-445 选学、RPC/协议、benchmark、gtest、valgrind、项目压测 |
-| 阶段 4 | 2027.4 ~ 2027.6 | 实习投递准备 | 项目打磨、简历、面试、Nginx/Kafka 基础、性能数据、项目讲稿 |
-| 阶段 5 | 2027 暑假 | 第一份实习 | 基础架构、云平台、中间件、C++ 后端 |
-| 阶段 6 | 2027.7 ~ 2028.1 | 分布式 / 云原生 | Raft、Mini KV、Docker、K8s、Prometheus、存储系统 |
-| 阶段 7 | 2028 | AI Infra 主线 | ML/DL、Transformer、LLM Serving、CUDA |
+| 阶段 2 | 2026.10 ~ 2027.1 | C++ 系统编程入门项目 + AI 低强度预热 | 阻塞队列、线程池、异步日志、TCP Server、epoll、Reactor；Python/NumPy/线代只做最低入口 |
+| 阶段 3 | 2027.1 ~ 2027.4 | 中间件项目 + PyTorch inference 基础 | Mini Redis、Redis/MySQL、RPC、benchmark；Tensor、dtype/device、Module、Transformer 第一层 |
+| 阶段 4 | 2027.4 ~ 2027.6 | 第一段实习投递 + CPU 推理小闭环 | 项目打磨、简历、面试；mini tensor/operator 或 CPU inference baseline |
+| 阶段 5 | 2027 暑假 | 第一份技术实习 | 优先 AI 部署/推理/C++ Infra；拿不到完全对口时，C++ 基础设施、中间件、存储、网络同样有效 |
+| 阶段 6 | 2027.7 ~ 2028.1 | AI Infra 桥接主线 | CPU 推理框架、CUDA 基础、kernel-lab、Transformer inference、单卡 mini LLM |
+| 阶段 7 | 2028.1 ~ 2028.6 | AI Infra 求职项目主线 | CUDA profiling/optimization、Triton、KV Cache、continuous batching、vLLM/nano-vLLM、开源贡献 |
+| 阶段 8 | 2028 暑假 | 关键实习 | 目标 AI Infra / 推理引擎 / 算子 / GPU 系统；形成真实工程经历和推荐信/转正可能 |
+| 阶段 9 | 2028.7 ~ 2028.10 | 2029 届秋招 | AI Infra 主投，C++ Infra / HPC / 存储 / 高性能服务端作为相邻岗位池 |
+| 阶段 10 | 2028.10 之后 | 深化与补短板 | 多 GPU/NCCL、分布式推理、训练系统或 AI 编译器按岗位反馈选一条深入 |
+
+日期是节奏参考，不是机械门槛。你推进速度快，真正是否进入下一阶段由后文的 readiness gate 决定；可以提前，但不能跳过依赖。
 
 ---
 
@@ -656,6 +685,7 @@ CMU 15-445 选学：storage / buffer pool / B+ tree / transaction / concurrency 
 RPC / 协议设计初步：请求响应、序列化、超时、错误码
 gtest / benchmark / valgrind / strace / gdb
 项目 README / 架构图 / 性能数据 / 面试讲稿 / 排查记录
+系统项目稳定后开始 AI Infra 预热：Python 工程、NumPy、线代、PyTorch inference
 ```
 
 ---
@@ -672,6 +702,10 @@ Raft
 Mini KV
 RocksDB / LSM Tree 初步
 15-445 project 思路选读
+CPU Tensor / operator / computation graph
+CUDA kernel-lab：vector add / reduce / softmax / matmul / RMSNorm
+单卡 Mini LLM inference
+Triton 与 vLLM/nano-vLLM 第一轮
 ```
 
 ---
@@ -692,7 +726,9 @@ ZeroMQ
 MQTT
 完整 Kafka 实现
 复杂模板元编程
-CUDA 过早深入
+当前 readiness gate 未满足时直接深挖 CUDA / CUTLASS / Tensor Core
+同时展开训练系统、推理系统、AI 编译器和完整 MLOps
+一上来逐行阅读 PyTorch / vLLM / TensorRT-LLM 大型源码
 MIT 6.S081 全部 lab 强刷
 CMU 15-445 全部 project 强刷
 ```
@@ -2345,15 +2381,728 @@ Prometheus 监控
 
 ---
 
-### 项目线 F：AI Infra 线，2028 主线
+### 项目线 F：AI Infra 线，分阶段提前启动
 
 ```text
-PyTorch 小训练
-Transformer 推理理解
-Mini LLM Serving
-KV Cache / batch scheduler
-CUDA 优化
+系统底座阶段：C++ / Linux / OS / 网络 / 并发 / benchmark
+低强度预热：Python / NumPy / 线代 / PyTorch inference
+CPU 推理阶段：Tensor / operator / computation graph / model execution
+GPU 阶段：CUDA kernel / memory / stream / event / Nsight
+LLM 阶段：Transformer / RoPE / RMSNorm / Attention / MLP / KV Cache / quantization
+Serving 阶段：prefill/decode / continuous batching / PagedAttention / scheduler / streaming
+扩展阶段：Triton / PyTorch custom op / vLLM contribution / NCCL multi-GPU
 ```
+
+AI Infra 不是 2028 年突然切换的新专业，而是当前系统能力在 GPU 和模型执行场景中的延伸。详细进入门槛、学习深度、项目和求职节奏见下一节。
+
+---
+
+## 10.1 AI Infra 主线细化：面向 2029 届本科就业
+
+### 10.1.1 方向定义
+
+本规划里的 **AI Infra** 主要指：
+
+```text
+让模型被正确、高效、稳定地执行和服务
+```
+
+优先覆盖三层：
+
+```text
+Layer 1：算子与 kernel
+CUDA / Triton、访存、并行、数值正确性、profiling、optimization
+
+Layer 2：推理引擎
+Tensor、operator、模型加载、执行流程、显存管理、KV Cache、quantization
+
+Layer 3：Serving system
+请求队列、continuous batching、prefill/decode、streaming、调度、监控、多 GPU
+```
+
+当前不同时展开：
+
+```text
+大规模分布式训练系统
+深度学习编译器 / MLIR / LLVM 后端
+完整 MLOps 平台
+模型算法研究与论文复现主线
+```
+
+这些方向以后可以选一条深化，但本科求职前先形成“单机推理 + kernel + serving”的完整证据链。
+
+---
+
+### 10.1.2 为什么当前系统路线必须保留
+
+当前内容与 AI Infra 的映射：
+
+| 当前主线 | 未来直接复用 |
+|---|---|
+| RAII / move / smart pointer | Tensor、显存、stream、event、handle 的资源管理 |
+| STL / 数据结构 | scheduler、KV block table、request queue、cache |
+| Linux / fd / process / mmap | 模型加载、共享内存、进程 worker、profiling 与部署 |
+| OS / virtual memory | pinned memory、unified memory、page fault、KV cache 管理直觉 |
+| thread / mutex / condition_variable | CPU executor、异步任务、数据准备与并发控制 |
+| socket / epoll / Reactor | online serving、streaming response、连接与 backpressure |
+| Redis / storage / RPC | cache、协议、状态管理、分布式服务接口 |
+| benchmark / perf / tracing | kernel 和 serving 性能证据 |
+
+所以近期不改变：
+
+```text
+C++ -> Linux -> OS -> 网络 -> 多线程 -> ThreadPool/Reactor -> Mini Redis
+```
+
+改变的是后续出口：不再只落到传统 C++ 后端，而是有计划地接到 PyTorch、CUDA 和 LLM serving。
+
+---
+
+### 10.1.3 五个 readiness gate
+
+日期只能提醒节奏，进入阶段必须看 gate。
+
+#### Gate A：开始 AI 低强度预热
+
+满足：
+
+```text
+能独立完成 C++17 小项目
+理解 RAII / move / STL / basic concurrency
+会 Linux / Git / CMake / gdb / strace
+至少一个系统 demo 有测试与 README
+当前 C++/OS 主线没有明显断层
+```
+
+进入内容：
+
+```text
+Python 语法与工程环境
+NumPy ndarray / shape / stride / broadcasting
+线性代数：向量、矩阵乘、转置、范数
+PyTorch Tensor、dtype、device、Module、inference_mode
+```
+
+比例控制：每周 `10%~20%`，不能挤掉系统主线。
+
+#### Gate B：开始 CPU 推理框架
+
+满足：
+
+```text
+能用 NumPy/PyTorch 写并验证 matmul / softmax / normalization
+知道 Tensor 的 shape、stride、dtype、layout 第一层含义
+能讲 ResNet 或 Transformer 的前向数据流之一
+完成 ThreadPool / Reactor / Mini Redis 中至少一个较完整项目
+会写最小单测和 benchmark
+```
+
+进入内容：
+
+```text
+Tensor storage / shape / stride
+operator interface 与 registration
+computation graph / DAG / topological execution
+模型权重加载与前向执行
+ReLU / pooling / conv / matmul / softmax 等 CPU operator
+跑通一个小模型 inference
+```
+
+#### Gate C：开始 CUDA 主线
+
+满足：
+
+```text
+C++ 指针、数组、内存生命周期、并发和错误处理稳定
+能解释 CPU matmul / reduce / softmax 的正确性和复杂度
+会用 PyTorch 生成 reference output
+CPU inference 项目至少形成一个闭环
+有可持续使用的 NVIDIA GPU 环境，或明确的实验室/服务器/云端资源
+```
+
+进入内容：
+
+```text
+host / device
+kernel / grid / block / thread
+global / shared / local memory
+cudaMalloc / cudaMemcpy / cudaFree
+synchronization / error checking
+stream / event
+coalesced access / shared memory / occupancy 第一层
+Nsight Systems / Nsight Compute
+```
+
+没有 GPU 时不要硬买硬件来制造进度。先完成 CPU inference、PyTorch reference 和 benchmark harness；获得稳定 GPU 环境后再正式进入 CUDA。
+
+#### Gate D：开始 Triton / vLLM
+
+满足：
+
+```text
+至少独立写过 3 个 CUDA kernel
+至少一个 kernel 有 naive / optimized 两版和 profiler 证据
+能讲 Transformer forward、prefill/decode 和 KV Cache
+完成或基本完成单卡 mini LLM inference
+能区分 kernel latency、模型 throughput 和 serving latency
+```
+
+进入内容：
+
+```text
+Triton vector add / reduce / softmax / matmul / attention
+同一 operator 的 PyTorch / CUDA / Triton 对照
+vLLM engine / worker / executor / scheduler 第一轮
+PagedAttention 与 KV block management
+continuous batching / streaming / cancellation
+TTFT / TPOT / throughput / GPU memory metrics
+```
+
+#### Gate E：开始多 GPU / 分布式推理
+
+满足：
+
+```text
+单 GPU inference 与 serving 项目稳定
+能定位 CPU、GPU、memory、network 四类瓶颈
+掌握基础网络与并发
+理解 Transformer 参数和 KV Cache 如何占用显存
+可以使用至少双 GPU 或实验室集群
+```
+
+进入内容：
+
+```text
+NCCL collectives：AllReduce / AllGather / ReduceScatter
+tensor parallel / pipeline parallel 第一层
+rank / world size / topology
+通信与计算 overlap
+多进程 worker 与故障边界
+multi-node serving 后置
+```
+
+---
+
+### 10.1.4 本科时间轴与求职节点
+
+按 2026 年 7 月准大二、常规 2029 届推算：
+
+#### 2026.07 ~ 2026.10：系统底座
+
+主线：
+
+```text
+现代 C++、Linux、OS、网络、6.S081、工具链
+```
+
+AI Infra：
+
+```text
+不主动开 CUDA
+不刷 vLLM 源码
+只在 Gate A 满足后，每周少量 Python/NumPy/线代
+```
+
+#### 2026.10 ~ 2027.01：系统组件与 Python 入口
+
+主线：
+
+```text
+BlockingQueue / ThreadPool / AsyncLogger / TCP / epoll / Reactor
+```
+
+AI Infra 伴随：
+
+```text
+Python 工程环境
+NumPy shape/stride/broadcasting
+PyTorch Tensor/device/dtype/inference_mode
+矩阵乘、softmax、normalization 的 reference 实现
+```
+
+#### 2027.01 ~ 2027.04：Mini Redis + inference 基础
+
+主线：
+
+```text
+Mini Redis / RPC / MySQL / benchmark / testing
+```
+
+AI Infra 伴随：
+
+```text
+Transformer forward 第一层
+Tensor/operator/computation graph 小实验
+开始 mini-infer-cpu，但不要求一次做大
+```
+
+#### 2027.04 ~ 2027.06：第一段实习投递
+
+投递池：
+
+```text
+C++ 后端 / 基础设施 / 中间件 / 存储 / 网络
+AI 部署 / 推理工程 / HPC / 算子初级岗位
+```
+
+第一份实习不必强求职位名称完全是 AI Infra。能进入高质量 C++、性能、系统或模型部署工作，就是有效路径。
+
+#### 2027 暑假：第一份实习与方向校准
+
+必须积累：
+
+```text
+真实代码协作
+issue / review / test / benchmark
+一次具体性能或稳定性问题的定位记录
+明确下一段更偏 kernel、engine 还是 serving
+```
+
+#### 2027.07 ~ 2028.01：AI Infra 桥接主线
+
+目标：
+
+```text
+完成 mini-infer-cpu
+完成 kernel-lab 第一版
+进入 CUDA 正式学习
+实现单卡 mini LLM inference 的核心路径
+```
+
+#### 2028.01 ~ 2028.06：关键实习准备
+
+目标：
+
+```text
+CUDA kernel 有 profiler 与优化数据
+理解 KV Cache / prefill / decode / batching
+完成 mini-serving 或 nano-vLLM 深入改动
+至少一次可说明的开源 issue / PR / benchmark contribution
+形成 AI Infra 专项简历与面试讲稿
+```
+
+#### 2028 暑假：关键实习
+
+优先：
+
+```text
+推理引擎
+大模型 serving
+CUDA / Triton 算子
+AI 系统 / GPU 平台
+高性能计算
+```
+
+这是 2029 届秋招前最重要的真实工程证据。
+
+#### 2028.07 ~ 2028.10：秋招
+
+主投：
+
+```text
+AI Infra Engineer
+Inference Engine / LLM Serving Engineer
+CUDA / GPU Kernel / Operator Engineer
+ML Systems / HPC Engineer
+```
+
+相邻岗位池：
+
+```text
+C++ Infrastructure
+高性能服务端
+存储 / 数据库内核
+分布式系统
+模型部署与推理平台
+```
+
+---
+
+### 10.1.5 各知识块学到什么程度
+
+| 知识块 | 本科求职目标深度 | 暂时不要求 |
+|---|---|---|
+| Python | 能写工程脚本、测试、benchmark、模型加载与服务胶水；会 venv/conda、pytest、typing 基础 | Web 全栈、复杂元编程 |
+| 数学 | 理解矩阵乘、向量化、softmax、norm、attention、数值稳定性和量化误差 | 证明导向高数、研究级优化理论 |
+| 深度学习 | 能讲 forward、参数、activation、dtype；掌握 ResNet 与 Transformer 至少一个完整前向 | 从零训练大模型、论文海量复现 |
+| PyTorch | Tensor/device/dtype/layout、Module、checkpoint、inference_mode、profiler、custom op 第一层 | autograd engine / dispatcher 全源码 |
+| C++ | 能写资源安全、并发、可测试、可 profile 的系统组件 | 复杂模板元编程 |
+| CUDA | kernel launch、SIMT、memory hierarchy、sync、stream/event、error check、profiling、常见优化 | 一开始就深挖 PTX/SASS、CUTLASS internals |
+| Triton | 能实现并 benchmark reduce/softmax/matmul/attention，能解释 tile 与访存 | 编译器后端和 MLIR 深入 |
+| LLM inference | Transformer forward、prefill/decode、KV Cache、quantization、sampling、memory estimate | 训练对齐、复杂 MoE 训练 |
+| Serving | queue、continuous batching、streaming、scheduler、PagedAttention、observability | 一开始就做跨地域超大集群 |
+| Distributed | NCCL collectives、TP/PP、通信开销和拓扑第一层 | 完整训练容错、参数服务器历史全线 |
+
+“会用”不算完成。每个知识块至少要达到：
+
+```text
+能解释对象和数据流
+能写最小正确实现
+能与 reference 对比正确性
+能做 benchmark
+能说出一个瓶颈和一个优化取舍
+```
+
+---
+
+### 10.1.6 AI Infra 项目证据链
+
+#### 项目 0：系统底座作品
+
+```text
+ThreadPool / Reactor / Mini Redis
+```
+
+价值：证明 C++、Linux、网络、并发、调试和工程能力。它不是 AI 项目，但会让后面的 serving 项目可信。
+
+#### 项目 1：`mini-infer-cpu`
+
+建议范围：
+
+```text
+Tensor：shape / stride / dtype / storage
+5~8 个 CPU operator
+operator registration
+computation graph / execution order
+模型权重加载
+跑通 ResNet、YOLO 小模型或极小 Transformer 中一个
+正确性测试与 benchmark
+```
+
+验收：
+
+```text
+不看视频也能画出 model -> graph -> operator -> tensor -> output
+至少一个 operator 有朴素版和改进版
+README 能让别人复现
+```
+
+#### 项目 2：`kernel-lab`
+
+建议顺序：
+
+```text
+vector add
+reduce
+softmax
+RMSNorm / LayerNorm
+matmul / GEMV
+RoPE 或 attention 子算子
+```
+
+每个 kernel 至少保存：
+
+```text
+PyTorch/CPU reference
+correctness tolerance
+naive version
+optimized version
+输入 shape / dtype
+GPU model / CUDA version
+warmup / repetition / synchronization 方法
+latency / bandwidth / throughput
+Nsight 观察与瓶颈解释
+```
+
+#### 项目 3：`mini-llm-cuda`
+
+建议范围：
+
+```text
+读取一个小型 LLaMA/Qwen 系模型权重
+embedding / RMSNorm / RoPE / attention / MLP
+prefill 与 decode 第一层区分
+KV Cache
+sampling
+关键 CUDA kernel
+至少一种量化或低精度路径的理解/实验
+```
+
+目标是单卡正确、可测、可解释，不追求复制完整工业框架。
+
+#### 项目 4：`mini-serving` 或 `nano-vllm-study`
+
+建议范围：
+
+```text
+request queue
+streaming output
+prefill/decode scheduling
+continuous batching
+KV block manager
+cancellation / timeout 第一层
+TTFT / TPOT / throughput / GPU memory
+Prometheus 或最小 metrics endpoint
+```
+
+二选一：
+
+```text
+A. 自己写一个小型 serving skeleton，强调系统设计
+B. 深入 nano-vLLM/vLLM，完成一个真实 issue、测试、benchmark 或 PR
+```
+
+不要同时做两个半成品。
+
+#### 项目 5：多 GPU 扩展，后置加分
+
+```text
+NCCL collective demo
+tensor parallel 第一层
+通信/计算时间分解
+双 GPU correctness 与 scaling 记录
+```
+
+只有 Gate E 满足且硬件可用时再做。
+
+---
+
+### 10.1.7 benchmark 硬标准
+
+AI Infra 项目不能只写“加速了 30%”。每次性能结果至少记录：
+
+```text
+硬件：GPU / CPU / memory
+软件：driver / CUDA / PyTorch / compiler / commit
+输入：shape / batch / sequence length / dtype
+基线：PyTorch、CPU、naive CUDA 或上一版本
+正确性：reference 与 tolerance
+方法：warmup / repetition / synchronization
+结果：latency、throughput、memory；serving 增加 p50/p95、TTFT、TPOT
+解释：瓶颈证据、改动、为何有效、在哪些 shape 下失效
+```
+
+kernel 重点指标：
+
+```text
+latency
+effective bandwidth / achieved throughput
+occupancy 第一层
+memory access / warp divergence / launch overhead
+```
+
+serving 重点指标：
+
+```text
+TTFT：Time To First Token
+TPOT：Time Per Output Token
+end-to-end latency
+tokens/s
+concurrency
+GPU memory usage
+queue time
+```
+
+必须保留原始命令、环境和结果文件，避免只留截图。
+
+---
+
+### 10.1.8 学习资料使用顺序
+
+#### 官方资料优先
+
+```text
+CUDA：NVIDIA CUDA C++ Programming Guide + Best Practices Guide
+PyTorch：官方 Tensor / profiler / custom C++ and CUDA operator tutorials
+Triton：官方 tutorials，从 vector add / softmax / matmul 开始
+vLLM：官方 architecture / PagedAttention / metrics 文档与仓库
+NCCL：NVIDIA NCCL User Guide
+```
+
+入口：
+
+- [CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-programming-guide/contents.html)
+- [PyTorch Custom C++ and CUDA Operators](https://docs.pytorch.org/tutorials/advanced/cpp_custom_ops.html)
+- [Triton Tutorials](https://triton-lang.org/main/getting-started/tutorials/)
+- [vLLM Architecture Overview](https://docs.vllm.ai/en/latest/design/arch_overview/)
+- [vLLM Production Metrics](https://docs.vllm.ai/en/latest/usage/metrics/)
+- [NCCL User Guide](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/overview.html)
+
+#### “我是傅傅猪”内容的定位
+
+本地盘点：[我是傅傅猪 UP 主视频盘点与 AI Infra 学习路线](我是傅猪猪/我是傅傅猪_UP主视频盘点与AI_Infra学习路线.md)。
+
+使用顺序：
+
+```text
+1. KuiperInfer 重制版：CPU Tensor / operator / graph 主线
+2. KuiperLlama/CUDA 选集：显存、RMSNorm、Softmax、KV Cache、Attention、Nsight
+3. Triton 选集：Reduce -> Softmax -> Matmul -> Attention
+4. vLLM 选集：KV Cache -> block manager -> PagedAttention -> engine/worker/executor
+5. 求职视频：项目已有结果后再看简历、面试和路线校准
+```
+
+规则：
+
+```text
+不按发布时间刷完 114 条
+重制版作主线，旧版只补断点
+视频时间不超过 AI Infra 学习时间的 20%
+看一段后必须落到代码、测试、benchmark 或图
+课程项目不能原样冒充独立项目，必须有自己的设计、问题和数据
+```
+
+---
+
+### 10.1.9 在中山大学阶段怎样借力
+
+课程与项目对齐：
+
+```text
+数据结构 -> scheduler / cache / graph
+计算机组成 -> CPU/GPU memory hierarchy 与 performance
+操作系统 -> process / virtual memory / synchronization
+计算机网络 -> serving / RPC / distributed inference
+线性代数 / 概率 -> Tensor / attention / numerical behavior
+编译原理 -> 后续理解 Triton/MLIR 的接口，不要求提前深挖
+```
+
+资源策略：
+
+```text
+优先争取校内实验室、课程服务器、导师项目或竞赛中的稳定 GPU 使用机会
+找老师/实验室时优先关注 ML systems、推理部署、GPU、分布式系统、高性能计算
+不因“没有个人 GPU”暂停基础学习，也不急着为学习路线购买昂贵硬件
+用课程项目、系统项目和开源贡献建立与老师/实习团队合作的可信度
+```
+
+本科就业不等于忽略学校课程。OS、网络、计组、数据结构、线代和概率是 AI Infra 面试与长期上限的一部分。
+
+---
+
+### 10.1.10 简历与岗位验收
+
+每个 AI Infra 项目都应回答：
+
+```text
+模型或请求的数据流是什么？
+CPU/GPU 内存由谁拥有，何时释放？
+正确性怎样验证？
+基线是什么？
+性能瓶颈怎样找到？
+改动为什么有效？
+结果是否能复现？
+失败案例和适用边界是什么？
+```
+
+2027 第一段实习前最低证据：
+
+```text
+一个扎实 C++ 系统项目
+一个可复现 benchmark/性能分析案例
+PyTorch/NumPy inference 基础
+mini-infer-cpu 或 operator lab 的起步成果
+```
+
+2028 关键实习前目标证据：
+
+```text
+系统项目 1 个
+CPU inference 项目 1 个
+CUDA kernel-lab 1 个
+单卡 LLM inference 或 serving 项目 1 个
+至少一个真实 issue / PR / benchmark contribution
+完整 README、测试、性能表和 interview.md
+```
+
+不要求仓库数量越多越好。`2~3` 个真正独立、可复现、能深挖的项目，胜过 `8` 个跟课半成品。
+
+---
+
+### 10.1.10A 最终项目的产品化标准
+
+参考完整系统项目时，学习的是**工程闭环和证据链**，不是照抄技术栈，也不是以模块数量判断项目价值。
+
+例如 [InazumaPlasma](https://github.com/Yao-shuai/InazumaPlasma/tree/main) 把 KV 引擎、AI API Gateway、语义缓存、聊天服务、Dashboard、配置部署和性能测试串成了一条可运行链路。它适合作为“项目怎样形成产品形态”的参考，但其 AI Gateway 主要转发外部模型 API，并不等同于自己实现 LLM 权重加载、Transformer forward、CUDA kernel 和推理调度。因此，它的技术方向不能直接替代本路线的 inference engine / serving 主线。
+
+本路线中的“产品化”至少意味着：
+
+```text
+有清楚的用户入口和完整数据流
+能够独立构建、启动、配置和停止
+核心功能形成闭环，不只是若干孤立 demo
+错误处理、资源生命周期和边界条件明确
+有 correctness test、集成测试或场景测试
+有可复现 benchmark，并保留环境、命令和原始结果
+有日志、指标或最小可观测性
+README 包含架构、构建、使用、限制和性能说明
+能区分自己实现的核心、使用的第三方库和仍未完成的部分
+```
+
+以下内容不等于产品化：
+
+```text
+为了显得高级而堆入 RDMA、XDP、eBPF、io_uring、CUDA 等名词
+加入 Dashboard，却没有可靠的核心执行链路
+把课程代码或开源项目换名后包装成独立项目
+只有最好看的性能数字，没有基线、正确性和复现方法
+仓库很大，但无法解释关键模块的所有权、设计取舍和失败边界
+```
+
+按阶段形成两次产品闭环：
+
+```text
+2027 第一段实习前：
+    Mini Redis / Reactor 形成 C++ 系统项目闭环
+    重点证明 C++、Linux、OS、网络、并发、测试和 benchmark
+
+2028 AI Infra 求职前：
+    mini-infer-cpu、mini-llm-cuda 与 mini-serving 逐步形成推理服务闭环
+    目标数据流为：
+    request -> tokenizer -> scheduler -> model execution
+    -> CUDA kernels -> KV Cache -> streaming response -> metrics
+
+kernel-lab：
+    作为正确性、profiling 和性能优化证据
+    不必为了“项目数量”强行包装成庞大产品
+```
+
+最终简历仍控制在 `2~3` 个能深挖的项目：
+
+```text
+1. Mini Redis / Reactor：系统底座项目
+2. Mini LLM Inference & Serving：AI Infra 旗舰项目
+3. CUDA kernel-lab 或真实 vLLM 开源贡献：性能与协作证据
+```
+
+当前阶段不要提前搭建一个包含所有名词的大仓库。先按 readiness gate 完成底层能力和独立模块，再在模块已经正确、可测、可解释后进行整合。每条简历描述都必须能回答：
+
+```text
+哪部分是我写的？
+为什么这样设计？
+正确性怎样证明？
+性能数据怎样复现？
+系统在哪些条件下会失败或退化？
+```
+
+---
+
+### 10.1.11 AI Infra 专项停止清单
+
+readiness gate 未满足时暂不做：
+
+```text
+逐行阅读完整 PyTorch / vLLM / TensorRT-LLM
+一上来写 FlashAttention
+一上来深挖 PTX / SASS / CUTLASS / Tensor Core
+同时做 CUDA、Triton、TVM、MLIR、XLA
+多机大规模训练
+完整 Kubernetes AI 平台
+追逐每个新模型和新推理框架
+把课程视频数量当进度
+只做模型调用，不做测试与性能验证
+```
+
+判断是否该学某项技术：
+
+```text
+它是否解决当前项目的真实瓶颈？
+我是否具备它的前置知识和硬件？
+它能否形成代码、数据或开源贡献？
+它是否服务于 2027/2028 的实习节点？
+```
+
+四个问题大多答不上来，就先放回 backlog。
 
 ---
 
@@ -2674,7 +3423,7 @@ io_uring 深入
 完整 Nginx 源码
 完整 Redis 源码逐行读
 Ceph / TiDB 工业级源码
-CUDA 过早深入
+readiness gate 未满足时深入 CUDA / Triton
 论文海量阅读
 MIT 6.S081 全 lab 强刷
 CMU 15-445 全 project 强刷
@@ -2708,8 +3457,12 @@ C++ 对象和资源管理
 → CMU 15-445 数据库/存储概念加固
 → 测试 / 调试 / 性能分析
 → 项目讲稿和面试追问
-→ 分布式 / 云原生
-→ AI Infra
+→ Python / NumPy / PyTorch inference 预热
+→ CPU Tensor / operator / computation graph
+→ CUDA kernel / profiling / optimization
+→ Transformer / KV Cache / 单卡 LLM inference
+→ Triton / continuous batching / vLLM serving
+→ NCCL / 多 GPU / 分布式推理（后置）
 ```
 
 这条线走通，你的简历会从“会写代码”变成：
@@ -2721,7 +3474,8 @@ C++ 对象和资源管理
 懂数据库/存储系统基本原理
 能写有技术密度的系统项目
 能用数据和工具证明项目质量
-能往基础架构和 AI Infra 延伸
+能把系统能力迁移到 GPU、推理引擎和 serving
+能以本科生身份拿出 AI Infra 岗位可验证的项目证据
 ```
 
 这就是接下来所有 week plan 和 daily .md 的总依据。

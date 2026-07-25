@@ -22,9 +22,13 @@
 ## 2. 背景和长期目标
 
 - 用户：FxorG。
-- 当前阶段：本科早期，自学 C++ 系统工程方向。
+- 学校与专业：中山大学，计算机科学与技术专业。
+- 当前阶段：2026 年 7 月准大二；按常规四年制节奏推算为 2029 届，如实际毕业时间变化再调整。
 - 已有基础：C 语言、基础算法题、Linux 基本命令、C++ 基础第一轮。
-- 长期方向：C++ 后端、系统工程、基础设施、AI Infra。
+- 当前已知缺口：计算机硬件基础相对薄弱。讲到 CPU、instruction、register、CSR、MMU、cache、interrupt 等硬件概念时，不能默认已经学过计算机组成原理；应先补足支撑当天 OS 主线的最小硬件模型。
+- 就业目标：本科毕业直接就业，主目标为 AI Infra。
+- AI Infra 主攻：LLM inference systems / serving 与 CUDA/Triton kernel optimization；多 GPU/NCCL 为第二层。
+- 相邻入口：C++ Infra、高性能服务端、中间件、存储、HPC、模型部署岗位都可以作为第一段实习或就业岗位池，不把职位名称是否完全等于 AI Infra 当作唯一标准。
 - 核心目标：不是只会调用 API，而是能解释资源所有权、边界、系统行为和设计取舍，并逐步完成可测试、可说明的工程项目。
 
 主线顺序保持为：
@@ -40,10 +44,34 @@ C++ 基础
 → epoll / Reactor
 → HTTP Server
 → Mini Redis
-→ 数据库与 AI Infra 方向准备
+→ Python / NumPy / PyTorch inference 预热
+→ CPU 推理框架
+→ CUDA kernel 与单卡 LLM inference
+→ Triton / vLLM serving
+→ NCCL / 分布式推理（后置）
 ```
 
 不要因为某个术语或热门技术临时改变主线。
+
+AI Infra 采用 readiness gate，而不是等到某个日期突然切换：
+
+```text
+Gate A：系统基础稳定后，低强度进入 Python/NumPy/线代/PyTorch inference
+Gate B：PyTorch 与系统项目达到门槛后，进入 CPU Tensor/operator/graph
+Gate C：CPU inference 闭环且有稳定 GPU 后，正式进入 CUDA
+Gate D：至少 3 个 CUDA kernel、有 profiler 数据并理解 Transformer/KV Cache 后，再学 Triton/vLLM
+Gate E：单 GPU serving 稳定且有多 GPU 资源后，再进入 NCCL/分布式推理
+```
+
+当前 Week4 以及接下来的 C++ / Linux / OS / 网络主线不因 AI Infra 目标而改变。近期“过早 CUDA”边界继续有效，但 Python/PyTorch 的低强度预热会在系统基础 gate 满足后提前开始，不再推迟到 2028 年。
+
+AI Infra 本地参考材料：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\我是傅猪猪\我是傅傅猪_UP主视频盘点与AI_Infra学习路线.md
+```
+
+该材料作为课程与项目资源索引，不作为机械刷课计划。重制 KuiperInfer -> CUDA/KuiperLlama -> Triton -> vLLM 是后续建议顺序；视频学习时间控制在 AI Infra 总投入的 20% 以内，完成度由代码、测试、benchmark 和开源产出判断。
 
 ---
 
@@ -121,7 +149,7 @@ LRU Cache V1
 
 用户认为许多容器接口属于容易掌握的使用性知识。后续应减少重复 API 练习，把时间放在失效规则、复杂度、所有权和工程组合上。
 
-### Week4：进行中
+### Week4：已完成
 
 主题：Linux 系统编程第一轮 + MIT 6.S081 正式穿插。
 
@@ -130,7 +158,9 @@ Day1：已完成，93 分
 Day2：已完成，95 分
 Day3：已完成，94 分
 Day4：已完成，90 分
-Day5：教程已生成，待学习与验收
+Day5：已完成，92 分
+Day6：已完成并验收
+Day7：已完成，93 分
 ```
 
 Day1 已完成：
@@ -179,7 +209,7 @@ redirect_stdout.cpp 编译运行及 strace / lsof 验证
 
 Day4 验收为 90 分。代码与主要机制通过；笔记仍有少量术语和边界不完整，包括 `open file description` 的准确名称、共享 file status flags、`dup2` 的原子性/错误边界，以及 `strace`/`lsof` 预期。用户选择继续推进，后续在实际用到时短纠偏，不安排重复抄写。
 
-Day5 当前主题：
+Day5 已完成：
 
 ```text
 process / PID / PPID
@@ -190,6 +220,105 @@ waitpid、退出状态与 zombie 回收
 fork 前用户态缓冲区
 return from main / exit / _exit
 ```
+
+Day5 实际验收：
+
+```text
+fork_wait.cpp 与 fork_memory.cpp 使用规定选项编译无 warning
+fork_wait 正确回收子进程并读取退出码 7
+fork_memory 验证父子虚拟地址可相同，但普通变量相互独立
+strace -f 验证 clone / wait4 / exit_group 的底层对应
+day5_note.md 已逐节、逐图和逐题复检
+```
+
+用户明确选择不做缓冲区重复输出和 `ps` zombie 观察实验；它们不作为 Day5 阻塞项，后续不要求为了补流程重复完成。笔记仍有两处非阻塞性表述可按需纠正：MIT 部分漏写输出交织原因；`exec` 失败应表述为进程映像未替换、子进程继续执行原程序中 `exec` 后面的代码，而不是继续执行 Shell。
+
+Day7 已完成：
+
+```text
+read/write 与 mmap 的使用模型区别
+文件 mapping、fd 与 munmap 的生命周期
+MAP_PRIVATE / MAP_SHARED 第一层语义
+SIGINT / SIGTERM 默认行为
+system call wrapper、ECALL/syscall、受控进入内核
+MIT 6.S081 Lec03 3.4 / 3.5
+```
+
+Day7 实际验收：
+
+```text
+mmap_basic.cpp 与 signal_observe.cpp 使用规定选项零 warning 编译
+普通文本、含 NUL 的二进制数据、空文件、不存在路径、错误参数和目录映射失败路径符合预期
+SIGINT / SIGTERM 默认终止状态分别验证为 130 / 143
+strace 能看到 openat -> mmap -> close(fd) -> munmap 与最终 write
+day7_note.md 的 fd/mmap 与 system call 主线正确
+```
+
+Day7 笔记有两个非阻塞缺口：`mmap` 长度为 0 应明确为接口要求失败，而不只是“没有字节”；验收题 5 只解释了 `SIGINT/SIGTERM` 名称，没有回答 handler 可能异步介入正常代码、受 async-signal-safe 限制。复评时已纠正，不要求重复抄整份笔记。
+
+### Week5：进行中
+
+主题：OS 第一轮 + MIT 6.S081 核心机制。
+
+```text
+Day1：address space / page / MMU / page table / TLB，Lec04 4.1~4.4
+Day2：trap 总图与 ECALL 前后，Lec06 6.1~6.4
+Day3：uservec/usertrap 与返回路径，Lec06 6.5~6.8
+Day4：page fault / lazy / COW / demand paging / mmap，Lec08 8.1~8.6
+Day5：race condition / mutex / deadlock，Lec10 10.1~10.5
+Day6：thread / context switch / scheduler，Lec09 9.2 + Lec11
+Day7：blocking / sleep-wakeup / lost wakeup / condition_variable，Lec13 13.1~13.5
+```
+
+Week5 不重复 Week4 的 fd/fork/pipe/mmap API 练习，而是解释其 OS 和硬件机制。概念日不为凑产出强制写代码；Day5 与 Day7 的独立练习在用户实现前不提供完整修复代码或线程控制流。
+
+Week5 Day3 已完成，验收 `90` 分，核心通过。用户在 `day3_note.md` 中按真实执行顺序独立梳理了：
+
+```text
+write wrapper / ECALL
+uservec 保存现场并建立 kernel execution environment
+usertrap / syscall / sys_write
+usertrapret 准备返回
+userret 恢复现场
+sret 回到 ECALL 后一条 user instruction
+```
+
+状态主线、trampoline 双重映射、`a0/sscratch` 反向交换和 `sepc -> trapframe.epc -> sepc` 返回链正确。非阻塞缺口：
+
+```text
+不能把 register 表述成“像指针一样使用”；register 只是保存 bit pattern，保存地址时才可作为 address operand
+ECALL 是 instruction，执行它触发 synchronous exception/trap，不等于 hardware trap actions 本身
+第一次 a0/sscratch 交换后，还应明确把 sscratch 中的旧 user a0 保存到 trapframe->a0
+验收题 2 的 trapframe/user stack/kernel stack 所有权与“不使用 user stack”的原因未在 note 中回答
+普通 call/system call/page fault/interrupt 的返回位置对照未写入 note
+```
+
+这些不要求重抄整份笔记；后续在 page fault、interrupt 和 context switch 中再次出现时短纠偏。
+
+Week5 Day4 已完成并通过验收，最终评分 `88`。用户已经建立 page fault、lazy allocation、COW、demand paging 与 `MAP_PRIVATE` 的共同处理骨架，能区分 VMA/PTE/physical page/backing file 的责任；后续无需重复实现同类 mmap demo。
+
+Week5 Day5 已完成并通过验收，最终评分 `90`：
+
+```text
+独立完成 race_counter.cpp 与 mutex_counter.cpp
+两份程序使用 -std=c++17 -Wall -Wextra -g -pthread 零 warning
+错误版多次得到不同的 lost-update 结果
+g++ ThreadSanitizer 在 race_counter.cpp 的 ++ 位置报告 data race
+mutex 粗粒度修复版稳定得到 expected == actual，TSan 无报告
+能手推 counter++ 的 read-modify-write 交错
+能区分 race condition 与 C++ data race
+能画 two-lock circular wait，并用统一 lock ordering 破坏它
+```
+
+Day5 笔记的非阻塞缺口：
+
+```text
+验收题 2 少写“一次正确输出只表示本次 schedule 未暴露问题”
+验收题 4 已补充只锁 read 仍会 lost update；只锁 write 的对称过程未写
+验收题 6 说明了先保证 correctness，但未列出 contention/profiling/poor scaling 等拆锁 evidence
+```
+
+用户的 mutex 版让每个 worker 持锁完成整批 increment，是正确的 coarse-grained design，会把 counter workload 序列化；后续如讨论 granularity，应先肯定 correctness，再依据 contention evidence 比较更细方案，不把粗粒度本身判成错误。
 
 ---
 
@@ -210,8 +339,8 @@ return from main / exit / _exit
 当前已学习范围：
 
 ```text
-Lec01：1.1、1.2、1.5、1.6、1.7、1.10
-Lec03：3.1、3.2、3.3
+Lec01：1.1、1.2、1.5、1.6、1.7、1.8、1.9 第一遍（wait 主线）、1.10
+Lec03：3.1、3.2、3.3、3.4、3.5
 ```
 
 生成 daily 时必须明确：
@@ -371,7 +500,402 @@ Part 3：收尾、验证与验收
 
 ---
 
-## 9. 练习日特殊规则
+## 9. daily.md 撰写流程与质量标准
+
+本节总结 Week2 到 Week5 实际生成、学习、追问和验收 daily 的经验。它不是额外课程内容，而是以后生成每一份教程时必须执行的工作标准。
+
+### 9.1 生成前流程
+
+生成 daily 前按下面顺序工作：
+
+```text
+1. 读取 plan_strengthened.md，确认当前主线和近期禁止扩展项。
+2. 读取 MEMORY.md，确认长期规则、真实进度和已知理解缺口。
+3. 读取当前 weekN/weekN.md，确认当天在本周承担的功能和深度边界。
+4. 读取当前已有 daily / note，以及前一天 note。
+5. 必要时通过 SSH 查看用户实际代码和测试结果。
+6. 提取“今天真正新增的知识增量”，删掉已经被代码或笔记证明掌握的重复 work。
+7. 判断今天属于概念机制日、接口代码日、独立练习日还是复盘整合日。
+8. 为今天选择一个能贯穿全文的核心问题或现象。
+9. 核对权威资料，并区分课程原文、Linux/C++ 补充和教程自己的推导。
+10. 写完后实际验证代码、命令、目录、标题结构和验收问题。
+```
+
+不能仅根据周计划的一行标题直接扩写。周计划规定方向，daily 必须根据用户当前已经会什么，决定今天还需要讲什么。
+
+### 9.2 先确定知识增量，不以篇幅为目标
+
+daily 的长度由当天新增机制决定，不追求固定行数，也不以“越长越像教程”为标准。
+
+必须避免：
+
+```text
+同一个定义在术语、正文、MIT 部分和收尾中完整重复四次
+为了显得完整而重新布置已经验收通过的旧练习
+创建两个内容相同的产出文件
+把所有工程边界都扩成当天必须完成的大清单
+提前展开下一天才需要的实现细节
+```
+
+推荐：
+
+```text
+一个核心问题
+一条主机制链
+一张主要关系图或状态表
+一个最小验证证据
+5~7 个真正检验新增理解的验收问题
+```
+
+如果原周计划要求 `xxx_summary.md`，但其内容与 `dayN_note.md` 完全重合，应合并到 note，并明确说明合并原因，避免重复 work。
+
+### 9.3 教程必须把抽象关系说具体
+
+只写“指向”“支持”“对应”“拥有”“共享”“复制”“映射”通常不够。第一次建立关系时必须回答：
+
+```text
+关系两端分别是什么对象
+对象存在于 user space、进程状态、kernel 还是硬件
+关系方向是什么
+关系何时建立、由谁建立
+操作读取或修改哪一端
+关系失效或资源释放的条件
+该关系不代表什么
+```
+
+例如：
+
+```text
+不能只说 backing file “支持” mapping；
+要说 mapping 属于进程的 virtual address space，file 只提供 file-backed 页面的初始字节来源，CPU 正常访问仍走 VA -> PA。
+
+不能只说 pipefd[0] 是读端；
+要区分数组下标 0、数组元素里保存的 fd 数字、进程 fd table entry 和 kernel pipe object。
+
+不能只说 kernel “执行 system call”；
+要区分 system call interface、一次 invocation 和 kernel handler。
+
+不能只说 ECALL “进入内核”；
+要区分硬件自动更新的状态与 software trap entry 后续保存寄存器、切 stack/page table 的工作。
+```
+
+如果一句话容易让用户追问“到底是谁？放在哪里？直接访问谁？”，应在 daily 里主动补出关系图或具体数值例子，不能等误解形成后再修补。
+
+### 9.4 机制讲解使用状态变化，而不只给名词定义
+
+OS、Linux、并发和资源管理主题优先使用：
+
+```text
+操作前状态
+-> 谁发起操作
+-> 创建或修改了什么
+-> 操作后状态
+-> 哪些状态保持不变
+-> 失败时停在哪个状态
+-> 何时释放、EOF、失效或返回
+```
+
+需要明确状态属于谁，例如：
+
+```text
+C++ object
+process fd table
+open file description
+kernel pipe/socket/file object
+process virtual mapping
+page table / PTE
+CPU register / CSR
+thread execution state
+```
+
+讲硬件和 OS 协作时必须分层：
+
+```text
+硬件自动做什么
+kernel 软件继续做什么
+user-space wrapper 做什么
+用户代码能观察到什么
+```
+
+还要主动区分看似相近但层级不同的概念：
+
+```text
+TLB miss vs page fault
+mode switch vs context switch
+virtual mapping vs backing file vs physical page
+fd number vs 数组下标 vs kernel object
+system call vs trap vs kernel handler
+copy object vs transfer ownership
+```
+
+#### Mermaid `flowchart` 使用原则
+
+用户明确喜欢 daily 中可以直接由 Markdown 渲染的 Mermaid `flowchart`。以后遇到下列内容时，优先考虑先画一张主流程图，再按图中的节点顺序展开正文：
+
+```text
+多阶段执行流：
+    system call、trap、page fault、fork/exec、Reactor event loop
+
+存在条件分支的处理流程：
+    地址是否合法、错误是否可恢复、是否需要阻塞或重试
+
+跨层责任交接：
+    user space -> hardware -> kernel -> user space
+
+资源或状态发生连续变化：
+    fd 继承与重定向、ownership 转移、PTE/mapping 修改、thread state 转换
+```
+
+推荐组织方式：
+
+```text
+先提出核心问题
+-> 给出一张能看见全局路径的 flowchart
+-> 按节点逐步讲每一步由谁执行、修改什么状态
+-> 再补关键分支、边界和失败路径
+-> 最后让用户用自己的话或自己的图复述
+```
+
+图中节点必须写具体动作和对象，避免只写“处理”“执行”“返回”这类无法判断责任主体的词。涉及标点、括号或较长中文时使用引号包住 Mermaid node label，例如：
+
+```mermaid
+flowchart TD
+    A["user instruction 访问 VA"]
+    B{"现有 PTE 能完成访问吗？"}
+    C["正常完成 instruction"]
+    D["产生 page fault，进入 trap path"]
+    A --> B
+    B -->|能| C
+    B -->|不能| D
+```
+
+使用边界：
+
+```text
+flowchart 负责展示顺序、分支、循环和责任交接，不代替正文解释
+对象静态关系很密集时，fd 表、对象关系图或对照表可能比 flowchart 更合适
+一张图应服务一个主问题，不为装饰而画，也不要把整篇教程塞进一个巨型节点网络
+练习日可以给需求级流程图，但不能把完整 syscall/API 排列画成可直接照抄的答案
+验收时鼓励用户自己重画；daily 中的图不能直接冒充用户已经掌握
+发布前检查 Mermaid 语法、节点连线、分支标签和正文描述是否一致
+```
+
+### 9.5 证据必须说明能力边界
+
+工具输出不是整个机制。使用观察工具时必须同时写：
+
+```text
+它直接展示了什么
+它没有展示什么
+哪些结论是直接证据
+哪些结论来自课程、man page 或体系结构规范
+```
+
+例如：
+
+```text
+/proc/<pid>/maps 展示 virtual mappings、权限、offset 和 pathname，不展示具体 PA。
+strace 展示 system call name、arguments、return value，不展示 RISC-V CSR 和 kernel entry assembly。
+lsof 展示 fd 与打开对象关系，但不等于完整展示所有内核引用计数。
+打印指针只能观察 VA，不能据此猜测 PA。
+```
+
+若只保留一个代表性观察就足以证明用户已掌握相同判断方法，不要求把 global、heap、stack 等同类结果机械抄完；但验收时要确认其他必要观察确实做过。
+
+### 9.6 按 daily 类型选择教学形式
+
+#### 概念机制日
+
+适合使用：
+
+```text
+问题驱动讲解
+关系图
+操作前后状态表
+一条工具证据
+少量口述或绘图验收
+```
+
+不为了“每天必须写代码”强行增加无意义 demo。Week5 Day2 的 trap 教程可以使用现有 `/bin/echo + strace`，不必重新写一个 `write` 程序。
+
+#### 接口代码日
+
+适合使用：
+
+```text
+最小完整 demo
+编译运行命令
+正常路径和当天相关错误路径
+接口参数、返回值、所有权和状态变化
+```
+
+代码数量服从机制，不用多个几乎相同的 demo 重复证明一个结论。
+
+#### 独立练习日
+
+遵守下一节“练习日特殊规则”，把实现空间留给用户。教程只提供足以开始的 API 语义、目标状态、约束、错误契约和测试，不泄露完整控制流。
+
+#### 复盘整合日
+
+优先复用已经写过的代码和观察结果，要求用户重新组织机制图、比较表或组合设计；没有新增约束时不重写旧 demo。
+
+### 9.7 教学代码与命令的标准
+
+决定加入代码前先问：
+
+```text
+这段代码是否真的能观察或验证今天的新机制？
+使用现有程序或系统工具是否已经足够？
+```
+
+如果需要教学代码：
+
+```text
+必须是完整、可独立编译运行的版本
+默认使用 g++ -std=c++17 -Wall -Wextra -g
+代码块开头说明目标和验证方法
+自定义函数说明职责
+关键系统调用说明参数、返回值和状态变化
+不机械注释普通赋值、return 等显然语法
+```
+
+写入 daily 前，必须在实际目标环境或等价 Linux 环境验证：
+
+```text
+编译零 error
+检查 warning
+正常路径能运行
+命令与实际文件名、参数和输出格式一致
+不会因教程中的等待、pipe 或交互设计意外卡住
+```
+
+纯命令观察也必须实际运行验证，不能凭记忆猜输出。
+
+### 9.8 课程与外部资料的组织规则
+
+课程型 daily 除了遵守第 5 节 MIT 6.S081 规则，还要做到：
+
+```text
+先说明课程从什么问题或 demo 出发
+沿课程真实顺序解释，而不是按术语字母表重排
+标明今天从哪一节开始、在哪里停止
+标明必须理解、只需建立直觉和明确后置的内容
+把课程原文、Linux 实践和官方规范补充清楚分开
+```
+
+课程为了教学可能压缩某些硬件或系统细节。如果 official specification 提供了更精确边界，应写成：
+
+```text
+课程为了抓主线强调什么
+完整第一层语义还包括什么
+今天需要记到什么深度
+```
+
+MIT 顺课讲解不应把教程主体完整复制一遍。主体负责建立机制，MIT 部分负责：
+
+```text
+把课程每一节的展开顺序映射到已经建立的主线
+指出截图、代码和课堂问答在证明什么
+说明 xv6/RISC-V 与 Linux/实际机器的共同点和差异
+```
+
+技术资料优先使用 primary source：课程官网、官方 specification、man page、标准文档。不能把推测写成课程原话。
+
+### 9.9 收尾、产出和验收设计
+
+Part 3 必须给出明确且分层的完成标准：
+
+```text
+核心通过条件：
+    当天新增机制、正常控制流、关键关系和必要验证。
+
+重点错误路径：
+    与当天新机制直接相关、会导致阻塞、泄漏、越界或明显错误的路径。
+
+工程增强项：
+    极端失败、完整诊断、抽象封装、性能优化等后续项目质量内容。
+```
+
+note 要求：
+
+```text
+只记录新增机制、真正卡住的问题、错误实验和少量验收回答
+代码注释已经写清的机械内容可以省略
+同一种观察方法可以保留一个代表例子
+不能为了完成篇幅复制 daily 全文
+```
+
+验收题要求：
+
+```text
+通常控制在 5~7 题
+每题只检验一个清晰的新知识点
+优先问因果、状态变化、边界和区别
+不重复询问已经能从代码直接证明的机械事实
+答案应能用自己的语言简短复述，而不是照抄大段教程
+```
+
+必须写清“今天停止在哪里”，防止学习范围顺势膨胀。
+
+### 9.10 从当前 daily 得到的已验证经验
+
+```text
+Week2 Day2：
+    “前情提要 -> 教程 -> 收尾”的顺序比先抛正文再补术语更自然。
+
+Week3 Day6：
+    独立练习日前置代码过多会削弱设计训练，需求和验收应先于参考实现。
+
+Week4 Day3~Day5：
+    教学代码必须解释程序目标、自定义函数责任和关键系统调用，不只保证能编译。
+
+Week4 Day6：
+    只列 pipe API 签名不够；必须先讲 kernel object、返回的新 fd、fork 后引用关系、阻塞和 EOF 条件。
+
+Week4 的 MIT 6.S081 daily：
+    只给链接和阅读范围不足；daily 必须有一份沿课程真实流程的独立讲解。
+
+Week5 Day1：
+    “backing file 为 mapping 提供内容”过于抽象；关系型术语必须说明对象在哪、方向、何时使用以及不代表什么。
+
+Week5 Day2：
+    trap 类主题用“ECALL 前 / 硬件动作 / ECALL 后未改变状态 / 软件继续工作”的状态表，比堆 CSR 定义更有效。
+    课程案例第一次出现前，必须先交代课程、系统/ISA、具体场景和阅读位置。课程展开顺序应成为教程主体的逻辑主线，不能先使用 xv6 等案例、后面才补课程背景，也不能再追加一章重复讲解同一课程。
+    用户的计算机硬件基础相对薄弱。首次出现 register / CSR 等概念时，应先解释 CPU 执行指令的最小模型、寄存器与内存的区别、普通寄存器与特殊寄存器的区别，以及 hardware 和 kernel software 分别能读写什么，再进入 CSR 名称表。
+
+Week5 Day3~Day4：
+    trap return 和 page fault 等多阶段机制先用 Mermaid flowchart 展示完整闭环，再逐节点解释，能明显降低局部术语造成的认知断裂。
+    flowchart 最适合表达“谁把控制权交给谁、在哪个条件处分支、修复后回到哪里”；正文仍负责说明 register、page table、mapping 等具体状态变化。
+```
+
+### 9.11 发布前自检清单
+
+每份 daily 写完后逐项检查：
+
+```text
+[ ] 是否对齐总规划、周计划、真实进度和最近 note？
+[ ] 是否能用一句话说出今天唯一的核心问题？
+[ ] 是否删除了已经掌握且没有新增约束的重复 work？
+[ ] 三个 Part 是否顺序正确，“教程开始”是否明确？
+[ ] 首次出现的英文术语是否有原词、含义和实际作用？
+[ ] 每个关键关系是否说明两端对象、方向、归属和失效条件？
+[ ] 是否写清操作前、操作后以及保持不变的状态？
+[ ] hardware / kernel / user space 的责任是否分开？
+[ ] 存在多步执行、分支或跨层交接时，是否需要一张 Mermaid flowchart？图与正文是否一致？
+[ ] 工具证据是否说明“能证明”和“不能证明”？
+[ ] 课程原文、教程补充和 Linux/架构差异是否分开？
+[ ] 必要 API 是否在正文给足，练习答案是否仍留给用户？
+[ ] 所有代码和命令是否实际验证？
+[ ] 标题编号是否单调、没有重复章节和重复产出文件？
+[ ] 核心任务、错误路径、工程增强是否分层？
+[ ] 验收题是否少而有效，今天停止边界是否明确？
+```
+
+如果某一条不满足，先修 daily，再交给用户学习。
+
+---
+
+## 10. 练习日特殊规则
 
 练习日的目标是锻炼用户从需求到设计、实现、测试和解释的能力。
 
@@ -379,6 +903,20 @@ Part 3：收尾、验证与验收
 
 - 教程前半部分不给完整答案，也少给能直接拼成答案的小段代码。
 - 先给需求、接口、约束、边界、验收标准和允许查阅的 API。
+- “允许查阅的 API”不能只列函数名、`man` 命令或官网链接，也不能要求用户自己从外部资料中发现完成任务所必需的关键 API。daily 正文必须直接提供足够开始实现的最小接口速查：
+
+```text
+所属头文件
+函数签名
+每个参数的含义
+成功与失败返回值
+调用改变了什么进程、fd 或内核状态
+新资源的所有权与关闭责任
+不直观语法的最小独立调用形式
+当天必须处理的常见错误（如 EINTR、short write）
+```
+
+- 外部标准文档和 `man` page 只作为可选深入资料，不能代替 daily 中的基础接口教学。最小独立调用形式可以讲清单个 API 语法，但仍不能提前给出练习要求的完整函数、完整控制流或多个 API 的标准组合答案。
 - 让用户先画数据关系、写伪代码或手推关键流程。
 - 完整代码拆解、参考实现和手推可以放在用户独立实现之后。
 - 对已经写过且已掌握的练习不要求重复实现，除非新练习增加了明确的新约束或新机制。
@@ -386,7 +924,7 @@ Part 3：收尾、验证与验收
 
 ---
 
-## 10. 代码、review 和测试规则
+## 11. 代码、review 和测试规则
 
 - C++ 默认：`g++ -std=c++17 -Wall -Wextra -g`。
 - 每个 demo 都要能编译运行；涉及内存错误时按需使用 ASan/UBSan。
@@ -424,9 +962,21 @@ Part 3：收尾、验证与验收
 
 重复内容允许省略，但不能因“代码跑通”跳过关键机制验证。
 
+每日任务的要求必须分层，不能把大量工程边界全部写成当天的阻塞性“契约”：
+
+```text
+核心通过条件：当天新机制、正常控制流、关键资源关系、可编译运行
+重点错误路径：与当天新机制直接相关、会造成阻塞或明显错误的路径
+工程增强项：极端系统调用失败、完整诊断、退出码传播、风格与封装完善
+```
+
+验收时先判断核心目标是否通过；工程增强项作为后续改进建议，不因它们未全部实现而否定当天学习成果。验收题只保留真正检验当天新增理解的少量问题，避免二十余项清单迫使用户重复抄写已经能从设计和代码中证明的内容。
+
+Week4 Day6 的核心目标是理解 `pipe()` 创建新的内核 pipe 与两个 fd、`fork` 继承 fd 关系、父子关闭无用端、通过关闭所有 write end 产生 EOF，以及组合 `dup2/exec/wait`。`fork` 失败清理、诊断输出通道、整体退出码传播等属于值得指出的工程增强，不作为 Day6 是否通过的主要阻塞项。
+
 ---
 
-## 11. 文件和开发环境
+## 12. 文件和开发环境
 
 Windows 规划与笔记目录：
 
@@ -459,28 +1009,320 @@ weekN/dayN/dayN_note.md
 
 ---
 
-## 12. 当前下一步
+## 13. 当前下一步
 
-当前位置：Week4 Day4 已完成，Day5 教程已生成，下一步是完成 Day5 学习、代码和笔记。
+当前位置：Week5 Day5 已完成并通过验收，最终评分 `90`；`week5/day6/day6.md` 已生成。下一步由用户学习 Day6，完成 thread identity 观察、xv6 context-switch 流程图和 `day6_note.md`，之后按日验收。
 
-Day4 已验收：
-
-```text
-redirect_stdout.cpp 使用规定选项编译无 warning
-正常重定向、错误路径及 fd 观察均通过
-day4_note.md 已逐节和逐题检阅，评分 90
-剩余小缺口采用后续按需纠偏，不要求重复完成整日内容
-```
-
-Day5 将进入：
+Day5 已验收：
 
 ```text
-fork 创建父子执行流
-父子普通内存隔离与 fd 继承
-waitpid 等待、读取状态并回收子进程
-zombie process 第一层直觉
-用户态缓冲区在 fork 前后的行为
-exit 与 _exit 的表面区别
+fork_wait.cpp 与 fork_memory.cpp 编译无 warning
+父子返回值分流、独立地址空间、fd 继承、waitpid 和退出状态通过
+Ubuntu 实际运行与 strace -f 结果符合预期
+day5_note.md 已复检，评分 92
+用户选择跳过两个观察实验，不作为阻塞项或后续重复任务
 ```
 
-Day5 不提前实现 `exec` 和 `pipe`；Day6 按练习日规则独立组合 `fork / pipe / dup2 / exec / wait`。
+Day6 已完成：
+
+```text
+pipe 两端与父子进程单向通信
+exec 替换当前进程映像
+fork / pipe / dup2 / exec / wait 的组合
+exec 失败路径与子进程退出
+```
+
+Day6 实际验收：
+
+```text
+用户独立完成 pipe_parent_child.cpp 与 fork_exec_pipe.cpp
+理解 pipe() 创建新的内核 pipe 对象并返回 read/write 两个新 fd
+理解 fork 后父子 fd 表项共同引用同一个内核 pipe，而不是复制两条 pipe
+能够正确关闭父子各自不用的端点，并依靠所有 write end 关闭产生 EOF
+能够组合 dup2 / execlp，使新程序 stdout 进入 pipe，由 parent 读取并 wait
+两份代码使用规定参数零 warning 编译，核心正常路径运行通过
+修正 sizeof(char_array) 包含字符串结尾 '\0'、导致 pipe 多传一个字节的问题
+```
+
+Day6 学习中发现一处需要长期避免的教学缺口：只列出 `pipe()` 签名和 `pipefd[0] / pipefd[1]` 不足以建立正确模型。首次讲解会创建内核资源的系统调用，必须先明确：
+
+```text
+系统调用在内核中创建了什么对象
+返回值和输出参数分别带回什么
+新 fd 如何安装到当前进程 fd 表
+数组下标与 fd 数字是否属于不同概念
+fork / close / dup2 分别怎样改变或继承关系
+阻塞、EOF 和资源仍被引用之间的条件
+```
+
+本次具体误解是把 `pipefd[0] / pipefd[1]` 的数组下标误认为 fd 0/1，并认为 `close` 后会自动连接 stdin/stdout。后续教学必须用“用户空间数组 -> 进程 fd 表 -> 内核对象/缓冲区”的状态图主动消除这类歧义，不能等用户运行卡住后才补充。
+
+Day6 产出：
+
+```text
+pipe_parent_child.cpp：parent 写、child 读，正确关闭端点并依靠 close 产生 EOF
+fork_exec_pipe.cpp：child stdout -> pipe -> parent，组合 fork / dup2 / execlp / waitpid
+day6_note.md：两张 fd 状态图、错误契约、测试结果和验收回答
+```
+
+Day6 是独立组合练习日。教程已经按规则只给问题、接口语义、fd 目标状态、错误契约和测试，不提供完整代码、伪代码或 syscall 完整排列顺序。MIT 6.S081 部分已实际读取中文网 1.9 和 1.10，并沿课程的 `echo -> exec -> fork/exec/wait -> redirect` 顺序讲解；Linux pipe EOF 与关闭纪律明确作为当天主线补充。
+
+Day7 已完成并验收，评分 93：
+
+```text
+主线：mmap 文件映射第一层、signal 默认行为、Week4 出口复盘
+Linux demo：mmap_basic.cpp；signal_observe.cpp 作为小型观察程序
+MIT 6.S081：Lec03 3.4 / 3.5 必读，3.6 可选
+代码：规定 warning 选项零 warning，正常、边界和错误路径通过
+signal：SIGINT / SIGTERM 默认终止行为通过
+笔记：主线正确；length 0 与异步 handler 原因有两个非阻塞缺口
+```
+
+Week4 可以正式结课，不安排重复性补写。Week5 继续把已观察到的 system call、virtual memory、process 和 COW 接入 OS 机制。
+
+Week5 周规划已经生成：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week5\week5.md
+```
+
+Week5 的 6.S081 主线按 Lec04 -> Lec06 -> Lec08 -> Lec10 -> Lec11 -> Lec13 推进；Lec09 只定向读取 interrupt 与调度衔接所需部分。daily 仍需在生成前实际读取当天中文课程页面，并提供顺着课程的独立讲解。
+
+Week5 Day1 教程已经生成：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week5\day1\day1.md
+```
+
+Day1 主线和深度：
+
+```text
+从“指针打印出的地址为什么不是物理地址”开始
+address space、virtual/physical address、page、VPN/PPN、page offset
+CPU -> TLB/MMU -> page table/PTE -> physical memory
+明确 TLB miss 不等于 page fault
+用 address_space_layout.cpp 与 /proc/<pid>/maps 对照 Linux virtual mappings
+MIT 6.S081 Lec04 只读 4.1~4.4，4.5 可选，停止在 xv6 具体函数实现之前
+```
+
+教程保持三段固定结构，首次出现的 OS 英文术语写出英文全称和作用；完整观察代码包含程序目标、验证方法、自定义函数责任和关键系统接口注释。
+
+Week5 Day1 已完成并验收，评分 96：
+
+```text
+day1_note.md：page 翻译图、MMU、/proc/<pid>/maps 观察和六道验收题均已完成
+用户实际观察了 global、heap、stack、anonymous mmap，只在 note 保留一个代表例子，按避免重复 work 的原则不要求补抄
+address_space_layout.cpp：规定参数重新编译零 warning，六类地址正常输出，page size=4096，munmap 正常退出
+能够解释 VA -> TLB/MMU -> page table/PTE -> PA
+能够区分 backing file、virtual mapping 与 physical page
+能够解释 file-backed mapping 中 file offset 只提供初始内容来源，不能替代 VA -> PA
+```
+
+唯一需要继续保持精确的表述：
+
+```text
+VPN 用于索引或定位 PTE；
+PTE 通常保存 PPN 与权限/状态位，不必把 VPN 本身作为映射内容再次记录。
+TLB miss 只表示缓存未命中；查询 page table 后可能成功，也可能因无有效映射或权限问题进一步产生 page fault。
+```
+
+Week5 Day2 教程已经生成：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week5\day2\day2.md
+```
+
+Day2 主线和深度：
+
+```text
+从“普通函数调用不能提升权限，system call 为什么可以”出发
+先介绍 MIT 6.S081 Lec06、xv6、RISC-V 和 Shell write 场景
+再严格沿 6.1 -> 6.2 -> 6.3 -> 6.4 推进，不在后文重复建立第二条课程主线
+区分 system call / exception / interrupt / trap
+解释 ECALL 前后 CPU state，区分 hardware 自动动作与 software trap entry 工作
+解释 stvec / sepc / scause / stval / sstatus / sscratch / satp 的第一层责任
+明确 ECALL 不自动保存所有通用寄存器，不自动切 kernel stack/page table
+明确 mode switch 不等于 process/context switch
+MIT 6.S081 Lec06 必读 6.1~6.4，严格停止在 6.4；6.5~6.8 留给 Day3
+```
+
+Day2 不重复编写 `read/write` C++ demo。原规划中的 `syscall_trap_path.md` 合并进 `day2_note.md`，避免与日笔记重复；核心实践是自己画 trap path、填写 ECALL 前后状态表，并执行：
+
+```bash
+strace -e trace=write /bin/echo trap-day2
+```
+
+该命令已在 Ubuntu 实测，输出包含 `write(1, "trap-day2\n", 10) = 10`。教程已依据 MIT 中文课程 6.1~6.4 和 RISC-V 官方 supervisor CSR 资料核对。
+
+Week5 Day2 已通过口述验收，评分 90：
+
+```text
+用户提交 5 分 31 秒录音，能够独立讲出：
+    今天的核心是 system call 怎样通过 trap 受控地从 U-mode 进入 S-mode
+    Shell write wrapper 准备 a0/a1/a2 和 a7，再执行 ECALL
+    ECALL 是 trap 来源之一，不是直接调用 sys_write
+    hardware 更新必要 CSR、privilege 和 PC，但不自动修改 general registers、SP、satp
+    trampoline 在 user page table 中有 mapping，但 U-mode 因权限不能执行
+    uservec 保存 user state，usertrap 根据 scause 判断原因，dispatcher 根据 a7 找到 sys_write
+    sscratch 为最早期 entry 提供预先准备的信息
+    CPU 的 fetch/decode/execute/update PC 最小循环和 register 的基本含义
+```
+
+口述中需要校正或补全：
+
+```text
+ECALL 全称是 Environment Call
+stvec 指向 trampoline page 中的 uservec entry，trampoline 不是一条 instruction
+sscratch 保存 kernel 预先准备的信息；它不会自动分配安全 memory
+只说出 ECALL 是 trap 来源之一，未展开 exception / interrupt 的完整关系
+未口述 mode switch 与 context switch 的区别
+未提供个人实际 strace 输出，因此不能把教程中的输出冒充为个人实验
+```
+
+已根据录音整理：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week5\day2\day2_note.md
+```
+
+Day2 概念主线通过，可以进入 Day3。`strace` 实际输出属于尚未展示的证据缺口，不阻塞当前进度，但后续 review 继续保持“不伪造已完成实验”的原则。
+
+Week5 Day3 教程已经生成：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week5\day3\day3.md
+```
+
+Day3 主线和深度：
+
+```text
+从“sys_write 已经完成，Shell 为什么能从 ECALL 后继续”出发
+严格沿 MIT 6.S081 Lec06 6.5 -> 6.6 -> 6.7 -> 6.8 推进
+uservec：用 trapframe + sscratch 保存 user registers，切 kernel stack/page table
+usertrap：保存 sepc、检查 scause、让 syscall path epc += 4、分派 handler、把返回值写入 trapframe->a0
+usertrapret：关闭过渡窗口的 interrupt，准备 stvec/sstatus/sepc 和下一次进入 kernel 所需 metadata
+userret：切 user page table、恢复 registers、处理 a0/sscratch，最后执行 sret
+用四个检查点追踪 privilege、page table、SP、registers 与 PC
+区分 trapframe、user stack、kernel stack
+区分 C return、RISC-V ret 与 privileged sret
+只比较 ordinary call / system call / page fault / interrupt 的发生方式和返回位置
+```
+
+Day3 是概念机制日，不新增 C++ demo。原规划中的 `trap_return_path.md` 合并进 `day3_note.md`，避免重复 work。核心任务是：
+
+```text
+自己画 user -> trap -> kernel -> trap return -> user 的完整闭环
+填写 ECALL 后、uservec 后、usertrapret 后、sret 后四个状态检查点
+追踪 a0 从 write argument 到 syscall return value 的完整变化
+完成 ordinary call / system call / page fault / interrupt 对照
+```
+
+教程已经实际核对 MIT 中文课程 6.5~6.8、MIT 官方 xv6-riscv repository 和 xv6 RISC-V book。具体汇编 register 搬运顺序、完整 CSR bit、xv6 build 和 traps lab 后置。Day3 已完成并通过验收，评分 `90`；保留少量不阻塞推进的边界，后续在 Day4 page fault 和其他 trap 场景中继续纠偏。
+
+Week5 Day4 教程已经生成：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week5\day4\day4.md
+```
+
+Day4 主线和深度：
+
+```text
+用 Day3 的 trap 路径接住 page fault
+明确 system call 跳到下一条 instruction，而可修复 page fault 重试原 instruction
+顺着 MIT 6.S081 Lec08 8.1~8.6 学习：
+    Page Fault Basics
+    Lazy Page Allocation
+    Zero Fill On Demand
+    Copy On Write Fork
+    Demand Paging
+    Memory Mapped Files
+建立 fault address / cause / PC 与 region metadata 的判断框架
+区分可修复 page fault、真正权限错误和最终 SIGSEGV
+独立完成 mmap_private_cow.cpp，验证 MAP_PRIVATE 的 application-visible COW 语义
+```
+
+Day4 不要求实现 xv6 lazy/COW/mmap lab，不深入 Linux page cache、writeback、swap、NUMA 或 TLB shootdown。代码练习只提供需求、必要接口和验证标准，不提前给出完整实现；原周计划中的 `page_fault_cow_note.md` 合并进 `day4_note.md`，避免重复笔记。
+
+Week5 Day4 已完成并通过验收，最终评分 `88`：
+
+```text
+已理解 page fault 的 fault address / cause / PC
+能区分 system call 跳到下一条 instruction 与可修复 page fault 重试原 instruction
+能解释 lazy allocation 的合法 region 判断
+能说明 COW page 与真正只读 code page依靠 metadata 区分
+能分开 backing file、VMA、PTE、physical page 的职责
+明确 CPU 不会绕过 physical memory 直接读取 backing file
+mmap_private_cow.cpp 已验证 MAP_PRIVATE 修改当前视图而 underlying file 保持不变
+```
+
+Ubuntu 代码使用 `-std=c++17 -Wall -Wextra -g` 编译通过；正常文件、空文件和文件不存在路径已验证，正常路径通过 ASan/UBSan。首次 review 发现 `read()` 的 `ssize_t` 返回值被错误保存为 `size_t`，现已修复。保留两个不阻塞推进的改进点：
+
+```text
+COW 手推仍应主动写出 copy old bytes、PTE writable/COW flag 更新
+fd_read 循环中的 size_t index 与 ssize_t count 在 -Wsign-conversion 下仍有 signedness warning
+```
+
+后续遇到 COW 或 read loop 时短纠偏，不要求重复重写 Day4。
+
+Week5 Day5 教程已经生成：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week5\day5\day5.md
+```
+
+Day5 主线和深度：
+
+```text
+从 counter++ 的 read-modify-write 交错手推 lost update
+区分 broad race condition 与 C++ data race；明确 data race 是 UB
+顺着 MIT 6.S081 Lec10 10.1~10.5 学习：
+    多核为什么需要锁
+    freelist lost update 与 acquire/release
+    shared state / operation / invariant 怎样决定 critical section
+    two-lock circular wait、lock ordering 与 deadlock
+    coarse-grained / fine-grained lock 的 correctness-performance 取舍
+使用 std::thread 的最小接口创建 execution flows
+使用同一 std::mutex 和 std::lock_guard 修复完整 read-modify-write
+```
+
+Day5 是受控错误实验和独立练习日。教程只提供问题、机制、必要 API、边界、验证命令和验收标准，不提供 `race_counter.cpp` 或 `mutex_counter.cpp` 的完整程序。周计划中的 `race_lock_note.md` 合并进 `day5_note.md`，避免重复笔记。
+
+Ubuntu 工具状态已经在 2026-07-25 重新配置并实际验证：
+
+```text
+已安装 gcc-10 / g++-10 / libgcc-10-dev
+默认 gcc / g++ 已通过 update-alternatives 切换为 10.5
+g++ -print-file-name=libtsan_preinit.o 能返回 GCC 10 下的完整文件路径
+g++ ThreadSanitizer 能报告 race_counter 的 data race
+g++ ThreadSanitizer 运行 mutex 修复版无 data race 报告
+```
+
+因此普通构建和 TSan 构建都统一使用 `g++`。TSan 基线：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -g \
+    -fsanitize=thread -fno-omit-frame-pointer \
+    -pthread file.cpp -o program_tsan
+```
+
+Week5 Day6 教程已经生成：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week5\day6\day6.md
+```
+
+Day6 主线和深度：
+
+```text
+program / process / thread 的资源与执行关系
+同一 process threads 共享 address space/fd 等资源，各自拥有 PC/registers/stack/TID
+concurrency 与 parallelism
+timer interrupt、preemption、scheduler、context switch 的责任边界
+xv6 trapframe 与 context 的两层保存
+P1 user -> P1 kernel -> per-CPU scheduler -> P2 kernel -> P2 user
+p->lock 保护 RUNNING/RUNNABLE、context 和 kernel stack 的跨步骤 invariant
+Linux thread_identity.cpp + ps -L + /proc/<pid>/task 观察
+```
+
+Day6 不提供完整 `thread_identity.cpp`；只给必要 PID/TID/thread API、需求、预测、观察命令和验收标准。课程内容已实际读取 MIT 6.S081 中文站 Lec09 9.2、Lec11 11.1~11.9，并按课程真实顺序组织。
