@@ -73,7 +73,7 @@ scheduler 可能在不同 CPU cores 上同时运行多个 threads
 ```text
 PC：下一条或当前相关 instruction 在哪里
 general-purpose registers：当前计算用到的 values / addresses
-SP：当前 thread 的 stack pointer
+SP：当前 thread 的 stack pointer 
 privilege / interrupt 等少量 control state
 ```
 
@@ -117,6 +117,41 @@ CPU core 当前的 registers。
 -> 让 CPU 从新 thread 之前暂停的位置继续
 ```
 
+## 2.3 process 的 VA space 布局
+
+你记得的是**进程的虚拟地址空间布局**，其中包含：
+
+```
+进程虚拟地址空间
+├── 代码区 text/code       多个线程共享
+├── 全局/静态数据区         多个线程共享
+├── Heap 堆                通常进程共享
+└── Stack 栈               每个线程独立一份
+```
+
+关键区别：
+
+- **进程**拥有一整个虚拟地址空间。
+- **线程**共享进程的代码、全局变量和堆。
+- **线程**拥有自己的栈，用来保存函数调用帧、局部变量、返回地址等。
+- `new/malloc` 分配的内存来自 **heap**，同一进程的线程通常都能访问。
+- 函数里的普通局部变量通常在当前线程的 **stack** 上。
+
+例如：
+
+```
+int global_value;        // 全局区，线程共享
+
+void work() {
+    int local = 0;       // 当前线程自己的 stack
+    int* p = new int(1); // heap，进程内线程可共享
+}
+```
+
+另外，内核通常还会给**每个线程单独分配 kernel stack**，用于线程进入内核执行系统调用时保存内核态调用信息。你现在主要先记住：
+
+> **进程有地址空间；线程共享进程资源，但每个线程有独立的用户栈。**
+
 ## 3. 必要术语
 
 | 术语 | 英文原意 | 今天的实际作用 |
@@ -140,7 +175,7 @@ CPU core 当前的 registers。
 | sleeping / blocked | 睡眠 / 阻塞 | 正在等待事件，现在即使给 CPU 也无法继续 |
 | PID | Process Identifier | process identifier，进程标识 |
 | TID | Thread Identifier | thread identifier，线程标识 |
-
+| RA | Return Address register（返回地址寄存器） | ra 是“以后恢复这条 execution flow 时，应该从哪里继续执行”的地址。 |
 ### 3.1 `context` 不要只翻译成“环境”
 
 这里的 context 不是泛泛的“背景”。
@@ -476,6 +511,79 @@ local variable
 就会互相覆盖。
 
 所以每个 thread 需要自己的 stack，以及指向自己 stack 当前位置的 SP。
+
+#### 具体覆盖过程
+
+因为 stack 不是“抽象变量”，而是一块会被函数调用不断写入的内存。
+
+函数调用大致会做：
+
+```
+SP -= frame_size
+保存 return address
+保存参数和寄存器
+在 stack frame 中放 local variable
+```
+
+假设两个 thread 共用同一块 stack，并且都从 `0x1000` 开始：
+
+```
+void work(int id) {
+    int local = id;
+}
+```
+
+可能发生：
+
+```
+Thread A:
+    SP -> 0x0fe0
+    local 放在 0x0ffc
+    写入 local = 1
+
+Thread B:
+    SP -> 0x0fe0
+    local 也放在 0x0ffc
+    写入 local = 2
+```
+
+于是：
+
+```
+A 的 local 和 B 的 local 实际是同一个内存地址
+A 写的 1 被 B 改成 2
+A 读取时可能得到 2
+```
+
+不仅 `local` 会冲突，下面这些也可能占用同一个位置：
+
+```
+return address
+saved registers
+function parameters
+```
+
+如果 B 覆盖了 A 的 return address，A 返回时甚至可能跳到错误的代码地址。
+
+所以每个 thread 必须拥有自己的 stack：
+
+```
+Thread A -> stack A -> local_A / return address_A
+Thread B -> stack B -> local_B / return address_B
+```
+
+而 CPU 切换 thread 时，只需要切换对应的 `SP`：
+
+```
+保存 A 的 SP
+恢复 B 的 SP
+```
+
+这样 A 和 B 的函数调用记录就不会互相覆盖。
+
+严格地说，如果人为给两个 thread 分配同一块大 stack 中完全不重叠的区域，也能工作；但那实际上已经等价于“每个 thread 有自己的 stack 区域”。核心要求就是：
+
+> 每个 thread 的 active stack frame 必须拥有独立的内存范围。
 
 ### 7.3 一张所有权图
 
@@ -865,6 +973,149 @@ P1 kernel thread registers
 
 xv6 把两类状态明确分开，能让进入/退出 kernel 与 scheduler switching 的责任更清楚。
 
+### 13.4 系统顺一下都有啥
+
+它们都保存“寄存器状态”，但保存的是**两个不同阶段**的状态。
+
+#### 1. `trapframe`：保存用户态状态
+
+P1: process 1 某个进程
+
+当 P1 正在用户态运行时发生系统调用或中断：
+
+```
+用户态寄存器
+PC、a0-a7、sp、ra、s0...
+        |
+        v
+保存到 P1 的 trapframe
+```
+
+`trapframe` 主要保存：
+
+```
+用户态 PC       sepc
+用户态栈指针    sp
+函数返回值/参数 a0
+通用寄存器      a1、a2、...
+状态寄存器      sstatus 等
+```
+
+它的作用是：
+
+> 将来从内核返回用户态时，恢复 P1 原来的用户执行现场。
+
+可以理解为：
+
+```
+trapframe = P1 用户态暂停时的存档
+```
+
+------
+
+#### 2. `context`：保存内核态状态
+
+进入内核后，P1 使用自己的 **kernel stack** 执行内核代码。
+
+如果此时 P1 被调度器暂停：
+
+```
+P1 kernel code
+      |
+      v
+保存当前内核执行现场到 P1.context
+```
+
+`context` 通常保存：
+
+```
+ra       从哪里继续执行
+sp       P1 的 kernel stack 栈顶
+s0-s11   内核函数需要保存的寄存器
+```
+
+它的作用是：
+
+> 将来 P1 再次被调度时，从上次暂停的内核位置继续执行。
+
+可以理解为：
+
+```
+context = P1 内核态暂停时的存档
+```
+
+------
+
+#### 3. 为什么需要两个？
+
+因为一次暂停可能跨越两个层次：
+
+```
+用户态 P1
+   |
+   | timer interrupt / system call
+   v
+内核态 P1
+   |
+   | yield / scheduler
+   v
+调度器
+```
+
+对应关系：
+
+```
+用户态 -> 内核态：
+使用 trapframe 保存用户现场
+
+内核态 P1 -> 调度器：
+使用 context 保存内核现场
+```
+
+完整流程大致是：
+
+```
+P1 user code
+    |
+    | 中断
+    v
+保存用户寄存器到 trapframe
+    |
+    v
+P1 kernel code
+    |
+    | yield()
+    v
+保存内核寄存器到 P1.context
+    |
+    v
+scheduler
+    |
+    | 再次选择 P1
+    v
+恢复 P1.context
+    |
+    v
+继续执行 P1 的 kernel code
+    |
+    v
+从 trapframe 恢复用户寄存器
+    |
+    v
+回到 P1 user code
+```
+
+一句话记忆：
+
+> `trapframe` 负责“用户态和内核态之间的进出”；`context` 负责“内核里的进程和调度器之间的切换”。
+
+所以：
+
+```
+trapframe：将来回用户态
+context：将来回内核态上次暂停的位置
+```
+
 ## 14. 顺着 11.3~11.4：P1 切到 P2 的完整路径
 
 ```mermaid
@@ -894,6 +1145,49 @@ flowchart TD
     J --> K
     K --> L
 ```
+
+### 14.0 要暂停当前在 CPU 上运行的 thread，必须先进入 kernel
+
+对，但更准确地说：
+
+> 要让 OS 暂停当前正在 CPU 上运行的 thread，CPU 必须先进入 kernel；`interrupt` 是其中一种进入方式。
+
+分两种情况。
+
+```
+1. thread 主动让出 / 阻塞
+   thread 调用 read、sleep、yield、exit...
+   -> system call（也是一种 trap）
+   -> 进入 kernel
+   -> scheduler 可决定切走它
+
+2. thread 不肯主动让出
+   timer interrupt 到来
+   -> CPU 被硬件打断，进入 kernel
+   -> OS 发现它时间片用完
+   -> scheduler 切到别的 thread
+```
+
+所以“强制暂停”的典型机制就是 **timer interrupt（时钟中断）**。没有它，一个纯计算的用户线程：
+
+```
+while (true) {
+    calculate();
+}
+```
+
+既不做系统调用，也不主动 `yield`，就可能一直霸占 CPU。
+
+但进入 kernel 后，是否真的切线程是调度器的决定，不是每次 interrupt 都必然切换：
+
+```
+timer interrupt
+-> kernel
+-> 检查：时间片是否用完、是否有更合适的 thread
+-> 可能 context switch，也可能继续运行当前 thread
+```
+
+这里的 `context switch` 才是“真正暂停 P1、改为运行 P2”的动作。
 
 ### 14.1 不是 P1 直接跳到 P2
 
@@ -934,6 +1228,180 @@ CPU 的 SP / RA 等变成 P2 当时保存的值
 ```
 
 今天理解现象即可，不背 assembly。
+
+#### 14.2 解释梳理
+
+不是说 `swtch` 的汇编代码只执行到一半卡住了；更准确的说法是：
+
+> `swtch` 执行完了，但它的 `ret` 没有返回到 P2 调用它之后的下一行，而是返回到了 scheduler 的执行位置。
+
+假设 P2 里有：
+
+```
+sched() {
+    swtch(&P2.context, &scheduler.context);
+    // P2 期待将来从这里继续
+}
+```
+
+`swtch` 的核心逻辑可以粗略看成：
+
+```
+保存“旧 context”到第一个参数
+恢复“新 context”从第二个参数
+ret
+```
+
+所以 P2 调用：
+
+```
+swtch(&P2.context, &scheduler.context)
+```
+
+实际发生的是：
+
+```
+1. 保存 P2 的 SP、RA 等到 P2.context
+   - P2 的 RA 是：“将来应回到 sched() 中 swtch 后面”
+
+2. 从 scheduler.context 恢复 scheduler 的 SP、RA 等
+
+3. ret
+   - 但现在 RA 已经是 scheduler 的 RA
+   - 所以跳回 scheduler 上次暂停的位置
+```
+
+因此，P2 的这句调用：
+
+```
+swtch(&P2.context, &scheduler.context);
+```
+
+后面的代码此刻没有运行。不是 CPU 停在 `swtch` 的某条指令上，而是 P2 的“函数调用返回结果”被延后了。
+
+之后 scheduler 执行：
+
+```
+swtch(&scheduler.context, &P2.context)
+```
+
+这一次它恢复 P2 原来保存的 `SP` 和 `RA`，再执行 `ret`。于是跳到：
+
+```
+sched() {
+    swtch(&P2.context, &scheduler.context);
+    // 从这里继续
+}
+```
+
+一句话：
+
+> `swtch` 像是一个会把“返回地址”换掉的函数：P2 调它时先返回 scheduler；scheduler 以后再调它时，才返回 P2。
+
+#### 14.2 几个问题
+
+##### Annotation 1
+
+对，`RA` 是 **CPU 当前的一个寄存器**，全名是 **Return Address register**（返回地址寄存器）。
+
+当 P2 执行：
+
+```
+swtch(&P2.context, &scheduler.context);
+```
+
+进入 `swtch` 时，CPU 的 `ra` 已经是：
+
+```
+P2 中这句 swtch 调用结束后，应继续执行的地址
+```
+
+`swtch` 把这个当前 CPU `ra` 保存进 `P2.context.ra`。
+
+------
+
+##### Annotation 2
+
+对，正是因为第二步恢复了 `scheduler.context`，其中包括 scheduler 之前保存的 `ra`：
+
+```
+scheduler.context.ra
+-> 加载到 CPU 的 ra 寄存器
+-> ret
+-> 跳回 scheduler 上次暂停的位置
+```
+
+所以“已经是 scheduler 的 RA”指的是：
+
+```
+CPU.ra 原本属于 P2
+-> 被 swtch 保存到 P2.context
+-> CPU.ra 改成 scheduler.context.ra
+```
+
+------
+
+##### Annotation 3
+
+完全对。可以把它记成这个精确模型：
+
+```
+swtch(old, new)
+
+1. CPU 当前寄存器 -> old context
+2. new context         -> CPU 当前寄存器
+3. ret，跳到“新 context 的 RA”
+```
+
+因此：
+
+```
+swtch(P2.context, scheduler.context)
+```
+
+最后会从 `scheduler.context.ra` 继续；
+
+```
+swtch(scheduler.context, P2.context)
+```
+
+最后会从 `P2.context.ra` 继续。
+
+这里的 `ret` 永远只看**此刻 CPU 寄存器里的 `ra`**；而 `swtch` 刚好在 `ret` 前把“目标 context”的 `ra` 恢复进去了。
+
+##### Annotation 4
+
+对。第 4 步就是开始执行 `new context` 对应的那条 execution flow 剩下的代码。
+
+```
+1. 保存 old execution flow 的寄存器
+2. 恢复 new execution flow 的寄存器
+3. ret 跳到 new.ra
+4. 执行 new.ra 指向的代码
+```
+
+例如：
+
+```
+scheduler -> swtch(scheduler.context, P2.context)
+```
+
+恢复的是 `P2.context`，于是：
+
+```
+ret
+-> 跳到 P2.context.ra
+-> 继续执行 P2 之前暂停的 kernel code
+```
+
+通常 P2 会从过去的：
+
+```
+swtch(&P2.context, &scheduler.context);
+// 这里继续
+```
+
+后面继续运行，随后逐层从 `sched()`、`yield()`、中断处理函数返回；如果它原来是从用户态被切走的，最后再恢复 `trapframe`，回到 P2 的用户代码。
 
 ## 15. `p->lock`：Day5 为什么直接出现在 context switch 中
 
@@ -1069,6 +1537,8 @@ xv6 `swtch` 具体只保存一组 kernel callee-saved registers，包括重要�
 
 ```text
 ra：return address
+ra 是“以后恢复这条 execution flow 时，应该从哪里继续执行”的地址。
+
 sp：stack pointer
 其他 callee-saved registers
 ```
@@ -1301,6 +1771,49 @@ g++ -std=c++17 -Wall -Wextra -g -pthread \
 ```bash
 ps -L -p <PID> -o pid,tid,psr,stat,comm
 ```
+
+含义是：查看某个进程及其所有线程的简要状态。
+
+```
+ps      = process status，查看进程状态
+-L      = 显示该进程的 threads（Linux threads / LWP）
+-p PID  = 指定要查看的进程 ID
+-o ...  = 指定输出哪些列
+```
+
+各列：
+
+```
+PID   = Process ID，进程编号
+TID   = Thread ID，线程编号
+PSR   = Processor，线程最近/当前运行在哪个 CPU 核上
+STAT  = Status，线程状态
+COMM  = Command，程序名/线程名
+```
+
+常见 `STAT`：
+
+```
+R = Running，可运行或正在运行
+S = Interruptible Sleep，可被信号唤醒的睡眠
+D = Uninterruptible Sleep，不可中断睡眠，常见于等待磁盘 I/O
+T = Stopped，被暂停
+Z = Zombie，僵尸进程
+I = Idle，空闲内核线程
+```
+
+例如：
+
+```
+PID    TID    PSR  STAT  COMM
+1234   1234   2    Sl    demo
+1234   1235   0    Sl    worker-1
+1234   1236   3    Rl    worker-2
+```
+
+表示 `demo` 进程有三个线程；`worker-2` 正在或可在 CPU 3 上运行，另外两个当前在睡眠。
+
+注意 `PSR` 是观察命令执行那一刻附近的状态，不代表这个线程永远绑定在那个 CPU 核上。
 
 字段：
 
