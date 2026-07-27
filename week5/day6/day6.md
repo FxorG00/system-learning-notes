@@ -117,7 +117,7 @@ CPU core 当前的 registers。
 -> 让 CPU 从新 thread 之前暂停的位置继续
 ```
 
-## 2.3 process 的 VA space 布局
+### 2.3 process 的 VA space 布局
 
 你记得的是**进程的虚拟地址空间布局**，其中包含：
 
@@ -240,6 +240,174 @@ RUNNABLE
 ```
 
 中文课程部分段落里偶尔写成 `RUNABLE`；今天代码和笔记统一使用源码拼写 `RUNNABLE`。
+
+### 3.4 devintr
+
+`devintr` 是 xv6 内核里的一个函数，名字来自：
+
+```
+devintr = device interrupt
+        = 设备中断
+```
+
+它的作用是：**判断这次 trap 是否由设备中断引起，并把中断分发给对应的处理函数。**
+
+当 CPU 进入 `usertrap()` 或 `kerneltrap()` 后，会检查 trap 原因：
+
+```
+which_dev = devintr();
+```
+
+`devintr()` 大致负责区分：
+
+```
+这次 trap
+   |
+   v
+是不是外部设备中断？
+   | 是
+   +--> UART 中断：调用 uartintr()
+   |
+   +--> 磁盘中断：调用 virtio_disk_intr()
+   |
+   +--> 其他设备中断
+   |
+   v
+是不是定时器中断？
+   | 是
+   +--> 调用 clockintr()
+   |
+   v
+都不是：返回 0
+```
+
+在课程使用的 xv6 版本中，它的返回值通常表示：
+
+```
+0：不是已识别的设备中断
+1：其他设备中断，例如 UART、磁盘
+2：定时器中断
+```
+
+因此 `usertrap()` 中可能有：
+
+```
+if (which_dev == 2)
+    yield();
+```
+
+意思是：
+
+```
+如果 devintr 判断这是 timer interrupt
+    |
+    v
+当前进程已经运行了一个时间片
+    |
+    v
+调用 yield()，主动让出 CPU
+    |
+    v
+进入 scheduler，可能切换到其他进程
+```
+
+所以你之前那条 timer interrupt 路径可以进一步写成：
+
+```
+P1 user code
+    |
+    | timer interrupt
+    v
+uservec：保存用户寄存器
+    |
+    v
+usertrap
+    |
+    v
+devintr：识别出 timer interrupt
+    |
+    v
+clockintr：更新时钟信息
+    |
+    v
+yield：P1 让出 CPU
+    |
+    v
+scheduler
+```
+
+注意，`devintr()` 主要是一个**识别器和分发器**。它不是完成所有设备工作的地方，而是判断“哪个设备发来的中断”，再调用相应处理函数。
+
+### 3.5 kernel stack/user stack
+
+对。对于一个能够进入内核的执行流，可以理解为它有两套栈：
+
+```
+user stack    用户态执行时使用
+kernel stack  进入内核后使用
+```
+
+以 xv6 的进程 P1 为例：
+
+```
+P1 user mode
+CPU 的 sp 指向 P1 user stack
+    |
+    | system call / interrupt / exception
+    v
+保存用户寄存器到 P1.trapframe
+其中包含原来的 user sp
+    |
+    v
+CPU 的 sp 切换到 P1 kernel stack
+    |
+    v
+执行 usertrap、devintr、yield 等内核函数
+```
+
+因此，之前说的：
+
+> CPU 正在执行 P1 的 kernel code
+
+更准确地说就是：
+
+```
+CPU 在内核态
+执行共享的内核代码
+使用 P1 自己的 kernel stack
+代表 P1 处理系统调用或中断
+```
+
+两套栈分别保存不同层次的函数调用现场：
+
+```
+P1 user stack
+    main()
+      -> foo()
+          -> write()
+
+P1 kernel stack
+    usertrap()
+      -> devintr()
+          -> yield()
+              -> sched()
+```
+
+需要注意：CPU 同一时刻只有一个实际使用中的 `sp`：
+
+- 用户态时，`sp` 指向 user stack。
+- 内核态时，`sp` 指向 kernel stack。
+- `trapframe` 保存切换前的用户寄存器，包括 user `sp`。
+- `P1.context` 保存发生内核上下文切换时的 kernel `sp` 等寄存器。
+
+所以两层保存关系是：
+
+```
+trapframe  保存 P1 的用户态执行现场
+context    保存 P1 的内核态执行现场
+```
+
+在现代 Linux 中，更准确地说是**每个线程/执行流**都有自己的 user stack 和 kernel stack；xv6 目前没有完整的用户线程概念，所以课程里通常按“每个进程”理解。
 
 ## 4. 今日课程范围与停止位置
 
@@ -1116,6 +1284,141 @@ trapframe：将来回用户态
 context：将来回内核态上次暂停的位置
 ```
 
+### 13.5 完整版 P1 切换
+
+这里的 **“P1 kernel code”不是 P1 自己拥有的一份内核代码**。
+
+准确说法是：
+
+> CPU 进入内核后，正在使用 **P1 的 kernel stack**，代表 P1 执行公共的 xv6 kernel code。这个执行流可以称为 P1 对应的 kernel thread。
+
+所有进程执行的是同一份 kernel code，但每个进程有自己的：
+
+```
+trapframe
+kernel stack
+context
+process state
+```
+
+以 timer interrupt 为例，具体路径大致是：
+
+```
+P1 user thread 正在 runing, 正在执行 user code
+    |
+    | timer interrupt
+    v
+uservec
+保存 P1 user registers 到 P1.trapframe(把当前 CPU registers 里 P1 的相关保存到 trapframe)
+切换到 P1 kernel stack
+    |
+    v
+usertrap()
+    |
+    v
+devintr(): device interrupt，判断这次 trap 是否由设备中断引起，并分发给对应的处理函数
+识别出这是 timer interrupt
+处理 timer 相关工作
+    |
+    v
+回到 usertrap()
+发现这是 timer interrupt
+    |
+    v
+yield()
+P1.state = RUNNABLE
+    |
+    v
+sched(): swtch 是一个独立的汇编函数，sched() 会调用它完成内核上下文切换。
+    |
+    v
+swtch(&P1.context, &CPU.scheduler_context)
+```
+
+这里所谓的 **P1 kernel code**，就是这条 kernel 调用链：
+
+```
+usertrap
+-> devintr
+-> timer interrupt handler
+-> 返回 usertrap
+-> yield
+-> sched
+-> swtch
+```
+
+#### 再次选择 P1 后
+
+`swtch` 保存的 `P1.context` 包含足够恢复 P1 kernel execution 的状态，例如：
+
+```
+sp：指向 P1 kernel stack
+ra：恢复后应该从哪里继续
+callee-saved registers
+```
+
+scheduler 再次选中 P1：
+
+```
+swtch(&CPU.scheduler_context, &P1.context)
+```
+
+恢复后不是重新执行 `usertrap()`，而是回到 P1 之前暂停的位置：
+
+```
+P1 的 swtch() 返回
+    |
+    v
+sched() 继续执行并返回
+    |
+    v
+yield() 继续执行并返回
+    |
+    v
+usertrap() 继续执行
+    |
+    v
+usertrapret / userret
+从 P1.trapframe 恢复 user registers
+    |
+    v
+回到 P1 user code
+```
+
+可以把两层状态理解成：
+
+```
+P1 user code 的暂停点
+    存在 P1.trapframe
+
+P1 kernel code 的暂停点
+    存在 P1.context + P1 kernel stack
+```
+
+所以你的图可以更精确地写成：
+
+```
+P1 user code
+    |
+timer interrupt
+    v
+trapframe 保存 P1 user state
+    |
+    v
+CPU 使用 P1 kernel stack
+代表 P1 执行 usertrap/devintr/yield/sched
+    |
+    v
+P1.context 保存 P1 kernel-thread state
+    |
+    v
+scheduler
+```
+
+核心一句话：
+
+> `trapframe` 让 P1 将来能回到 user code；`context + kernel stack` 让 P1 将来能先恢复那条尚未执行完的 kernel 调用链。
+
 ## 14. 顺着 11.3~11.4：P1 切到 P2 的完整路径
 
 ```mermaid
@@ -1887,6 +2190,39 @@ cpu-migrations
 今天不要根据这个很小的 sleep demo 做性能结论。
 
 工具可能因 kernel permission 或未安装而失败；它是可选项，不阻塞 Day6。
+
+### 20.6 sleep 等待观察
+
+那就保留，相关说明已经写入正式的 `day6.md`。
+
+你看不到稳定的 4 个线程，原因是：
+
+1. `task()` 中的 worker 打印完就直接返回，线程随即结束。
+2. `sleep(20)` 只让 main thread 存活，并不会让已经结束的 workers 复活。
+3. `join()` 只是等待线程结束；线程可以在调用 `join()` 前就已经结束。
+4. `main_task()` 还在持有 `mutex_lock` 时睡眠。main 抢到锁之前，可能已有部分 workers 打印并结束，所以此时 `ps -L` 看到的数量不固定。
+
+因此，你的程序可能经历：
+
+```
+worker 1 抢锁 -> 打印 -> 结束
+worker 2 抢锁 -> 打印 -> 结束
+main 抢锁 -> 持锁 sleep
+worker 3 被锁阻塞
+```
+
+这时 `ps -L` 只能看到 main 和 worker 3，而不是 4 个。
+
+要稳定观察 4 个线程，应该让每个 worker 打印后都保持存活，并且在释放输出锁之后再睡眠：
+
+```
+worker 获取锁并打印
+-> 释放锁
+-> worker 自己 sleep 20 秒
+-> worker 结束
+```
+
+main 直接进入 `join()` 等待即可。这样观察窗口里就是 main + 3 个 sleeping workers。
 
 ## 21. 最容易混淆的点
 

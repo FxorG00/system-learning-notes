@@ -256,18 +256,18 @@ day7_note.md 的 fd/mmap 与 system call 主线正确
 
 Day7 笔记有两个非阻塞缺口：`mmap` 长度为 0 应明确为接口要求失败，而不只是“没有字节”；验收题 5 只解释了 `SIGINT/SIGTERM` 名称，没有回答 handler 可能异步介入正常代码、受 async-signal-safe 限制。复评时已纠正，不要求重复抄整份笔记。
 
-### Week5：进行中
+### Week5：已完成
 
 主题：OS 第一轮 + MIT 6.S081 核心机制。
 
 ```text
-Day1：address space / page / MMU / page table / TLB，Lec04 4.1~4.4
-Day2：trap 总图与 ECALL 前后，Lec06 6.1~6.4
-Day3：uservec/usertrap 与返回路径，Lec06 6.5~6.8
-Day4：page fault / lazy / COW / demand paging / mmap，Lec08 8.1~8.6
-Day5：race condition / mutex / deadlock，Lec10 10.1~10.5
-Day6：thread / context switch / scheduler，Lec09 9.2 + Lec11
-Day7：blocking / sleep-wakeup / lost wakeup / condition_variable，Lec13 13.1~13.5
+Day1：已完成，96 分；address space / page / MMU / page table / TLB，Lec04 4.1~4.4
+Day2：已完成，90 分；trap 总图与 ECALL 前后，Lec06 6.1~6.4
+Day3：已完成，90 分；uservec/usertrap 与返回路径，Lec06 6.5~6.8
+Day4：已完成，88 分；page fault / lazy / COW / demand paging / mmap，Lec08 8.1~8.6
+Day5：已完成，90 分；race condition / mutex / deadlock，Lec10 10.1~10.5
+Day6：已完成，92 分；thread / context switch / scheduler，Lec09 9.2 + Lec11
+Day7：已完成，复检 90 分；blocking / sleep-wakeup / lost wakeup / condition_variable，Lec13 13.1~13.5
 ```
 
 Week5 不重复 Week4 的 fd/fork/pipe/mmap API 练习，而是解释其 OS 和硬件机制。概念日不为凑产出强制写代码；Day5 与 Day7 的独立练习在用户实现前不提供完整修复代码或线程控制流。
@@ -319,6 +319,215 @@ Day5 笔记的非阻塞缺口：
 ```
 
 用户的 mutex 版让每个 worker 持锁完成整批 increment，是正确的 coarse-grained design，会把 counter workload 序列化；后续如讨论 granularity，应先肯定 correctness，再依据 contention evidence 比较更细方案，不把粗粒度本身判成错误。
+
+Week5 Day6 已完成并通过复检，最终评分 `92`：
+
+```text
+thread_identity.cpp 使用 -std=c++17 -Wall -Wextra -g -pthread 零 warning
+Linux 实测 ps -L 同时看到 main + 3 workers，共 4 个 threads
+/proc/<pid>/task 实测 task_count == 4
+所有 threads PID 相同，Linux TID 与 std::thread::id 不同
+global object 与 shared heap object virtual address 相同
+每个 thread 的 stack local variable address 不同
+能解释 timer interrupt、scheduler 与 context switch 的责任边界
+能沿 P1 user -> P1 kernel -> scheduler -> P2 kernel -> P2 user 梳理主路径
+能区分 trapframe 保存 user state、context 保存 swtch 边界的 kernel state
+能解释切换 SP 是恢复目标 kernel stack、stack frames 与 kernel call chain
+能解释 trap 只代表进入 kernel，不必然发生 thread context switch
+能解释 p->lock 保护跨 RUNNING/RUNNABLE、context 与 kernel stack 的 invariant
+```
+
+Day6 复检后的非阻塞改进：
+
+```text
+验收题 5 的 P2 返回路径应继续保持条件意识：恢复的是 P2 上次暂停的 kernel call chain，不保证永远是同一条 yield/usertrap 路径
+验收题 8 中负责选择 P1 的实体应表述为另一个 CPU 上的 scheduler，而不是 P2
+thread_identity.cpp 的手动 lock/unlock 后续优先改成 scoped lock_guard
+global owning raw pointer 后续按已学 RAII 改成 unique_ptr 或显式释放
+笔记未单独保存 ps -L 与 /proc 输出；本次由 Codex 在 Ubuntu 实测确认，不把工具观察伪装成用户笔记已有内容
+```
+
+### Week6：Day1 已完成，Day2 教程已生成
+
+主题：网络原理第一轮 + 阻塞式 Socket 编程。
+
+周计划位置：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week6\week6.md
+```
+
+Week6 从 Week5 的 fd、blocking、scheduler 和 sleep/wakeup 自然接入 socket，不重复普通文件 I/O、pipe 或调度机制。七天递进为：
+
+```text
+Day1：网络分层、封装/解封装与端到端 packet path；MIT 6.S081 Lec21 21.1
+Day2：Ethernet / ARP / IP / route / port / network byte order；Lec21 21.2~21.4
+Day3：UDP / socket layer / DNS；Lec21 21.5~21.6
+Day4：blocking TCP server，socket -> bind -> listen -> accept
+Day5：TCP client、byte stream、partial I/O、EINTR、EOF
+Day6：三次握手、四次挥手、TIME_WAIT/CLOSE_WAIT、可靠性/流量控制/拥塞控制
+Day7：HTTP/1.1 request framing 与受控范围 request parser
+```
+
+Week6 核心产出：
+
+```text
+address_demo.cpp
+udp_echo_server.cpp
+tcp_echo_server_v1.cpp
+tcp_echo_server.cpp
+tcp_client.cpp
+http_request_parser.cpp
+ip / ss / nc / curl / dig 观察证据
+```
+
+本周边界：
+
+```text
+IPv4、单线程、blocking socket、协议第一层直觉
+不提前学习 select/poll/epoll、non-blocking I/O、Reactor、线程池、TLS、HTTP/2/3
+MIT 6.S081 Lec21 21.7~21.9 留到后续高性能网络 / AI Infra 性能阶段，不永久跳过
+daily 按用户进入对应 Day 时逐日生成，不提前生成后续教程
+```
+
+Week6 Day1 教程已经生成并按只读规则冻结：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week6\day1\day1.md
+```
+
+Day1 类型和知识增量：
+
+```text
+概念机制日 + Linux 最小观察，不为凑产出写 C++ demo
+从 Week5 blocking/scheduler 接到 socket receive queue
+顺着 MIT 6.S081 Lec21.1 建立 host -> LAN -> router -> routing
+补充 Application / Transport / Network / Link 四层责任
+讲清 encapsulation / decapsulation 和不同层的数据名称
+区分 loopback、same-LAN、cross-network 三种路径
+用 ip address / ip route / ss 分别观察 interface、route 和 socket state
+明确工具直接证据与无法证明的内容
+```
+
+Day1 生成前已实际读取 Lec21.1 Markdown、MIT 官方 networking slides 与 Linux `ip-address(8)`、`ip-route(8)`、`ss(8)` man pages。Ubuntu 实测：
+
+```text
+lo = 127.0.0.1/8
+ens33 = 192.168.56.129/24
+default route via 192.168.56.2 dev ens33
+ss -lntup 能观察 TCP LISTEN 和 UDP UNCONN sockets
+```
+
+这些是教程生成时的环境验证，不冒充用户已经完成 Day1 观察。
+
+Week6 Day1 第一次检阅已经完成，暂定 `72` 分，尚未通过。`day1.md` 保持只读，未作任何修改。
+
+已掌握：
+
+```text
+Q3 能按 sender application -> sender kernel/protocol layers -> NIC/network -> receiver kernel -> receive queue -> receiver application 梳理主路径
+Q5 能解释 loopback 不经过 physical NIC/external switch/router，但仍经过 kernel networking
+Q6 能区分 application、transport、network、link 各层数据名称，并知道 send 不等于一个 packet
+四层职责的主体内容基本正确
+```
+
+需要最小补正：
+
+```text
+Q1 回答中断在“因为”，缺少巨大 LAN 的 broadcast/scalability 问题，以及 router 连接多个 networks 并逐跳转发的动机
+Q2 没回答 layer 为什么不等于独立 process：layer 是 protocol/responsibility boundary，多个层可在同一 kernel execution context 中连续处理
+Q3 把“变为 RUNNABLE”归到 scheduler 恢复不准确；network event/kernel wakeup 提供 RUNNABLE 机会，scheduler 负责选择后变为 RUNNING
+Q4 没写 recv 如何避免 busy wait；scheduler 不负责从 socket queue 取 bytes，恢复后的 receiver thread 在 recv/kernel path 中取 bytes
+Q7 直接复制教程表格，没有保存自己的实际观察和证据边界
+day1_note.md 没记录 lo/ens33、local/default route、TCP LISTEN/UDP UNCONN 代表，也没有单独的个人流程图；Q3 的编号链可复用，不要求重复画两份
+```
+
+Codex 在复检时再次实测 Ubuntu 当前状态：
+
+```text
+lo = 127.0.0.1/8
+ens33 = 192.168.56.129/24
+default via 192.168.56.2 dev ens33
+local prefix 192.168.56.0/24 dev ens33
+TCP LISTEN 0.0.0.0:22
+UDP UNCONN 127.0.0.53%lo:53
+```
+
+Day1 第二次复检后，暂定分数调整为 `78`，仍未通过：
+
+```text
+Q1 已补充巨大 LAN 中 broadcast 扩散带来的 scalability/cost 问题，核心正确
+Q4 已把 scheduler 修正为选择 RUNNABLE execution flow 并使其 RUNNING，不再写成 scheduler 读取 socket queue
+用户明确确认 ip address / ip route / ss 实际观察已经做过，只是不愿机械复制输出；按避免重复 work 原则接受，不再要求粘贴证据
+Q3 的编号链已经能承担个人流程图作用，不要求另外重复画 Mermaid
+```
+
+仍需补三处：
+
+```text
+Q2 仍未回答 layer 为什么不等于独立 process
+Q3 第 13 步仍把“变为 RUNNABLE”归到 scheduler；应由 packet arrival/kernel queue update 后的 wakeup 提供 RUNNABLE 机会
+Q4 仍未写 recv 为什么不 busy wait：queue 为空时 execution flow blocking/sleeping 并让出 CPU，恢复后由 receiver thread 在 recv path 中取 bytes
+```
+
+只需各补一句，不需要重写其他答案、流程或实际观察。
+
+Week6 Day1 第三次短复检通过，最终评分 `88`：
+
+```text
+Q2 已明确 layer 是 protocol/responsibility boundary，不等于独立 process
+Q3 已修正为 kernel 更新 receive queue 后 wakeup，使等待 execution flow 获得 RUNNABLE 机会；scheduler 再选择其 RUNNING
+Q4 已补充 queue 为空时 receiver thread blocking/sleeping 并让出 CPU，恢复后由 receiver thread 在 recv path 中取 bytes
+用户确认 ip address / ip route / ss 的实际观察已完成，选择不机械复制输出，予以接受
+Q3 的编号链承担个人端到端流程，不要求重复画另一份 Mermaid
+```
+
+Day1 核心已建立：
+
+```text
+host / LAN / router / routing
+Application / Transport / Network / Link 四层职责
+encapsulation / decapsulation
+loopback、same-LAN、cross-network 路径
+sender application -> kernel/protocol stack -> network -> receiver queue -> blocked receiver -> recv
+interface、route、socket 三类 Linux state 的观察边界
+```
+
+保留的非阻塞精度提醒：单独写“wakeup 唤醒 execution flow”时，继续理解为提供 `BLOCKED/SLEEPING -> RUNNABLE` 的机会，不等于立即 `RUNNING`；当前 Q3 已把这个边界表达正确。`day1.md` 始终未修改。
+
+Week6 Day2 教程已经生成，并从生成完成起按只读规则冻结：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week6\day2\day2.md
+```
+
+Day2 类型和知识增量：
+
+```text
+概念机制日 + address representation 小练习 + Linux route/neighbour 观察
+顺着 MIT 6.S081 Lec21 21.2 -> 21.3 -> 21.4 讲解 Ethernet、ARP、Internet
+用 Ubuntu 实际地址 192.168.56.129/24 和 gateway 192.168.56.2 贯穿教程
+区分 MAC address、IPv4 address、port、socket object 和 fd
+建立 destination IP -> routing lookup -> next-hop IP -> neighbour/ARP -> next-hop MAC 的完整链
+区分同 link destination 与 remote destination 的第一跳
+解释 router 每一跳重建 link-layer header，而 IP header 承担跨网络意义
+使用 htons/ntohs 理解 network byte order
+使用 inet_pton/inet_ntop 完成 IPv4 text 与 network binary form 的 round trip
+```
+
+Day2 生成前已实际读取 MIT 6.S081 中文课程 `21.2`、`21.3`、`21.4` 的 Markdown 原文，并核对 Linux `inet_pton(3)`、`inet_ntop(3)`、`byteorder(3)`、`ip-route(8)`、`ip-neighbour(8)` 文档。Ubuntu 环境实测：
+
+```text
+ens33 MAC = 00:0c:29:4a:a3:3f
+ens33 IPv4 = 192.168.56.129/24
+local route = 192.168.56.0/24 dev ens33
+default route = via 192.168.56.2 dev ens33
+ip route get 8.8.8.8 = via 192.168.56.2 dev ens33 src 192.168.56.129
+gateway neighbour = 192.168.56.2 -> 00:50:56:e1:1a:29
+gateway ping 成功
+```
+
+这些仍是教程生成时的环境校验，不冒充用户已经完成 Day2 观察。Day2 的 `address_demo.cpp` 只给需求、接口语义、错误路径、预期 byte sequence 和测试标准，不提供完整实现。用户后续问题只在对话中回答；若明确要求落盘，写入 `day2_note.md` 或独立补充文件，不修改 `day2.md`。
 
 ---
 
@@ -409,6 +618,7 @@ Lec03：3.1、3.2、3.3、3.4、3.5
 - 不喜欢为了“完成计划”重复已经掌握的 work。
 - 喜欢从具体问题、运行现象、warning 或错误实验出发理解机制。
 - 需要知道“为什么”，不接受只堆高级代码或只列接口。
+- 喜欢先看到从起因、调用、状态修改、CPU 交接直到恢复点的完整纵向流程，再拆解其中每个函数和对象。
 - 愿意自己写代码；练习日应保留独立设计和实现空间。
 - 笔记可以省略已经掌握、代码注释已写清的机械内容，但关键机制、错误原因和真实疑问必须保留。
 - 用户说“ok”只代表本人暂时完成，不等于自动验收通过；仍需查看 note、实际代码和运行结果后点评。
@@ -434,7 +644,9 @@ Lec03：3.1、3.2、3.3、3.4、3.5
 1. 原始英文或正式完整描述
 2. 准确中文含义
 3. 它实际查询、创建、修改或释放什么
-4. 一句可复述的记忆钩子
+4. 在当前上下文中的具体作用
+5. 它不是什么，避免和相邻概念混淆
+6. 一句可复述的记忆钩子
 ```
 
 例如：
@@ -447,6 +659,9 @@ fstat = 通过 fd 做 stat；“fd-based stat”只是帮助理解，不冒充�
 lseek = reposition read/write file offset：核心词 seek 是定位，不强行编造 l 的展开
 offset = offset：距离起点的偏移量
 TOCTOU = Time Of Check To Time Of Use：检查和真正使用之间的竞争窗口
+channel：sleep/wakeup 的等待事件匹配标识，不保存 condition 或业务数据
+spin：拿不到锁时持续循环检查，不睡眠，也不主动让出 CPU
+predicate：读取受保护 shared state 后得到的布尔条件，不是 condition_variable 本身
 ```
 
 术语来源规则：
@@ -497,6 +712,22 @@ Part 3：收尾、验证与验收
 - 明确下一天衔接，但不提前展开下一课。
 
 生成 daily 前必须对齐：总规划、当前周计划、真实进度、最近 note 和代码。不要机械照搬周计划中已经被用户提前掌握的内容。
+
+### daily.md 生成后的只读规则
+
+`daily.md` 只在对应 Day 开始时生成一次。生成完成后视为只读文件，后续始终不修改。
+
+用户学习过程中提出问题时：
+
+```text
+默认只在当前对话中回答
+不得把问题、回答、补充解释或纠错回写到 daily.md
+用户明确要求落盘时，只能写入 dayN_note.md、MEMORY.md 或单独的补充文件
+review、验收、评分和进度更新也不能修改 daily.md
+后续教程需要吸收经验时，更新 MEMORY.md，并应用到尚未生成的 daily
+```
+
+即使问题直接引用了 `daily.md` 的某一段，也只解释该段，不修改原文件。这样 `daily.md` 始终保留进入当天学习时的原始教程版本，学习过程中的理解、追问和修正由 note 与对话承载。
 
 ---
 
@@ -581,6 +812,31 @@ daily 的长度由当天新增机制决定，不追求固定行数，也不以�
 
 如果一句话容易让用户追问“到底是谁？放在哪里？直接访问谁？”，应在 daily 里主动补出关系图或具体数值例子，不能等误解形成后再修补。
 
+机制描述必须有明确执行主体。不能只写“发生切换”“被唤醒”“进入内核”“恢复执行”，而要主动回答：
+
+```text
+谁当前正在 CPU 上运行
+谁调用这个函数
+函数操作的是哪个 process/thread/kernel object
+谁修改 shared state 或 execution state
+谁接管 CPU
+谁选择下一个 RUNNABLE execution flow
+目标 execution flow 将来从哪个调用点继续
+```
+
+例如：
+
+```text
+等待者调用 sleep
+事件产生者或 interrupt handler 修改 predicate 并调用 wakeup
+scheduler 选择 RUNNABLE execution flow
+sched 检查切换前提并调用 swtch
+swtch 保存旧 context、恢复目标 context
+目标 execution flow 依靠恢复后的 ra/sp 从旧 kernel call chain 继续
+```
+
+如果课程在 xv6 中使用 `process` / `struct proc`，先沿课程保持准确，再说明通用现代系统里实际被调度和阻塞的通常是 thread / execution flow，不能把三个词无条件混用。
+
 ### 9.4 机制讲解使用状态变化，而不只给名词定义
 
 OS、Linux、并发和资源管理主题优先使用：
@@ -594,6 +850,36 @@ OS、Linux、并发和资源管理主题优先使用：
 -> 失败时停在哪个状态
 -> 何时释放、EOF、失效或返回
 ```
+
+复杂机制优先先写一条完整因果链，再按节点拆解。完整链至少覆盖：
+
+```text
+起因或外部事件
+-> 当前执行主体与状态
+-> 主体调用哪个函数
+-> 函数读取/修改哪个对象的什么字段
+-> CPU 或资源控制权交给谁
+-> 哪些 state/register/stack 被保存
+-> 目标 execution flow 从哪里恢复
+-> 恢复后为什么还要重新检查、清理或返回
+```
+
+用户偏好如下这种纵向表达：
+
+```text
+P1 当前运行
+-> P1 调用 yield/sleep
+-> sched 检查切换条件
+-> sched 调用 swtch
+-> swtch 保存 P1 的 ra/sp 等 context
+-> per-CPU scheduler 恢复
+-> scheduler 选择 P2
+-> scheduler 调用 swtch
+-> 恢复 P2 的 ra/sp
+-> P2 从上次暂停的 kernel call chain 继续
+```
+
+不能在 `sleep`、`sched`、`swtch`、`scheduler` 等函数各自解释正确后，就假设用户会自动把它们串起来；daily 必须至少提供一次端到端主流程。
 
 需要明确状态属于谁，例如：
 
@@ -626,7 +912,83 @@ virtual mapping vs backing file vs physical page
 fd number vs 数组下标 vs kernel object
 system call vs trap vs kernel handler
 copy object vs transfer ownership
+process vs thread vs execution flow
+user stack vs kernel stack
+trapframe vs context
+sched vs scheduler vs swtch
+condition vs channel vs data
+wakeup vs 立即运行
+RUNNABLE vs RUNNING
 ```
+
+#### `sleep/wakeup` 与等待机制的固定讲解要求
+
+首次讲等待机制时必须明确三层对象：
+
+```text
+condition / predicate：
+    execution flow 当前能否继续，例如 pipe 是否非空
+
+data：
+    真正要读写的业务内容，例如 pipe buffer 中的 bytes
+
+channel：
+    sleep 与 wakeup 的匹配标识，不保存 condition，也不传输 data
+```
+
+锁不能只写“获取/释放”，必须说明：
+
+```text
+锁保护哪些 shared fields 和 invariant
+为什么检查 predicate 也必须持锁
+睡眠时为什么必须允许事件产生者获得 condition lock
+检查 predicate 与进入等待之间怎样避免 lost wakeup
+醒来后为什么重新获取 condition lock
+重新获得锁后为什么仍要 while 检查 predicate
+```
+
+pipe 类场景优先使用完整流程：
+
+```text
+reader 持有 pi->lock
+-> reader 检查 pipe，发现 predicate“非空”为 false
+-> reader 调用 sleep(channel, &pi->lock)
+-> sleep 先获得 reader 对应的 p->lock
+-> sleep 释放 pi->lock
+-> sleep 记录 channel，设置 reader state = SLEEPING
+-> sleep 调用 sched，sched 调用 swtch 切到 scheduler
+-> writer 获得 pi->lock，写入 pipe data，修改 predicate
+-> writer 调用 wakeup(channel)，使匹配 waiter SLEEPING -> RUNNABLE
+-> scheduler 将来选择 reader
+-> swtch 恢复 reader context，reader 从 sleep 内部继续
+-> sleep 重新获得 pi->lock 后返回
+-> reader 在 pi->lock 保护下用 while 重新检查 pipe predicate
+```
+
+必须强调：
+
+```text
+wakeup 只提供 SLEEPING -> RUNNABLE 的机会
+不保证 waiter 立即 RUNNING
+不保证 waiter 获得锁时 predicate 仍成立
+notification/wakeup 不是业务数据，也不替 shared state 记住事件
+```
+
+还必须区分 xv6 实现层与 C++ 接口层：
+
+```text
+xv6 sleep(chan, lk) 显式使用两层锁：
+    condition lock lk 保护 predicate/data
+    p->lock 保护 struct proc 的 channel/state 和切换 invariant
+    两者交接用于消除释放 condition lock 到进入 SLEEPING 之间的窗口
+
+C++ condition_variable 的调用者通常只提供一把业务 mutex：
+    mutex 保护 predicate/data
+    wait 的接口契约负责原子地 unlock + 进入等待，并在返回前重新 lock
+    waiter 管理和 OS 阻塞细节属于标准库/OS 内部，不能臆造一把具体的“第二 mutex”
+```
+
+不能把 xv6 代码中可见的两把锁机械推广成“所有 condition_variable 业务代码都必须写两把 mutex”。共同点是消除“检查 predicate 与真正进入等待之间”的 lost-wakeup 窗口，不是表面锁数量相同。
 
 #### Mermaid `flowchart` 使用原则
 
@@ -758,6 +1120,28 @@ lsof 展示 fd 与打开对象关系，但不等于完整展示所有内核引�
 关键系统调用说明参数、返回值和状态变化
 不机械注释普通赋值、return 等显然语法
 ```
+
+C++ 并发接口第一次出现时，除函数用途外还要解释默认参数和 ownership 语义：
+
+```text
+std::thread 默认把 callable 与 arguments decay-copy / move 到内部存储
+需要保留引用时显式使用 std::ref / std::cref
+普通 pointer 被复制后仍指向同一对象，但复制 pointer 不等于复制对象或转移 ownership
+join 等待 execution flow 结束；detach 放弃由该 thread object 管理汇合
+joinable 的 std::thread 在析构前必须 join 或 detach，否则 std::terminate
+Linux 使用 std::thread 时默认编译和链接命令包含 -pthread
+condition_variable::wait 需要 unique_lock，因为 wait 要暂时 unlock 并在返回前重新 lock
+```
+
+出现错误时先判断阶段：
+
+```text
+compile error：语法、类型、模板实例化或接口调用不成立
+link error：声明已通过编译，但 definition/library 没有正确链接
+runtime error / hang：程序已经生成并开始执行，检查 ownership、同步、状态和资源边界
+```
+
+例如 `undefined reference to pthread_create` 属于 link 阶段，通常说明 pthread 链接选项缺失；在 Linux 上使用规定的 `-pthread` 编译与链接。
 
 写入 daily 前，必须在实际目标环境或等价 Linux 环境验证：
 
@@ -960,6 +1344,41 @@ Week5 Day3~Day4：
 
 如果用户问“是不是都对”，必须明确回答哪些对、哪些不完整、哪些错误或未做；不能用“整体不错”代替逐项判断。评分不能掩盖具体知识缺口。
 
+复检与评分还必须遵守：
+
+```text
+1. 用户说“已修改”后，重新读取最新 note，不能沿用上一次 review 的旧内容
+2. 对已修正的问题明确撤销旧扣分；仍未修正的边界继续指出
+3. 区分三类证据：用户 note 已记录、Ubuntu 代码可证明、Codex 本次工具实测
+4. 不把 Codex 实测到的结果写成“用户已经在 note 中记录”
+5. 评分主要看当天核心机制、验收题、代码正确性和验证证据；工程增强项只做小幅扣分
+6. 按实际修正幅度调整复评分数，不能为了鼓励机械加分，也不能无视已经完成的修正
+7. 用户只记录真正不熟悉的内容是允许的，不因省略重复 work 扣分
+```
+
+每次学习进度发生变化时，必须在同一轮同步更新 `MEMORY.md`。触发事件包括：
+
+```text
+某个 Day 首次通过或复检通过
+某个 Week 完成
+最终评分发生变化
+进入下一 Day / Week
+学习路线、停止边界或长期规则发生变化
+```
+
+同步内容至少包括：
+
+```text
+当前位置与下一步
+最终评分和通过状态
+当天已经证明的核心能力
+实际代码、编译和运行证据
+仍存在但不阻塞推进的缺口
+用户明确选择跳过、避免重复的 work
+```
+
+进度更新不能只追加历史记录，还必须同步修正“当前实际进度”和“当前下一步”，避免 MEMORY 同时保留互相冲突的旧状态。
+
 重复内容允许省略，但不能因“代码跑通”跳过关键机制验证。
 
 每日任务的要求必须分层，不能把大量工程边界全部写成当天的阻塞性“契约”：
@@ -1011,7 +1430,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5 Day5 已完成并通过验收，最终评分 `90`；`week5/day6/day6.md` 已生成。下一步由用户学习 Day6，完成 thread identity 观察、xv6 context-switch 流程图和 `day6_note.md`，之后按日验收。
+当前位置：Week5 已正式完成，Week6 Day1 第三次短复检通过，最终评分 `88`。Week6 Day2 教程已经生成，当前等待用户学习 Day2、独立完成 `address_demo.cpp`、route/neighbour 观察和验收问题。暂不生成 Day3。所有已生成 daily 保持只读；后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
 
 Day5 已验收：
 
@@ -1326,3 +1745,81 @@ Linux thread_identity.cpp + ps -L + /proc/<pid>/task 观察
 ```
 
 Day6 不提供完整 `thread_identity.cpp`；只给必要 PID/TID/thread API、需求、预测、观察命令和验收标准。课程内容已实际读取 MIT 6.S081 中文站 Lec09 9.2、Lec11 11.1~11.9，并按课程真实顺序组织。
+
+Week5 Day6 已完成并通过复检，最终评分 `92`。Ubuntu 实际代码和工具验证已经确认：
+
+```text
+thread_identity.cpp 规定参数零 warning
+ps -L 与 /proc/<pid>/task 同时观察到 4 个 threads
+共享 PID/global/heap 与独立 TID/stack local address 符合预测
+worker 在输出锁 scope 外保持存活，main join 所有 workers
+day6_note.md 的 8 道验收题已逐题复检
+第 6 题已修正 SP 的含义
+第 7 题已补充 trap 不必然触发 switch 的根本原因
+```
+
+Week5 Day7 教程已经生成：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week5\day7\day7.md
+```
+
+Day7 主线和深度：
+
+```text
+blocking 与 busy waiting 的 CPU 行为差异
+RUNNING -> BLOCKED/SLEEPING -> RUNNABLE -> RUNNING
+顺着 MIT 6.S081 Lec13 13.1~13.5：
+    context switch 的 p->lock 与其他 spinlock 限制
+    UART sleep/wakeup 与 sleep channel
+    lost wakeup 的错误时间窗口
+    condition lock -> p->lock 的锁交接
+    pipe 中 predicate、循环检查与多 waiter 竞争
+xv6 sleep/wakeup 与 C++ condition_variable 的机制映射
+predicate + mutex + wait/notify 的责任边界
+notification 不保存业务事实，醒来后必须重新检查 predicate
+```
+
+Day7 是 Week5 出口的小型组合练习日。教程只为 `blocking_wakeup.cpp` 给出行为需求、shared-state 要素、允许查阅的最小 API、测试和验收标准，不提供完整 worker/producer 函数或可直接拼成答案的控制流。完整 BlockingQueue、ThreadPool、futex、semaphore、复杂 atomic memory order 后置。
+
+Week5 Day7 首次验收评分 `86`；第二次复检及语义澄清后调整为最终 `90`。Day7 核心通过，Week5 正式完成。
+
+Ubuntu 实际验证：
+
+```text
+blocking_wakeup.cpp 使用 -std=c++17 -Wall -Wextra -g -pthread 零 warning
+当前无延迟版本输出 value == 2007，exit status == 0
+无延迟版本连续运行 100 次全部完成，无 hang
+g++ ThreadSanitizer 运行通过，无 data-race report
+worker 使用 cv.wait(unique_lock, predicate)
+producer 在同一 mutex 下修改 is_ready/value，解锁后 notify
+worker 在 wait 返回并重新持锁后读取 value
+所有 threads 正常 join
+```
+
+首次验收待修正项：
+
+```text
+Q1 把 busy waiting 写成“一直阻塞”不准确；busy waiter 正在运行/反复检查，会浪费 CPU time
+Q4 只写 mutex 保护 shared state 不够，需要说明同一 mutex 如何排除 predicate check 与 wait 之间的 notifier 插入
+Q6 只写了多 waiter 竞争，漏写 spurious wakeup
+Q8 需要明确 p->lock 保护 channel/state，并与 condition lock 交接消除 lost-wakeup 窗口
+producer 延迟 sleep 当前注释在 lock_guard scope 内；若启用，worker 可能阻塞在 mutex，而不是明确进入 condition-variable wait
+源文件有重复和未使用的 headers，属于非阻塞清理项
+day7_note.md 未保存代表性运行/重复测试证据，也未提供 Week5 总机制图
+```
+
+Day7 的核心 `predicate + mutex + wait/notify` 已建立；复检重点只处理上述真实缺口，不要求重写整份教程或重复已通过代码。
+
+Day7 第二次复检结果：
+
+```text
+Q1 已修正 busy waiting 为 execution flow 持续运行并循环检查；“其他 execution flow 没办法执行”仍过于绝对，scheduler 仍可能抢占，多核也可在其他 core 运行
+Q4 已补充同一 mutex 阻止 producer 在 waiter 持锁检查时修改 predicate，核心通过
+Q6 已补充 spurious wakeup，并保留多 waiter 竞争导致 predicate 再次为 false，回答正确
+Q8 已补充 condition lock 与 p->lock 的保护对象，核心正确
+Q7 的三个并列项共享前面的“不保证”前缀：不保证立刻执行、不保证一定最先拿到 mutex、不保证 predicate 仍为 true；经用户澄清后判定正确，不要求机械重复前缀
+Ubuntu 源码未改变；再次验证规定参数零 warning、100 次无延迟运行通过、TSan exit 0
+用户确认 producer delay / blocked waiter 观察已经实际完成，最终源码只是把 sleep 注释掉；不要求为了留下最终代码形态重复实验
+Week5 总机制图由用户主动省略：Day1~Day7 已逐日建立并串通完整流程，重复绘图不再作为 Week5 出口阻塞项
+```
