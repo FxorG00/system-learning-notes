@@ -149,6 +149,26 @@ LRU Cache V1
 
 用户认为许多容器接口属于容易掌握的使用性知识。后续应减少重复 API 练习，把时间放在失效规则、复杂度、所有权和工程组合上。
 
+已新增独立 STL 长期速查资料，不属于新的 daily 或学习支线：
+
+```text
+路径：C:\Users\FxorG\Desktop\gpt_infra\杂教程\常用STL api.md
+标准：C++17
+用途：需要时查询常用容器构造、API、返回值、复杂度和失效规则，不要求机械背诵或整份重做
+```
+
+该资料首先解决 container count/value construction：
+
+```text
+vector<T>(n) 与 vector<T>{n} 的区别
+vector<T>(n, value)
+size / capacity / resize / reserve / assign
+vector<vector<vector<Db>>> 的 A x B x C 构造和从内向外读法
+嵌套 vector 只保证每个最内层 row 连续，不是单块连续三维 storage
+```
+
+随后覆盖 vector/array/string/deque/list、map/unordered_map、set、container adapters、iterator、algorithm、numeric、pair/tuple/optional。重要 API 保留最小例子，重点标注 `operator[]` 插入行为、iterator invalidation、复杂度和 C++17/C++20 边界。代表性汇总程序已在 Windows MinGW 和 Ubuntu 上使用 `-std=c++17 -Wall -Wextra -g` 零 warning 编译并通过断言。
+
 ### Week4：已完成
 
 主题：Linux 系统编程第一轮 + MIT 6.S081 正式穿插。
@@ -347,7 +367,7 @@ global owning raw pointer 后续按已学 RAII 改成 unique_ptr 或显式释放
 笔记未单独保存 ps -L 与 /proc 输出；本次由 Codex 在 Ubuntu 实测确认，不把工具观察伪装成用户笔记已有内容
 ```
 
-### Week6：Day1 已完成，Day2 教程已生成
+### Week6：Day1~Day3 已完成，Day4 教程已生成
 
 主题：网络原理第一轮 + 阻塞式 Socket 编程。
 
@@ -528,6 +548,450 @@ gateway ping 成功
 ```
 
 这些仍是教程生成时的环境校验，不冒充用户已经完成 Day2 观察。Day2 的 `address_demo.cpp` 只给需求、接口语义、错误路径、预期 byte sequence 和测试标准，不提供完整实现。用户后续问题只在对话中回答；若明确要求落盘，写入 `day2_note.md` 或独立补充文件，不修改 `day2.md`。
+
+2026-07-28 用户明确要求对 `day2.md` 做一次图片增强，因此按显式授权例外修改后重新冻结。新增四张从用户提供的《图解网络》小林 Coding v4.0 中选择并裁剪的图：
+
+```text
+router-interfaces-networks.png：
+    router 通过多个 interfaces 连接不同 networks，并与 routing table 对应
+
+ethernet-header.png：
+    destination MAC、source MAC、EtherType 三个核心 fields
+
+arp-broadcast-reply.png：
+    当前 subnet 内 ARP request broadcast 与目标节点 response
+
+encapsulation-decapsulation.png：
+    sender 逐层添加 header，receiver 逐层检查并移除 header
+```
+
+正文同时补充：
+
+```text
+router 由跨 network 转发功能定义，不由蓝色小盒子的外形定义
+家用 router 常集成 switch、Wi-Fi AP、NAT 等功能
+Linux multi-interface host 启用 IP forwarding 后也可承担 software router
+每张图片都给来源、页码和读图边界
+```
+
+图片目录：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week6\day2\images
+```
+
+完成此次明确授权的视觉增强后，`day2.md` 再次恢复只读。后续普通提问仍只在对话或 note 中回答。
+
+2026-07-28 用户再次明确授权修改 `day2.md`，用于补清 `link` 的对象边界。此次增补：
+
+```text
+将 link 解释为一组 interfaces 所处的局部二层通信范围
+明确“不经过 IP router 转发”不等于“中间没有 switch”或“只有一根网线”
+明确图论类比中的点优先看 interface，而不是整台 host
+说明 point-to-point link 才近似一条边，Ethernet LAN 的 link 往往包含多个 interfaces
+新增 link-boundary.svg，对照 Link A、Link B 和 router 的 r0/r1 归属
+串起 Host A -> r0 -> IP forwarding -> r1 -> Host C 的跨 link 路径
+```
+
+修改完成后 `day2.md` 再次冻结；这仍是用户显式授权的例外，不改变 daily 默认只读规则。
+
+2026-07-28 用户第三次明确授权修改 `day2.md`：保留 `inet_pton` 已有的作用、签名、参数和返回值说明，新增一个可独立编译的最小调用例子。例子展示 input、`in_addr` output object、`&address`、三类返回值处理和成功后的状态，同时明确不提供 `inet_ntop` round trip 或完整 `address_demo.cpp`。修改后 Day2 再次冻结。
+
+同日用户将该要求扩展到 Day2 中出现的 API。最终补充状态：
+
+```text
+htons/ntohs：
+    共用一个 16-bit port round-trip 最小 demo
+
+htonl/ntohl：
+    因为只是相同语义的 32-bit 变体，只给带已定义 input 的最小调用片段
+
+inet_pton：
+    独立 demo 展示 output object 与 1/0/-1 三类返回值
+
+inet_ntop：
+    独立 demo 展示 source in_addr、output buffer、buffer size 与 nullptr 错误判断
+```
+
+Day2 中的 Linux `ip`/`ping`/`ss` 属于命令观察，不归入本次 C/POSIX API 例子补充。所有例子继续保留独立练习空间，不组合成完整 `address_demo.cpp`；完成后 Day2 再次冻结。
+
+Week6 Day2 首次验收已于 2026-07-28 完成，评分 `76`，暂未通过。
+
+笔记证据：
+
+```text
+day2_note.md 已记录实际 routing table
+能正确找出 local prefix 192.168.56.0/24、default gateway 192.168.56.2 和 outgoing interface ens33
+缺少计划要求的 interface MAC/IPv4、remote route lookup 和 gateway neighbour entry 代表性证据
+```
+
+验收题状态：
+
+```text
+Q1：正确；on-link destination、next-hop IP、ARP target 都是 192.168.56.1
+Q2：正确；destination MAC 只承担当前 hop 的 frame 交付
+Q3：基本正确；顺序正确，但 routing lookup 还应包含 outgoing interface/source selection
+Q4：不完整；写出重新构造 link header 和 TTL 改变，遗漏 TTL 改变后 IPv4 header checksum 更新
+Q5：不完整；MAC/IP/port/fd 正确，但把 socket object 误认为 API
+Q6：不完整；解释了 on-link/default 行为，但没有直接写出各自匹配的 destination range
+Q7：不准确；acronym 和“不产生字符串”正确，但 input/output 不是“十进制数”，也不是所有 host 都固定翻转 bytes
+Q8：不完整；-1 应明确表示 address family 不受支持并设置 errno
+Q9：流程正确；虽然标记为 copy，仍按内容正确性通过
+Q10：正确；已有 neighbour mapping 时可直接复用，不需要重新 ARP broadcast
+```
+
+Ubuntu 代码与工具证据：
+
+```text
+目录：~/code/system-learning/cpp/week6/day2
+文件：test_htons.cpp、inet_pton.cpp
+两份源码均以 g++ -std=c++17 -Wall -Wextra -g 零 warning 编译
+正常输出：
+    IPv4 bytes = c0 a8 38 81
+    IPv4 round trip = 192.168.56.129
+    network bytes = 1f 90
+    port round trip = 8080
+UBSan 构建和当前正常输入运行无 report
+Codex spot-check 证实当前 route get 和 neighbour 状态符合教程环境，但这不能冒充用户 note 已保存的观察证据
+```
+
+首次验收必须修正：
+
+```text
+1. 将 byte 观察改为通过 const unsigned char* 读取 object representation；
+   当前整数移位方案依赖 host integer interpretation，且对负 int mask 的右移是 implementation-defined。
+2. 实际加入并运行 invalid IPv4 text 测试，确认 inet_pton 返回 0；
+   当前源码只有分支，没有产生该测试输入，运行输出也没有 invalid IPv4 rejected。
+3. 修正 Q5 的 socket object、Q7 的 byte-order conversion 和 Q8 的 -1 条件。
+4. 补全 Q4 的 IPv4 header checksum，以及 Q6 的 destination matching 范围。
+5. note 增加一条 remote route lookup 和一条 gateway neighbour entry 及各自证据含义。
+```
+
+已经正确的回答、route table 解释和正常 round trip 不要求重写。完成上述短修后复检；暂不进入 Day3。
+
+Week6 Day2 第二次复检已于 2026-07-28 完成，评分从 `76` 调整为 `86`，暂未最终通过。
+
+本次已经修正：
+
+```text
+Q4 已补充 TTL 改变与 IPv4 header checksum 更新
+Q5 已撤销“socket 是 API”，能将其识别为 kernel communication endpoint object
+Q6 已写出 local prefix 与 default route 的 destination matching
+Q7 已改为 uint16_t host/network representation 与按需调整 byte order
+Q8 已准确区分 1、0、-1，且写出 unsupported address family / errno
+IPv4 address 与 port 的 byte observation 已改为 const unsigned char* 读取 object representation
+用户明确说明 ip link/addr、route get、ip neigh、ping 等 Linux 命令均已实际观察；
+不要求为了留痕机械复制全部输出
+```
+
+Ubuntu 复检：
+
+```text
+inet_pton.cpp 使用规定参数零 warning
+正常 IPv4 和 port round trip 输出正确
+UBSan 当前运行无 report
+```
+
+唯一阻塞项：
+
+```text
+输入仍是合法的 "192.168.56.129"
+代码却在 result == 1 的 success branch 中直接打印 "invalid IPv4: rejected"
+这只制造了目标输出文字，没有真正向 inet_pton 提交 invalid address text
+必须使用第二个确实非法的字符串进行一次独立调用，并根据返回值 0 打印 rejected
+```
+
+非阻塞建议：
+
+```text
+直接 include <cstdint>，不要依赖其他 header 间接提供 std::uint16_t
+十六进制 byte 若要稳定显示两位，可同时使用 std::setfill('0')
+```
+
+除真实 invalid-input test 外不需要重写 note、验收题、byte loop 或 Linux 观察。修正并运行后进行一次极短复检，再决定进入 Day3。
+
+Week6 Day2 第三次极短复检通过，最终评分 `90`：
+
+```text
+新增 test_wrong()
+使用确实非法的 IPv4 text "192.168.56.888"
+对该输入执行第二次 inet_pton(AF_INET, text, &address)
+只有 result == 0 时才输出 "invalid IPv4 text"
+g++ -std=c++17 -Wall -Wextra -g 零 warning
+完整运行同时证明：
+    合法 IPv4 text -> binary -> text round trip
+    host/network port round trip
+    invalid IPv4 text 被 inet_pton 返回 0 拒绝
+程序 exit status = 0
+```
+
+Day2 核心通过，可以进入 Day3。保留两个非阻塞工程建议：直接 `#include <cstdint>`；若希望任意 byte 都固定显示两位十六进制，配合 `std::setfill('0')`。不要求为此延迟进度。
+
+Week6 Day3 教程已经生成，并从生成完成起按只读规则冻结：
+
+```text
+正式路径：C:\Users\FxorG\Desktop\gpt_infra\week6\day3\day3.md
+状态：教程已生成；用户尚未学习、提交代码或验收，不评分
+```
+
+Day3 严格衔接 Week6 规划：
+
+```text
+MIT 6.S081 Lec21 21.5 UDP -> 21.6 Network Stack
+IP 到达 host 后，UDP destination port demultiplex 到 socket
+fd -> kernel socket object -> local endpoint -> receive queue
+UDP datagram boundary、recvfrom blocking、sendto reply
+DNS stub/recursive resolver -> root -> TLD -> authoritative -> address
+```
+
+主项目仅给 contract，不给完整实现：
+
+```text
+独立完成 udp_echo_server.cpp
+IPv4 + UDP
+bind 127.0.0.1:8080
+recvfrom 一条 datagram
+使用实际 byte count 和原 peer address 执行 sendto echo
+复用已有 UniqueFd 做 RAII
+使用 nc -u、ss -lunp、strace 和 dig 验证
+```
+
+教程生成时已经完成质量验证：
+
+```text
+实际读取 MIT 6.S081 中文课程 21.5、21.6
+核对 Linux socket/bind/recvfrom/sendto/udp/getaddrinfo 文档
+从《图解网络》v4.0 选取 UDP header、UDP receive queue、DNS resolution 三张图
+DNS demo 和未写入教程的 reference UDP server 在 Ubuntu 上用
+g++ -std=c++17 -Wall -Wextra -g 零 warning 编译
+ss 观察到 bound UDP endpoint
+包含 NUL 的 payload echo 实测为 41 00 42
+dig 实测能观察 answer、SERVER 和 query time
+```
+
+这些是教程生成阶段的环境与内容验证，不代表用户已经完成 Day3。后续问题默认只在对话中回答；除非用户明确授权，不修改已冻结的 `day3.md`。
+
+Week6 Day3 第一次检阅已于 2026-08-02 完成，暂定 `84` 分，尚未整日通过：
+
+```text
+代码主线通过：
+    udp_echo_server.cpp 使用 socket -> UniqueFd -> bind -> recvfrom -> sendto
+    bind 127.0.0.1:8080
+    peer_length 在 recvfrom 前正确初始化
+    echo length 使用 recvfrom 返回值，不使用 strlen
+    sendto 使用原 peer address
+    system call 返回值均有检查
+
+Ubuntu 实测：
+    udp_echo_server.cpp 与 dns_lookup_demo.cpp
+    均以 g++ -std=c++17 -Wall -Wextra -g 零 warning 编译
+    ss 看到 127.0.0.1:8080、process 和 fd=3
+    普通 payload echo 正确
+    含 NUL payload echo 为 41 00 42
+    DNS demo 正常返回 IPv4 address
+```
+
+当前只需做短修，不重写代码或重复实验：
+
+```text
+验收问题 4：补齐 packet -> IP -> UDP destination port demux
+             -> socket receive queue -> wake waiter -> RUNNABLE
+             -> scheduler 恢复 -> recvfrom copy/return 的主体链
+
+验收问题 8：当前回答错误。dig 默认询问 configured resolver；
+             SERVER 显示本次直接询问的 DNS server。
+             cache 只影响 recursive resolver 是否继续询问上游，
+             不是 SERVER 通常不是 root server 的原因。
+
+验收问题 9：尚未回答。127.0.0.1 走 local loopback path，
+             不离开 host，不需要 next-hop MAC、ARP 或 router forwarding。
+
+代码：inet_pton 返回 0 表示 invalid text，通常不设置 errno，不能用 perror；
+      应区分 0 与 -1。绝对 include path 和缺少文件顶部运行/测试说明
+      作为工程扣分项，不要求为此重做实验。
+```
+
+验收问题 1、2、5、6、7、10 正确；问题 3 结论正确但应明确“一次 recvfrom 只取一条 datagram”；问题 5 的“无 NUL 结尾”应更精确为“不保证有结尾 NUL，并且中间可能含 NUL”。完成上述短修后再做一次短复检。
+
+Week6 Day3 短复检已于 2026-08-02 通过，最终评分 `92`：
+
+```text
+day3_note.md：
+    问题 4 已补齐 IP -> UDP demux -> socket receive queue
+              -> waiter RUNNABLE -> scheduler -> recvfrom return
+    问题 8 已正确说明 dig 的 SERVER 是 configured recursive resolver，
+              cache 只影响 resolver 是否继续查询上游
+    问题 9 已正确说明 127.0.0.1 走 local loopback path，
+              不需要 next-hop MAC、ARP 或 router forwarding
+
+udp_echo_server.cpp：
+    inet_pton 返回 -1 时 perror
+    返回 0 时输出 invalid IPv4 text
+    修改后用 g++ -std=c++17 -Wall -Wextra -g 零 warning 编译
+```
+
+Day3 正式通过，可以进入 Week6 Day4。保留非阻塞工程建议：把绝对路径 `#include` 改成项目内相对 include/编译 include path；文件顶部补运行与测试说明；问题 3 可写得更明确；问题 5 的准确表述是 UDP payload 不保证 NUL 结尾并且可以包含嵌入 NUL。不要为这些建议重复 Day3 实验。
+
+Week6 Day4 教程已经生成，并从生成完成起按只读规则冻结：
+
+```text
+正式路径：C:\Users\FxorG\Desktop\gpt_infra\week6\day4\day4.md
+状态：用户已学习并提交 note/code；2026-08-04 初检 86、短复检 91、最终复检 93，Day4 正式通过
+```
+
+Day4 严格衔接 Week6 规划与用户当前理解：
+
+```text
+从“一个 TCP server 为什么不能只用一个 socket fd”出发
+区分 listening socket 与 connected socket 的 role、state、queue 和 lifetime
+socket -> setsockopt(SO_REUSEADDR) -> bind -> listen -> accept
+accept queue、backlog 与 accept blocking 第一层
+Week5 blocking/scheduler 主线映射到 accept / recv
+connected fd 上的一次 recv/send echo
+TCP byte stream、partial send 与多 client loop 明确留给 Day5
+三次握手 packet/state 细节明确留给 Day6
+```
+
+主项目只给 contract，不给完整实现：
+
+```text
+独立完成 tcp_echo_server_v1.cpp
+bind 127.0.0.1:18080，backlog 8
+accept 一个 client，打印 peer endpoint
+recv 一批 bytes，send 一次 echo，并检查 sent == received
+listening fd 与 connected fd 分开命名、分开 ownership
+使用 nc、ss、strace 验证 Connection refused / LISTEN / ESTAB / echo / EOF
+```
+
+教程生成阶段已经完成环境与内容验证：
+
+```text
+核对 Linux socket/setsockopt/bind/listen/accept/recv/send/tcp 官方语义
+从《图解网络》v4.0 第 295、296 页选取 socket call flow 与 accept queue 图
+未写入教程的 reference server 在 Ubuntu 上以
+g++ -std=c++17 -Wall -Wextra -g 零 warning 编译
+server 缺席时 nc 得到 Connection refused
+ss 观察到 127.0.0.1:18080 LISTEN、backlog 8、listener fd=3
+单字节 T echo 正确；无 payload 连接使 recv 返回 0 分支正确
+strace 观察到 accept 使用 fd 3，新 connected fd 为 4，后续 I/O 使用 fd 4
+当前 glibc/Linux 下源码 recv/send 在 strace 中显示为 recvfrom/sendto，教程已解释 wrapper/system call 边界
+```
+
+Week6 Day4 初次检阅结果：
+
+```text
+note：C:\Users\FxorG\Desktop\gpt_infra\week6\day4\day4_note.md
+code：~/code/system-learning/cpp/week6/day4/tcp_echo_server_v1.cpp
+评分：86/100
+```
+
+已经通过的核心：
+
+```text
+能说明 socket -> setsockopt -> bind -> listen -> accept -> recv/send 主线
+能区分 listening socket、pending connection 与 connected socket fd
+代码中 listening_fd / connected_fd ownership 清楚，UniqueFd 保证中途 return 不泄漏
+socket、setsockopt、inet_pton、bind、listen、accept、inet_ntop、recv、send 均检查返回值
+recv > 0 / == 0 / == -1 和 v1 partial-send boundary 正确
+Ubuntu 使用 g++ -std=c++17 -Wall -Wextra -g 零 warning 编译
+实际验证 server absent、LISTEN backlog 8、ESTAB、single-byte echo、peer EOF 均通过
+strace 确认 accept 使用 listener fd 3，recvfrom/sendto 使用 connected fd 4，最终都 close exactly once
+```
+
+仍需修正或补清的点：
+
+```text
+peer_address.sin_port 应使用 ntohs 表达 network -> host conversion；当前写成 htons，常见平台数值碰巧相同但语义方向错误
+server ready 信息应放在 listen 成功之后
+绝对路径 include 应改成 project-relative include 或编译 include path
+直接使用 std::uint16_t 应显式 include <cstdint>；<netdb.h> 当前未使用
+note 中 setsockopt“配置 restart 行为”过于含糊，应说明 SO_REUSEADDR 放宽 bind 时的 local-address reuse 限制，不是重启 socket
+note 未留下 accept blocking -> wakeup -> runnable -> scheduled -> return 因果链
+note 未解释 backlog 限制 pending queue，而不是 server 一生 client 数或 connected socket 总数
+10 道验收题没有逐题作答；现有 note 只覆盖问题 1/2/5 的主体，问题 6 由代码体现，其余没有书面答案
+```
+
+用户明确认为重复观察和抄写属于 dirty work。以后不要求重跑已经由实际验收证明通过的命令，也不要求机械补抄全部验收题；但 blocking 因果链、backlog 边界、byte-order API 方向属于核心机制，不能按 dirty work 跳过。`day4.md` 继续保持冻结，不因本次 review 修改。
+
+Week6 Day4 短复检结果：
+
+```text
+短复检评分：91/100，正式通过，可以进入 Day5
+peer port 已由 htons 改为 ntohs
+ready log 已移到 listen 成功之后
+已显式 include <cstdint>
+同一源码再次以 g++ -std=c++17 -Wall -Wextra -g 零 warning 编译
+note 已补 accept blocking chain 与 backlog 边界
+```
+
+短复检后保留的非阻塞修正：
+
+```text
+accept chain 的准确顺序是：kernel wakeup 先使 waiter SLEEPING -> RUNNABLE，scheduler 选中后才恢复运行并重新检查 queue
+SO_REUSEADDR 仍不应只记成“配置 restart 行为”，应记为放宽 bind 时的 local-address reuse 限制
+absolute include 仍应在后续整理项目时改为 relative include 或 -I include path
+<netdb.h> 当前未使用，可以删除
+note 顶部 Markdown fence 仍有小格式问题，不影响机制通过
+```
+
+这些剩余项不阻塞进入 Day5，不要求为了形式重复提交 Day4。
+
+Week6 Day4 最终复检：
+
+```text
+最终评分：93/100
+absolute include 已改为 relative include：../../week4/day2/unique_fd.hpp
+最新源码再次以 g++ -std=c++17 -Wall -Wextra -g 零 warning 编译
+ntohs、ready log、<cstdint>、RAII 和所有 error branches 保持正确
+```
+
+最终仅保留三个不阻塞项：
+
+```text
+note 第 10 步顺序仍不准确：wakeup 先使 SLEEPING -> RUNNABLE，scheduler 选中后才恢复并 recheck queue
+SO_REUSEADDR 仍写成“配置 restart 行为”，需要在记忆中按 bind address reuse 理解
+ntohs 后变量已经是 host-order port，名称 network_port 最好改为 host_port；<netdb.h> 仍未使用
+```
+
+不再要求修改或复检 Day4，直接进入 Day5。
+
+Week6 Day5 教程已经提前生成，并从生成完成起按只读规则冻结：
+
+```text
+正式路径：C:\Users\FxorG\Desktop\gpt_infra\week6\day5\day5.md
+状态：教程已生成；用户尚未学习、提交代码或验收，不评分
+前置状态：Week6 Day4 已于 2026-08-04 最终复检正式通过，最终评分 93
+```
+
+Day5 严格衔接 Week6 Day4 的 single-connection v1，并集中处理 TCP byte stream 的真实 I/O contract：
+
+```text
+从“client 连续两次 send，server 是否一定两次 recv”这个错误假设出发
+区分 application message boundary、TCP byte stream 与单次 recv boundary
+send_all 使用 offset/invariant 推进 partial send
+区分 recv 一批当前 bytes 与 recv_exact 累计 N bytes 两种 helper contract
+明确 recv > 0、recv == 0、recv == -1 三条路径，以及 errno 只在 -1 时解释
+EINTR 在 accept/read/send/recv 中重试；connect 失败后不在同一个 socket 上盲目重试
+client stdin EOF 后 shutdown(SHUT_WR)，保留接收方向直到 peer EOF
+MSG_NOSIGNAL 把 broken connection 暴露为 EPIPE error path
+server 使用 outer accept loop + inner recv/echo loop，仍然只做 sequential clients
+并发、nonblocking、select/poll/epoll/Reactor 不提前扩展
+```
+
+练习日只给需求、helper contract、因果链、测试和验收问题，不提供完整 client/server 答案。教程配入《图解网络》v4.0 第 464 页的三张 byte-stream 边界图，并对 `connect`、`shutdown` 等新 API 给出签名、返回值、状态变化和独立最小例子。
+
+教程生成阶段已经完成独立环境验证：
+
+```text
+未写入教程的 reference client/server 在 Ubuntu 上以
+g++ -std=c++17 -Wall -Wextra -g 零 warning 编译
+server 缺席时 client 非零退出且 stdout 为空
+empty、newline、embedded NUL、131072-byte random binary、三个 sequential clients 全部逐 byte 一致
+strace 能观察 network syscall path
+strace 5.5 的 --inject=sendto:error=EINTR:when=1 实际触发，client retry 后输出仍一致
+```
+
+这些验证只证明 Day5 教程和测试命令可用，不代表用户已经学习或完成 Day5。Day4 已按用户后续指令完成初检；Day5 仍等待用户学习和提交。
 
 ---
 
@@ -715,7 +1179,7 @@ Part 3：收尾、验证与验收
 
 ### daily.md 生成后的只读规则
 
-`daily.md` 只在对应 Day 开始时生成一次。生成完成后视为只读文件，后续始终不修改。
+`daily.md` 只在对应 Day 开始时生成一次。生成完成后默认视为只读文件，后续问题和 review 不修改。
 
 用户学习过程中提出问题时：
 
@@ -728,6 +1192,18 @@ review、验收、评分和进度更新也不能修改 daily.md
 ```
 
 即使问题直接引用了 `daily.md` 的某一段，也只解释该段，不修改原文件。这样 `daily.md` 始终保留进入当天学习时的原始教程版本，学习过程中的理解、追问和修正由 note 与对话承载。
+
+唯一例外是用户明确点名某一份已生成的 `daily.md`，并直接要求修改该文件本身。此时把它视为一次显式授权：
+
+```text
+只完成用户点名的修改范围
+不能把普通追问自行解释成修改授权
+修改前说明改什么
+修改后重新校验并再次冻结
+同步更新 MEMORY 中的版本状态
+```
+
+Week6 Day2 的图片增强就是一次用户明确授权的例外，不改变“普通问题只在对话/note 中回答”的默认规则。
 
 ---
 
@@ -1042,6 +1518,385 @@ flowchart 负责展示顺序、分支、循环和责任交接，不代替正文�
 发布前检查 Mermaid 语法、节点连线、分支标签和正文描述是否一致
 ```
 
+#### 网络与系统教程的图片使用原则
+
+用户在 Week6 Day2 明确反馈：网络主题只看文字和抽象 flowchart 不够直观，希望看到 router、interface、link、packet nesting 等对象的图。
+
+以后生成尚未创建的网络类 daily 时，根据知识点选择性使用：
+
+```text
+静态示意图 / bitmap：
+    解释设备大致外观、network topology、多个 interfaces、header nesting、frame layout
+
+Mermaid flowchart：
+    解释先后顺序、条件分支、执行主体和状态变化
+
+正文：
+    解释图片中每个对象的职责、边界和不能推出的结论
+```
+
+图片要求：
+
+```text
+只放真正降低理解成本的图，不为装饰堆图
+优先裁出相关 figure，不嵌入带大量无关文字的整页截图
+图片紧邻对应解释，并提供来源、页码和“读图重点”
+不能让图片代替完整因果链，也不能假设用户看图就自动理解
+一张图只承担一个主要问题，通常一日 2~4 张关键图已经足够
+router 等设备必须说明“图标只是抽象符号，功能而非外形定义对象”
+```
+
+用户提供的本地参考资料：
+
+```text
+C:\Users\FxorG\Desktop\小林coding图解网站合集PDF
+```
+
+#### 小林 Coding PDF 资源库定位
+
+已在 2026-07-28 实际检查以下亮白版本的目录、关键主题和代表性图页：
+
+```text
+《图解网络》v4.0：776 页
+《图解系统》v1.0：432 页
+《图解 MySQL》v2.0：333 页
+《图解 Redis》v2.0：320 页
+```
+
+同一本书的暗黑版、浅色版和亮白版内容重复。以后为 daily 截取教学图时默认使用亮白版，不重复检查不同配色版本。
+
+这套资料的统一定位：
+
+```text
+适合：
+    建立第一层直觉
+    展示静态结构、拓扑、内存对象关系和数据流
+    在课程之后帮助串联知识
+    在项目实现后与真实系统做对照
+    为阶段验收提供面试表达角度
+
+不适合：
+    替代 MIT 6.S081、CMU 15-445、Linux man page、RFC、官方文档或实际代码
+    从第一页机械读到最后一页
+    仅凭一张图认定已经掌握机制
+    把文章中的版本参数、阈值或术语不经核对直接写入教程
+```
+
+资料本身明确说明它是图解文章合集而不是教科书。实际抽查也发现存在简化、版本敏感内容和拼写错误，例如《图解系统》的 scheduler 页面把 `task_struct` 写成了 `tark_struct`。因此以后使用时必须：
+
+```text
+1. 先确定当天知识增量，不能反过来让 PDF 目录决定学习路线。
+2. 从相关章节中选择 0~4 张真正有用的图。
+3. 用课程、官方文档或实际代码核对关键事实。
+4. 标明图片来源、PDF 版本和页码。
+5. 在正文说明图片展示了什么、没有展示什么。
+6. 对 Redis/MySQL 的 version-specific 行为注明版本并重新核验。
+```
+
+#### 《图解系统》的路线映射
+
+高价值内容：
+
+```text
+硬件基础：
+    冯诺依曼模型、CPU/register/bus、instruction execution
+    memory hierarchy、CPU Cache、cache line、false sharing
+    interrupt、DMA
+
+OS 第一层：
+    virtual memory、process address space、malloc/mmap
+    process/thread、Linux task、scheduler
+    synchronization、deadlock
+    filesystem、inode、dentry、disk block
+
+Linux I/O 与性能：
+    disk I/O path、DMA
+    mmap + write、sendfile 与 zero-copy
+    select/poll/epoll
+```
+
+与规划的具体对应：
+
+```text
+Week5 已完成的 OS 第一轮：
+    不重新整本学习。
+    用户对 hardware object、page table、scheduler、inode 等概念再次卡住时，
+    可定向取一张图辅助纠偏，但不制造重复 work。
+
+Week7 C++ 多线程和同步：
+    可使用 CPU core / cache / cache line 图补充 data race、false sharing、
+    thread migration 与 cache locality 的硬件直觉。
+    不提前深入 lock-free memory ordering。
+
+Week8 ThreadPool / AsyncLogger / benchmark：
+    可使用 scheduler、cache hierarchy、producer-consumer 数据路径图，
+    帮助解释 queue contention、batching、locality 与 benchmark 现象。
+
+Week9 epoll / Reactor：
+    可使用 select/poll/epoll 的对象关系图作为静态全景，
+    但 system call 语义仍以 Linux man page 和实际程序为准。
+
+后续 filesystem / storage / performance：
+    inode/dentry、page/cache、DMA、zero-copy 图可作为复习入口。
+
+AI Infra CPU 性能与 data path 阶段：
+    memory hierarchy、cache locality、false sharing、DMA、copy path
+    可以作为 CPU inference 和 host-side serving 优化的前置桥梁。
+    这不等于现在提前学习 CUDA 或 GPU DMA。
+```
+
+使用边界：
+
+```text
+《图解系统》用于补用户较薄弱的硬件直觉，MIT 6.S081 负责 OS 因果链，
+Linux 工具和代码负责验证。三者不能互相替代。
+```
+
+#### 《图解 Redis》的路线映射
+
+高价值内容：
+
+```text
+基础与数据结构：
+    Redis 的角色与总体架构
+    String/SDS、List/quicklist、Hash/dict、Set、ZSet/skiplist
+    listpack、渐进式 rehash、load factor
+
+网络与执行模型：
+    main event loop
+    listen socket / connected sockets
+    epoll、accept/read/write event handlers
+    single-threaded command execution 与 background threads 的边界
+
+持久化与 OS 连接：
+    AOF、AOF rewrite
+    RDB/bgsave
+    fork 与 Copy-On-Write
+    large key 对 fork/COW/持久化延迟的影响
+
+内存管理：
+    expiration deletion
+    memory eviction、LRU/LFU
+
+后置能力：
+    replication、Sentinel、Cluster
+    cache avalanche/breakdown/penetration
+    cache/database consistency
+```
+
+与项目路线的具体对应：
+
+```text
+Week9 Reactor：
+    学完自己的 epoll/Reactor 主流程后，
+    使用 Redis event-loop 图做“真实系统如何组织 handlers/queues”的对照。
+    不在独立设计前把完整 Redis event loop 当作可照抄答案。
+
+Week11~12 Mini Redis V1：
+    使用 Redis command/data-type 总图确定产品边界；
+    用 SDS、dict、skiplist、listpack、渐进式 rehash 解释真实 Redis 的取舍；
+    自己的 V1 只实现规划要求的 SET/GET/DEL 与内存 KV，
+    不因资料内容丰富而强行复制全部 Redis 数据结构。
+
+Mini Redis V2：
+    对照 Redis event loop、client socket、TTL/expiration；
+    重点比较自己的 Reactor 和真实 Redis 的职责划分。
+
+Mini Redis V3：
+    对照 AOF/RDB、fork/COW、LRU/LFU、large key 与 benchmark；
+    把 Week5 的 fork/page fault/COW 和实际中间件连接起来。
+
+Mini Redis V3 之后：
+    replication、Sentinel、Cluster、缓存问题进入原理与面试层；
+    除非总规划以后明确升级项目，不实现完整高可用 Redis。
+```
+
+版本边界：
+
+```text
+Redis 3.x、6.x、7.x 的底层 encoding 和 I/O threading 描述可能不同。
+daily 中出现具体 threshold、encoding 或 thread model 时，
+必须说明版本并查 Redis 官方文档或对应源码，不能只引用 PDF。
+```
+
+#### 《图解 MySQL》的路线映射
+
+高价值内容：
+
+```text
+SQL execution path：
+    connection -> parser/preprocessor -> optimizer -> executor -> InnoDB
+
+storage layout：
+    tablespace、page、row format、record
+
+index：
+    B+ tree、data page
+    clustered index、secondary index、back-to-table lookup
+    index failure、covering index、EXPLAIN
+
+transaction / concurrency：
+    isolation levels
+    MVCC、Read View、transaction id、undo version chain
+    record lock、gap lock、next-key lock、deadlock
+
+logging / recovery：
+    undo log、redo log、binlog
+    WAL、crash recovery 和 two-phase coordination 的第一层
+
+memory：
+    Buffer Pool、free/LRU/flush lists
+    clean page、dirty page、flush
+    MySQL 对简单 LRU 的改造
+```
+
+与规划的具体对应：
+
+```text
+当前 Week6~Week12：
+    不提前系统学习 MySQL。
+    只有在 TCP connection、B+ tree、LRU、WAL 等已学概念需要一个具体例子时，
+    才允许做一两句连接，不展开 MySQL 章节。
+
+Week11~12 Mini Redis V1 之后：
+    可以低强度预热 database page、buffer pool、WAL 三个概念，
+    为 15-445 和 MySQL 第一轮建立入口。
+
+Week13~14 MySQL / CMU 15-445：
+    用《图解 MySQL》提供 MySQL 实例、结构图和面试语言；
+    用 15-445 建立 page/buffer pool/index/concurrency/recovery 的系统模型；
+    用真实 MySQL、SQL、EXPLAIN 和 transaction experiments 提供证据。
+
+项目连接：
+    B+ tree 与 Week3 数据结构比较
+    Buffer Pool 与 LRUCache、OS page/cache 比较
+    MVCC/lock 与 Week7 concurrency 比较
+    redo/undo/binlog 与 AsyncLogger、WAL、durability 比较
+    TCP connection 与未来 MySQL connection pool 比较
+```
+
+版本边界：
+
+```text
+MySQL 5.7 与 8.0 在 query cache、parser/prepare、optimizer 和部分实现上有差异。
+daily 必须标明实验版本；PDF 图只帮助理解，不替代 EXPLAIN、官方文档和 15-445。
+```
+
+#### 《图解网络》的后续路线映射
+
+Week6 Day2 已经实际使用 Ethernet、ARP、router 和 encapsulation 图。后续可以继续定向使用：
+
+```text
+Week6 Day3：
+    UDP、DNS、protocol header nesting
+
+Week6 Day4~Day6：
+    TCP socket path、handshake/close、state、flow/congestion control
+
+Week6 Day7 / Week10：
+    HTTP request/response、browser-to-server path
+
+Week9：
+    网络图只补 packet path；epoll/Reactor 主体优先使用《图解系统》和实际代码
+```
+
+不能因为《图解网络》篇幅大就把 TLS、HTTP/2/3、QUIC 等内容提前塞进 Week6。
+
+#### 面试题 PDF 的使用方式
+
+已抽查：
+
+```text
+100 道+ C++ 面试题
+150 道 MySQL + Redis 面试题
+150 道计算机网络 + 操作系统 + 数据结构与算法面试题
+30 道 Linux 命令 + Git 面试题
+50 道消息队列 + 分布式 + 系统设计面试题
+大厂后端面试真题
+```
+
+这些材料自己也明确定位为学习后的复习/突击题库，不是体系教程。以后只这样使用：
+
+```text
+week.md：
+    在阶段出口安排一次 5~10 题口述抽查；
+    题目只覆盖本周已经学过的内容。
+
+daily.md：
+    Part 3 可从中改写 1~3 道真正检验当天机制的验收题；
+    不复制参考答案，不用八股答案替代教程因果链。
+
+面经雷达：
+    统计重复出现但当前不会的问题；
+    按 P0/P1/P2 和当前项目相关性排序，不看到什么就立刻学什么。
+
+项目 interview.md：
+    在 ThreadPool、Reactor、Mini Redis、MySQL 阶段，
+    用题库检查“原理、取舍、bug、benchmark、优化”表达是否完整。
+```
+
+具体启用时间：
+
+```text
+C++ 题库：
+    Week7~Week8 之后按模块抽查，不重新刷已经通过的基础语法。
+
+网络/OS 题库：
+    Week6 出口和 Week9/10 项目后分两轮抽查。
+
+MySQL/Redis 题库：
+    Mini Redis 对应模块完成后、Week13~14 MySQL 学完后再抽查。
+
+Linux/Git 题库：
+    项目工程化 review 时抽查，不单开一周背命令。
+
+消息队列/分布式/系统设计：
+    当前后置，等 RPC、中间件项目和分布式基础进入规划后再启用。
+
+大厂后端面试真题：
+    只作为 2024 年前后题型样本；
+    真正投递前必须结合当时更新的面经，不能把旧 PDF 当成当前岗位需求全貌。
+```
+
+当前明确排除：
+
+```text
+Java、Golang、测试开发题库不进入当前主线
+不按题库顺序倒推课程
+不为了“覆盖 100/150 道”增加重复性作业
+不默认相信 PDF 中所有参考答案，关键结论仍需核验
+```
+
+#### 写入未来 week.md / daily.md 的执行规则
+
+生成未来 `week.md` 时：
+
+```text
+1. 先按总规划确定当周主线和出口项目。
+2. 再标出本地 PDF 可辅助的章节/图，不把 PDF 阅读量当周目标。
+3. 每周最多安排一次阶段性面试题抽查，不每日刷八股。
+4. 独立项目设计在前，真实系统/PDF 对照在后，避免提前泄露实现。
+```
+
+生成未来 `daily.md` 时：
+
+```text
+1. 实际打开当天相关 PDF 页面，不凭 MEMORY 猜图。
+2. 只选择 0~4 张和当天核心问题直接相关的 figure。
+3. 裁剪掉无关正文，保留必要 labels，并检查清晰度。
+4. 图片后必须写读图重点、责任边界和 source/page。
+5. flowchart 讲动态因果，bitmap 讲静态结构/外形/拓扑，两者按需组合。
+6. 关键事实与 version-sensitive 内容用 primary source 或实际实验复核。
+7. 练习日不通过图片或参考实现提前给出完整解法。
+```
+
+这套资料只增强表达和理解，不改变当前路线：
+
+```text
+C++ -> Linux -> OS -> 网络 -> 并发组件 -> epoll/Reactor
+-> HTTP Server -> Mini Redis -> MySQL/15-445 -> RPC -> AI Infra
+```
+
 ### 9.5 证据必须说明能力边界
 
 工具输出不是整个机制。使用观察工具时必须同时写：
@@ -1120,6 +1975,33 @@ lsof 展示 fd 与打开对象关系，但不等于完整展示所有内核引�
 关键系统调用说明参数、返回值和状态变化
 不机械注释普通赋值、return 等显然语法
 ```
+
+首次讲解一个新 API 时，保留原有的：
+
+```text
+英文来源与用途
+所属头文件
+函数签名
+每个参数的含义
+成功与失败返回值
+调用改变的对象、状态、资源或 output parameter
+ownership、关闭责任和关键错误边界
+```
+
+并在这些内容之后增加一个小型使用例子，不能只停在 prototype 和参数表。最小例子应明确展示：
+
+```text
+1. 输入变量怎样准备
+2. output object / buffer / fd 怎样声明
+3. 函数调用这一行实际怎样写
+4. 返回值怎样判断
+5. 成功后哪个对象或状态发生了什么变化
+6. 最小编译运行命令和可观察结果
+```
+
+例子应只解释当前单个 API 的基本调用，规模越小越好。接口代码日可以使用完整最小 demo；独立练习日不得借“小例子”提前给出练习要求的完整函数、完整控制流或多个 API 的组合答案。若 API 只读状态或没有 output parameter，也要明确它返回了什么、能证明什么和不能证明什么。
+
+同一语义家族的 API 可以共用一个例子，例如 `htons/ntohs` 用一次 round trip 展示两个方向。仅宽度或名称不同、调用方式完全相同的简单变体，例如 `htonl/ntohl`，可以只给最小调用片段并明确与主例子的差异，不机械复制整份程序。是否省略完整 demo 的判断标准是“用户能否据此独立写出正确调用”，不是为了缩短篇幅。
 
 C++ 并发接口第一次出现时，除函数用途外还要解释默认参数和 ownership 语义：
 
@@ -1250,6 +2132,10 @@ Week5 Day2：
 Week5 Day3~Day4：
     trap return 和 page fault 等多阶段机制先用 Mermaid flowchart 展示完整闭环，再逐节点解释，能明显降低局部术语造成的认知断裂。
     flowchart 最适合表达“谁把控制权交给谁、在哪个条件处分支、修复后回到哪里”；正文仍负责说明 register、page table、mapping 等具体状态变化。
+
+Week6 Day2：
+    “额外测试一个 invalid input”必须明确写成“准备第二个非法输入 -> 再调用一次 API -> 检查该次返回值 -> 输出证据”。
+    只给预期输出标签会让用户误以为打印那行文字就是完成测试；验收要求必须说清测试动作与证据来源。
 ```
 
 ### 9.11 发布前自检清单
@@ -1269,6 +2155,7 @@ Week5 Day3~Day4：
 [ ] 工具证据是否说明“能证明”和“不能证明”？
 [ ] 课程原文、教程补充和 Linux/架构差异是否分开？
 [ ] 必要 API 是否在正文给足，练习答案是否仍留给用户？
+[ ] 每个非平凡新 API 是否有最小调用例子、返回值判断和成功后的状态说明？
 [ ] 所有代码和命令是否实际验证？
 [ ] 标题编号是否单调、没有重复章节和重复产出文件？
 [ ] 核心任务、错误路径、工程增强是否分层？
@@ -1430,7 +2317,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5 已正式完成，Week6 Day1 第三次短复检通过，最终评分 `88`。Week6 Day2 教程已经生成，当前等待用户学习 Day2、独立完成 `address_demo.cpp`、route/neighbour 观察和验收问题。暂不生成 Day3。所有已生成 daily 保持只读；后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
+当前位置：Week5 已正式完成，Week6 Day1 最终评分 `88`，Week6 Day2 最终评分 `90`，Week6 Day3 短复检通过、最终评分 `92`，Week6 Day4 最终复检正式通过、最终评分 `93`。Day4 的 listening/connected socket、socket -> bind -> listen -> accept、pending queue、blocking accept、单连接 echo、fd ownership 与实际运行均通过；`ntohs`、ready log、`<cstdint>` 和 relative include 已修正。保留的非阻塞项是按 wakeup -> RUNNABLE -> scheduled -> recheck 的准确顺序理解 accept 恢复过程、细化 SO_REUSEADDR 表述，以及把 host-order port 变量名改清楚。Week6 Day5 已提前生成并冻结，用户尚未学习、提交代码或验收。当前下一步是学习 Week6 Day5，不再修改或复检 Day4。所有已生成 daily 默认保持只读，后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
 
 Day5 已验收：
 

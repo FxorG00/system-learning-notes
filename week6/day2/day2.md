@@ -129,13 +129,53 @@ network-layer address，也就是本机配置的 IPv4/IPv6 address
 
 `link`：链路。
 
-今天把它理解为：
+今天在 Ethernet / IP 的上下文里，把它理解为：
 
 ```text
-一批可以直接使用当前 link-layer protocol 互相交付 frame 的 interfaces
+一组处于同一个二层通信范围内的 interfaces；
+它们不需要经过 IP router 转发，就能通过当前 link-layer protocol 互相交付 frame
 ```
 
-例如同一个 Ethernet LAN。`link` 不是“整个互联网”。
+这里的“直接”不是指两台 hosts 之间必须只有一根线。中间可以有 Ethernet switch；只要不需要 router 把 IP packet 从一个 network 转发到另一个 network，它们仍然可以属于同一个 link。
+
+![两个 Ethernet links 以及作为边界的 router](images/link-boundary.svg)
+
+读图重点：
+
+```text
+Link A：
+    Host A 的 ens33
+    Host B 的 eth0
+    router 的 r0
+    这些 interfaces 可以在当前 link 内交换 Ethernet frames
+
+Link B：
+    router 的 r1
+    Host C 的 eth0
+    它们属于另一组二层通信范围
+```
+
+router 整台设备同时连接两个 links，但它的两个 interfaces 分别属于不同的 link。Host A 要把 IP packet 发给 Host C 时，需要经历：
+
+```text
+Link A：Host A -> router 的 r0
+router：检查 IP destination，执行三层转发
+Link B：router 的 r1 -> Host C
+```
+
+因此，你说的“与当前 host 有边相连的 nodes”可以作为第一层图论直觉，但要修正两点：
+
+```text
+1. 图中的点更适合看成 interface，而不是整台 host。
+2. link 更像一个允许多个 interfaces 二层直达的局部区域，
+   不一定只是两个 nodes 之间的一条 point-to-point edge。
+```
+
+在 point-to-point link 中，确实可以近似画成两个 interfaces 之间的一条边；在常见 Ethernet LAN 中，一个 link 往往包含多个 hosts、switch ports 和一个或多个 router interfaces。
+
+最后压缩成一句：
+
+> `link` 是一次 Ethernet frame 能在不经过 IP router 转发的情况下活动的局部二层范围，不是“整个互联网”，也不等于固定的一根网线。
 
 ### 3.3 hop
 
@@ -242,6 +282,44 @@ IPv6 使用的是 Neighbor Discovery，不是 ARP；今天只处理 IPv4。
 跨网段目标：next hop 通常是 gateway/router
 ```
 
+#### 3.9.1 router 到底“长什么样”
+
+先看下面这张抽象网络图。中间的蓝色小盒子是 router，它有多个 interfaces：
+
+```text
+eth1 连接 Internet 一侧
+eth2 连接 10.10.1.0/24
+eth3 连接 192.168.1.0/24
+```
+
+![router 通过多个 interfaces 连接不同 networks](images/router-interfaces-networks.png)
+
+> 图源：《图解网络》小林 Coding v4.0，第 43 页，截取了 router、interfaces、networks 与 routing table 的关系图。
+
+读图时不要把“蓝色小盒子”当成 router 的定义。真实设备可能是：
+
+```text
+家用无线路由器：
+    常见为带网口和天线的塑料盒子；
+    往往同时集成 router、Ethernet switch、Wi-Fi access point 和 NAT 等功能。
+
+企业或数据中心 router：
+    可能是有很多 network ports 的机架式设备。
+
+软件 router：
+    一台拥有多个 network interfaces、启用 IP forwarding 并配置 routes 的 Linux host，
+    也可以承担 router 的工作。
+```
+
+因此 router 由功能定义，不由外形定义：
+
+```text
+连接不同 networks
+-> 接收一个 interface 上的 IP packet
+-> 查询 routing table
+-> 从另一个 interface 转发
+```
+
 ### 3.10 route 与 routing table
 
 `route`：到一组 destination addresses 的转发规则。
@@ -332,6 +410,105 @@ protocol + IP address + port
 
 `network byte order` 规定为 big-endian。`host byte order` 则由当前 CPU/平台决定。
 
+### 3.15 address family
+
+`address family`：**地址族**，表示你准备处理哪一种地址体系/格式。
+
+`inet_pton` 的第一个参数就是 address family：
+
+```
+int inet_pton(int af, const char* src, void* dst);
+              ^^
+```
+
+常见值：
+
+```
+AF_INET：IPv4 address family
+AF_INET6：IPv6 address family
+AF_UNIX：本机 Unix domain socket address family
+```
+
+对于 `inet_pton`，主要使用前两个：
+
+| `af`       | 输入格式           | 输出对象   | 大小     |
+| ---------- | ------------------ | ---------- | -------- |
+| `AF_INET`  | `"192.168.56.129"` | `in_addr`  | 4 bytes  |
+| `AF_INET6` | `"2001:db8::1"`    | `in6_addr` | 16 bytes |
+
+例如 IPv4：
+
+```
+in_addr address{};
+
+int result =
+    ::inet_pton(AF_INET, "192.168.56.129", &address);
+```
+
+这里 `AF_INET` 告诉它：
+
+```
+按照 IPv4 语法解析 src
+成功后把结果写成 4-byte IPv4 address
+```
+
+IPv6 则是：
+
+```
+in6_addr address{};
+
+int result =
+    ::inet_pton(AF_INET6, "2001:db8::1", &address);
+```
+
+所以返回值的精确含义是：
+
+```
+1：
+    按指定 address family 转换成功
+
+0：
+    src 不是指定 address family 的合法文本
+
+-1：
+    inet_pton 不支持传入的 address family
+    同时设置 errno，通常是 EAFNOSUPPORT
+```
+
+注意 `0` 不只是“无效 IPv4”。例如：
+
+```
+in_addr address{};
+
+inet_pton(AF_INET, "2001:db8::1", &address);
+```
+
+返回 `0`，因为这个字符串可能是合法 IPv6，但它不是合法 IPv4，而你指定的是：
+
+```
+AF_INET
+```
+
+如果错误地传入：
+
+```
+inet_pton(AF_UNIX, "...", &address);
+```
+
+则返回 `-1`，因为 `inet_pton` 不支持把 Unix domain socket 地址转换成网络二进制地址。
+
+因此你的答案可以改得更精确：
+
+```
+1：转换成功
+0：输入不是指定 address family 的合法地址文本
+-1：指定的 address family 不受 inet_pton 支持，并设置 errno
+```
+
+一句话记忆：
+
+> address family 告诉 API：“你现在要按 IPv4、IPv6，还是其他地址体系来解释这份地址。”
+
 ---
 
 # Part 2：教程主体
@@ -393,6 +570,12 @@ destination MAC：当前这一跳把 frame 交给哪个 interface
 source MAC：当前这一跳是谁发送的
 EtherType：payload 下一步交给哪个 protocol parser
 ```
+
+![Ethernet header 的三个核心字段](images/ethernet-header.png)
+
+> 图源：《图解网络》小林 Coding v4.0，第 35 页。图中“接收方 MAC”就是 destination MAC，“发送方 MAC”就是 source MAC，“协议类型”就是 EtherType。
+
+这张图只画了 Ethernet header 的核心部分。真正的 frame 后面还有 payload；不要误以为这三个 fields 就是整份 frame。
 
 常见 EtherType：
 
@@ -467,6 +650,17 @@ ff:ff:ff:ff:ff:ff
 
 kernel 可以把这个 mapping 暂存在 neighbour table 中，后续发送不必每次都重新 broadcast。
 
+![ARP request 广播与目标节点应答](images/arp-broadcast-reply.png)
+
+> 图源：《图解网络》小林 Coding v4.0，第 36 页。黑色箭头表示 ARP request 在同一 subnet 内广播，浅蓝箭头表示拥有目标 IP 的节点返回自己的 MAC。
+
+读图时注意两个边界：
+
+```text
+“所有节点都收到 request”不等于所有节点都 reply
+ARP broadcast 只在当前 link/subnet 内传播，不会一路广播到整个互联网
+```
+
 ### 6.2 完整 ARP 因果链
 
 ```mermaid
@@ -518,6 +712,20 @@ Ethernet parser 检查 EtherType
 ```
 
 这正是 Day1 的 encapsulation / decapsulation 在具体协议上的表现。
+
+![发送端逐层添加 header，接收端逐层移除 header](images/encapsulation-decapsulation.png)
+
+> 图源：《图解网络》小林 Coding v4.0，第 46 页。左侧是 encapsulation，右侧是 decapsulation。
+
+这张图使用 HTTP/TCP 作为示例，但今天只读它的结构：
+
+```text
+发送端不是把 HTTP data、TCP header、IP header、Ethernet header 分开发送
+而是下一层把上一层的完整结果当成自己的 payload
+
+接收端也不是一次性“扒开所有 header”
+而是当前 layer 检查自己的 header，再根据 type/protocol field 交给上一层
+```
 
 ---
 
@@ -800,6 +1008,59 @@ network representation
 -> 当前 host 能自然使用的整数值 8080
 ```
 
+最小使用例子：
+
+```cpp
+/*
+目标：
+    把 host-side port 转成 network representation，再转换回来。
+验证：
+    round trip 后仍然得到原来的 port 8080。
+*/
+#include <arpa/inet.h>
+#include <cstdint>
+#include <iostream>
+
+int main() {
+    const std::uint16_t host_port = 8080;
+
+    const std::uint16_t network_port = ::htons(host_port);
+    const std::uint16_t restored_port = ::ntohs(network_port);
+
+    std::cout << "host port: " << host_port << '\n';
+    std::cout << "restored port: " << restored_port << '\n';
+    return 0;
+}
+```
+
+编译运行：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -g port_byte_order_minimal.cpp -o port_byte_order_minimal
+./port_byte_order_minimal
+```
+
+预期输出：
+
+```text
+host port: 8080
+restored port: 8080
+```
+
+调用关系：
+
+```text
+htons(host_port)：
+    输入是当前 host 自然使用的 16-bit value；
+    返回值是准备写进 network field 的 16-bit representation。
+
+ntohs(network_port)：
+    输入是从 network field 读取的 16-bit representation；
+    返回值是当前 host 可以自然使用和打印的数值。
+```
+
+这两个 API 不通过特殊返回值报告失败，因为它们只是对固定宽度整数进行 byte-order conversion。不要把 `network_port` 的十进制打印结果当成 network bytes；要观察 bytes，需要查看它的 object representation。
+
 在 little-endian host 的内存里，经过 `htons(8080)` 后观察 bytes，应看到：
 
 ```text
@@ -807,6 +1068,118 @@ network representation
 ```
 
 不要只打印转换后的整数并根据十进制外观判断对错。今天要观察的是它在内存中的 byte sequence。
+
+### 10.2.1 为啥需要 htons
+
+```text
+所以就是 8080 对应的是 0x1f90，但是目前低位 是90，然后网络那边要求要反过来，也就是要求低位是 1f，所以我需要的是 0x901f 才能满足这个需求。然后 htons 就是这个作用
+```
+
+
+
+关键区别是：
+
+```
+0x1f90 是“数值的写法”
+1f 90 是“内存/网络中的 byte 顺序”
+```
+
+这两个不是一回事。
+
+假设当前 CPU 是 little-endian：
+
+```
+std::uint16_t host_port = 8080;
+```
+
+`host_port` 的数值是：
+
+```
+十进制：8080
+十六进制：0x1f90
+```
+
+但它在内存里的两个 bytes 是：
+
+```
+90 1f
+```
+
+因为 little-endian 把低位 byte 放在前面。
+
+如果你这样打印：
+
+```
+std::cout << std::hex << host_port;
+```
+
+输出确实是：
+
+```
+1f90
+```
+
+但 `std::hex` 只是改变**终端显示格式**，不会改变内存中的 bytes：
+
+```
+打印结果：1f90
+内存 bytes：90 1f
+```
+
+而网络要求 big-endian：
+
+```
+网络 bytes：1f 90
+```
+
+所以需要：
+
+```
+const std::uint16_t network_port = ::htons(host_port);
+```
+
+在 little-endian 机器上，转换后的情况是：
+
+```
+network_port 作为本机整数打印：0x901f
+network_port 在内存中的 bytes：1f 90
+```
+
+看起来打印值反而“变怪了”，但它的内存 bytes 正好满足网络协议。
+
+完整对比：
+
+| 对象               | 作为整数打印 | 内存中的 bytes |
+| ------------------ | ------------ | -------------- |
+| `host_port`        | `0x1f90`     | `90 1f`        |
+| `htons(host_port)` | `0x901f`     | `1f 90`        |
+
+因此给 socket address 填端口时要写：
+
+```
+sockaddr_in address{};
+address.sin_port = ::htons(8080);
+```
+
+因为 kernel 读取 `sin_port` 时，需要看到：
+
+```
+1f 90
+```
+
+而不是看你在终端上能不能打印出 `"1f90"`。
+
+一句话压缩：
+
+> `std::hex` 只改变数字怎么显示；`htons` 改变的是这个 16-bit object 的 byte representation，使其可以按网络规定发送。
+
+如果你只是想在终端显示 `8080` 的十六进制，当然不需要 `htons`：
+
+```
+std::cout << std::hex << 8080;  // 只为了显示
+```
+
+只有准备把数值放进网络协议字段时，才需要 `htons`。
 
 ### 10.3 `htonl` 与 `ntohl`
 
@@ -817,7 +1190,15 @@ std::uint32_t htonl(std::uint32_t host_value);
 std::uint32_t ntohl(std::uint32_t network_value);
 ```
 
-今天练习只要求 16-bit port，因此重点是 `htons/ntohs`。
+它们的调用形式与 `htons/ntohs` 相同，只是 value width 从 16-bit 变成 32-bit：
+
+```cpp
+const std::uint32_t host_value = 0x01020304U;
+const std::uint32_t network_value = ::htonl(host_value);
+const std::uint32_t restored_value = ::ntohl(network_value);
+```
+
+这是简单的同族接口，不再复制一份完整 demo。今天练习只要求 16-bit port，因此重点是 `htons/ntohs`。
 
 ---
 
@@ -881,6 +1262,76 @@ dst：输出 binary address 的内存位置
 -1：af 不受支持，并设置 errno
 ```
 
+最小使用例子：
+
+```cpp
+/*
+目标：
+    把一段 IPv4 text 转换为 in_addr 中的 network binary form。
+验证：
+    程序根据 inet_pton 的三类返回值打印结果。
+*/
+#include <arpa/inet.h>
+#include <cstdio>
+#include <iostream>
+
+int main() {
+    const char* text = "192.168.56.129";
+    in_addr address{};  // output object：转换成功后，binary IPv4 写到这里
+
+    const int result = ::inet_pton(AF_INET, text, &address);
+
+    if (result == 1) {
+        std::cout << "conversion succeeded\n";
+        return 0;
+    }
+
+    if (result == 0) {
+        std::cerr << "invalid IPv4 text\n";
+        return 1;
+    }
+
+    std::perror("inet_pton");
+    return 1;
+}
+```
+
+编译运行：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -g inet_pton_minimal.cpp -o inet_pton_minimal
+./inet_pton_minimal
+```
+
+预期输出：
+
+```text
+conversion succeeded
+```
+
+把这次调用拆开看：
+
+```text
+AF_INET：
+    告诉 inet_pton 按 IPv4 语法解析。
+
+text：
+    指向输入的、以 '\0' 结尾的 C string。
+
+address：
+    调用前是 value-initialized 的 in_addr object；
+    调用成功后保存 4-byte IPv4 network binary form。
+
+&address：
+    把 output object 的地址交给 inet_pton；
+    void* 只让接口可以接收不同 address-family 对应的 output type。
+
+result：
+    先判断 result，确认成功后才能把 address 当成有效转换结果使用。
+```
+
+这个例子只证明“怎样正确调用一次 `inet_pton`”。它没有把 binary address 转回文字，也没有替你完成后面的 `address_demo.cpp`。
+
 `inet_pton` 不做 DNS name resolution。输入 `"example.com"` 不会替你查询 DNS。
 
 ### 11.3 `in_addr`
@@ -932,6 +1383,72 @@ char text[INET_ADDRSTRLEN]{};
 失败：返回 nullptr，并设置 errno
 ```
 
+最小使用例子：
+
+```cpp
+/*
+目标：
+    把已经按 network byte order 保存的 4-byte IPv4 address 转成 text。
+验证：
+    inet_ntop 成功后输出 "192.168.56.129"。
+*/
+#include <arpa/inet.h>
+#include <cstdio>
+#include <iostream>
+
+int main() {
+    in_addr address{};
+    address.s_addr = ::htonl(0xc0a83881U);  // 192.168.56.129
+
+    char text[INET_ADDRSTRLEN]{};
+    const char* result =
+        ::inet_ntop(AF_INET, &address, text, sizeof(text));
+
+    if (result == nullptr) {
+        std::perror("inet_ntop");
+        return 1;
+    }
+
+    std::cout << text << '\n';
+    return 0;
+}
+```
+
+编译运行：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -g inet_ntop_minimal.cpp -o inet_ntop_minimal
+./inet_ntop_minimal
+```
+
+预期输出：
+
+```text
+192.168.56.129
+```
+
+把调用参数拆开看：
+
+```text
+AF_INET：
+    按 IPv4 address 解释 src。
+
+&address：
+    指向已有的 4-byte IPv4 network binary form；
+    inet_ntop 只读取这个 source object。
+
+text：
+    output buffer；成功后保存以 '\0' 结尾的 IPv4 text。
+
+sizeof(text)：
+    告诉 inet_ntop output buffer 的实际容量。
+
+result：
+    成功时指向 text，失败时为 nullptr。
+```
+
+这里直接给 `address.s_addr` 准备固定输入，只是为了隔离演示单个 `inet_ntop`。业务代码通常不会手工把四段 IPv4 拼成 `0xc0a83881U`；应根据输入来源使用 `inet_pton`、socket API 或已有的 `in_addr`。
+
 完整 round trip：
 
 ```text
@@ -941,6 +1458,40 @@ char text[INET_ADDRSTRLEN]{};
 -> inet_ntop
 -> "192.168.56.129"
 ```
+
+### 11.5 怎么查看每个 byte
+
+**怎样直接读取 object representation**
+
+C++17 允许通过 `unsigned char*` 观察任意对象的实际 bytes：
+
+```
+const auto* bytes =
+    reinterpret_cast<const unsigned char*>(&address);
+
+for (std::size_t i = 0; i < sizeof(address); ++i) {
+    std::cout << std::hex
+              << std::setw(2)
+              << std::setfill('0')
+              << static_cast<unsigned int>(bytes[i])
+              << ' ';
+}
+```
+
+如果：
+
+```
+in_addr address{};
+inet_pton(AF_INET, "192.168.56.129", &address);
+```
+
+那么通常输出：
+
+```
+c0 a8 38 81
+```
+
+这不是某个网络 API，而是 C++ 提供的合法 object-representation 观察方式。
 
 ---
 
@@ -1005,6 +1556,339 @@ default via 192.168.56.2 dev ens33
 哪个 address 是 default gateway？
 remote destination 会从哪个 interface 发出？
 ```
+
+### 12.3.1 ip route 怎么看
+
+先把每一行看成一条规则：
+
+```
+如果 destination IP 匹配这个 prefix
+-> 下一跳交给谁
+-> 从哪个 interface 发出
+-> 使用哪个 source IP
+```
+
+通用格式大致是：
+
+```
+destination-prefix [via next-hop] dev interface
+                   [proto 来源] [scope 范围]
+                   [src source-IP] [metric 优先级]
+```
+
+**第一行**
+
+```
+default via 192.168.56.2 dev ens33 proto dhcp metric 100
+```
+
+逐段拆开：
+
+```
+default
+```
+
+等价于：
+
+```
+0.0.0.0/0
+```
+
+它可以匹配所有 IPv4 destination，但优先级最低，通常作为“其他更具体规则都匹配不到时”的兜底规则。
+
+```
+via 192.168.56.2
+```
+
+表示 next hop 是：
+
+```
+192.168.56.2
+```
+
+也就是 default gateway。注意，它不是最终 destination，而是当前主机首先把 packet 交给的 router interface。
+
+```
+dev ens33
+```
+
+表示从 `ens33` 这个 network interface 发出。
+
+```
+proto dhcp
+```
+
+这里的 `proto` 表示这条 route 的**来源**，不是 TCP、UDP 那种 protocol：
+
+```
+这条 route 由 DHCP 配置得到
+metric 100
+```
+
+表示这条 route 的 cost/优先级。存在多个同样具体的候选 route 时，通常 metric 越小越优先。
+
+整行翻译：
+
+> 如果没有更加具体的 route 能匹配 destination，就从 `ens33` 发出，把 packet 先交给 gateway `192.168.56.2`。这条规则由 DHCP 提供，metric 是 100。
+
+例如访问：
+
+```
+8.8.8.8
+```
+
+它不匹配后面的两个具体 prefix，所以使用：
+
+```
+destination IP = 8.8.8.8
+next-hop IP    = 192.168.56.2
+outgoing dev   = ens33
+source IP      = 通常选择 ens33 上的 192.168.56.129
+```
+
+**第二行**
+
+```
+169.254.0.0/16 dev ens33 scope link metric 1000
+169.254.0.0/16
+```
+
+表示匹配：
+
+```
+169.254.0.0 ~ 169.254.255.255
+```
+
+这是 IPv4 的 **link-local address range**，用于当前局部链路，通常不经过 router 转发。
+
+```
+dev ens33
+```
+
+匹配这个 prefix 的 packet 从 `ens33` 发出。
+
+这里没有：
+
+```
+via ...
+```
+
+表示不需要先交给 gateway。目标被认为可以在当前 link 上直接到达。
+
+```
+scope link
+```
+
+表示这条 route 的有效范围是当前 link。kernel 会把目标当作当前链路上的 neighbour。
+
+```
+metric 1000
+```
+
+这条 route 的 metric 是 1000。
+
+整行翻译：
+
+> 如果 destination 属于 `169.254.0.0/16`，就把它看作 `ens33` 当前链路上的目标，不经过 gateway，直接尝试在链路上交付。
+
+**第三行**
+
+```
+192.168.56.0/24 dev ens33 proto kernel scope link src 192.168.56.129 metric 100
+192.168.56.0/24
+```
+
+表示你的 local network，覆盖：
+
+```
+192.168.56.0 ~ 192.168.56.255
+dev ens33
+```
+
+从 `ens33` 发出。
+
+同样没有 `via`，所以不经过 gateway，目标在当前 link 上直接到达。
+
+例如发送给：
+
+```
+192.168.56.23
+```
+
+kernel 会尝试得到：
+
+```
+192.168.56.23 -> 对应 MAC address
+```
+
+然后直接构造 Ethernet frame。
+
+```
+proto kernel
+```
+
+表示这条 route 是 kernel 根据 interface 的地址配置自动产生的。
+
+因为 `ens33` 配置了：
+
+```
+192.168.56.129/24
+```
+
+kernel 就知道它直接连接着：
+
+```
+192.168.56.0/24
+scope link
+```
+
+表示目标可以在当前 link 上直接到达，不需要 router 做三层转发。
+
+```
+src 192.168.56.129
+```
+
+表示使用这条 route 时，kernel 推荐选择：
+
+```
+192.168.56.129
+```
+
+作为 source IP。
+
+```
+metric 100
+```
+
+表示 metric 是 100。
+
+整行翻译：
+
+> `192.168.56.0/24` 是通过 `ens33` 直接连接的 local network。这条规则由 kernel 自动生成；发送时优先使用 `192.168.56.129` 作为 source IP，不经过 gateway。
+
+**如何选择**
+
+假设发送给 `192.168.56.23`：
+
+```
+default          能匹配，prefix length = 0
+192.168.56.0/24  也能匹配，prefix length = 24
+```
+
+kernel 先使用 **longest prefix match**，即最长前缀匹配：
+
+```
+/24 比 /0 更具体
+```
+
+所以选择第三行，而不是 default route。
+
+发送给 `8.8.8.8`：
+
+```
+不匹配 192.168.56.0/24
+不匹配 169.254.0.0/16
+匹配 default
+```
+
+所以选择第一行。
+
+压缩起来：
+
+```
+192.168.56.x
+-> ens33 直接交付
+-> 不经过 gateway
+-> source IP 选择 192.168.56.129
+
+169.254.x.x
+-> ens33 当前 link 直接交付
+-> 不经过 gateway
+
+其他 destination
+-> ens33 发出
+-> 先交给 gateway 192.168.56.2
+```
+
+最重要的是：
+
+> 先用 destination IP 做最长前缀匹配；`dev` 决定从哪个 interface 发出，`via` 决定第一跳交给哪个 gateway，`src` 是建议使用的 source IP。
+
+### 12.3.2 local network
+
+你观察得很准确：**这两条都是 on-link route，都不需要经过 gateway。**
+
+但“哪个 prefix 表示 local network”中的 `local network` 通常特指你当前配置的正常 LAN，因此答案仍然是：
+
+```
+192.168.56.0/24
+```
+
+原因是 `ens33` 配置了：
+
+```
+192.168.56.129/24
+```
+
+所以 kernel 自动推出：
+
+```
+所在 network = 192.168.56.0/24
+```
+
+对应路由中也明确写了：
+
+```
+192.168.56.0/24
+dev ens33
+proto kernel
+scope link
+src 192.168.56.129
+```
+
+而：
+
+```
+169.254.0.0/16
+```
+
+是一个特殊的 **IPv4 link-local prefix**。它也表示：
+
+```
+匹配 169.254.x.x
+-> 从 ens33 直接尝试交付
+-> 不经过 gateway
+```
+
+但它不是由你的：
+
+```
+192.168.56.129/24
+```
+
+推导出来的正常 LAN prefix。
+
+因此分两种问法：
+
+```
+问：当前 ens33 所在的正常 local network 是哪个？
+答：192.168.56.0/24
+
+问：routing table 中哪些 prefix 被认为是 on-link、无需 gateway？
+答：169.254.0.0/16 和 192.168.56.0/24
+```
+
+可以整理为：
+
+| Prefix            | 是否经过 gateway | 含义                           |
+| ----------------- | ---------------- | ------------------------------ |
+| `192.168.56.0/24` | 否               | `ens33` 当前真正配置所在的 LAN |
+| `169.254.0.0/16`  | 否               | 特殊 IPv4 link-local 地址范围  |
+| `default`         | 是               | 其他目标交给 `192.168.56.2`    |
+
+所以你的推理“它俩都不经过 gateway”完全正确，只是：
+
+> **on-link prefix 不一定就是题目中所说的那个正常 local network prefix。**
 
 ### 12.4 让 kernel 只做一次 route lookup
 

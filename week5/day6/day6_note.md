@@ -80,7 +80,7 @@ std::thread worker(task);
 
 `std::thread` 用来创建一个新的线程，让某个函数与当前线程并发执行。
 
-```
+```cpp
 #include <iostream>
 #include <thread>
 
