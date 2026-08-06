@@ -367,7 +367,7 @@ global owning raw pointer 后续按已学 RAII 改成 unique_ptr 或显式释放
 笔记未单独保存 ps -L 与 /proc 输出；本次由 Codex 在 Ubuntu 实测确认，不把工具观察伪装成用户笔记已有内容
 ```
 
-### Week6：Day1~Day3 已完成，Day4 教程已生成
+### Week6：Day1~Day4 已完成，Day5~Day6 教程已提前生成
 
 主题：网络原理第一轮 + 阻塞式 Socket 编程。
 
@@ -407,7 +407,7 @@ ip / ss / nc / curl / dig 观察证据
 IPv4、单线程、blocking socket、协议第一层直觉
 不提前学习 select/poll/epoll、non-blocking I/O、Reactor、线程池、TLS、HTTP/2/3
 MIT 6.S081 Lec21 21.7~21.9 留到后续高性能网络 / AI Infra 性能阶段，不永久跳过
-daily 按用户进入对应 Day 时逐日生成，不提前生成后续教程
+daily 通常按用户进入对应 Day 时逐日生成；用户明确要求并行节省等待时间时，可以提前生成下一天，但不能因此把前一天标记为完成
 ```
 
 Week6 Day1 教程已经生成并按只读规则冻结：
@@ -992,6 +992,30 @@ strace 5.5 的 --inject=sendto:error=EINTR:when=1 实际触发，client retry �
 ```
 
 这些验证只证明 Day5 教程和测试命令可用，不代表用户已经学习或完成 Day5。Day4 已按用户后续指令完成初检；Day5 仍等待用户学习和提交。
+
+Week6 Day6 教程已经按用户明确要求提前生成，并从生成完成起按只读规则冻结：
+
+```text
+正式路径：C:\Users\FxorG\Desktop\gpt_infra\week6\day6\day6.md
+状态：教程已生成；用户尚未学习、提交 note 或验收，不评分
+前置状态：Week6 Day5 仍未学习、提交或检阅，不能跳过进度判断
+```
+
+Day6 是连接机制观察日，不新写一套 client/server，也不重复 Day5 的 robust I/O 练习。知识增量为：
+
+```text
+connection state 位于两端 kernel，不等于 application fd
+三次握手交换并确认两个独立 ISN；connect、kernel handshake、accept 主体分离
+sequence range、cumulative ACK、retransmission 与 ordered byte stream
+sliding window、rwnd/flow control 与 cwnd/congestion control 的第一层职责
+full-duplex、half-close、两个 FIN、active/passive close
+CLOSE-WAIT 等 local application close；TIME-WAIT 等 protocol timer
+fd lifetime 不等于 TCP state lifetime
+```
+
+Day6 复用 Day5 的 `tcp_client.cpp` 和 `tcp_echo_server.cpp`，使用 `ss` 与 `tcpdump` 观察 LISTEN、ESTAB、TIME-WAIT、CLOSE-WAIT、SYN/ACK/FIN 和基本 seq/ack/length。受控制造 CLOSE-WAIT 时只复制 probe 并在 peer EOF 后临时延迟 connected fd close，不污染正式 Day5 server。
+
+教程使用《图解网络》小林 Coding v4.0 的四张图：第 241 页三次握手、第 266 页正常关闭、第 316 页累计 ACK、第 317 页发送滑动窗口。生成时已按 RFC 9293、Linux `tcp(7)`、`ss(8)`、`tcpdump(8)` 校对机制与命令；2026-08-06 远端 Ubuntu 的旧地址 `192.168.56.129:22` 超时且本机未发现运行中的 `vmware-vmx` 进程，因此本轮没有伪造 Ubuntu 动态观察结果，待用户实际学习 Day6 时再运行验证。
 
 ---
 
@@ -2317,7 +2341,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5 已正式完成，Week6 Day1 最终评分 `88`，Week6 Day2 最终评分 `90`，Week6 Day3 短复检通过、最终评分 `92`，Week6 Day4 最终复检正式通过、最终评分 `93`。Day4 的 listening/connected socket、socket -> bind -> listen -> accept、pending queue、blocking accept、单连接 echo、fd ownership 与实际运行均通过；`ntohs`、ready log、`<cstdint>` 和 relative include 已修正。保留的非阻塞项是按 wakeup -> RUNNABLE -> scheduled -> recheck 的准确顺序理解 accept 恢复过程、细化 SO_REUSEADDR 表述，以及把 host-order port 变量名改清楚。Week6 Day5 已提前生成并冻结，用户尚未学习、提交代码或验收。当前下一步是学习 Week6 Day5，不再修改或复检 Day4。所有已生成 daily 默认保持只读，后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
+当前位置：Week5 已正式完成，Week6 Day1 最终评分 `88`，Week6 Day2 最终评分 `90`，Week6 Day3 短复检通过、最终评分 `92`，Week6 Day4 最终复检正式通过、最终评分 `93`。Day4 的 listening/connected socket、socket -> bind -> listen -> accept、pending queue、blocking accept、单连接 echo、fd ownership 与实际运行均通过；`ntohs`、ready log、`<cstdint>` 和 relative include 已修正。保留的非阻塞项是按 wakeup -> RUNNABLE -> scheduled -> recheck 的准确顺序理解 accept 恢复过程、细化 SO_REUSEADDR 表述，以及把 host-order port 变量名改清楚。Week6 Day5 与 Day6 都已按用户要求提前生成并冻结；用户尚未学习、提交代码/note 或验收这两天。当前下一步仍是学习 Week6 Day5，不能因 Day6 文件已存在而跳过 Day5 的进度判断。所有已生成 daily 默认保持只读，后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
 
 Day5 已验收：
 
