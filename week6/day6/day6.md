@@ -465,6 +465,133 @@ server kernel：LISTEN，等待 connection attempt
 server application：可能正在 accept 中阻塞
 ```
 
+### 6.2.0 发送 SYN 啥意思
+
+不是把“第 1000 个 byte”作为 payload 发出去。
+
+`SYN` 是 TCP header 里的一个 control flag，英文是 **Synchronize**。client 调用 `connect()` 后，client kernel 会构造并发送一个 TCP segment，大致是：
+
+```text
+TCP header:
+    seq = 1000
+    SYN = 1
+payload:
+    通常为空
+```
+
+这里的 `1000` 是 TCP header 的 `sequence number` 字段，不是 payload 内容。线上确实会有一个四字节字段以二进制形式存着数字 `1000`，但它不是应用数据，比如不是字符 `'1' '0' '0' '0'`。
+
+这条 SYN 的意思可以拆成两句：
+
+```text
+SYN = 1：
+    “我希望和你建立 TCP connection。”
+
+seq = 1000：
+    “在 client -> server 这个方向上，我选择 1000 作为初始编号。”
+```
+
+为什么 SYN 后 server 回复 `ack=1001`？
+
+```text
+SYN 使用了逻辑上的 sequence position 1000
+-> server 确认它后，下一步期待 1001
+-> 所以回 ACK = 1001
+```
+
+但 SYN 不是普通 payload byte。它只是 TCP 规定的一个“控制信息也占一个编号位置”的规则。之后 client 真正发送第一批业务数据时，通常从：
+
+```text
+seq = 1001
+```
+
+开始。
+
+所以“发送同步”不是同步文件、同步数据、同步时钟，而是：
+
+> 让两端 kernel 对这条连接的状态和两个方向的起始序号达成一致。
+
+server 收到这个 SYN 后，知道的是：
+
+```text
+有个 client 正在请求连接
+client -> server 方向从 1000 开始编号
+如果以后收到 client 的普通数据，下一步应从 1001 开始期待
+```
+
+它此时还不知道 server -> client 方向该从哪里开始，那是 server 选出自己的 `server_isn` 并放进第二次 `SYN+ACK` 才告诉 client 的。
+
+### 6.2.1 byte stream 在初始的时候不应该都是从位置 0 开始的吗？为什么需要 isn？
+
+“本方向 byte stream”指的是单向的那条逻辑字节序列。
+
+对 client 来说：
+
+```text
+client -> server：一条 byte stream
+server -> client：另一条独立的 byte stream
+```
+
+你说得对，**从 application 的视角**，client 发送的第一个业务 byte 完全可以理解为 offset `0`：
+
+```text
+application logical offset:
+
+0: 'H'
+1: 'e'
+2: 'l'
+3: 'l'
+4: 'o'
+```
+
+但 TCP 不把这个 application offset 直接写成网络包里的 `seq=0`。它会给这条连接的这一个方向选一个 ISN，例如 `1000`，建立映射：
+
+```text
+TCP control / stream position:
+
+SYN          seq = 1000
+第一个业务 byte 'H'  seq = 1001
+第二个业务 byte 'e'  seq = 1002
+...
+```
+
+所以可以这样理解：
+
+```text
+application 的第一个 byte：offset 0
+TCP 给它的线上编号：ISN + 1
+```
+
+`+1` 是因为前面的 SYN 已经占用了逻辑上的 position `1000`。
+
+如果 client 发出 `"hello"`：
+
+```text
+client -> server:
+
+SYN                  seq = 1000
+payload "hello"      seq = 1001, length = 5
+```
+
+server 收到完整 `"hello"` 后会回：
+
+```text
+ack = 1006
+```
+
+意思是：
+
+```text
+1001, 1002, 1003, 1004, 1005 这五个 payload positions 已连续收到
+下一步期待 1006
+```
+
+为什么不固定所有连接都从 `0` 开始？因为 TCP 要区分**旧连接遗留、延迟到达的包**和当前新连接的包；每次连接选择不同的初始序号会大幅减少混淆。`0` 作为某次随机选择的 ISN 在理论上并非绝对不可能，但它不是“所有连接必须从 0 开始”的规则。
+
+一句话：
+
+> application 把第一个数据叫 offset 0；TCP 为避免连接之间的旧包混淆，把它映射为 `ISN + 1` 这个线上 sequence number。
+
 ### 6.2 第一次：client 发送 SYN
 
 client application 调用 `connect` 后，client kernel：
