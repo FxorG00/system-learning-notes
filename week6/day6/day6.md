@@ -383,136 +383,422 @@ server kernel cannot directly read client TCB
 
 ---
 
-## 5. 三次握手：双方交换并确认两个 sequence spaces
+## 5. 先回答最基本的问题：三次握手到底在干什么
+
+先暂时不要计算 `x + 1`，也不要急着问“为什么不是两次或四次”。先看握手开始前发生了什么。
+
+Day5 的程序中：
+
+```text
+server application 已经完成 socket / bind / listen
+-> server kernel 有一个 LISTEN socket
+-> server application 可能阻塞在 accept
+
+client application 刚创建 socket
+-> client fd 还没有 connected
+-> client application 调用 connect(server_address)
+```
+
+此时，server 只是愿意接收连接，client 只是提出连接请求。两端 kernel 还没有完成一条可供普通 byte stream 使用的 TCP connection。
+
+### 5.1 为什么不能直接开始普通数据传输
+
+TCP 是 full-duplex byte stream。这里的 full-duplex 意味着存在两个独立方向：
+
+```text
+client -> server 的 byte stream
+server -> client 的 byte stream
+```
+
+两个方向都要使用 sequence number，但它们不是共用同一个起点：
+
+```text
+client 为自己的发送方向选择 client_isn
+server 为自己的发送方向选择 server_isn
+```
+
+所以连接建立前，两端至少要完成下面这些事：
+
+```text
+1. server 收到的是一个当前 connection attempt，而不是凭空进入 connected state
+2. server 学到 client 的初始 sequence number
+3. client 学到 server 的初始 sequence number
+4. client 确认 server 收到了自己的 SYN
+5. server 确认 client 收到了自己的 SYN
+6. 两端 kernel 分别把本地 TCP state 推进到 ESTABLISHED
+```
+
+这里的“确认”只发生在 TCP endpoint/kernel 层。它不表示：
+
+```text
+server application 已经处理了业务请求
+client 身份已经登录成功
+后续网络绝不会断开
+```
+
+`ESTABLISHED` 当前只表示：两端 TCP state 已经完成正常数据传输所需的连接同步。
+
+### 5.2 一句话目标
+
+> 三次握手让两个 kernel 为同一条 TCP connection 建立匹配状态，同步两个方向各自的初始 sequence number，并确认这次连接请求得到了当前 peer 的响应。
+
+RFC 9293 还强调一个重要原因：握手要降低网络中旧的重复 SYN 被误当成新连接、从而形成 false connection 的可能性。这个异常场景放到正常流程之后再解释。
+
+---
+
+## 6. 先不看大图：把三次握手从头到尾走一遍
+
+使用一组具体数字：
+
+```text
+client_isn = 1000
+server_isn = 5000
+```
+
+`ISN` 是 Initial Sequence Number，初始序列号。数字本身不是重点，重点是两个方向各自选一个起点。
+
+### 6.1 初始状态
+
+```text
+client kernel：CLOSED，尚未连接
+server kernel：LISTEN，等待 connection attempt
+server application：可能正在 accept 中阻塞
+```
+
+### 6.2 第一次：client 发送 SYN
+
+client application 调用 `connect` 后，client kernel：
+
+```text
+选择 client_isn = 1000
+发送 SYN, seq=1000
+进入 SYN-SENT
+```
+
+这条 SYN 表达的是：
+
+```text
+“我想建立一条连接；我这个发送方向从 sequence 1000 开始同步。”
+```
+
+server kernel 收到它后，至少学到了两件事：
+
+```text
+有一个 client 正在请求连接
+client 的初始 sequence number 是 1000
+```
+
+但 server 此时还不能确信 client 已经收到 server 的任何回应，所以连接尚未在 server 端完成建立。
+
+### 6.3 第二次：server 发送 SYN + ACK
+
+server kernel 为自己的发送方向选择：
+
+```text
+server_isn = 5000
+```
+
+然后回复：
+
+```text
+SYN + ACK
+seq = 5000
+ack = 1001
+```
+
+这一条 segment 同时表达两件事：
+
+```text
+ACK 部分：
+    “你的 SYN 1000 我收到了；下一步期待 1001。”
+
+SYN 部分：
+    “我这个发送方向从 sequence 5000 开始同步。”
+```
+
+server kernel 发送后进入 `SYN-RECEIVED`。这个状态可以压缩理解为：
+
+```text
+我收到了对方的 SYN
+我也发出了自己的 SYN + ACK
+但我还在等对方确认我的 SYN
+```
+
+### 6.4 client 收到第二次报文后知道了什么
+
+client kernel 检查：
+
+```text
+ack = 1001
+```
+
+这证明 server 已经接收并接受了 client 的 `SYN seq=1000`。同时，client 从：
+
+```text
+seq = 5000, SYN = 1
+```
+
+学到了 server 的初始 sequence number。
+
+到这里，client 已经掌握了自己进入正常数据阶段所需的信息：
+
+```text
+自己的发送方向下一位置是 1001
+server 的发送方向下一位置是 5001
+```
+
+client kernel 因而进入 `ESTABLISHED`，并发送第三次 ACK。
+
+### 6.5 第三次：client 确认 server 的 SYN
+
+client kernel 发送：
+
+```text
+ACK
+seq = 1001
+ack = 5001
+```
+
+它表达的是：
+
+```text
+“你的 SYN 5000 我收到了；下一步期待 5001。”
+```
+
+server kernel 收到 `ack=5001` 后，才确认 client 已经收到了 server 的 SYN，于是：
+
+```text
+server state：SYN-RECEIVED -> ESTABLISHED
+completed connection：进入 accept queue
+server application：以后可以从 accept 得到 connected fd
+```
+
+### 6.6 把完整主线压成一张图
+
+```mermaid
+sequenceDiagram
+    participant CA as Client Application
+    participant CK as Client Kernel TCP
+    participant SK as Server Kernel TCP
+    participant SA as Server Application
+
+    SA->>SK: listen, accept may block
+    CA->>CK: connect(server address)
+
+    Note over CK: choose client_isn = 1000<br/>state = SYN-SENT
+    CK->>SK: 1. SYN, seq=1000
+
+    Note over SK: learn client_isn<br/>choose server_isn = 5000
+    SK->>CK: 2. SYN+ACK, seq=5000, ack=1001
+
+    Note over SK: state = SYN-RECEIVED
+    Note over CK: server confirmed client SYN<br/>learn server_isn<br/>state = ESTABLISHED
+
+    CK->>SK: 3. ACK, seq=1001, ack=5001
+    CK-->>CA: connect returns success
+
+    Note over SK: client confirmed server SYN<br/>state = ESTABLISHED<br/>enqueue completed connection
+    SK-->>SA: accept returns connected fd
+```
+
+先把这条主线记住：
+
+```text
+client SYN：告诉 server 自己的起点
+server SYN+ACK：确认 client 起点，同时告诉 client 自己的起点
+client ACK：确认 server 起点
+```
+
+---
+
+## 7. 现在再看小林的图：把报文与状态对上
 
 ![TCP three-way handshake](images/tcp_three_way_handshake.png)
 
 图源：《图解网络》小林 Coding v4.0，第 241 页，TCP 篇 4.1.2.1。
 
-读图只抓四件事：
+这张图放在完整流程之后，因为它适合做“状态与报文总览”，不适合代替第一次讲解。
+
+从上往下读：
+
+| 时刻 | client state | 线上 segment | server state |
+|---|---|---|---|
+| 握手前 | `CLOSED` | 无 | `LISTEN` |
+| 第一次后 | `SYN-SENT` | `SYN, seq=x` | 收到 SYN 后准备回复 |
+| 第二次后 | 等待并处理 SYN+ACK | `SYN+ACK, seq=y, ack=x+1` | `SYN-RECEIVED` |
+| 第三次后 | `ESTABLISHED` | `ACK, seq=x+1, ack=y+1` | 收到 ACK 后进入 `ESTABLISHED` |
+
+图里的 `CLOSE` 按标准状态名称应读作 `CLOSED`；`SYN_RCVD` 与本文的 `SYN-RECEIVED` 是同一个状态。
+
+### 7.1 为什么 `ack` 是 `ISN + 1`
+
+SYN 虽然通常不携带普通 application payload，但它会占用一个 sequence position：
 
 ```text
-1. client 有自己的 client_isn
-2. server 有自己的 server_isn
-3. SYN 会占用一个 sequence position
-4. 两边最终都要确认自己收到了对方的 ISN
+client SYN 使用 sequence 1000
+-> client 下一发送位置是 1001
+-> server 用 ack=1001 表示已经确认该 SYN
 ```
 
-假设：
+server 方向同理：
 
 ```text
-client_isn = x
-server_isn = y
+server SYN 使用 sequence 5000
+-> client 用 ack=5001 确认
 ```
 
-三次交换：
+第三次是 pure ACK，不携带 payload，也没有 SYN/FIN，所以它本身通常不再消耗一个新的 sequence position。client 后续第一批普通数据仍可从 `seq=1001` 开始。
+
+### 7.2 两个 sequence spaces 到底是什么
+
+现在再使用这个术语就有具体对象了：
 
 ```text
-1. client -> server：SYN, seq=x
-2. server -> client：SYN+ACK, seq=y, ack=x+1
-3. client -> server：ACK, ack=y+1
+client -> server 方向：
+    client 从 x 开始编号
+    server 维护自己下一步期待的位置 x+1
+
+server -> client 方向：
+    server 从 y 开始编号
+    client 维护自己下一步期待的位置 y+1
 ```
 
----
+这就是“交换并同步两个 sequence spaces”。它不是额外发生的第四件神秘工作，而是上面三条 segment 已经完成的结果。
 
-## 6. 从 `connect` 到 `accept` 返回的完整因果链
+### 7.3 `connect`、握手与 `accept` 谁负责什么
 
-```mermaid
-flowchart TD
-    A["server application: listen"] --> B["server kernel: LISTEN"]
-    C["client application: connect"] --> D["client kernel chooses ISN x"]
-    D --> E["send SYN seq=x"]
-    E --> F["client state: SYN-SENT"]
-    F --> G["server kernel receives SYN"]
-    G --> H["server chooses ISN y"]
-    H --> I["send SYN+ACK seq=y ack=x+1"]
-    I --> J["server state: SYN-RECEIVED"]
-    J --> K["client kernel receives SYN+ACK"]
-    K --> L["client verifies ack and learns y"]
-    L --> M["send ACK ack=y+1"]
-    M --> N["client state: ESTABLISHED"]
-    N --> O["client connect can return"]
-    M --> P["server kernel receives final ACK"]
-    P --> Q["server state: ESTABLISHED"]
-    Q --> R["connection enters accept queue"]
-    R --> S["blocked accept waiter becomes RUNNABLE"]
-    S --> T["scheduler later runs server flow"]
-    T --> U["accept creates/returns connected fd"]
-```
-
-这里有三个不同的主体：
+三个主体必须分开：
 
 ```text
-client application：调用 connect，等待结果
-client/server kernel：真正维护 TCP state 并发送/接收 control segments
-server application：调用 accept，从 completed connection queue 取得 connected fd
+client application：
+    调用 connect，等待 client kernel 给出成功或失败结果
+
+client/server kernel TCP：
+    选择 ISN、发送/接收 SYN/ACK、维护 state、重传 handshake segment
+
+server application：
+    调用 accept，从 completed connection queue 取得 connected fd
 ```
 
-不能说：
+所以不能说：
 
 ```text
 accept 执行三次握手
 ```
 
-更准确的是：
+正常路径是：
 
 ```text
 kernel TCP path 完成握手
--> connection 进入 accept queue
--> accept 才能把它交给 application
+-> server kernel 将 connection 放入 accept queue
+-> blocked accept 将来返回 connected fd
 ```
+
+client 的 `connect` 可以已经成功返回，而 server application 还没有被 scheduler 运行到 `accept` 返回；此时 server kernel 可以先保存该 connection 的状态和收到的数据。
 
 ---
 
-## 7. 为什么不是两次握手
+## 8. 主线清楚后，再回答“为什么不是两次或四次”
 
-连接建立需要完成两件双向确认：
-
-```text
-A 把自己的 ISN 告诉 B，并知道 B 已确认
-B 把自己的 ISN 告诉 A，并知道 A 已确认
-```
+### 8.1 为什么两次不够
 
 如果只有：
 
 ```text
-A -> B：SYN x
-B -> A：SYN+ACK y, ack=x+1
+1. client -> server：SYN x
+2. server -> client：SYN y + ACK x+1
 ```
 
-B 还不知道最后这条 SYN+ACK 是否到达 A，也不知道 A 是否真的接受了 `y` 这个 sequence space。
-
-第三次 ACK 给 B 提供确认：
+第二次之后：
 
 ```text
-A 已收到 B 的 SYN
-A 下一步期待 y+1
+client 已知道：server 收到了 x，并且 server 的起点是 y
+server 仍不知道：client 是否收到了 y、是否接受这次连接同步
 ```
 
-因此不能把三次握手只背成“确认双方能收能发”。更完整的核心是：
+如果 server 仅仅因为自己“发出了 SYN+ACK”就进入 `ESTABLISHED`，它可能把一个未被当前 client 确认的 connection 当成已经建立。
 
-> 双方交换各自的 ISN，并让每一方都得到对方对自己 sequence space 的确认。
-
----
-
-## 8. 为什么通常不需要四次握手
-
-逻辑上需要四个动作：
+RFC 9293 特别指出了 old duplicate SYN 场景。简化理解：
 
 ```text
-A sends SYN x
-B ACKs x
-B sends SYN y
-A ACKs y
+网络中一条旧 SYN 延迟到达 server
+-> server 无法只看第一条 SYN 就确定它属于当前连接请求
+-> server 回复 SYN+ACK
+-> 当前 client 会检查 ack/sequence 是否符合自己正在等待的连接
+-> 不匹配时可以用 RST 拒绝；匹配时才回第三次 ACK
 ```
 
-但中间两个动作可以合并：
+第三次 ACK 因而向 server 提供了当前 client 对 `server_isn` 的确认。server 不应在缺少这个确认时把普通两次报文流程视为完整 established connection。
+
+所以不要记成：
 
 ```text
-B sends SYN y + ACK x+1
+三次握手只是为了证明双方都有发送和接收能力
 ```
 
-所以成为三个 segments，而不是为了神秘数字“强行规定三次”。
+更准确的第一层结论是：
+
+```text
+同步两个方向的初始 sequence number
+确认 peer 接受了本次同步
+降低旧重复连接请求造成 false connection 的可能性
+```
+
+### 8.2 为什么正常路径不需要四次
+
+如果把所需信息机械拆开，会得到四个逻辑动作：
+
+```text
+1. client 发送自己的 SYN x
+2. server 单独 ACK x
+3. server 再发送自己的 SYN y
+4. client ACK y
+```
+
+但 server 收到 client SYN 后，通常已经可以同时完成：
+
+```text
+确认 client 的 SYN
+发送 server 自己的 SYN
+```
+
+TCP header 允许 SYN flag 与 ACK flag 同时为 1，所以中间两件事合并成一条 `SYN+ACK`：
+
+```text
+client SYN
+server SYN+ACK
+client ACK
+```
+
+第四条独立 segment 不会带来新的必要确认，因此正常主动/被动打开路径使用三条。三不是神秘常数，而是四个逻辑动作中有两个能够安全合并后的结果。
+
+后面关闭连接常被画成四次，是因为收到 peer FIN 的一方可以立即 ACK，却不一定已经准备好发送自己的 FIN；那两个动作不能保证像握手中的 SYN+ACK 一样同时发生。
+
+### 8.3 “三次”不表示抓包永远只有三个 packets
+
+三次描述的是无丢包正常路径中的三个逻辑 handshake segments。实际网络可能出现：
+
+```text
+SYN 丢失        -> client 重传 SYN
+SYN+ACK 丢失    -> server 重传 SYN+ACK，或 client 超时后重传 SYN
+最后 ACK 丢失   -> server 保持 SYN-RECEIVED 并重传 SYN+ACK
+                  client 再次回复 ACK
+```
+
+所以 `tcpdump` 看到四条、五条甚至更多 handshake packets，不代表协议突然变成“四次握手”；要根据 flags、seq、ack 和 retransmission 关系判断它们承担的逻辑角色。
+
+### 8.4 握手主线最终压缩
+
+```text
+server LISTEN；accept 可以先阻塞
+-> client connect 触发 SYN x，client 进入 SYN-SENT
+-> server 收到 x，回复 SYN y + ACK x+1，进入 SYN-RECEIVED
+-> client 确认自己的 SYN 已被收到，也学到 y
+-> client 回复 ACK y+1，进入 ESTABLISHED，connect 可以成功
+-> server 收到最终 ACK，进入 ESTABLISHED
+-> connection 进入 accept queue
+-> server application 的 accept 返回 connected fd
+```
 
 ---
 
@@ -1543,7 +1829,7 @@ fd lifetime 不等于 TCP state lifetime
 
 标准与 Linux official documentation：
 
-- RFC 9293, Transmission Control Protocol：<https://www.rfc-editor.org/rfc/rfc9293.html>
+- RFC 9293, Transmission Control Protocol，Section 3.5 Establishing a Connection：<https://www.rfc-editor.org/rfc/rfc9293.html#section-3.5>
 - Linux `tcp(7)`：<https://man7.org/linux/man-pages/man7/tcp.7.html>
 - Linux `ss(8)`：<https://man7.org/linux/man-pages/man8/ss.8.html>
 - Linux `tcpdump(8)`：<https://man7.org/linux/man-pages/man8/tcpdump.8.html>

@@ -691,6 +691,8 @@ connect 失败
 
 `connect`：连接。
 
+对于 client 而言，对 server 建立 connection。
+
 头文件与签名：
 
 ```cpp
@@ -779,16 +781,23 @@ if (::connect(
 
 ```mermaid
 flowchart TD
-    A["client application 调用 connect"] --> B["client kernel 选择 local endpoint，并开始 connection establishment"]
-    B --> C["当前还没有 success/failure result"]
-    C --> D["client execution flow 阻塞"]
-    D --> E["network events 改变 TCP connection state"]
-    E --> F{"结果"}
-    F -- "connection established" --> G["等待者变为 runnable"]
-    F -- "refused / timeout / route error" --> H["等待者变为 runnable"]
-    G --> I["scheduler 恢复 client execution flow"]
+    A["client application 调用 connect"] --> B["client kernel 开始连接建立"]
+    B --> C["connect 尚未得到结果"]
+    C --> D["client execution flow 阻塞等待"]
+
+    D --> E["network event 或 timeout 到达"]
+    E --> F{"kernel 得到什么结果"}
+
+    F -- "成功" --> G["记录 connection established"]
+    F -- "失败" --> H["记录失败原因，例如 ECONNREFUSED 或 ETIMEDOUT"]
+
+    G --> I["唤醒等待者：SLEEPING -> RUNNABLE"]
     H --> I
-    I --> J["connect 返回 0 或 -1/errno"]
+
+    I --> J["scheduler 以后恢复 client execution flow"]
+    J --> K{"connect 结果"}
+    K -- "成功" --> L["connect 返回 0"]
+    K -- "失败" --> M["connect 返回 -1，errno 表示原因"]
 ```
 
 注意：
@@ -889,7 +898,7 @@ stdin EOF
 
 ---
 
-## 17. 为什么没有 half-close 时，echo pair 容易互相等待
+## 17.0 为什么没有 half-close 时，echo pair 容易互相等待
 
 设想：
 
@@ -922,6 +931,157 @@ flowchart TD
 ```
 
 这里的 EOF 是 communication state，不是额外传输一个字符。
+
+---
+
+## 17.1 client 与 server 有各自独立的 socket
+
+client 跟 server 都有自己的 socket，这个只是 client 跟 server 在各自那里与 kernel 里的 network stack 打交道的接口。
+
+对，你的理解基本正确。
+
+更准确地说：
+
+```text
+client application
+    |
+    | client fd
+    v
+client kernel socket
+    |
+    v
+client kernel TCP/IP network stack
+    |
+    | packets
+    v
+server kernel TCP/IP network stack
+    ^
+    |
+server kernel socket
+    ^
+    | server connected fd
+server application
+```
+
+但要注意：application 看到的通常不是 socket object 本身，而是一个 `fd`：
+
+```text
+fd
+-> process fd table entry
+-> kernel socket object
+-> TCP state / buffers / timers
+```
+
+client 一般有一个 socket：
+
+```cpp
+int client_fd = socket(...);
+connect(client_fd, ...);
+```
+
+server 通常有两个 socket：
+
+```text
+listening socket
+    -> bind/listen
+    -> 只负责等待新连接
+
+connected socket
+    -> accept 返回
+    -> 负责和某一个 client 传输数据
+```
+
+所以：
+
+```text
+server listening socket != server connected socket
+```
+
+真正参与某条 TCP connection 的，是：
+
+```text
+client connected socket
+<-> server connected socket
+```
+
+它们不是同一个 socket object，也不是共享内存，而是两端 kernel 各自维护的本地 socket 和 TCP state。socket 的确可以理解成：
+
+> application 与本机 kernel network stack 之间的接口；两端 kernel 再通过网络 packet 交换 TCP 状态和数据。
+
+## 17.2 TCP 的关闭
+
+TCP connection 不是由某一端单独“关掉”的，而是两端分别关闭自己的发送方向。
+
+TCP 是全双工的：
+
+```text
+client -> server
+server -> client
+```
+
+所以每个方向都需要独立结束。正常关闭流程是：
+
+```mermaid
+flowchart TD
+    A["client close 或 shutdown(SHUT_WR)"] --> B["client kernel 发送 FIN"]
+    B --> C["server kernel ACK FIN"]
+    C --> D["server 进入 CLOSE-WAIT"]
+    D --> E["server application 仍可发送剩余数据"]
+    E --> F["server close 或 shutdown(SHUT_WR)"]
+    F --> G["server kernel 发送 FIN"]
+    G --> H["client kernel ACK FIN"]
+    H --> I["client 进入 TIME-WAIT"]
+    H --> J["server 进入 CLOSED"]
+    I --> K["等待 2 MSL 后 CLOSED"]
+```
+
+对应状态：
+
+```text
+client:
+ESTABLISHED
+-> FIN-WAIT-1
+-> FIN-WAIT-2
+-> TIME-WAIT
+-> CLOSED
+
+server:
+ESTABLISHED
+-> CLOSE-WAIT
+-> LAST-ACK
+-> CLOSED
+```
+
+关键点是：
+
+```text
+client close
+!= server socket 立即消失
+```
+
+client 跟 server 都有自己的 socket，这个只是 client 跟 server 在各自那里与 kernel 里的 network stack 打交道的接口。
+
+例如 client 关闭自己的 socket：
+
+```text
+client application close
+-> client kernel 发送 FIN
+-> server kernel 收到 FIN
+-> server 的 recv 最终返回 0
+```
+
+此时 server 的 socket 仍然存在，而且 server 仍然可以向 client 发送剩余数据。只有 server 自己也关闭发送方向，才会发送第二个 FIN。
+
+另外：
+
+- `shutdown(fd, SHUT_WR)`：只关闭本机发送方向，仍然可以 `recv`。
+- `close(fd)`：关闭本机这个 fd；如果它是最后一个引用，kernel 才会真正处理 socket 的关闭流程。
+- 关闭 listening socket，只影响“以后接收新连接”，不会自动关闭已经 `accept` 出来的 connected socket。
+- 如果异常中止，可能发送 `RST`，这不是正常的 FIN 关闭流程。
+
+所以一句话记忆：
+
+> TCP connection 的关闭是两端分别关闭两个发送方向，通过 FIN/ACK 完成协议收尾，而不是某一端 close 后连接瞬间消失。
 
 ---
 
@@ -1215,9 +1375,54 @@ connected fd 与 listening fd 是不同 resource。当前 client 失败不必销
 
 ## 25. 产出一：独立实现 `tcp_client.cpp`
 
-教程不会提供完整 client code。按下面 contract 自己组织。
+教程不会提供完整 client code。先看清这个程序整体要做什么，再按下面的 contract 自己组织实现。
 
-### 25.1 固定 endpoint
+### 25.1 这个 `.cpp` 到底是干什么的
+
+`tcp_client.cpp` 是一个从命令行使用的 **binary-safe TCP echo client**：
+
+```text
+stdin 中的任意 bytes
+        |
+        v
+tcp_client 连接 127.0.0.1:18080
+        |
+        v
+把这些 bytes 发给 echo server
+        |
+        v
+接收 server 原样返回的 bytes
+        |
+        v
+写到 stdout
+```
+
+例如：
+
+```bash
+printf 'hello tcp\n' | ./tcp_client > output.bin
+```
+
+成功后，`output.bin` 应与输入逐 byte 相同。输入也可以包含 `\0` 或远大于单次 buffer 的 binary data，因此它不是按行处理的聊天 client，也不是把 payload 当 C string 处理的程序。
+
+它的完整行为目标是：
+
+```text
+启动
+-> 创建 socket 并连接 server
+-> 从 stdin 读取一批 N bytes
+-> 把这 N bytes 全部发送
+-> 累计收回这 N bytes 的 echo
+-> 把它们写到 stdout
+-> 继续处理下一批
+-> stdin EOF 后关闭自己的发送方向
+-> 继续接收，直到 server 也发送 EOF
+-> 正常退出
+```
+
+下面的 contract 不是一堆互不相关的要求。它们分别保证这条完整链路在 partial I/O、`EINTR`、embedded NUL、half-close 和 broken connection 下仍然成立。
+
+### 25.2 固定 endpoint
 
 今天固定：
 
@@ -1228,7 +1433,7 @@ server port = 18080
 
 不增加 command-line port parser，避免把注意力从 byte stream 移开。
 
-### 25.2 resource 与 connection setup
+### 25.3 resource 与 connection setup
 
 要求：
 
@@ -1243,7 +1448,7 @@ connect
 
 所有 API 检查返回值。
 
-### 25.3 stdin -> socket -> stdout contract
+### 25.4 stdin -> socket -> stdout contract
 
 选择一个固定 buffer，例如 1024 bytes。
 
@@ -1269,7 +1474,7 @@ read stdin
     report and exit non-zero
 ```
 
-### 25.4 helper contract
+### 25.5 helper contract
 
 至少需要两个清楚的 responsibilities：
 
@@ -1289,7 +1494,7 @@ recv_exact(fd, buffer, expected)
 
 函数名可以不同，但 contract 不能含糊。
 
-### 25.5 output discipline
+### 25.6 output discipline
 
 ```text
 stdout：只放 echo payload
@@ -1298,7 +1503,7 @@ stderr：diagnostic / perror / progress log
 
 这样 binary test 才能使用 `cmp`。
 
-### 25.6 connect failure
+### 25.7 connect failure
 
 server 不存在时：
 
@@ -1315,7 +1520,34 @@ stdout remains empty
 
 不要覆盖 Day4 v1。新建文件，保留两个版本用于对比。
 
-### 26.1 保留 Day4 setup
+### 26.1 这个 `.cpp` 到底是干什么的
+
+`tcp_echo_server.cpp` 是一个持续运行的、一次服务一个 client 的 **binary-safe TCP echo server**。
+
+它监听 `127.0.0.1:18080`。每当一个 client 连入时，它从该连接收到多少 bytes，就把同样的 bytes 原样发回同一个 client：
+
+```text
+启动并监听
+-> 接受一个 client connection
+-> 收到一批 N bytes
+-> 原样发回这 N bytes
+-> 继续服务当前 client
+-> 当前 client EOF 或出错后，只关闭该 connected socket
+-> listening socket 保持存在
+-> 回去等待下一个 client
+```
+
+例如 client 发来下面 4 bytes：
+
+```text
+41 00 42 0a    // 'A' '\0' 'B' '\n'
+```
+
+server 必须原样返回这 4 bytes，不能在 `\0` 处停止，也不能多发日志。payload 通过 socket 返回；chunk size、错误等诊断写入 server 的 `stderr`。
+
+这个版本仍然不是并发 server：同一时刻只处理一个 connected client。它相对 Day4 v1 的增量，是让 server 能正确处理 byte stream、一个 client 的多次 `recv`，以及多个 clients 的顺序连接。
+
+### 26.2 保留 Day4 setup
 
 继续使用：
 
@@ -1327,7 +1559,7 @@ listen backlog 8
 UniqueFd
 ```
 
-### 26.2 outer accept loop
+### 26.3 outer accept loop
 
 要求：
 
@@ -1337,7 +1569,7 @@ accept other error -> report and exit server
 accept success -> raw connected fd immediately enters UniqueFd
 ```
 
-### 26.3 inner recv/echo loop
+### 26.4 inner recv/echo loop
 
 要求：
 
@@ -1360,7 +1592,7 @@ recv == -1 other
 
 `send_all` fatal error 也只结束当前 client。
 
-### 26.4 scope requirement
+### 26.5 scope requirement
 
 connected `UniqueFd` 必须在 outer loop 的单次 iteration 内。
 
@@ -1372,7 +1604,7 @@ listening fd remains open
 next accept can continue
 ```
 
-### 26.5 server termination
+### 26.6 server termination
 
 server 会持续 accept，正常测试后使用：
 

@@ -367,7 +367,7 @@ global owning raw pointer 后续按已学 RAII 改成 unique_ptr 或显式释放
 笔记未单独保存 ps -L 与 /proc 输出；本次由 Codex 在 Ubuntu 实测确认，不把工具观察伪装成用户笔记已有内容
 ```
 
-### Week6：Day1~Day4 已完成，Day5~Day6 教程已提前生成
+### Week6：Day1~Day5 已完成，Day6 教程已提前生成
 
 主题：网络原理第一轮 + 阻塞式 Socket 编程。
 
@@ -980,6 +980,8 @@ server 使用 outer accept loop + inner recv/echo loop，仍然只做 sequential
 
 练习日只给需求、helper contract、因果链、测试和验收问题，不提供完整 client/server 答案。教程配入《图解网络》v4.0 第 464 页的三张 byte-stream 边界图，并对 `connect`、`shutdown` 等新 API 给出签名、返回值、状态变化和独立最小例子。
 
+2026-08-07 根据用户反馈修正了一个练习设计缺口：初版直接列出 `tcp_client.cpp` 与 `tcp_echo_server.cpp` 的 endpoint、helper 和错误 contract，却没有先说明两个可执行程序各自解决什么问题。Day5 已在 contract 前补上程序用途、输入输出、完整生命周期、成功标准、能力边界和最小使用场景。今后独立练习必须遵循“先讲清要造什么，再规定怎样造对”的顺序；接口 contract 不能代替任务说明。该修改只澄清教程任务，不改变 Day5 当前代码验收结果与 `58/100` 暂定评分。
+
 教程生成阶段已经完成独立环境验证：
 
 ```text
@@ -993,12 +995,77 @@ strace 5.5 的 --inject=sendto:error=EINTR:when=1 实际触发，client retry �
 
 这些验证只证明 Day5 教程和测试命令可用，不代表用户已经学习或完成 Day5。Day4 已按用户后续指令完成初检；Day5 仍等待用户学习和提交。
 
+Week6 Day5 首次验收已于 2026-08-07 完成，暂定 `58/100`，尚未通过：
+
+```text
+Ubuntu 源码：~/code/system-learning/cpp/week6/day5/tcp_client.cpp
+Ubuntu 源码：~/code/system-learning/cpp/week6/day5/tcp_echo_server_v2.cpp
+两份源码均以 g++ -std=c++17 -Wall -Wextra -g 零 warning 编译
+Codex 重新运行 current source：empty、short text、embedded NUL、131072-byte random binary 均 round-trip/cmp 通过
+server 保持 listening，可顺序处理后续正常 clients
+```
+
+首次验收的核心阻塞项：
+
+```text
+两个 send_all 都没有在 send == -1 && errno == EINTR 时 retry，也没有使用 MSG_NOSIGNAL
+strace --inject=sendto:error=EINTR:when=1 实际稳定触发失败：client exit 1、stdout 为空、cmp 失败
+recv_exact 使用 sizeof(buffer)，但 buffer 是 char* 参数；64-bit 环境实际只请求 8 bytes，并且没有用 expected-offset 限制最后一次 recv
+recv_exact 的 recv == -1 没有 EINTR retry
+client 在 stdin EOF 后 shutdown(SHUT_WR) 随即 return；strace 显示 shutdown 后直接 close，没有继续 recv 到 server EOF
+server accept 没有 EINTR retry
+server connected-client recv fatal error 使用 return 1，导致整个 server/listening socket 退出，而不是只结束当前 client
+send_all 没有处理正长度请求却返回 0 的 no-progress 防御
+没有 day5_note.md，14 道验收题尚未回答，概念理解无法完整书面验收
+```
+
+本地 `week6/day5/day5.md` 存在约 180 行用户侧增补：补充了 `connect` blocking 因果图、client/server 各自 socket 与 fd/kernel object 的关系，以及 TCP 双向关闭说明。这些补充总体正确，但属于教程注解，不是 `day5_note.md`，也没有逐题回答 Day5 的 byte-stream、robust I/O 与 fault-injection 验收问题，因此不能替代本次代码验收。
+
+用户目录中原先保存的 `nul.in/out` 可以 `cmp` 通过，但 `short.in/out` 与 `large.in/out` 当前均 `cmp` 失败；文件时间显示测试产物早于随后修改的 source/binary，因此属于 stale evidence。Codex 的 `/tmp` fresh rerun 证明当前代码的普通 round-trip 已通过，但旧产物不能继续作为当前版本证据。
+
+下次短复检只检查：修正 robust helper 与 half-close/control-flow contract，重新运行 EINTR injection 和核心 binary tests，并提交简短 `day5_note.md`/验收回答。不要重写已经正确的 socket setup、RAII、normal recv loop 或重复抄 Day4 内容。
+
+Week6 Day5 已于 2026-08-08 完成短复检并正式通过，最终评分 `92/100`。首次验收的核心阻塞项均已修复：
+
+```text
+client/server 两侧 send_all 均按 offset/remaining 推进，处理 EINTR、send == 0，并使用 MSG_NOSIGNAL
+client recv_exact 使用 expected - offset，处理 early EOF、EINTR 和 fatal error
+client stdin EOF 后 shutdown(SHUT_WR)，继续 recv 到 server EOF
+server accept 与 recv 对 EINTR 重试；当前 connected-client 错误只结束该 client，listening socket 保留
+```
+
+Codex 使用最新 Ubuntu 源码重新验证：
+
+```text
+tcp_client.cpp 与 tcp_echo_server_v2.cpp 以 g++ -std=c++17 -Wall -Wextra -g 零 warning 编译
+empty、short、embedded NUL、131072-byte random binary 均 client exit 0 且 cmp 逐 byte 一致
+三个 sequential clients 连续通过，server 保持运行
+client send/recv EINTR fault injection 均先返回 -1/EINTR，retry 后 cmp 通过
+server accept/recv/send EINTR fault injection 均 retry 成功
+server send EPIPE injection 后只使第一个 client 失败；server 继续服务第二个 client且 cmp 通过
+server 缺席时 client 非零退出、stdout 为 0 bytes、stderr 报 Connection refused
+strace 显示 shutdown(SHUT_WR) 后继续 recv，直到 recv 返回 0，再 close fd
+ASan/UBSan 下 131072-byte round-trip 通过，无 sanitizer report
+```
+
+`day5_note.md` 不再要求机械复制 14 道验收题。用户记录的实际卡点、修正原因与调试方法，加上最终代码、用户在 `day5.md` 中补充的 connect/fd/half-close 分析以及本次动态证据，已经覆盖当天验收意图，可以替代逐题作答。笔记中的 EINTR、MSG_NOSIGNAL、`echo $?`、`wc -c` 和断点说明均正确；调试时只有 syscall 返回 `-1` 后才应把 `errno` 当作本次失败原因。
+
+2026-08-08 用户又在 `day5_note.md` 末尾补充两张手绘流程图。client 图正确串起 socket/connect、stdin read、send_all、recv_exact、stdin EOF、shutdown(SHUT_WR) 和继续 recv 到 peer EOF；server 图正确区分 inner recv/echo loop 与 outer accept-next-client loop，进一步补强了代码控制流验收证据。server 图有三处非阻塞性表达可在以后重画时修正：正式程序在 listen 前还有 bind；accept 的返回值是 connected fd，该 fd 指向新的 connected socket；recv 的 `N < 0` 应继续区分 EINTR 原地重试与 fatal error 离开当前 client。无需为了这些标注重画，Day5 最终评分保持 `92/100`。
+
+两个非阻塞工程改进留到自然重构时处理，不要求为了形式返工：
+
+```text
+recv_exact 内部固定 recv_buffer[1024]，当前 caller 保证 expected <= 1024，所以本程序安全；若以后把 helper 变成通用接口，应限制单次 recv 长度或直接接收到 buffer + offset
+work_one_connection 遇到 accept 的非 EINTR fatal error 时只 return，main outer loop 会再次 accept；当前正常服务与注入测试不受影响，但长期 server 应让 fatal listening error 传播到 main，避免永久错误时 busy retry
+server 的进度与 payload 观察目前写到 stdout；若将 server 纳入脚本化工具，应把 diagnostics 统一放到 stderr
+```
+
 Week6 Day6 教程已经按用户明确要求提前生成，并从生成完成起按只读规则冻结：
 
 ```text
 正式路径：C:\Users\FxorG\Desktop\gpt_infra\week6\day6\day6.md
 状态：教程已生成；用户尚未学习、提交 note 或验收，不评分
-前置状态：Week6 Day5 仍未学习、提交或检阅，不能跳过进度判断
+前置状态：Week6 Day5 已于 2026-08-08 通过短复检，Day6 已解锁
 ```
 
 Day6 是连接机制观察日，不新写一套 client/server，也不重复 Day5 的 robust I/O 练习。知识增量为：
@@ -1016,6 +1083,10 @@ fd lifetime 不等于 TCP state lifetime
 Day6 复用 Day5 的 `tcp_client.cpp` 和 `tcp_echo_server.cpp`，使用 `ss` 与 `tcpdump` 观察 LISTEN、ESTAB、TIME-WAIT、CLOSE-WAIT、SYN/ACK/FIN 和基本 seq/ack/length。受控制造 CLOSE-WAIT 时只复制 probe 并在 peer EOF 后临时延迟 connected fd close，不污染正式 Day5 server。
 
 教程使用《图解网络》小林 Coding v4.0 的四张图：第 241 页三次握手、第 266 页正常关闭、第 316 页累计 ACK、第 317 页发送滑动窗口。生成时已按 RFC 9293、Linux `tcp(7)`、`ss(8)`、`tcpdump(8)` 校对机制与命令；2026-08-06 远端 Ubuntu 的旧地址 `192.168.56.129:22` 超时且本机未发现运行中的 `vmware-vmx` 进程，因此本轮没有伪造 Ubuntu 动态观察结果，待用户实际学习 Day6 时再运行验证。
+
+2026-08-06 用户明确要求撤销随后两份外部 review 引发的全部修改。`week6/day6/day6.md` 与 `MEMORY.md` 已以 Git 提交 `85ef615` 为基线回溯；Day6 保留首次生成时的详细术语、完整因果链、观察与验收结构。那两份 review 及其衍生的“强制大幅压缩、改成单线短版、术语速查表、改变验收设计”等规则均不进入后续 daily 生成经验。今后继续执行本次 review 之前已经存在于 MEMORY 的原则。回溯操作本身没有改变当时的学习进度。
+
+2026-08-08 用户开始学习 Day6 后指出三次握手部分仍存在真实教学缺口：原版先展示小林握手图，只列 client/server ISN、SYN 占位等读图要点，随后直接讨论为什么不是两次/四次；虽然另有 `connect -> accept` flowchart，但没有先用具体场景回答三次握手在做什么，也没有沿三个报文连续解释每一步谁发送、对方知道什么、state 怎样变化。用户明确授权修改冻结的 `day6.md`。修订版重写第 5~8 节：先交代 LISTEN/connect 初始状态和握手目标，再用 `client_isn=1000`、`server_isn=5000` 从 SYN 到 SYN+ACK 再到 ACK 走完正常路径，随后用小林第 241 页总览图复盘状态和 seq/ack，映射 connect/accept 返回点，最后才解释两次不足、SYN+ACK 为什么省去第四条、旧重复 SYN 与丢包重传。小林第 242~243 页 header 图未加入主线，因为字段布局会在当前理解障碍上增加噪声。机制按 RFC 9293 Section 3.5 校对；本次是用户明确要求的定向教学修复，不撤销 2026-08-06 对无关外部 review 的回溯决定。
 
 ---
 
@@ -1518,6 +1589,33 @@ C++ condition_variable 的调用者通常只提供一把业务 mutex：
 -> 最后让用户用自己的话或自己的图复述
 ```
 
+#### 机制主线必须先闭环，再讨论反问和例外
+
+对于 handshake、state machine、协议关闭、调度、trap 等多阶段机制，不能用下面这种顺序：
+
+```text
+先展示一张信息密集的图
+-> 只列几个“读图重点”
+-> 正常流程尚未讲清
+-> 立即追问为什么不是另一种设计
+-> 再把 API、state、异常分散到后续小节
+```
+
+这种写法即使每个局部结论正确，也会让用户没有一条可复述的主线。以后必须按以下认知顺序：
+
+```text
+1. 说明机制开始前的具体场景、参与者和初始状态
+2. 用日常语言回答“这个机制总体要解决什么问题”
+3. 不依赖图片和缩写，从头到尾走完一次无异常正常路径
+4. 对每一步说明谁执行、发送/调用什么、知道了什么、修改什么 state
+5. 再代入 seq/ack、register、fd 等具体字段或对象
+6. 此时才展示总览图，并按刚讲过的路径逐项读图
+7. 把 application API 返回点映射到 kernel/协议流程
+8. 最后讨论为什么不是其他设计、丢包/失败/重试等反事实问题
+```
+
+图片用于压缩和复盘已经建立的模型，不能承担第一次讲懂完整机制的责任。反问“为什么不是两次/四次”“为什么不直接做 X”属于设计权衡，必须放在 baseline 正常流程闭环之后。正常流程没有闭环时，不得用更多术语、问题清单或异常分支掩盖缺口。
+
 图中节点必须写具体动作和对象，避免只写“处理”“执行”“返回”这类无法判断责任主体的词。涉及标点、括号或较长中文时使用引号包住 Mermaid node label，例如：
 
 ```mermaid
@@ -1974,7 +2072,7 @@ lsof 展示 fd 与打开对象关系，但不等于完整展示所有内核引�
 
 #### 独立练习日
 
-遵守下一节“练习日特殊规则”，把实现空间留给用户。教程只提供足以开始的 API 语义、目标状态、约束、错误契约和测试，不泄露完整控制流。
+遵守下一节“练习日特殊规则”，把实现空间留给用户。每个练习文件必须先说明程序用途、输入来源、输出去向、完整生命周期、成功标准和当天不做什么，再提供足以开始的 API 语义、目标状态、约束、错误契约和测试；不能只列接口 contract，也不泄露完整实现控制流。
 
 #### 复盘整合日
 
@@ -2170,6 +2268,7 @@ Week6 Day2：
 [ ] 是否对齐总规划、周计划、真实进度和最近 note？
 [ ] 是否能用一句话说出今天唯一的核心问题？
 [ ] 是否删除了已经掌握且没有新增约束的重复 work？
+[ ] 每个练习 `.cpp` 是否先说明了程序用途、输入、输出、完整生命周期、成功标准和能力边界？
 [ ] 三个 Part 是否顺序正确，“教程开始”是否明确？
 [ ] 首次出现的英文术语是否有原词、含义和实际作用？
 [ ] 每个关键关系是否说明两端对象、方向、归属和失效条件？
@@ -2197,7 +2296,8 @@ Week6 Day2：
 因此：
 
 - 教程前半部分不给完整答案，也少给能直接拼成答案的小段代码。
-- 先给需求、接口、约束、边界、验收标准和允许查阅的 API。
+- 在任何接口 contract 之前，先从使用者视角讲清楚“这个 `.cpp` 最终是干什么的”：输入从哪里来、输出到哪里去、程序从启动到退出的完整行为、怎样算成功，以及当天明确不实现哪些能力。需要时给一个最小运行场景或输入输出例子。
+- 再给需求、接口、约束、边界、验收标准和允许查阅的 API。contract 负责规定“怎样才算实现正确”，不能代替程序目的本身。
 - “允许查阅的 API”不能只列函数名、`man` 命令或官网链接，也不能要求用户自己从外部资料中发现完成任务所必需的关键 API。daily 正文必须直接提供足够开始实现的最小接口速查：
 
 ```text
@@ -2341,7 +2441,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5 已正式完成，Week6 Day1 最终评分 `88`，Week6 Day2 最终评分 `90`，Week6 Day3 短复检通过、最终评分 `92`，Week6 Day4 最终复检正式通过、最终评分 `93`。Day4 的 listening/connected socket、socket -> bind -> listen -> accept、pending queue、blocking accept、单连接 echo、fd ownership 与实际运行均通过；`ntohs`、ready log、`<cstdint>` 和 relative include 已修正。保留的非阻塞项是按 wakeup -> RUNNABLE -> scheduled -> recheck 的准确顺序理解 accept 恢复过程、细化 SO_REUSEADDR 表述，以及把 host-order port 变量名改清楚。Week6 Day5 与 Day6 都已按用户要求提前生成并冻结；用户尚未学习、提交代码/note 或验收这两天。当前下一步仍是学习 Week6 Day5，不能因 Day6 文件已存在而跳过 Day5 的进度判断。所有已生成 daily 默认保持只读，后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
+当前位置：Week5 已正式完成，Week6 Day1 最终评分 `88`，Week6 Day2 最终评分 `90`，Week6 Day3 最终评分 `92`，Week6 Day4 最终评分 `93`，Week6 Day5 最终评分 `92` 并正式通过。Day5 的 robust I/O、half-close、client-error isolation、双端 EINTR fault injection、binary round-trip 与 sanitizer 验证均已完成；实际问题记录与代码/trace 证据获准替代机械逐题回答。Week6 Day6 教程已提前生成并冻结，现已解锁。当前下一步是学习 Day6，不再重复 Day5 已通过的 socket setup、binary tests 或 14 道验收题。所有已生成 daily 默认保持只读，后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
 
 Day5 已验收：
 
