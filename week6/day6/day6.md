@@ -651,6 +651,70 @@ server kernel 发送后进入 `SYN-RECEIVED`。这个状态可以压缩理解为
 但我还在等对方确认我的 SYN
 ```
 
+### 6.3.1 server 的 SYN 也会占用编号 5000
+
+对，完全一样。
+
+server 的：
+
+```text
+SYN + ACK
+seq = 5000
+ack = 1001
+```
+
+里面，`SYN` 会占用 **server -> client** 方向的 position `5000`。
+
+所以 server 发送这条报文后：
+
+```text
+server 方向已经用掉 5000
+-> server 下一次可发送的位置变成 5001
+```
+
+client 收到后回：
+
+```text
+ACK
+ack = 5001
+```
+
+就是在说：
+
+```text
+“我已经收到你占用位置 5000 的 SYN；
+我下一步期待你从 5001 开始发。”
+```
+
+因此，之后 server 真正向 client 发送第一批业务数据时，会是：
+
+```text
+payload "Hi"
+seq = 5001
+length = 2
+```
+
+而另一边独立地是：
+
+```text
+client 的 SYN 使用 1000
+-> client 第一批业务数据从 1001 开始
+```
+
+所以握手后两条方向分别是：
+
+```text
+client -> server：
+    SYN 占 1000
+    第一个业务 byte 从 1001 开始
+
+server -> client：
+    SYN 占 5000
+    第一个业务 byte 从 5001 开始
+```
+
+`ack=1001` 和 `seq=5000` 同时出现在 server 的第二个报文里，只是因为它一边确认 client 方向，一边开启自己的方向。
+
 ### 6.4 client 收到第二次报文后知道了什么
 
 client kernel 检查：
@@ -699,6 +763,66 @@ server state：SYN-RECEIVED -> ESTABLISHED
 completed connection：进入 accept queue
 server application：以后可以从 accept 得到 connected fd
 ```
+
+### 6.5.1 第三次的 seq=1001 表达什么？
+
+`ack = 5001` 是在谈 **server -> client** 方向：
+
+```text
+“我收到了你从 5000 开始的 SYN；
+我下一步期待你发来的位置是 5001。”
+```
+
+而 `seq = 1001` 是在谈 **client -> server** 方向：
+
+```text
+“我在 client -> server 这条 stream 上，
+自己的下一个发送位置是 1001。”
+```
+
+因为 client 先前已经发送过：
+
+```text
+SYN, seq = 1000
+```
+
+SYN 占用了位置 `1000`，所以 client 自己下一位置自然变成 `1001`。
+
+第三次握手是一个 pure ACK：没有 payload，也没有 SYN/FIN，因此它虽然 header 中写着：
+
+```text
+seq = 1001
+```
+
+却**不再消耗** `1001`。它只是告诉 server 当前 client 方向的序号上下文在这里。
+
+所以 client 接下来真正发送 `"Hi"` 时仍然是：
+
+```text
+payload "Hi"
+seq = 1001
+length = 2
+```
+
+然后 server 收到后会回复：
+
+```text
+ack = 1003
+```
+
+因为 `1001` 和 `1002` 两个位置已经被 `'H'`、`'i'` 占用。
+
+可以压成一句：
+
+```text
+第三次 ACK 的 seq=1001：
+    client 自己的发送方向下一位置在哪里。
+
+第三次 ACK 的 ack=5001：
+    client 期待 server 的发送方向下一位置在哪里。
+```
+
+一个 TCP segment 同时带这两个字段，是因为 TCP 本来就是双向的：它可以在同一条包里，一边报告“我这边发到哪了”，一边确认“你那边我收到了哪”。
 
 ### 6.6 把完整主线压成一张图
 
@@ -1304,6 +1428,336 @@ ESTABLISHED
 
 ---
 
+## 21.0这几个状态的意思
+
+这些 state 都是在描述：**这台机器的 kernel 在关闭这条 TCP connection 的哪个阶段、它还在等谁的什么动作。**
+
+先把正常路径串起来：
+
+```text
+client 先发送 FIN
+-> server ACK 这个 FIN
+-> server 以后也发送自己的 FIN
+-> client ACK server 的 FIN
+```
+
+对应状态：
+
+```text
+client                                      server
+
+ESTABLISHED                                 ESTABLISHED
+    | client 发送 FIN
+    v
+FIN-WAIT-1  ---------------- FIN -------->  CLOSE-WAIT
+    | <---------------------- ACK --------
+    v
+FIN-WAIT-2
+    |                                         | server application 决定不再发送
+    |                                         v
+    | <---------------------- FIN --------  LAST-ACK
+    | ----------------------- ACK -------->
+    v                                         v
+TIME-WAIT                                  CLOSED
+    |
+    v
+CLOSED
+```
+
+`ESTABLISHED`
+
+```text
+双向正常通信中。
+两端都还可以 send，也都可以 recv。
+```
+
+`FIN-WAIT-1`，只在先关闭的 client 上：
+
+```text
+client 已经发送 FIN。
+意思是：client 以后不再发送新的 byte。
+
+它正在等：
+    server 对这个 FIN 的 ACK；
+    或者特殊情况下同时等到 server 的 FIN。
+```
+
+此时 client 仍然可以 `recv` server 之前或之后发来的剩余数据。
+
+`FIN-WAIT-2`
+
+```text
+client 已收到 server 对自己 FIN 的 ACK。
+说明 server 已知道：client 不会再发送数据。
+
+client 现在只等一件事：
+    server 什么时候也关闭 server -> client 方向，
+    即发送自己的 FIN。
+```
+
+为什么 server 可能不会立刻发 FIN？因为 server application 还可能有剩余响应要发。例如 HTTP server 先收到 client 的 EOF，但仍要把 response 发完。
+
+`CLOSE-WAIT`，只在先收到 FIN 的 server 上：
+
+```text
+server kernel 已收到 client 的 FIN，并已 ACK。
+server 知道：client 不会再发新数据。
+```
+
+但 server 自己还没关闭发送方向，所以它在等：
+
+```text
+local server application 调用 shutdown(SHUT_WR) 或 close
+```
+
+这就是它名字里的 `WAIT`：
+
+> `CLOSE-WAIT` 等的是本机 application 做关闭动作，不是在等网络。
+
+它仍然可以向 client `send` 剩余数据。
+
+`LAST-ACK`，只在 server 上：
+
+```text
+server application 终于决定关闭；
+server kernel 已发送自己的 FIN。
+```
+
+它现在只等 client 的最后一个 ACK。收到后 server 进入 `CLOSED`。
+
+`TIME-WAIT`，只在主动关闭的 client 上：
+
+```text
+client 已收到 server 的 FIN；
+client 已发出最后 ACK；
+但 kernel 暂时保留这条 connection 的 state。
+```
+
+它主要等两个东西：
+
+```text
+1. server 的 FIN 若因最后 ACK 丢失而重传，
+   client 还能再次回复 ACK。
+
+2. 网络里延迟的旧 segment 自然过期，
+   避免影响之后可能复用相同四元组的新连接。
+```
+
+所以 `TIME-WAIT` 等的是 protocol timer，通常按 `2 * MSL` 的边界理解。用户态 fd 可能已经关闭，但 kernel 仍可保留 `TIME-WAIT` 状态。
+
+`CLOSED`
+
+```text
+这台机器的 TCP kernel 已不再保留这条 connection 的正常 state。
+```
+
+最值得记住的两个：
+
+```text
+CLOSE-WAIT：
+    我已经收到对方 FIN；
+    等我自己的 application 关闭。
+
+TIME-WAIT：
+    我已经完成最终 ACK；
+    等 protocol timer，防止旧包和重传问题。
+```
+
+`active closer` 只是“谁先发 FIN”，不是 client 永远如此。任何一端先调用 `shutdown(SHUT_WR)` 或最后一个 `close` 触发 FIN，谁就是这次连接的 active closer。
+
+## 21.1 串起来！EOF，recv=0,FIN,ACK
+
+这几个东西是一条链上的不同层次：
+
+```text
+FIN：TCP kernel 收到的“对方不再发送”的控制标记
+ACK：TCP kernel 对这个 FIN 的确认
+recv() == 0：本机 application 被告知“对方发送方向已结束，且之前数据已读完”
+EOF：对 recv() == 0 这件事在 Unix I/O 语义里的名字
+```
+
+最重要的关系是：
+
+> **FIN 到达 kernel，不等于 application 立刻 `recv() == 0`。**  
+> 必须先把 FIN 前已经到达的普通 payload bytes 交给 application；读空后，`recv()` 才返回 `0`。
+
+用你抓包里的 client 关闭过程举例。
+
+client 先发送了 10 byte：
+
+```text
+client payload: seq 1:11, length 10
+```
+
+这表示 client 已经发送了相对位置 `[1, 11)` 的业务数据。接着 client 调用：
+
+```cpp
+shutdown(fd, SHUT_WR);
+```
+
+client kernel 会发送：
+
+```text
+FIN, seq=11
+```
+
+这里的 FIN 表达：
+
+```text
+“client -> server 方向到此结束；
+我不会再发送新的业务 bytes。”
+```
+
+FIN 也占一个 sequence position，所以 server 确认它时会回：
+
+```text
+ack = 12
+```
+
+即：
+
+```text
+我已收到：
+    client 的普通数据 [1, 11)
+    以及占用位置 11 的 FIN
+
+下一步若还收到 client 方向内容，
+我会期待位置 12。
+```
+
+但是这个 `ack=12` 是 **server kernel** 对 FIN 的 TCP 确认。它不表示：
+
+```text
+server application 已经处理完业务数据
+server application 已经从 recv() 读到了 EOF
+server application 已经关闭自己的发送方向
+```
+
+这些是后面的事情。
+
+完整因果链是：
+
+```text
+client application:
+    stdin EOF
+    -> shutdown(SHUT_WR)
+
+client kernel:
+    -> 发送 FIN, seq=11
+    -> client 进入 FIN-WAIT-1
+
+server kernel:
+    收到 FIN
+    -> 确认该 FIN，发 ACK=12
+    -> 标记“client 不会再发新数据”
+    -> server 进入 CLOSE-WAIT
+
+server application:
+    调用 recv()
+    -> 若 receive buffer 还有 FIN 前的 payload，先返回那些正长度 bytes
+    -> 当这些 bytes 都交付完，下一次 recv() 返回 0
+```
+
+所以 `recv() == 0` 的准确意思是：
+
+```text
+peer 的发送方向已经 orderly close
+并且此前已经到达的 payload 都已被当前 application 读完
+```
+
+它不是：
+
+```text
+收到了一个 '\0'
+读到了长度为 0 的普通 TCP payload
+整个 TCP connection 已经从两端完全消失
+```
+
+它是 EOF，英文 **End Of File**；在 socket 上更准确地理解成：
+
+```text
+End Of Stream
+```
+
+也就是“来自 peer 的这条单向 byte stream 到头了”。
+
+收到 `recv() == 0` 后，本机仍可能可以发送。例如 server 收到 client FIN 后：
+
+```text
+server recv() == 0
+```
+
+只说明：
+
+```text
+client -> server 已结束
+```
+
+不说明：
+
+```text
+server -> client 已结束
+```
+
+server 仍能发送最后的 echo、response 或错误信息。等 server application 也调用：
+
+```cpp
+shutdown(server_fd, SHUT_WR);
+// 或最后一个 close(server_fd)
+```
+
+server kernel 才发送自己的 FIN。
+
+然后 client 也经历同样的过程：
+
+```text
+client recv()
+-> 先读到 server 在 FIN 前发送的剩余数据
+-> 最后 recv() == 0
+```
+
+在你的抓包里，server 很快关闭了自己的方向，所以它把两件事合在同一条包里：
+
+```text
+[F.] seq 11, ack 12
+```
+
+这条包同时表示：
+
+```text
+ack = 12：
+    “我确认了 client 的 FIN。”
+
+FIN, seq = 11：
+    “server 也不再向 client 发送数据。”
+```
+
+最后 client 回：
+
+```text
+ACK, ack = 12
+```
+
+确认 server 的 FIN。
+
+可以把两条方向分开记：
+
+```text
+client FIN
+-> server kernel ACK
+-> server application 最终 recv() == 0
+
+server FIN
+-> client kernel ACK
+-> client application 最终 recv() == 0
+```
+
+一句话压缩：
+
+> FIN 是 TCP kernel 收到的“对方发送方向结束”标记；ACK 是 kernel 对该标记的确认；`recv() == 0` 是 application 在读完 FIN 前所有数据后看到的 EOF。
+
+---
+
 ## 21. 从 `shutdown(SHUT_WR)` 到两端 EOF 的完整因果链
 
 ```mermaid
@@ -1423,6 +1877,82 @@ connection refused 等相关错误
 具体 error 取决于发生时机和调用方向。今天不实现 abortive close，也不设置 `SO_LINGER`。
 
 ---
+
+## 24.1 RST 是啥
+
+`RST` 是 TCP header 里的 **Reset** flag。它不是普通 payload，也不是“正常关闭的另一种写法”，而是：
+
+> “这条 connection state 不成立，立刻中止或拒绝它。”
+
+`FIN` 和 `RST` 的核心差别：
+
+| | FIN | RST |
+|---|---|---|
+| 含义 | “我不再发送新数据” | “这条连接立刻作废” |
+| 是否允许 half-close | 是 | 否 |
+| 已排队数据 | 正常交付完后再 EOF | 不保证继续正常交付 |
+| 对端 `recv` | 最终得到 `0`，即 EOF | 常见为 `-1`，如 `ECONNRESET` |
+| 对端还能否继续发送 | 在自己方向未关闭前可以 | 不可以，连接 state 已被中止 |
+
+正常 FIN 路径是：
+
+```text
+A 发 FIN
+-> A 不再发送
+-> B 仍可发送剩余数据
+-> B 的 recv 在已收到数据读完后返回 0
+-> B 以后再发自己的 FIN
+```
+
+RST 路径则像：
+
+```text
+A 或 A 的 kernel 发 RST
+-> B 的 kernel 丢弃这条 connection 的 TCP state
+-> B 不会得到“正常 EOF”的关闭语义
+-> B 后续 recv/send 得到 error
+```
+
+最常见的 RST 场景是 server 根本没有监听目标端口：
+
+```text
+client kernel 发送 SYN 到 127.0.0.1:18080
+-> 对方 kernel 发现该 port 没有 LISTEN socket
+-> 对方 kernel 回 RST
+-> client kernel 终止这次 connect
+-> connect 返回 -1，errno = ECONNREFUSED
+```
+
+所以 `Connection refused` 常常可以理解为：
+
+```text
+不是“网络上没人回复”
+而是“目标主机明确回复：这个 port 当前不接受 TCP connection”
+```
+
+另一类是连接已经建立后，某端异常中止。例如 kernel 收到一个不该属于当前 connection 的严重 segment，或应用显式使用 abortive close（例如某些 `SO_LINGER` 配置）。此时 peer 常见表现是：
+
+```text
+recv -> -1, errno = ECONNRESET
+```
+
+而：
+
+```text
+send -> -1, errno = EPIPE
+```
+
+表示你在向一个已经不能接收该方向数据的 connection 写；若没用 `MSG_NOSIGNAL`，还可能收到 `SIGPIPE`。它可能和 RST 有关，但不要机械记成“`EPIPE` 就一定说明收到了 RST”。
+
+最短记忆：
+
+```text
+FIN：
+    有秩序地结束一个发送方向，receiver 最终看到 EOF。
+
+RST：
+    否定或中止整条 connection state，application 通常看到 error，不是 EOF。
+```
 
 ## 25. application action 与常见 state 对照
 

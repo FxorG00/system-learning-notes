@@ -367,7 +367,7 @@ global owning raw pointer 后续按已学 RAII 改成 unique_ptr 或显式释放
 笔记未单独保存 ps -L 与 /proc 输出；本次由 Codex 在 Ubuntu 实测确认，不把工具观察伪装成用户笔记已有内容
 ```
 
-### Week6：Day1~Day5 已完成，Day6 教程已提前生成
+### Week6：Day1~Day6 已完成，Day7 教程已生成、尚未验收
 
 主题：网络原理第一轮 + 阻塞式 Socket 编程。
 
@@ -388,6 +388,24 @@ Day5：TCP client、byte stream、partial I/O、EINTR、EOF
 Day6：三次握手、四次挥手、TIME_WAIT/CLOSE_WAIT、可靠性/流量控制/拥塞控制
 Day7：HTTP/1.1 request framing 与受控范围 request parser
 ```
+
+Day7 教程已经生成：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week6\day7\day7.md
+```
+
+Day7 的职责边界：
+
+```text
+输入是已经完整收进 std::string 的一条 HTTP/1.1 request
+主线是 request-line -> headers -> empty line -> Content-Length -> body boundary
+产出是 http_request_parser.cpp，不是 socket server 或 incremental parser
+无 Content-Length 且无 Transfer-Encoding 时，当前 request body length 为 0
+出现 Transfer-Encoding 时明确拒绝，不提前实现 chunked coding
+```
+
+Day7 已生成但不等于已经完成。等待用户学习、提交 `http_request_parser.cpp` 与 `day7_note.md` 后，再按逐节笔记、逐题验收、代码和测试证据进行评分。
 
 Week6 核心产出：
 
@@ -1087,6 +1105,30 @@ Day6 复用 Day5 的 `tcp_client.cpp` 和 `tcp_echo_server.cpp`，使用 `ss` �
 2026-08-06 用户明确要求撤销随后两份外部 review 引发的全部修改。`week6/day6/day6.md` 与 `MEMORY.md` 已以 Git 提交 `85ef615` 为基线回溯；Day6 保留首次生成时的详细术语、完整因果链、观察与验收结构。那两份 review 及其衍生的“强制大幅压缩、改成单线短版、术语速查表、改变验收设计”等规则均不进入后续 daily 生成经验。今后继续执行本次 review 之前已经存在于 MEMORY 的原则。回溯操作本身没有改变当时的学习进度。
 
 2026-08-08 用户开始学习 Day6 后指出三次握手部分仍存在真实教学缺口：原版先展示小林握手图，只列 client/server ISN、SYN 占位等读图要点，随后直接讨论为什么不是两次/四次；虽然另有 `connect -> accept` flowchart，但没有先用具体场景回答三次握手在做什么，也没有沿三个报文连续解释每一步谁发送、对方知道什么、state 怎样变化。用户明确授权修改冻结的 `day6.md`。修订版重写第 5~8 节：先交代 LISTEN/connect 初始状态和握手目标，再用 `client_isn=1000`、`server_isn=5000` 从 SYN 到 SYN+ACK 再到 ACK 走完正常路径，随后用小林第 241 页总览图复盘状态和 seq/ack，映射 connect/accept 返回点，最后才解释两次不足、SYN+ACK 为什么省去第四条、旧重复 SYN 与丢包重传。小林第 242~243 页 header 图未加入主线，因为字段布局会在当前理解障碍上增加噪声。机制按 RFC 9293 Section 3.5 校对；本次是用户明确要求的定向教学修复，不撤销 2026-08-06 对无关外部 review 的回溯决定。
+
+Week6 Day6 已于 2026-08-08 完成并正式通过，最终评分 `90/100`。
+
+`day6_note.md` 的主要证据：
+
+```text
+保存了 loopback 端口 18080 的真实 tcpdump 输出，从 SYN/SYN+ACK/ACK 到双向 10-byte echo 和 FIN/ACK 关闭完整连续
+正确识别真实 client/server ISN，以及 tcpdump 握手后默认显示 relative seq/ack
+能把 seq 1:11 解释为 10-byte 左闭右开范围，并把 ack 11 解释为 next expected progress
+能解释 SYN 和 FIN 各消耗一个 sequence position，第一批 payload 从相对 seq=1 开始，FIN 后 ack 推进到 12
+正确识别 [S]、[S.]、[.]、[P.]、[F.]，并明确 PSH 不是 application message boundary
+实际抓包出现 client FIN -> server FIN+ACK -> client ACK，正确解释 ACK 与 FIN 可合并，因此正常关闭不保证四个独立 packets
+验收回答正确覆盖两个 ISN、cumulative ACK、rwnd/cwnd、CLOSE-WAIT、TIME-WAIT 和 peer FIN/recv 0
+```
+
+复检修正与证据边界：
+
+```text
+问题 5 的结论“不能证明 peer application 已处理”正确，但理由中过度写成 send 已保证到达 peer kernel；正返回只保证 local kernel 接受对应 bytes，peer kernel 也可能尚未收到
+问题 4 在本次 relative numbering 示例中可写 [1,700)，通用表达应是从该方向已同步起点到 700 的连续前缀，而不是永远从 1 开始
+问题 9 复制的关闭链停在 server CLOSE-WAIT；完整延迟链后半段还包括 client FIN-WAIT-2、server close/FIN/LAST-ACK、client ACK/TIME-WAIT、server CLOSED
+Ubuntu 中没有 week6/day6 目录、close-wait probe 或 ss 状态保存文件；受控 CLOSE-WAIT/FIN-WAIT-2 实验按未提交处理，不能写成用户已经观察，但不阻塞本日机制通过
+Q1 与 Q9 涉及用户已多次画过的主体/关闭流程，不要求为了验收形式重复重画；评价使用抓包分析、已有代码/图和本次回答的组合证据
+```
 
 ---
 
@@ -2441,7 +2483,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5 已正式完成，Week6 Day1 最终评分 `88`，Week6 Day2 最终评分 `90`，Week6 Day3 最终评分 `92`，Week6 Day4 最终评分 `93`，Week6 Day5 最终评分 `92` 并正式通过。Day5 的 robust I/O、half-close、client-error isolation、双端 EINTR fault injection、binary round-trip 与 sanitizer 验证均已完成；实际问题记录与代码/trace 证据获准替代机械逐题回答。Week6 Day6 教程已提前生成并冻结，现已解锁。当前下一步是学习 Day6，不再重复 Day5 已通过的 socket setup、binary tests 或 14 道验收题。所有已生成 daily 默认保持只读，后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
+当前位置：Week5 已正式完成；Week6 Day1~Day6 均已正式通过，评分依次为 `88 / 90 / 92 / 93 / 92 / 90`。Day6 已用真实 tcpdump 串通 handshake、relative seq/ack、10-byte echo 和合并 FIN+ACK 的关闭链；`send` 正返回只保证 local kernel 接受 bytes 的语义已在复检中纠正。受控 CLOSE-WAIT/FIN-WAIT-2 probe 未提交，不伪造为已观察，也不要求为了形式补做。Week6 Day7 教程已生成，当前下一步是学习 Day7，并独立完成 `http_request_parser.cpp` 与 `day7_note.md`；Day7 尚未验收，不能提前把 Week6 标记为完成。所有已生成 daily 默认保持只读，后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
 
 Day5 已验收：
 
