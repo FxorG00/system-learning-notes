@@ -340,8 +340,10 @@ compiler 会根据需要实例化 `Box<int>`。第一层可以理解为：
 -> 看到使用 Box<int>
 -> 用 int 代入本次需要的 T
 -> type-check Box<int> 的相关 members
--> 为实际使用的 members 生成 code
+-> 为实际使用的 members 生成 code，也就是不一定为所有 members 生成 code
 ```
+
+但它通常不是简单的“往源码文本里复制粘贴一份”。这是 compiler 内部的类型分析和代码生成过程。
 
 这个过程叫：
 
@@ -369,6 +371,69 @@ flowchart LR
     C --> D["generated concrete member code"]
     D --> E["runtime constructs number object"]
 ```
+
+### 2.8.5.1 具体 class code 是啥？
+
+这里的 “具体 class code” 说得不够严谨，容易让人以为 compiler 真在源码里复制出一份 class。更准确应是：
+
+```text
+先让 compiler 知道具体类型 Box<int> 的结构和成员规则，
+并为本次实际用到的成员函数生成可执行的目标代码；
+运行时才能按这个具体类型的布局创建 object。
+```
+
+以：
+
+```cpp
+Box<int> number(42);
+number.get();
+```
+
+为例，compiler 需要得到的“具体版本”大致是：
+
+```cpp
+class Box<int> 的类型信息：
+    成员 value_ 的类型是 int
+    object 需要多少内存、成员在什么位置
+
+本次需要的成员：
+    Box<int>::Box(int)
+    const int& Box<int>::get() const
+```
+
+其中要分两类：
+
+```text
+类型布局
+    例如 Box<int> 里有一个 int value_。
+    这不是“机器指令 code”，而是 compiler 用来安排 object 内存的规则。
+
+成员函数的目标代码
+    例如 constructor 把 42 写进 value_，
+    get() 返回 value_ 的引用。
+    compiler 会为实际调用到的函数生成机器码或内联后的等价指令。
+```
+
+然后运行时才发生：
+
+```text
+执行 Box<int>::Box(42) 的代码
+-> 在 number 所在的内存位置按 Box<int> 的布局放置一个 int
+-> 把 42 写进去
+-> number object 构造完成
+```
+
+所以你原来的理解可以改成这条更稳：
+
+```text
+template instantiation：
+    编译期形成具体类型 Box<int> 的规则，并处理本次需要成员的代码生成。
+
+object construction：
+    运行时按照 Box<int> 的内存布局，执行 constructor，创建 number。
+```
+
+甚至在优化后，`get()` 这种很小的函数可能被直接展开，最终没有一个独立叫 `Box<int>::get` 的机器码函数；但 `Box<int>` 的具体类型规则仍然存在。
 
 ---
 
@@ -508,6 +573,343 @@ blocking_queue_test.cpp
 显式实例化、extern template、分离大型 template implementation 等方案以后再学。今天 header-only 是最直接、最容易验证的组织方式。
 
 ---
+
+### 2.8.8.1 上面的是啥意思啊？对比非模板的确定函数
+
+
+这段的核心是：
+
+```text
+普通函数：可以先在别的 .cpp 里把“确定的一份函数”编译好，最后交给 linker 拼起来。
+
+template：`T` 还没确定，必须等某个 .cpp 真正说“我要 Box<int>”
+时，compiler 才能生成 `Box<int>` 对应的函数代码。
+```
+
+先看普通函数。
+
+`add.hpp`：
+
+```cpp
+int add(int a, int b);  // declaration：只说有这个函数
+```
+
+`add.cpp`：
+
+```cpp
+int add(int a, int b) { // definition：真正实现
+    return a + b;
+}
+```
+
+`main.cpp`：
+
+```cpp
+#include "add.hpp"
+
+int main() {
+    return add(1, 2);
+}
+```
+
+编译时：
+
+```text
+compiler 编译 add.cpp
+-> 已经知道 add(int, int) 的完整实现
+-> 生成 add 的目标代码，放进 add.o
+
+compiler 编译 main.cpp
+-> 只需知道 add 的声明，确认调用参数和返回值正确
+-> 生成“调用 add”的代码，放进 main.o
+
+linker
+-> 把 main.o 中“我需要 add”与 add.o 中“我提供 add”连接起来
+```
+
+因为 `add(int, int)` 从一开始就是一个确定的函数，`add.cpp` 可以独立编译好。
+
+---
+
+再看 template。
+
+假设 `box.hpp` 只有声明：
+
+```cpp
+template <typename T>
+class Box {
+public:
+    T get() const;
+};
+```
+
+而定义藏在 `box.cpp`：
+
+```cpp
+template <typename T>
+T Box<T>::get() const {
+    return value_;
+}
+```
+
+`main.cpp`：
+
+```cpp
+#include "box.hpp"
+
+int main() {
+    Box<int> box;
+    box.get();
+}
+```
+
+当 compiler 编译 `main.cpp` 时，它看到：
+
+```text
+我要调用 Box<int>::get()
+```
+
+但它只有 declaration，不知道 `get()` 的函数体具体是什么。
+
+你可能会想：“那 linker 之后去 `box.cpp` 找不就好了？”
+
+关键在于 `box.cpp` 里的不是一个已经确定的函数：
+
+```text
+不是：int Box<int>::get()
+而是：T Box<T>::get()
+```
+
+`T` 还没确定。linker 不会理解 template 语法、更不会自己做：
+
+```text
+“哦，main 需要 int，
+那我把 T 换成 int，
+生成 Box<int>::get 吧。”
+```
+
+这件事是 **compiler** 的工作，不是 linker 的工作。
+
+所以 `main.cpp` 在使用：
+
+```cpp
+BlockingQueue<int>
+```
+
+时，必须能看见完整定义，才能自己完成：
+
+```text
+看到 BlockingQueue<T> 的完整 definition
+-> 看到 BlockingQueue<int> 的使用
+-> compiler 生成本次需要的 BlockingQueue<int>::push/pop 等代码
+```
+
+这就是为什么今天通常写成：
+
+```text
+blocking_queue.hpp
+    declaration + definition 都放这里
+
+blocking_queue_test.cpp
+    #include "blocking_queue.hpp"
+    使用 BlockingQueue<int>
+```
+
+`#include` 后，`blocking_queue_test.cpp` 的 translation unit 就能同时看见：
+
+```text
+template 定义
++
+BlockingQueue<int> 的实际使用
+```
+
+于是 compiler 能完成实例化。
+
+有一个例外：你也可以在 `.cpp` 中明确说：
+
+```cpp
+template class BlockingQueue<int>;
+```
+
+这叫显式实例化，意思是“请在这里专门生成 `BlockingQueue<int>` 的代码”。但它只能提前支持你列出来的类型，例如 `int`；Day4 不需要先碰这个复杂度，所以先用 header-only。
+
+---
+
+### 2.8.8.2 针对上文的注解
+
+不会。`g++ -std=c++17 main.cpp` 只会把 `main.cpp` 交给编译器，它不会因为看到 `add()` 就自动去目录里寻找并编译 `add.cpp`。注释 1
+
+你要明确把相关 `.cpp` 都交给 `g++`：
+
+```bash
+g++ -std=c++17 main.cpp add.cpp -o app
+```
+
+这里 `g++` 这个驱动程序会依次做：
+
+```text
+编译 main.cpp -> main.o
+编译 add.cpp  -> add.o
+link main.o + add.o + 标准库
+-> app
+```
+
+或者手动拆开：
+
+```bash
+g++ -std=c++17 -c main.cpp -o main.o
+g++ -std=c++17 -c add.cpp -o add.o
+g++ main.o add.o -o app
+```
+
+`-c` 的意思是“只编译成 object file，不做最后链接”。
+
+---
+
+`translation unit`，中文一般叫“翻译单元”。它不是一个 `.cpp` 文件原样本身，而是：
+
+```text
+一个 .cpp 文件
++ 它 #include 进来的所有 header 内容
++ 预处理后的结果
+```
+
+例如：
+
+```cpp
+// blocking_queue_test.cpp
+#include "blocking_queue.hpp"
+
+int main() {
+    BlockingQueue<int> queue(4);
+}
+```
+
+预处理器先把 `#include "blocking_queue.hpp"` 的内容文本展开进来，概念上得到：
+
+```text
+blocking_queue_test.cpp 原内容
++
+blocking_queue.hpp 的完整内容
+=
+一个 translation unit
+```
+
+然后 compiler 编译这个完整 translation unit。注释 3
+
+---
+
+Day4 的 header-only 结构具体像这样。这里用一个不涉及 queue 逻辑的 `Box<T>` 展示文件组织：
+
+```cpp
+// box.hpp
+#pragma once
+
+#include <utility>
+
+template <typename T>
+class Box {
+public:
+    explicit Box(T value);
+
+    const T& get() const;
+
+private:
+    T value_;
+};
+
+template <typename T>
+Box<T>::Box(T value) : value_(std::move(value)) {}
+
+template <typename T>
+const T& Box<T>::get() const {
+    return value_;
+}
+```
+
+注意：**declaration 和 definition 都在 `box.hpp`**。
+
+使用它：
+
+```cpp
+// main.cpp
+#include "box.hpp"
+
+int main() {
+    Box<int> number(42);
+    return number.get();
+}
+```
+
+编译：
+
+```bash
+g++ -std=c++17 main.cpp -o app
+```
+
+预处理后，`main.cpp` 的 translation unit 已经同时拥有：
+
+```text
+Box<T> 的完整 definition
++
+Box<int> 的实际使用
+```
+
+于是 compiler 能在编译 `main.cpp` 时生成所需的：
+
+```text
+Box<int>::Box(int)
+Box<int>::get() const
+```
+
+的具体目标代码。注释 2
+
+Day4 的真实结构同理，只是把 `Box` 换成 `BlockingQueue`：
+
+```text
+blocking_queue.hpp
+    template <typename T>
+    class BlockingQueue { ... }
+
+    template <typename T>
+    BlockingQueue<T> 的各个 method definitions
+
+blocking_queue_test.cpp
+    #include "blocking_queue.hpp"
+    BlockingQueue<int> queue(4);
+```
+
+---
+
+完整过程可以串成：
+
+```text
+blocking_queue_test.cpp
++ #include "blocking_queue.hpp"
+        |
+        v
+预处理后得到一个 translation unit
+        |
+        v
+compiler 看到：
+template definition + BlockingQueue<int> 的使用
+        |
+        v
+实例化本次需要的 BlockingQueue<int> members
+        |
+        v
+生成 blocking_queue_test.o
+        |
+        v
+linker 把它和 C++ 标准库、pthread 等连接
+        |
+        v
+最终可执行文件
+```
+
+这里没有独立的 `blocking_queue.cpp` 需要 linker 去找；因为 `BlockingQueue<int>` 需要的实现代码，已经在编译 `blocking_queue_test.cpp` 时生成进对应的 `.o` 了。注释 4
+
+如果 template definition 被藏进 `blocking_queue.cpp`，但 test `.cpp` 看不到它，那么 test 那一侧无法生成 `BlockingQueue<int>::push/pop`；linker 也不会替你做 `T -> int` 的实例化，于是常见结果就是 `undefined reference`。
 
 ### 2.8.9 template 并不保证任意 `T` 都能工作
 
