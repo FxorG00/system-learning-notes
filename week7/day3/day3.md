@@ -593,6 +593,38 @@ notification 已经发生，而 queue 虽然有数据，consumer 却进入了一
 
 ---
 
+**或者看这个：**
+
+你现在可以把：
+
+```cpp
+cv.wait(lock, predicate);
+```
+
+理解为语义上的：
+
+```text
+while predicate == false:
+    原子地释放 mutex 并进入等待
+    醒来后重新获得 mutex
+
+predicate == true 时才返回调用者
+```
+
+这里的“原子”不是说整个 wait 期间一直持有 mutex。
+
+而是：
+
+```text
+释放 mutex
+和
+登记/进入 condition-variable wait
+```
+
+之间不会留下一个可导致 lost wakeup 的普通代码窗口。
+
+---
+
 ### 13.4 `condition_variable` API 逐项看
 
 头文件：
@@ -656,7 +688,7 @@ A. 修改 state -> notify -> unlock
 B. 修改 state -> unlock -> notify
 ```
 
-在 A 中，被唤醒的 waiter 想重新检查 predicate，仍要等 notifier 释放同一 mutex。在 B 中，waiter 被唤醒时 mutex 已经可能可用，因此常能减少一次刚醒来又阻塞在 mutex 上的过程。
+在 A 中，被唤醒的 waiter 想重新检查 predicate，仍要等 notifier 释放同一 mutex。**在 B 中，waiter 被唤醒时 mutex 已经可能可用，因为 B 是先 unlock 再 notify，此时 B 已经释放 mutex**，因此常能减少一次刚醒来又阻塞在 mutex 上的过程。
 
 但 B 不是脱离生命周期分析的绝对口诀。今天 queue object 在 notify 完成前一定仍存在，因此推荐 B。未来若“unlock 后 object 可能立刻被另一个 owner 销毁”，则必须重新审视 object lifetime。正确性的核心始终是：
 
