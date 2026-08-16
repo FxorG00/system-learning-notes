@@ -367,7 +367,7 @@ global owning raw pointer 后续按已学 RAII 改成 unique_ptr 或显式释放
 笔记未单独保存 ps -L 与 /proc 输出；本次由 Codex 在 Ubuntu 实测确认，不把工具观察伪装成用户笔记已有内容
 ```
 
-### Week6：Day1~Day6 已完成，Day7 教程已生成、尚未验收
+### Week6：已完成
 
 主题：网络原理第一轮 + 阻塞式 Socket 编程。
 
@@ -405,7 +405,83 @@ Day7 的职责边界：
 出现 Transfer-Encoding 时明确拒绝，不提前实现 chunked coding
 ```
 
-Day7 已生成但不等于已经完成。等待用户学习、提交 `http_request_parser.cpp` 与 `day7_note.md` 后，再按逐节笔记、逐题验收、代码和测试证据进行评分。
+Week6 Day7 已于 2026-08-14 完成首次检阅，暂定 `72/100`，尚未通过。用户独立完成了 `http_request_parser.cpp`，并明确选择不机械回答验收题；允许由代码和测试替代重复书面作答，但当前实现仍有当天核心缺口：
+
+```text
+已经正确：
+    基本 GET request-line / headers 解析
+    header value 按第一个冒号拆分
+    Content-Length field-name 大小写不敏感
+    from_chars 同时检查 ec 与 ptr，能拒绝 5x 和 overflow
+    重复 Content-Length、Transfer-Encoding、LF-only、缺冒号、short/trailing body 均能拒绝
+
+阻塞项：
+    成功解析后没有把 body bytes 写入 request.body，含 NUL 的 3-byte body 测试得到 size 0
+    parse_header 删除 value 内部所有空格/Tab，而不是只 trim 两端 OWS；hello world 被改成 helloworld
+    header 缺少结束 CRLF 时 line_end == npos 仍进入 parse_header；ASan 在第 101 行确认 heap-buffer-overflow
+    空 method 被接受
+    body_start/body_end/content_length 混用 int 与 size_t，规定编译产生两个 -Wsign-compare warning，并存在 narrowing/overflow 边界
+
+note：
+    HTTP application-layer 定位与 string::find/npos 说明正确
+    note 没有记录 parser 主边界、malformed/incomplete 区别或测试证据
+    验收题 5/6 和部分 2/3/7 可由当前代码证明；1/8 不能由离线 parser 代替，4 的 NUL body 当前实现反而失败
+```
+
+短复检只检查上述阻塞项与对应测试，不要求重写已正确的 request-line、首冒号、case-insensitive、from_chars、duplicate/Transfer-Encoding 逻辑，也不要求机械补抄全部八道验收题。
+
+Week6 Day7 第一次短修后的复检暂定 `82/100`，仍未正式通过：
+
+```text
+已经修正：
+    成功解析后会逐 byte 写入 request.body；A\0B 的 3-byte body 测试通过
+    空 method / target / version 增加显式拒绝
+    header 缺少结束 CRLF 时不再进入 parse_header，ASan/UBSan 不再报告越界
+    body_start/body_end 改为 size_t，规定编译已零 warning
+
+仍有三个阻塞项：
+    line_end == npos 分支写成 return 1；bool 中 1 表示 true，malformed request 被误报为成功
+    OWS 循环只删除最后一个尾部空白；连续尾部空格/Tab 测试得到带尾部空白的 value
+    HttpRequest::content_length 仍为 int；4294967296 narrowing 成 0 后，无 body 的 request 被错误接受
+
+复测证据：
+    g++ -std=c++17 -Wall -Wextra -g 零 warning
+    ASan + UBSan 定向测试 5/8 通过，无 sanitizer 崩溃
+    body with NUL、empty method、invalid Content-Length、trailing bytes、Transfer-Encoding 通过
+```
+
+下一次极短复检只检查：`return false` 语义、两端 OWS index trim，以及全程 `size_t` 并在加法前比较 remaining bytes 防 overflow。note 未改变，不要求机械补写全部验收题。
+
+Week6 Day7 第二轮修正后的第三次极短复检暂定 `89/100`，尚差一个协议边界：
+
+```text
+已经通过：
+    npos 分支返回 false
+    连续 leading/trailing OWS 只 trim 两端，内部空格保持
+    empty value 与 all-OWS value 得到空 string
+    content_length 全程 size_t
+    先比较 raw.size() - body_start，再计算 body_end，超大长度被拒绝
+    body with NUL、missing CRLF、empty method、5x、duplicate Content-Length、
+    Transfer-Encoding、trailing bytes 均符合预期
+    规定编译零 warning；ASan/UBSan 无错误
+
+唯一剩余：
+    field-name 与冒号之间只拒绝 SP，没有拒绝 HTAB；X\t: y 被错误接受
+```
+
+修正 `parse_header` 冒号前同时检查 `' '` 与 `'\t'` 后，只需定向复测这一例即可，不再重复运行其他已经通过的测试。
+
+Week6 Day7 最终定向复检通过，最终评分 `92/100`，Week6 正式完成：
+
+```text
+parse_header 已同时拒绝 field-name 冒号前的 SP 与 HTAB
+X\t: y 定向测试返回 failure，并给出 whitespace before ':' 错误
+定向测试以 g++ -std=c++17 -Wall -Wextra -g + ASan/UBSan 零 warning 编译
+运行 exit status = 0，sanitizer 无错误
+此前 11 组 request-line/header/body/framing 边界测试保持通过，不机械重跑
+```
+
+Day7 最终保留的非阻塞工程建议：显式 `#include <cctype>`，并在调用 `std::tolower` 前转换为 `unsigned char`；当前受控 ASCII header-name 测试不受影响，不阻塞进入 Week7。
 
 Week6 核心产出：
 
@@ -1132,6 +1208,216 @@ Q1 与 Q9 涉及用户已多次画过的主体/关闭流程，不要求为了验
 
 ---
 
+### Week7：Day1 已完成
+
+主题：C++ 多线程同步 + 可关闭的 `BlockingQueue<T>`。
+
+周计划位置：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week7\week7.md
+```
+
+Week7 周计划于 Week6 Day7 尚未验收时按用户要求提前生成，用于节省等待时间；这不改变当前进度，不得把 Week6 或 Week7 提前标记为完成/开始。
+
+Week7 根据真实起点删除了 Week5 已完成的重复入门 work：不重新安排 hello-thread、PID/TID/address 观察、race counter 入门、xv6 scheduler 手推或 condition_variable lost-wakeup 全套复述。七天递进为：
+
+```text
+Day1：thread lifecycle、joinable 与 work/result ownership；parallel_sum.cpp
+Day2：shared invariant、mutex scope 与 RAII locking；shared_invariant.cpp
+Day3：condition_variable、not_empty/not_full 与 backpressure；producer_consumer.cpp
+Day4：bounded BlockingQueue<T> V1；blocking_queue.hpp + test
+Day5：close、drain、notify_all 与 graceful shutdown；升级同一 BlockingQueue
+Day6：atomic counter、CAS loop 与适用边界；atomic_counter.cpp + cas_max.cpp
+Day7：contention、false sharing、组件复检与 Week7 出口
+```
+
+Week7 核心出口是一个经过 MPMC、empty/full/close/drain、join 和 TSan 基本验证的 bounded `BlockingQueue<T>`，供 Week8 `ThreadPool V1` 直接复用。Week8 的 `future`、`packaged_task`、ThreadPool 和 AsyncLogger 不提前进入 Week7。
+
+MIT 6.S081 本周不新增必读 lecture：总规划要求的 locks/scheduling/sleep-wakeup 已在 Week5 Lec10、Lec11、Lec13 第一轮完成。Week7 只在 C++ 组件中定向映射旧机制，不要求重复听课或抄笔记。15-445 仍不开。
+
+用户于 Week6 Day7 尚未检阅时再次明确要求提前生成 Week7 全部 daily，以节省后续等待时间。以下教程均已生成：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week7\day1\day1.md
+C:\Users\FxorG\Desktop\gpt_infra\week7\day2\day2.md
+C:\Users\FxorG\Desktop\gpt_infra\week7\day3\day3.md
+C:\Users\FxorG\Desktop\gpt_infra\week7\day4\day4.md
+C:\Users\FxorG\Desktop\gpt_infra\week7\day5\day5.md
+C:\Users\FxorG\Desktop\gpt_infra\week7\day6\day6.md
+C:\Users\FxorG\Desktop\gpt_infra\week7\day7\day7.md
+```
+
+七份 daily 的职责边界：
+
+```text
+Day1 用 parallel_sum 学 thread lifecycle、joinable 和 work/result ownership，不重复 PID/TID 观察
+Day2 用 Ledger 复合状态学习 mutex 保护 invariant，不重复普通 counter++ 入门
+Day3 只实现固定数量的一生产者一消费者，讲清 not_empty/not_full，不提前加入 close
+Day4 独立封装 bounded BlockingQueue<T> V1，用 sentinel 仅完成受控 MPMC test
+Day5 升级同一 queue，加入 close/drain/notify_all/graceful shutdown，以 optional 结束状态替代 sentinel
+Day6 只学默认 seq_cst 下的 atomic counter 与 CAS max，不进入复杂 memory ordering 或 lock-free queue
+Day7 区分 correctness/performance，观察 mutex/atomic contention 与 false sharing，并复检 BlockingQueue
+```
+
+Day4~Day6 练习均只给 program purpose、interface/state contract、流程图、错误路径与测试，不提供完整 BlockingQueue implementation、完整 push/pop/close 排列或可直接抄写的 CAS loop。Day7 使用本地《图解系统》亮白版的 false-sharing 图，并明确它只提供第一层 hardware intuition。
+
+生成后自检：七份文件均严格包含 Part1/Part2/Part3 与唯一“教程开始”，Markdown fences 成对，Day7 图片路径存在；涉及的 `std::thread`、`std::ref`、`scoped_lock`、`optional`、`atomic compare_exchange`、`alignas` 和 `steady_clock` API 组合已在 Ubuntu GCC 10.5 的 C++17 + `-Wall -Wextra -pthread` 下零 warning 编译运行。
+
+2026-08-09 用户指出：一次性生成七份 daily 不能让单份教程退化成较短的提纲。随后已按与逐日生成完全相同的发布标准重新逐份审计并补强 Day1~Day7，不以凑字节为目标，重点补齐每一天原稿中偏薄的完整机制链：
+
+```text
+Day1：thread object move ownership、joinable 时间线、range 数字例、capture lifetime 与部分创建失败
+Day2：复合 invariant 被合法交错破坏、mutex 可见性、method/state matrix、RAII 与 deadlock
+Day3：capacity=1 逐步状态、lost wakeup 窗口、wait/notify API 与固定 count termination
+Day4：BlockingQueue 内部 ownership、constructor invariant、push copy/move、MPMC trace 与 test ownership
+Day5：close empty/full/with-data 轨迹、linearization order、双 CV notify_all 与 owner shutdown
+Day6：atomic load/store logical race、CAS expected 改写、negative max、seq_cst 边界与 atomic lifetime
+Day7：cache hierarchy、cache-line ownership ping-pong、benchmark 方法、布局证据与结论边界
+```
+
+复检后七份仍严格保持三 Part、唯一“教程开始”和成对 Markdown fences；Day7 图片仍存在。本轮新增 API 关系还在 MinGW GCC 8.1 的 C++17 + `-Wall -Wextra -g -pthread` 下做了独立组合编译，零 warning 运行通过。它们仍是提前准备、尚未学习/验收的教程，不改变真实进度。
+
+2026-08-09 又按用户要求进行第二轮资料驱动审计：重新对照 `plan_strengthened.md`、`week7.md`、MEMORY 教程标准、本地小林《图解系统》CPU cache/false-sharing 内容，以及 C++ Core Guidelines、GCC/libstdc++、Clang TSan、Linux kernel false-sharing documentation、Intel VTune false-sharing guidance 和 WG21 interference-size paper。结论不是七份都必须机械扩写，而是只修四个真实缺口：
+
+```text
+Day1：week7.md 明确要求所有正常/异常路径 join 已创建 workers，因此 thread creation partial failure 从“可选增强”提升为 core contract，并加入受控 failure-path test 要求
+Day4：capacity > 0 是 class invariant，因此 capacity=0 rejection 从可选增强移入固定测试，并补 std::invalid_argument / <stdexcept> 边界
+Day5：纠正 bool push(T value) 失败后的 ownership 表述；false 只表示未发布，rvalue caller 可能已 moved-from；新增 multiple blocked producers 的 close/notify_all 测试
+Day7：保留小林图作为第一层直觉并继续声明其 coherence 顺序是简化图；补 C++17 hardware_destructive_interference_size 的标准/实现边界，以及 perf stat 不能单独证明 false sharing、perf c2c/VTune 才是更强可选证据
+```
+
+Day2、Day3、Day6 经资料核对后不为“每份都改一点”而硬改：shared invariant + RAII/TSan、predicate + lost-wakeup、RMW + CAS/seq_cst 的主线、具体状态轨迹和停止边界已经满足规划。第二轮复检仍通过三 Part、唯一“教程开始”、Markdown fences、图片路径和逐日核心矩阵；新增 conditional interference-size snippet 在 C++17 + `-Wall -Wextra -g -pthread` 下零 warning 编译。全部 daily 仍未学习/验收，真实进度不变。
+
+这些 daily 从生成完成起按只读规则冻结，但全部仍属于“提前准备、尚未学习/验收”。必须先检阅并通过 Week6 Day7，再进入 Week7 Day1；之后仍按顺序学习和验收，不能因为文件已存在就一次性把 Week7 标记完成。
+
+Week7 Day1 已于 2026-08-15 完成首次检阅，暂定 `74/100`，尚未通过：
+
+```text
+Ubuntu 源码：~/code/system-learning/cpp/week7/day1/parallel_sum.cpp
+
+已经正确：
+    10 elements / 3 workers 的 range 使用 base + remainder，无 overlap/gap
+    input 只读，每个 worker 只写独立 sum[index]
+    main 在 join 后汇总，不需要 mutex
+    vector<thread> reserve + emplace_back，正常路径逐个 join
+    emplace_back 抛异常时 catch 会 join 已创建 workers 后 rethrow
+    规定编译零 warning，正常运行 exit 0，连续 100 次通过
+    TSan 编译运行 exit 0，无 data-race report
+
+阻塞项：
+    程序固定使用 global int value[10] / sum[10] 与常量 worker_count，
+    没有实现 vector input + requested worker count，无法覆盖 empty、1 element、workers > elements、negative、large vector
+    没有受控“创建两个 workers 后抛异常”测试，cleanup code 正确但 failure path 未被执行验证
+    结果不一致只打印 failed，main 仍 return 0，自动测试无法从 exit status 识别失败
+    day1_note 问题 5 未回答；问题 1/3/4/8 只覆盖结论的一部分
+    问题 7 中“没有 shared variable”不准确：value/sum 是 shared objects，
+    只是没有对同一 memory location 的 conflicting access
+```
+
+短复检只要求把 `parallel_sum` 改成可传入 values/requested_workers 的本地状态实现，补固定 case table、受控 failure injection 和失败非零 exit；不要求重写已经正确的 partition、join cleanup 或机械抄写整份教程。问题 5 需要用自己的话说明 detach 只解除 thread object 的关联，不延长 reference lifetime，也不提供等待 execution flow 完成的 graceful-shutdown 协议。
+
+Week7 Day1 第一次修改后的第二次复检暂定 `76/100`，仍未通过：
+
+```text
+本次已经修正：
+    增加多组 element_count / worker_count 调用
+    随机输入包含负数
+    result mismatch 和 thread-creation exception 均使用非零 exit
+    note 问题 5 已补 detach / reference lifetime / graceful shutdown 主体
+    规定编译零 warning；正常运行和 TSan exit 0
+
+仍有阻塞项：
+    仍使用 global value[10005] / sum[10005] / element_count / worker_count，
+    没有实现 const vector<int>& values + requested_workers 的本地状态接口
+    test(3, 1000) 实际创建 1000 个 threads，没有把 actual workers 限制为 min(requested, values.size())
+    empty vector、deterministic one/negative/large vector 与 std::accumulate 对照仍未完成
+    没有 test-only fail_after/injection，partial thread creation cleanup 仍未执行验证
+    输入扩大到 +/-1e9，但 main_sum、sum 和 worker_sum 仍为 int；
+    UBSan 在第 17、27 行确认 signed integer overflow，程序却继续打印 success
+    note 问题 3 仍只写“execution flow 可能在运行”；即使已结束，只要仍 joinable，析构也 terminate
+    note 问题 7 仍写“没有 shared variable”；实际有 shared value/sum，只是没有同一 memory location 的 conflicting access
+```
+
+下次只检查：使用 deterministic vector cases、本地 `long long` partial results、actual worker cap、empty/requested=0 边界、受控创建失败，以及 UBSan/TSan。已经正确的 base+remainder partition、catch-join-rethrow、问题 5 和失败 exit 不重复返工。
+
+Week7 Day1 改为 callable 后的第三次复检暂定 `84/100`，仍未通过：
+
+```text
+本次已经通过：
+    parallel_sum 接收 const vector<int>& values 与 worker_count
+    input、workers、partial storage 均已移回 function local ownership
+    外部 harness 的 empty(worker=1)、one element、10/1、10/3、3/10、negative cases 全部返回 true
+    mismatch / creation exception 返回 false
+    代表性 10/3 case 在 TSan 下 exit 0，无 race report
+
+剩余阻塞项：
+    partial storage 仍是 vector<int>；100000 个 1e9、4 workers 时，
+    UBSan 在 work 第 9 行确认 signed integer overflow，case 返回 false
+    requested_workers > values.size() 时没有 cap；3/10 会真实创建 10 个 threads
+    worker_count == 0 没有 precondition check，UBSan 报 division by zero，进程 SIGFPE exit 136
+    main 为空，固定测试没有保存在交付物中；Codex 临时 harness 只能作为本轮 review 证据，不能替代回归测试
+    仍无 test-only fail_after/injection，catch-join cleanup 未执行验证
+    note 问题 3、7 仍保留首次复检指出的不精确表述
+```
+
+固定测试的正确理解是：先写一个可复用 callable，再由 main 或独立 test file 以不同输入调用它；不是为每个 case 重写算法，也不是长期依赖 Codex 临时 harness。下一次只需补 `int64_t` partial、actual worker cap、worker_count=0 contract、保存固定 case table、fail-after-two injection，并修正 note 3/7。
+
+Week7 Day1 第四次复检暂定 `89/100`，尚未正式通过：
+
+```text
+本次已经通过：
+    partial results 改为 vector<int64_t>，100000 个 1e9 的 large case 在 UBSan 下成功
+    actual worker count 使用 min(requested, values.size())，3/10 不再创建空 tasks
+    requested_workers == 0 明确返回 false，不再除零
+    simulate-failure flag 在创建两个 workers 后抛 runtime_error
+    catch join 已创建 workers 后返回 false；外部 harness 验证无 terminate
+    普通路径与 failure path 的 TSan 均 exit 0，无 race report
+    note 问题 1/4/5/7 已补充到正确主体
+
+剩余：
+    empty values + requested=3 当前因 actual_workers=0 返回 false；
+    empty vector 是固定合法 case，应无须创建线程并成功得到 sum=0
+    main 仍为空，固定 case table 未保存在 parallel_sum.cpp 或独立 test file
+    note 问题 3 仍只写“flow 可能在运行”；应补即使 flow 已结束，仍 joinable 时析构也 terminate
+```
+
+下一次只定向检查 empty success、持久 test table 和 note 问题 3；large/negative/cap/failure injection/UBSan/TSan 均不重复。
+
+Week7 Day1 最终极短复检通过，最终评分 `91/100`：
+
+```text
+empty vector 在不创建 workers 的情况下返回 success，临时定向调用 PASS、exit 0
+note 问题 3 已明确：execution flow 即使结束，只要 thread object 仍 joinable，析构仍 terminate process
+问题 1~8 的核心边界全部通过
+此前 callable/local ownership、range partition、int64 partial、actual worker cap、requested=0、
+normal/negative/large cases、fail-after-two cleanup、UBSan 与 TSan 证据继续有效
+```
+
+用户明确选择不把固定 case table 写进 `main` 或独立 test file；本次已有 Codex 外部 harness 的完整验证证据，因此不再阻塞 Day1，但长期工程项目仍应保存 regression tests。两个非阻塞 include 建议：直接包含 `<cstdint>` 和 `<stdexcept>`，不要依赖其他 standard headers 的传递包含。
+
+Week7 Day2 于 2026-08-15 完成最终极短复检，最终评分 `92/100`，正式通过：
+
+```text
+笔记 1/2/4/7 正确；3/5/6/8 基本正确但不完整
+用户已把 insufficient-funds 检查移入与 debit/credit 相同的 mutex scope，修复了余额读取与更新之间的 data race，并避免了空 requests 除零
+规定 warning 选项下正常构建通过；当前三条有效 transfer 的普通运行与 TSan 通过
+独立单线程 contract tests 覆盖 same-account、zero、negative、invalid index、insufficient funds、成功 transfer、snapshot 和 total，均通过
+第二次修正为 success/failed counters 的写入增加 synchronization；8 threads 共 80000 次 same-account failure 的定向 TSan 不再报告 data race，旧竞争扣分撤销
+第三次修正后 print_count() 的 counter reads 也有同步，main 已使用 test() 结果决定 exit code；成功 transfer 与 8 threads/80000 failure 的定向 TSan 均通过
+更新后的 note 已补具体 invariants、const-reference 风险、unique_lock 能力和 TSan 证据边界；8 道题的当天核心均通过，const-reference 内容位置稍错不影响理解验收
+最终修正把负余额遍历改为 auto，保持 int64_t 类型，消除 narrowing 漏检
+main 恢复 valid normal case，并用 test() 结果决定进程退出状态；规定参数编译零 warning，运行 invariant PASS、exit 0
+```
+
+Day2 核心已通过，可以进入 Day3。保留两个非阻塞工程建议：三个 mutex 对当前小型 Ledger 偏复杂，未来可优先评估一把 mutex 保护完整 Ledger state；长期项目应把 fixed regression cases 保存下来。无需为这两点延迟进度。
+
+Day2 暴露的可复用教程/验收经验：并发练习的 fixed tests 不能只走 happy path；凡是会写 shared state 的成功、失败、early-return 路径都要有定向并发测试。教程要求的每条 invariant 都应进入 executable assertion/check，且失败必须反映到返回值或 exit code；只输出 `PASS`、循环程序 50 次或最终 sum 相等，都不能单独证明测试通过。
+
+本次 `week7/day2/day2.md` 与 `day2_note.md` 在 review 时仍为 untracked，Git 中没有首次生成 baseline；只能确认 daily 从 2026-08-09 创建后于 2026-08-15 被修改，无法可靠逐块还原用户增补。今后提前生成的 daily 必须在生成当轮立即按 9.12 提交并 push，之后验收才能准确提炼用户修改带来的教学经验；本次不伪造 diff 结论。
+
+---
+
 ## 5. MIT 6.S081 和 CMU 15-445
 
 ### MIT 6.S081
@@ -1314,33 +1600,39 @@ Part 3：收尾、验证与验收
 
 生成 daily 前必须对齐：总规划、当前周计划、真实进度、最近 note 和代码。不要机械照搬周计划中已经被用户提前掌握的内容。
 
-### daily.md 生成后的只读规则
+### daily.md 生成后的 ownership、修改与验收规则
 
-`daily.md` 只在对应 Day 开始时生成一次。生成完成后默认视为只读文件，后续问题和 review 不修改。
+`daily.md` 仍只在对应 Day 开始时生成一次。对 Codex 而言，生成并提交后默认只读：普通追问、review、评分和进度更新不能擅自回写 daily；默认在对话中回答，需要落盘时写入 `dayN_note.md`、`MEMORY.md` 或单独补充文件。
 
-用户学习过程中提出问题时：
+但用户拥有 daily，可以在学习过程中主动修改它。用户会把不懂的地方问清楚后，将自己认为必要的解释、例子、术语或流程补进 daily。这类用户修改是正常学习产物，不再被“冻结/只读”规则视为违规，也不能被 Codex 回滚。
 
-```text
-默认只在当前对话中回答
-不得把问题、回答、补充解释或纠错回写到 daily.md
-用户明确要求落盘时，只能写入 dayN_note.md、MEMORY.md 或单独的补充文件
-review、验收、评分和进度更新也不能修改 daily.md
-后续教程需要吸收经验时，更新 MEMORY.md，并应用到尚未生成的 daily
-```
-
-即使问题直接引用了 `daily.md` 的某一段，也只解释该段，不修改原文件。这样 `daily.md` 始终保留进入当天学习时的原始教程版本，学习过程中的理解、追问和修正由 note 与对话承载。
-
-唯一例外是用户明确点名某一份已生成的 `daily.md`，并直接要求修改该文件本身。此时把它视为一次显式授权：
+Codex 修改 daily 的边界仍然是：
 
 ```text
-只完成用户点名的修改范围
-不能把普通追问自行解释成修改授权
-修改前说明改什么
-修改后重新校验并再次冻结
-同步更新 MEMORY 中的版本状态
+普通追问不等于授权修改
+只有用户明确点名并要求 Codex 修改 daily 时，Codex 才能编辑
+修改前说明准备改什么
+只完成用户点名的范围
+修改后重新校验
 ```
 
-Week6 Day2 的图片增强就是一次用户明确授权的例外，不改变“普通问题只在对话/note 中回答”的默认规则。
+每次验收某个 Day 时，除了 note、代码和验收题，还必须检查 daily 自首次生成后的变化：
+
+```text
+1. 找到该 daily 首次加入 Git 的 baseline commit；优先使用：
+   git log --follow --diff-filter=A --format=%H -- <daily-path>
+2. 对比 baseline 与当前文件，并同时检查未提交修改：
+   git diff <baseline-commit> -- <daily-path>
+   git diff -- <daily-path>
+3. 逐块阅读用户新增、删除或改写的内容，不能只说“daily 有修改”。
+4. 检查每一处修改在技术上是否正确，是否解决了真实理解障碍，是否与当天主线冲突。
+5. 区分个人记忆补充与可复用教学经验；不是用户写下的每句话都自动升级为全局规则。
+6. 将真正可复用的经验压缩写入 MEMORY，并应用到以后尚未生成的 daily。
+```
+
+重点提炼这些经验：缺失的前置概念、英文术语解释、主线顺序、完整因果链、API 最小例子、图示需求、练习目的、contract 是否过多、测试动作是否讲清，以及哪些重复 work 可以省略。发现用户修改有错误时先在 review 中解释，不擅自改回；只有用户明确授权才编辑该 daily。
+
+早期 daily 若 Git 历史中没有可靠的首次生成 baseline，就使用能找到的最早版本并明确证据限制，不能伪造精确 diff。Week6 Day2 的图片增强等历史显式授权仍然有效。
 
 ---
 
@@ -1370,6 +1662,10 @@ Week6 Day2 的图片增强就是一次用户明确授权的例外，不改变“
 ### 9.2 先确定知识增量，不以篇幅为目标
 
 daily 的长度由当天新增机制决定，不追求固定行数，也不以“越长越像教程”为标准。
+
+批量提前生成只改变工作调度，不改变单份 daily 的质量门槛。即使用户一次要求生成整周，每一份也必须被当作一份独立正式教程，分别完成资料对齐、主线设计、机制展开、练习边界和发布前自检；不能用“先写七份”作为缩成周计划扩展稿的理由。
+
+文件字节数不是质量目标，但与同阶段历史 daily 相比突然大幅缩短，应视为审计信号：检查是否把完整因果链压成了术语表、只给流程图不逐步读图、只给接口 contract 不说明程序目的，或把具体状态轨迹和错误边界省略。发现这些问题时补机制，不填重复定义、泛泛总结或超出当天路线的内容。
 
 必须避免：
 
@@ -2300,6 +2596,12 @@ Week5 Day3~Day4：
 Week6 Day2：
     “额外测试一个 invalid input”必须明确写成“准备第二个非法输入 -> 再调用一次 API -> 检查该次返回值 -> 输出证据”。
     只给预期输出标签会让用户误以为打印那行文字就是完成测试；验收要求必须说清测试动作与证据来源。
+
+Week7 第二轮资料审计：
+    周计划中明确列为目标深度的异常路径、边界或测试，不能在 daily 展开时悄悄降级为“可选增强”；若确实要降级，必须先根据用户进度和主线说明原因并修改周计划。
+    `operation failed` 只说明 operation 没有生效，不自动说明 input ownership 已归还。对于 `bool push(T value)`，parameter 已经 copy/move 构造；失败返回后 parameter 析构，rvalue caller 可能已经 moved-from。教程必须分别说明业务状态与 argument ownership。
+    performance 教程要区分“符合机制的现象”和“定位根因的证据”。elapsed time + address layout 可以支持 false-sharing hypothesis，普通 `perf stat` 不能单独定位具体 cache line；`perf c2c`、VTune Memory Access 等属于更强但可选的证据。
+    标准标记为 C++17 的 API 仍要检查当前 compiler + standard library implementation availability。若当前 GCC/libstdc++ 不支持，给兼容 fallback 或明确后置，不能为了接口名升级环境打断主线。
 ```
 
 ### 9.11 发布前自检清单
@@ -2310,6 +2612,8 @@ Week6 Day2：
 [ ] 是否对齐总规划、周计划、真实进度和最近 note？
 [ ] 是否能用一句话说出今天唯一的核心问题？
 [ ] 是否删除了已经掌握且没有新增约束的重复 work？
+[ ] 如果本次批量生成多份 daily，是否对每一份分别完成了同等深度的独立审计？
+[ ] 若篇幅相较同阶段教程异常缩短，是否确认没有遗漏主线、具体状态轨迹、API 语义或练习目的？
 [ ] 每个练习 `.cpp` 是否先说明了程序用途、输入、输出、完整生命周期、成功标准和能力边界？
 [ ] 三个 Part 是否顺序正确，“教程开始”是否明确？
 [ ] 首次出现的英文术语是否有原词、含义和实际作用？
@@ -2328,6 +2632,41 @@ Week6 Day2：
 ```
 
 如果某一条不满足，先修 daily，再交给用户学习。
+
+### 9.12 daily.md 生成后的 Git 发布流程
+
+正式规划仓库：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra
+remote：repo
+branch：master
+```
+
+以后每生成一份新的 `daily.md`，完成内容校验、代码验证、MEMORY 进度同步和发布前自检后，必须在该仓库执行：
+
+```bash
+git status --short
+git diff --check
+git add .
+git commit -m "docs: add weekN dayN tutorial"
+git push repo master
+```
+
+执行规则：
+
+```text
+1. 单份 daily：该 daily 完成并验证后立即提交和 push。
+2. 用户一次要求多份 daily：每一份仍独立完成同等质量审计；按每份 daily 分别 commit/push，不能只在全部写完后含糊汇总。
+3. `git add .` 是用户明确要求，会把仓库当前的 daily 修改、note、MEMORY 和其他改动一起 stage；不得为得到“干净提交”而回滚用户改动。
+4. add 前必须查看 status/diff，检查是否意外包含凭据、超大二进制、编译产物或明显不应上传的临时文件；遇到这类风险先停止并报告，不能盲目 push。
+5. commit message 使用真实 week/day；如同时包含用户此前积累的修改，可在 commit message/body 中如实概括，不能伪装成只有新 daily。
+6. push 成功后检查 `git status --short` 和最新 commit，向用户报告 commit hash 与 push 结果。
+7. commit 或 push 失败时保留工作区和 index，不声称成功，说明失败阶段与错误；解决后继续完成同一次发布。
+8. 禁止 `--force`、`reset --hard`、擅自 amend/rebase 或覆盖 remote history，除非用户另行明确要求。
+```
+
+若生成过程中最终没有文件变化，不创建空 commit；但正常新 daily 必然产生变化。该自动 Git 流程只由“生成新的 daily.md”触发，普通问答、review、评分或仅更新 MEMORY 不自动 commit/push，除非用户另行要求。
 
 ---
 
@@ -2377,7 +2716,10 @@ Week6 Day2：
 完成日验收流程：
 
 ```text
-阅读 dayN_note.md
+定位 daily 首次生成的 Git baseline
+→ diff 并逐块检阅用户对 daily 的修改
+→ 提炼可复用 daily 编写经验并按需更新 MEMORY
+→ 阅读 dayN_note.md
 → SSH 查看 Ubuntu 实际代码
 → 用规定 warning 选项编译
 → 运行正常、边界和错误用例
@@ -2483,7 +2825,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5 已正式完成；Week6 Day1~Day6 均已正式通过，评分依次为 `88 / 90 / 92 / 93 / 92 / 90`。Day6 已用真实 tcpdump 串通 handshake、relative seq/ack、10-byte echo 和合并 FIN+ACK 的关闭链；`send` 正返回只保证 local kernel 接受 bytes 的语义已在复检中纠正。受控 CLOSE-WAIT/FIN-WAIT-2 probe 未提交，不伪造为已观察，也不要求为了形式补做。Week6 Day7 教程已生成，当前下一步是学习 Day7，并独立完成 `http_request_parser.cpp` 与 `day7_note.md`；Day7 尚未验收，不能提前把 Week6 标记为完成。所有已生成 daily 默认保持只读，后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
+当前位置：Week5、Week6 均已正式完成，Week7 已正式开始。Week7 Day1 最终评分 `91/100`，Week7 Day2 最终评分 `92/100`，均正式通过。Day2 已验收 shared invariant、完整 mutex scope、counter synchronization、snapshot ownership、成功/失败并发 TSan、int64 negative boundary 和 executable test result；当前下一步是 Week7 Day3。所有已生成 daily 的后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
 
 Day5 已验收：
 

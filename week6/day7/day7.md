@@ -341,6 +341,65 @@ header field 携带的是 message metadata，不是 body 本身。
 
 ---
 
+### 3.10.1 metadata
+
+`metadata` 就是“描述数据的数据”，中文通常翻译成“元数据”。
+
+在 HTTP 里：
+
+```text
+body：真正要传的内容
+metadata：帮助双方理解、处理这些内容的信息
+```
+
+例如：
+
+```http
+Content-Length: 5
+
+hello
+```
+
+这里：
+
+```text
+hello            -> body，真正的数据
+Content-Length: 5 -> metadata，说明 body 有 5 个字节
+```
+
+它不属于 `hello` 这个内容本身，但接收方需要靠它知道该读多少 body。
+
+再看几个常见 header field：
+
+```http
+Content-Type: application/json
+```
+
+表示 body 应按 JSON 理解。
+
+```http
+Host: example.com
+```
+
+表示客户端想访问哪个主机。
+
+```http
+Connection: close
+```
+
+表示这次响应后连接是否应关闭。
+
+所以可以压缩记成：
+
+```text
+body：我传了什么
+header metadata：这份内容是什么、怎么读、从哪来、要怎么处理
+```
+
+`Content-Length: 5` 不是业务正文的一部分，而是 HTTP message 的“说明书”中的一项。
+
+---
+
 ### 3.11 OWS
 
 `OWS`：Optional Whitespace，可选空白。
@@ -482,6 +541,10 @@ TIME-WAIT
 
 ## 5. RFC 给出的 request 骨架
 
+RFC 是 `Request for Comments`，直译是“征求意见稿”。
+
+RFC 可以理解成“互联网各方约定通信格式和行为的正式说明书”。
+
 HTTP/1.1 message 的简化骨架是：
 
 ```text
@@ -590,7 +653,69 @@ Content-Length: 5
 ```text
 body_length = 5
 message_end = body_start + 5
+message 就是整条消息，包括 header and body
 ```
+
+### 6.4.1 左闭右开
+
+对，`message_end` 是开区间的 end，也就是“整条 message 后面的第一个位置”。
+
+这里完整范围应写成：
+
+```text
+message = [message_start, message_end)
+body    = [body_start, message_end)
+```
+
+假设：
+
+```text
+body_start = 100
+Content-Length = 5
+```
+
+那么：
+
+```text
+message_end = 100 + 5 = 105
+```
+
+body 实际占用的下标是：
+
+```text
+[100, 101, 102, 103, 104]
+```
+
+所以：
+
+```text
+body length = message_end - body_start
+            = 105 - 100
+            = 5
+```
+
+`105` 不属于 body；它指向 body 最后一个字节后面的位置。
+
+这和你刚才看到的 `from_chars` 是同一个半开区间习惯：
+
+```cpp
+[text.data(), text.data() + text.size())
+```
+
+因此当前受控 parser 的完整条件是：
+
+```text
+raw 中唯一的一条 message 范围为 [0, message_end)
+raw.size() == message_end
+```
+
+如果 `raw.size() > message_end`，那么多出的 bytes 位于：
+
+```text
+[message_end, raw.size())
+```
+
+它们不属于当前这条 request。
 
 ### 6.5 验证输入长度
 
@@ -986,6 +1111,93 @@ from_chars 不跳过未声明的 whitespace
 ```
 
 今天只把它当一个“严格十进制数字转换器”，不要把 parser 主线塞进这个 API 例子。
+
+---
+
+## 13.1 为什么上面的例子用了 .data()，与 .begin() 有什么不同
+
+`text.data()` 是取得 `std::string` 内部字符存储区的起始地址。
+
+这里：
+
+```cpp
+const std::string text = "123";
+```
+
+可以先把它想成：
+
+```text
+地址:      p       p+1     p+2
+内容:      '1'     '2'     '3'
+```
+
+那么：
+
+```cpp
+text.data()               // p，指向 '1'
+text.data() + text.size() // p + 3，指向 '3' 后面的 one-past-the-end 位置
+```
+
+所以传给 `from_chars` 的是半开区间：
+
+```text
+[text.data(), text.data() + text.size())
+```
+
+也就是恰好这三个字符：
+
+```text
+'1' '2' '3'
+```
+
+不包含结尾位置。
+
+`from_chars` 的整数版本接口大致是：
+
+```cpp
+std::from_chars(const char* first,
+                const char* last,
+                T& value);
+```
+
+它要求的是两个 `const char*`，因此这里用 `.data()` 最合适。
+
+`.begin()` 则是“容器/字符串迭代器范围”的起点：
+
+```cpp
+text.begin()  // 指向第一个字符的 iterator
+text.end()    // 指向末尾后一位的 iterator
+```
+
+它们表达的范围同样是：
+
+```text
+[text.begin(), text.end())
+```
+
+区别主要在类型和适用接口：
+
+| 写法 | 得到什么 | 常用于 |
+|---|---|---|
+| `text.data()` | `const char*` 指针 | 需要字符地址或 C 风格连续内存的 API |
+| `text.begin()` | `std::string::const_iterator` 迭代器 | STL 算法、遍历 |
+
+例如 STL 算法通常接受迭代器：
+
+```cpp
+std::sort(text.begin(), text.end());
+```
+
+而 `from_chars` 明确要字符指针，所以写：
+
+```cpp
+std::from_chars(
+    text.data(),
+    text.data() + text.size(),
+    value);
+```
+
+不要把 `data() + size()` 理解成“字符串结尾的 `'\0'`”。`from_chars` 只按你给它的 `[first, last)` 范围读取，它不依赖 `'\0'`，也不会越过 `last`。这正是它适合 parser 的原因：你可以让它只解析一段明确边界的 bytes。
 
 ---
 
