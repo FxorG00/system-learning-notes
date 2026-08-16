@@ -1439,6 +1439,8 @@ Day3 daily 相对首次 Git baseline `d2f4824` 的变化已逐块检阅。除 Co
 
 Day3 保留的非阻塞代码建议：当前 PASS 只检查 adjacent duplicates，后续组件测试应同时检查 `size == N`、每个 sorted ID 等于期望值、counts 和最终 queue state，并让 FAIL 影响 exit code；删除重复 `<thread>` include，避免为大 N 打印全部 IDs。无需为这些工程增强延迟进入 Day4。
 
+2026-08-16 进入 Week7 Day4 前，用户明确反馈 class template 语法几乎没有实际使用经验，并授权扩写 `day4.md`。Day4 已在 Part 1 末尾、教程主体使用 `BlockingQueue<T>` 前新增 class-template 第一层前置：从重复 typed classes 的问题出发，解释 `template <typename T>`、parameter/argument、concrete type、compile-time instantiation 与 runtime construction、class 内外 member definition、CTAD 边界、header-only translation-unit 原因、T 的 operation requirements 和常见错误。示例使用独立 `Box<T>`，不泄露 BlockingQueue 练习实现；复杂模板元编程继续后置。Day4 仍未学习/验收，真实进度不变。
+
 Day2 暴露的可复用教程/验收经验：并发练习的 fixed tests 不能只走 happy path；凡是会写 shared state 的成功、失败、early-return 路径都要有定向并发测试。教程要求的每条 invariant 都应进入 executable assertion/check，且失败必须反映到返回值或 exit code；只输出 `PASS`、循环程序 50 次或最终 sum 相等，都不能单独证明测试通过。
 
 本次 `week7/day2/day2.md` 与 `day2_note.md` 在 review 时仍为 untracked，Git 中没有首次生成 baseline；只能确认 daily 从 2026-08-09 创建后于 2026-08-15 被修改，无法可靠逐块还原用户增补。今后提前生成的 daily 必须在生成当轮立即按 9.12 提交并 push，之后验收才能准确提炼用户修改带来的教学经验；本次不伪造 diff 结论。
@@ -2665,6 +2667,10 @@ Week7 第二轮资料审计：
 Week7 Day3 实际学习反馈：
     condition_variable 的 predicate overload 只给 signature 和结论仍可能不够。若用户卡在 lost wakeup，应把 `cv.wait(lock, predicate)` 展开成语义上的 `while (!predicate) wait(lock)`，并明确“释放 mutex 与进入等待之间不留下普通代码窗口”，同时说明醒来后先重新获得 mutex、再检查 predicate。
     unlock-before-notify 的教学应把真实顺序写完整：先在锁内修改 predicate state，再 unlock，再 notify；这样 waiter 被唤醒时 mutex 已可能可用。随后保留 lifetime 例外，避免把该顺序升级成脱离 ownership 的绝对口诀。
+
+Week7 Day4 template 前置反馈：
+    不能因为用户已经学过普通 class、vector 和 initializer list，就默认其熟悉 class template。第一次把 template 作为独立练习骨架时，应先用与主练习无关的最小类型示例讲清“为什么需要 -> declaration syntax -> 使用语法 -> 编译期实例化 -> header/translation unit -> T 的操作要求 -> 常见错误”，再进入主组件。
+    必须主动区分 template parameter `T`、template argument `int`、concrete type `BlockingQueue<int>`、object 和 runtime constructor argument；也要区分 compiler 实例化具体 class code 与 runtime constructor 创建 object。复杂 specialization/SFINAE/concepts 不随基础语法一起展开。
 ```
 
 ### 9.11 发布前自检清单

@@ -166,6 +166,431 @@ if (!queue.empty()) queue.pop()
 
 ---
 
+## 2.8 class template 前置：`BlockingQueue<T>` 里的 `T` 到底是什么
+
+你目前对 template 使用不多，所以这里不直接把：
+
+```cpp
+template <typename T>
+class BlockingQueue;
+```
+
+当作已经熟悉的语法。先从它解决的问题开始。
+
+### 2.8.1 没有 template 时会发生什么
+
+假设先写一个只能保存 `int` 的 class：
+
+```cpp
+class IntBox {
+public:
+    explicit IntBox(int value) : value_(value) {}
+
+    int get() const {
+        return value_;
+    }
+
+private:
+    int value_;
+};
+```
+
+如果还需要保存 `std::string`，可以再写一个 `StringBox`，但两个 class 的结构几乎相同，只是类型不同：
+
+```text
+IntBox       里面写 int
+StringBox    里面写 std::string
+```
+
+继续为 `double`、自定义 `Task` 重复 class，维护成本会越来越高。
+
+class template 解决的是：
+
+```text
+class 的结构和 algorithm 相同
+只有某些 type 需要由使用者决定
+```
+
+你可以把它理解为“生成一族具体 class 的编译期蓝图”。
+
+---
+
+### 2.8.2 最小 class template 语法
+
+```cpp
+#include <utility>
+
+template <typename T>
+class Box {
+public:
+    explicit Box(T value) : value_(std::move(value)) {}
+
+    const T& get() const {
+        return value_;
+    }
+
+private:
+    T value_;
+};
+```
+
+逐项看：
+
+```text
+template
+    告诉 compiler：接下来的 declaration 是一个 template。
+
+<typename T>
+    template parameter list；这里声明一个 type parameter，名字叫 T。
+
+typename
+    这里表示“后面的 parameter 代表一个 type”，不是普通 value。
+
+T
+    由我们起的 placeholder name。可以改名为 ValueType，但惯例常写 T。
+
+class Box
+    Box 现在不是单独一个完整 concrete type，而是一个 class template。
+```
+
+在 template parameter list 中，下面两种写法等价：
+
+```cpp
+template <typename T>
+class Box;
+
+template <class T>
+class Box;
+```
+
+今天推荐 `typename T`，因为它更直接表达“T 是一个类型参数”。`typename` 在 dependent name 等其他场景还有额外规则，当前不展开。
+
+---
+
+### 2.8.3 `T` 能出现在哪里
+
+在这个 template declaration 的作用域中，`T` 可以像一个类型名一样使用：
+
+```cpp
+T value_;                 // member type
+explicit Box(T value);    // parameter type
+const T& get() const;     // return type 的组成部分
+```
+
+但要区分：
+
+```text
+T 是 type placeholder
+value_ 是一个 object
+```
+
+`T` 自己不占用一块运行时内存，也不是“存着类型信息的变量”。它在 compiler 生成具体 class 时被一个实际 type 替换。
+
+---
+
+### 2.8.4 怎样使用：template argument 与 concrete type
+
+```cpp
+#include <string>
+
+Box<int> number(42);
+Box<std::string> text("hello");
+```
+
+这里：
+
+```text
+T                         template parameter
+int / std::string         template arguments
+Box<int>                  一个具体 class type
+Box<std::string>          另一个具体 class type
+number / text             各自类型的 objects
+```
+
+`Box<int>` 和 `Box<std::string>` 是不同类型，不能因为它们来自同一个 template 就随意互相赋值：
+
+```cpp
+Box<int> a(1);
+Box<std::string> b("x");
+
+// a = b;  // type mismatch
+```
+
+这不是 Java/C# 风格的运行时“一个 Box 里随时放任意类型”。每个 object 的 `T` 在 compile time 已经确定：
+
+```text
+Box<int> object 的 value_ 永远是 int
+Box<std::string> object 的 value_ 永远是 std::string
+```
+
+---
+
+### 2.8.5 compiler 什么时候生成具体代码
+
+当 source 中真正使用：
+
+```cpp
+Box<int> number(42);
+```
+
+compiler 会根据需要实例化 `Box<int>`。第一层可以理解为：
+
+```text
+读取 Box<T> template definition
+-> 看到使用 Box<int>
+-> 用 int 代入本次需要的 T
+-> type-check Box<int> 的相关 members
+-> 为实际使用的 members 生成 code
+```
+
+这个过程叫：
+
+```text
+instantiation：实例化
+specialization：由某组 template arguments 得到的具体版本
+```
+
+不要把“template 实例化”和“构造 object”混成一件事：
+
+```text
+template instantiation
+    compiler 形成 Box<int> 这个具体 class/method code，是 compile-time 概念。
+
+object construction
+    程序创建 number object 并执行 constructor，是 object lifetime 概念。
+```
+
+它们的关系是：先要有可用的具体 class code，运行时才能构造对应 object。
+
+```mermaid
+flowchart LR
+    A["Box<T> template definition"] --> B["source uses Box<int>"]
+    B --> C["compiler instantiates Box<int>"]
+    C --> D["generated concrete member code"]
+    D --> E["runtime constructs number object"]
+```
+
+---
+
+### 2.8.6 为什么常写 `BlockingQueue<int>`，不能只写 `BlockingQueue`
+
+今天的 queue template 有一个 type parameter `T`。因此使用时要给出 element type：
+
+```cpp
+BlockingQueue<int> queue(4);
+```
+
+拆开看：
+
+```text
+BlockingQueue<int>    object 的完整 type
+queue                 variable name
+(4)                   调用 constructor，4 是 runtime capacity
+```
+
+这里有两个完全不同维度：
+
+```text
+int：compile-time template argument，决定 element type
+4：runtime constructor argument，决定这个 object 的 capacity
+```
+
+不要写成：
+
+```cpp
+// BlockingQueue queue(4);
+```
+
+C++17 某些 class template 可以使用 class template argument deduction，也就是 CTAD，让 compiler 从 constructor arguments 推导 template arguments。但这里的 `4` 只能说明 capacity，无法说明 queue element 是 `int`、`Task` 还是其他 type，所以今天必须显式写 `BlockingQueue<int>`。
+
+---
+
+### 2.8.7 template class 内部与外部定义 method 的语法差异
+
+如果 method definition 写在 class body 内，可以直接使用 `T`：
+
+```cpp
+template <typename T>
+class Box {
+public:
+    void set(T value) {
+        value_ = std::move(value);
+    }
+
+private:
+    T value_{};
+};
+```
+
+如果把 definition 写到 class body 外，即使仍放在同一个 header 中，也要重新写 template parameter，并指出这是 `Box<T>` 的 member：
+
+```cpp
+template <typename T>
+class Box {
+public:
+    void set(T value);
+
+private:
+    T value_{};
+};
+
+template <typename T>
+void Box<T>::set(T value) {
+    value_ = std::move(value);
+}
+```
+
+关键语法：
+
+```text
+template <typename T>
+    让这份 out-of-class definition 也认识 T。
+
+Box<T>::set
+    说明 set 属于由 T 参数化的 Box<T>，不是某个普通 Box class。
+```
+
+对于 constructor，class body 内写：
+
+```cpp
+explicit Box(T value);
+```
+
+class body 外写：
+
+```cpp
+template <typename T>
+Box<T>::Box(T value) : value_(std::move(value)) {}
+```
+
+Day4 可以把 methods 都定义在 class body 内，先减少语法噪声；但你需要能看懂上面的 class 外写法。
+
+---
+
+### 2.8.8 为什么 template definition 通常必须让使用点看见
+
+普通 non-template function 常见组织是：
+
+```text
+header 放 declaration
+.cpp 放 definition
+其他 .cpp 只 include header
+linker 最后找到已经编译好的 definition
+```
+
+template 多了一步：使用 `BlockingQueue<int>` 的 translation unit 需要根据 definition 实例化具体 members。若 `blocking_queue_test.cpp` 只看见 declaration，看不见 method definitions，它通常无法为 `BlockingQueue<int>` 生成需要的 code。
+
+今天的实际编译链：
+
+```mermaid
+flowchart TD
+    A["blocking_queue_test.cpp"] --> B["#include blocking_queue.hpp"]
+    B --> C["preprocessor forms one translation unit"]
+    C --> D["compiler sees BlockingQueue<T> definitions"]
+    D --> E["source uses BlockingQueue<int>"]
+    E --> F["compiler instantiates needed int members"]
+    F --> G["object file"]
+    G --> H["link executable"]
+```
+
+所以今天使用：
+
+```text
+blocking_queue.hpp
+    template declaration + method definitions
+
+blocking_queue_test.cpp
+    include header + tests
+```
+
+若把所有 template definitions 单独藏在普通 `.cpp`，常见结果是在 link 阶段出现 `undefined reference`，因为需要的具体 specialization 没有在正确位置生成。
+
+显式实例化、extern template、分离大型 template implementation 等方案以后再学。今天 header-only 是最直接、最容易验证的组织方式。
+
+---
+
+### 2.8.9 template 并不保证任意 `T` 都能工作
+
+template definition 中对 `T` 做了什么，就对实际 template argument 提出了什么要求。
+
+例如：
+
+```cpp
+value_ = std::move(value);
+```
+
+意味着对应类型需要支持这里要求的 assignment。对于 Day4 的 BlockingQueue：
+
+```text
+push(T value)
+    涉及把 caller value copy/move 到 parameter，再把 parameter 放进 container。
+
+T pop()
+    涉及把 front element copy/move 到返回 object。
+```
+
+如果某个 `T` 不支持被当前 implementation 使用的 operation，通常会在实例化相关 method 时得到 template compile error。错误信息可能很长，但第一步仍是找：
+
+```text
+你实例化了哪个 concrete type？
+哪个 user-code operation 要求 T 支持什么？
+```
+
+今天固定使用 `BlockingQueue<int>` 完成主练习，不要求立刻解决 move-only type、copy/move 抛异常或 concepts/constraints。
+
+---
+
+### 2.8.10 Day4 常见 template 语法错误
+
+```text
+错误 1：使用时漏掉 template argument
+    BlockingQueue queue(4);
+
+修正：
+    BlockingQueue<int> queue(4);
+```
+
+```text
+错误 2：class 外定义 member 时漏掉 template declaration
+    void Box<T>::set(T value) { ... }
+
+修正：
+    template <typename T>
+    void Box<T>::set(T value) { ... }
+```
+
+```text
+错误 3：把 definition 只放进普通 .cpp，使用点只看见 declaration
+
+现象：
+    source 可能通过部分 compile，但 link 出现 undefined reference
+
+当前修法：
+    template method definitions 放回 blocking_queue.hpp
+```
+
+```text
+错误 4：把 template 当成 runtime 任意类型 container
+
+澄清：
+    BlockingQueue<int> 与 BlockingQueue<std::string> 是不同 concrete types；
+    一个 BlockingQueue<int> object 只保存 int。
+```
+
+学完这一节，今天只要求你能回答：
+
+```text
+T 是什么？
+int 在 BlockingQueue<int> 中是什么？
+BlockingQueue<int> 和 BlockingQueue<std::string> 是否同一类型？
+为什么 4 是 constructor argument，不是 template argument？
+为什么 method definitions 今天放在 header？
+```
+
+复杂 template metaprogramming、partial specialization、variadic templates、SFINAE 和 concepts 继续后置。
+
+---
+
 # Part 2：教程主体
 
 # 教程开始
@@ -326,7 +751,7 @@ mutex 和 condition variables 怎样复制？
 
 ## 8. template 为什么通常放在 header
 
-compiler 为具体 `T` 生成 template specialization 时，需要看到 template definition。
+前面的 2.8 已经建立完整编译链。这里把它压缩映射回今天的组件：compiler 为具体 `T` 生成 template specialization 时，需要看到 template definition。
 
 例如 test 中使用：
 
