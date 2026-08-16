@@ -880,6 +880,162 @@ g++ -std=c++17 -Wall -Wextra -g -O1 -pthread \
 ./producer_consumer_tsan
 ```
 
+### 17.1 TSan 到底在做什么
+
+`TSan` 是 `ThreadSanitizer` 的简称：
+
+```text
+Thread：线程
+Sanitizer：运行时错误检测工具
+```
+
+它不是把 source code 静态看一遍，而是分成两部分工作：
+
+```text
+compile time：compiler 给 memory access 和 synchronization operations 插入检查代码
+run time：TSan runtime 记录本次执行中不同 threads 的访问与同步关系
+发现冲突：把 report 写到 stderr，并给出两次冲突访问的 stack traces
+```
+
+今天先用这个判断模型：
+
+```text
+两个 threads 访问同一个 memory location
++ 至少一个 access 是 write
++ 两次 access 之间没有 TSan 能识别的 synchronization ordering
+= TSan 可能报告 data race
+```
+
+例如 producer 在没有 queue mutex 的情况下执行 `queue.push(...)`，consumer 同时执行 `queue.pop()`。即使程序这一次打印结果看起来正确，这两个 operations 仍可能并发读写 queue 的内部 state。
+
+TSan 官方实现由 compiler instrumentation 和 runtime library 组成；`-fsanitize=thread` 必须同时参与 compile 和 link。参考：[GCC instrumentation options](https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html)、[Clang ThreadSanitizer documentation](https://clang.llvm.org/docs/ThreadSanitizer.html)。
+
+---
+
+### 17.2 这些编译参数分别有什么用
+
+```text
+-fsanitize=thread
+    开启 TSan instrumentation，并链接 TSan runtime。
+
+-g
+    保留 debug information，使 report 尽量显示 source file、function 和 line number。
+
+-O1
+    保留一定优化，也是 sanitizer 常用验证档；不要把这个 binary 的 timing 当性能结果。
+
+-fno-omit-frame-pointer
+    尽量保留 stack frame 链，帮助生成更完整的 stack trace。
+
+-pthread
+    为 std::thread / pthread 提供正确的 compile/link 设置；它不是 TSan 开关。
+```
+
+今天建议第一次定位时这样运行：
+
+```bash
+TSAN_OPTIONS="halt_on_error=1" ./producer_consumer_tsan
+echo $?
+```
+
+`halt_on_error=1` 表示发现第一份 report 后停止，避免大量相似报告淹没第一条因果链。非零 exit status 或 `WARNING: ThreadSanitizer` 都表示本次 TSan run 不能算通过。
+
+---
+
+### 17.3 一份 TSan report 应该怎样读
+
+真实行号会根据你的实现变化，但结构通常近似：
+
+```text
+WARNING: ThreadSanitizer: data race
+
+Read of size ... by thread T2:
+  #0 consumer ... producer_consumer.cpp:LINE
+
+Previous write of size ... by thread T1:
+  #0 producer ... producer_consumer.cpp:LINE
+
+Location is ...
+
+Thread T2 created by main thread at:
+  #0 ...
+
+SUMMARY: ThreadSanitizer: data race ...
+```
+
+不要从上到下逐字翻译。按下面顺序抓证据：
+
+```text
+1. 冲突类型：read/write，还是 write/write？access size 是多少？
+2. 当前访问：第一段 stack 中，第一条属于自己 source 的 frame 在哪一行？
+3. previous access：另一段 stack 中，另一个 thread 在哪一行访问同一位置？
+4. shared object：这个 address 属于 queue、counter、flag，还是 test result container？
+5. synchronization contract：这两个位置本来应该共同持有哪一把 mutex，或通过什么 atomic operation 访问？
+6. path coverage：为什么当前 test 能让两条路径同时执行？修复后用同一 case 再跑一次。
+```
+
+`Thread T2 created by ...` 不是说创建 thread 的那一行就是 bug。它只是帮助你把 `T2` 映射回 `main` 中哪个 worker；真正冲突位置优先看两个 access stacks。
+
+也不要一看到 STL frame 就说“vector/queue 有 bug”。沿 stack 向下找第一条属于你代码的 frame，通常是你在没有正确同步时调用了 container operation。
+
+---
+
+### 17.4 Day3 应该怎样让 TSan 真正覆盖 producer-consumer
+
+只运行一个几乎不重叠的 producer 和 consumer，证据很弱。今天至少让 test 产生这些执行机会：
+
+```text
+capacity 很小，例如 1 或 2
+N 足够大，使 push/pop 多次交错
+producer 快、consumer 慢：覆盖 full -> producer wait
+producer 慢、consumer 快：覆盖 empty -> consumer wait
+最终 result/counter 的读写也经过锁或只发生在 join 后
+```
+
+如果 report 指向：
+
+```text
+queue/container access
+    检查 push/pop 和 predicate check 是否使用同一 queue mutex。
+
+produced/consumed counter 或 result vector
+    先检查 test harness 自己；被测 queue 可能没错，测试代码也可以有 race。
+
+ready/done 等辅助 flag
+    普通 bool 也属于 shared memory，不能因为它“只是测试标记”就无锁访问。
+```
+
+---
+
+### 17.5 TSan 没有报告，能得出什么结论
+
+准确表达是：
+
+```text
+本次 TSan-instrumented execution 没有检测到 data race report。
+```
+
+不能扩大成：
+
+```text
+程序已经被证明没有 race
+没有 lost wakeup
+不会 deadlock / hang
+predicate 一定正确
+produced IDs 一定无丢失、无重复
+性能一定好
+```
+
+TSan 只观察本次真正执行到的 paths/interleavings。它主要发现 memory-access synchronization 问题，不替你证明业务 invariant 或等待协议。因此 Day3 的证据组合仍然是：
+
+```text
+TSan：查执行到的 data races
+结果 invariant：查 IDs、数量和 capacity contract
+不同速度/小 capacity cases：覆盖 empty/full paths
+重复运行：扩大 schedule 样本
+程序能 join 并退出：检查没有永久 waiter
+```
+
 重复：
 
 ```bash

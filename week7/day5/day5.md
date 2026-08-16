@@ -1030,6 +1030,57 @@ g++ -std=c++17 -Wall -Wextra -g -O1 -pthread \
 ./blocking_queue_test_tsan
 ```
 
+### 20.1 Day5 要用 TSan 检查哪些 lifecycle paths
+
+Day5 新增的风险不是普通 push/pop 本身，而是 `close()` 与其他 operations 并发：
+
+```text
+close writes closed state
+push/pop read closed state and queue state
+blocked waiters 醒来后重新检查 predicate
+test threads 记录 operation 是否返回
+```
+
+因此不能只跑“先完成全部 work，再由 main close”的轻松路径。TSan case 至少要实际覆盖：
+
+```text
+consumer blocked on empty -> another thread close
+producer blocked on full -> another thread close
+queue has data -> close 与 consumers drain 并发
+multiple blocked waiters -> close + notify_all
+close 与 push 尽量同时发生，结果按 linearization order 验证
+```
+
+分析 report 时先分类：
+
+```text
+report points to closed_
+    检查所有 reads/writes 是否在同一 queue mutex 下，而不是只给 close 加锁。
+
+report points to container internals
+    检查 close/drain path 是否绕开了 push/pop 的 locking discipline。
+
+report points to returned/counter/test flag
+    检查 test harness；记录“某 waiter 已返回”的 flag 也需要 synchronization。
+```
+
+推荐先停在第一份报告：
+
+```bash
+TSAN_OPTIONS="halt_on_error=1" ./blocking_queue_test_tsan
+echo $?
+```
+
+这里必须把 TSan 和 hang 检查分开：
+
+```text
+TSan 能报告未同步 memory access
+TSan 不保证发现 lost wakeup
+TSan 没有输出但程序永久不返回，仍然是失败
+```
+
+TSan instrumentation 会显著减慢程序，因此 timeout 要比普通 build 宽松；但不能因为它慢就把真正的永久等待都解释成工具开销。先确认当前 case 的 expected terminal state，再观察所有 workers 是否 join。
+
 ```bash
 for i in $(seq 1 100); do
   ./blocking_queue_test || exit 1

@@ -543,6 +543,39 @@ g++ -std=c++17 -Wall -Wextra -g -O1 -pthread \
 
 只用它查 race，不记录 timing 排名。
 
+运行时仍按 Day3 的 report 阅读顺序：
+
+```bash
+TSAN_OPTIONS="halt_on_error=1" ./contention_false_sharing_tsan
+echo $?
+```
+
+Day7 要特别区分三种结果：
+
+```text
+TSan reports data race
+    correctness 失败；先修 shared memory access，不讨论性能排名。
+
+TSan clean，但 expected != actual
+    可能是 logical race、work partition、overflow 或测试错误；TSan 不替代结果检查。
+
+TSan clean，expected == actual，但运行较慢
+    才进入 contention / false sharing / measurement 分析。
+```
+
+false sharing 本身通常不会产生 TSan report：不同 threads 可以合法修改不同 objects，只是这些 objects 恰好落在同一 cache line，引发 coherence traffic。它是 performance 问题，不是 C++ data race。
+
+因此 Day7 的顺序必须是：
+
+```text
+correctness build 检查结果
+-> TSan build 检查执行到的 memory races
+-> optimized benchmark 多轮测量 timing
+-> 地址/layout 与可选硬件工具支持性能解释
+```
+
+若把 TSan timing 拿去比较 shared mutex、atomic 和 local variants，结论无效。TSan 会插入大量 bookkeeping，官方文档也明确说明它会带来显著运行时间与内存开销；该 binary 的职责只是找 race。
+
 ### Optimized benchmark
 
 ```bash

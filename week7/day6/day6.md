@@ -582,6 +582,44 @@ CAS loop 条件错误
 
 因此仍需 trusted single-thread result 和 invariant check。
 
+TSan 能识别标准 mutex 和 atomic operations 建立的同步关系，所以：
+
+```text
+两个 threads 都用 atomic operations 访问同一个 atomic object
+    通常不会产生普通 non-atomic data-race report。
+
+一个 thread 用 atomic access，另一个通过错误方式访问同一 storage
+    仍可能被报告为冲突。
+
+atomic load + store 造成 lost update
+    可能完全 TSan clean，因为每次单独 access 都是 atomic；错误在 algorithm contract。
+```
+
+这使 Day6 成为理解 TSan 证据边界的最好反例：
+
+```text
+TSan clean
+!=
+atomic algorithm correct
+```
+
+今天若 TSan report 指向 `atomic_counter.cpp` 或 `cas_max.cpp`，按以下顺序查：
+
+```text
+1. 被报告的 location 真的是 atomic object，还是旁边的普通 expected/result/test flag？
+2. 两个 user-code frames 分别执行 atomic access、ordinary access 还是 container access？
+3. main 是否在 join 前读取 worker 正在修改的普通 result？
+4. CAS loop 的 expected/desired 是否为 thread-local，而不是被多个 workers 共享？
+```
+
+即使没有 report，也必须分别检查：
+
+```text
+atomic counter == worker_count * increments
+cas_max == std::max_element trusted result
+negative / duplicate / worker-count boundaries
+```
+
 ---
 
 ### 16.1 atomic `load` + `store` 仍可能丢更新
@@ -1003,7 +1041,12 @@ g++ -std=c++17 -Wall -Wextra -g -O1 -pthread \
 g++ -std=c++17 -Wall -Wextra -g -O1 -pthread \
   -fsanitize=thread -fno-omit-frame-pointer \
   cas_max.cpp -o cas_max_tsan
+
+TSAN_OPTIONS="halt_on_error=1" ./atomic_counter_tsan
+TSAN_OPTIONS="halt_on_error=1" ./cas_max_tsan
 ```
+
+看到 `exit 0 + no report` 时，只记录“本次执行未检测到 data race”。随后仍要读取两个程序自己的 PASS/FAIL 和 trusted-result comparison；不能用 TSan exit status 替代算法结果。
 
 ---
 

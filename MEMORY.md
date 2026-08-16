@@ -1412,6 +1412,33 @@ main 恢复 valid normal case，并用 test() 结果决定进程退出状态；�
 
 Day2 核心已通过，可以进入 Day3。保留两个非阻塞工程建议：三个 mutex 对当前小型 Ledger 偏复杂，未来可优先评估一把 mutex 保护完整 Ledger state；长期项目应把 fixed regression cases 保存下来。无需为这两点延迟进度。
 
+2026-08-16 用户明确授权修改尚未学习的 Week7 Day3~Day7，在已有 TSan compile/run commands 旁补充“为什么测、怎样读、怎样设计覆盖、证据边界”。本轮不回写已完成的 Day1/Day2，也不改变 Day3 尚未学习的真实进度：
+
+```text
+Day3：完整建立 ThreadSanitizer、instrumentation/runtime、flags、report anatomy、六步阅读法与 no-report 边界
+Day4：template/header/STL stack frame、被测 class 与 test harness race 的区分、MPMC targeted paths
+Day5：close 与 blocked producer/consumer lifecycle paths，明确 TSan 不证明 no lost-wakeup / no hang
+Day6：atomic access 可 TSan clean 但 RMW/CAS/invariant 仍错，要求与 trusted result 对照
+Day7：correctness -> TSan -> optimized benchmark 分层；false sharing 可以 race-free，TSan timing 不用于性能结论
+```
+
+这些补充只增强工具理解和验证能力，不提供五天练习的完整实现，也不增加新的学习分支。
+
+Week7 Day3 于 2026-08-16 完成验收，最终评分 `90/100`，正式通过：
+
+```text
+producer 在 queue mutex 下等待 not_full、push、更新 produced_count，解锁后 notify not_empty
+consumer 在同一 mutex 下等待 not_empty、pop、更新 consumed_count，解锁后 notify not_full；consumed vector 由单 consumer 独占写，main join 后读取
+capacity=1/N=1、capacity=3/N=10000、capacity>N、N=0 均运行 PASS、exit 0；capacity=1/N=1000 连续 50 次通过
+g++ -std=c++17 -Wall -Wextra -g -pthread 零 warning；N=10000 的 TSan run exit 0、stderr 0 bytes
+note 不机械回答 8 道题，但完整手写 producer/consumer 流程；问题 1~7 的核心由 note、daily 用户增补和代码共同覆盖。note 第 10 行把 producer 条件写成 queue not empty，属于笔误；相邻 not_full_cv/predicate 与实际代码均正确，应改为 queue not full，不阻塞通过
+问题 8 未显式解释；当前固定 N 是为了先验收 two-predicate normal lifecycle，close/shutdown 按计划留到 Day5，不阻塞 Day3
+```
+
+Day3 daily 相对首次 Git baseline `d2f4824` 的变化已逐块检阅。除 Codex 经用户授权新增的 TSan 教学外，用户主动增加两处说明：把 `cv.wait(lock, predicate)` 展开为语义上的 while/recheck、atomic unlock-and-wait、wake/relock；把 unlock-before-notify 中 mutex 已先释放的因果关系加粗写清。两处技术上均正确，且保留 object-lifetime 例外，没有误写成绝对规则。
+
+Day3 保留的非阻塞代码建议：当前 PASS 只检查 adjacent duplicates，后续组件测试应同时检查 `size == N`、每个 sorted ID 等于期望值、counts 和最终 queue state，并让 FAIL 影响 exit code；删除重复 `<thread>` include，避免为大 N 打印全部 IDs。无需为这些工程增强延迟进入 Day4。
+
 Day2 暴露的可复用教程/验收经验：并发练习的 fixed tests 不能只走 happy path；凡是会写 shared state 的成功、失败、early-return 路径都要有定向并发测试。教程要求的每条 invariant 都应进入 executable assertion/check，且失败必须反映到返回值或 exit code；只输出 `PASS`、循环程序 50 次或最终 sum 相等，都不能单独证明测试通过。
 
 本次 `week7/day2/day2.md` 与 `day2_note.md` 在 review 时仍为 untracked，Git 中没有首次生成 baseline；只能确认 daily 从 2026-08-09 创建后于 2026-08-15 被修改，无法可靠逐块还原用户增补。今后提前生成的 daily 必须在生成当轮立即按 9.12 提交并 push，之后验收才能准确提炼用户修改带来的教学经验；本次不伪造 diff 结论。
@@ -2497,6 +2524,38 @@ runtime error / hang：程序已经生成并开始执行，检查 ownership、�
 
 纯命令观察也必须实际运行验证，不能凭记忆猜输出。
 
+Sanitizer 教学不能只给一条 compile command 和一句“无 report 即通过”。首次引入某个 sanitizer 时，daily 必须讲清：
+
+```text
+英文名称与检测目标
+compiler instrumentation 与 runtime library 的基本工作方式
+每个新增编译参数的作用
+一份 report 的字段结构和阅读顺序
+怎样设计 targeted case 让危险路径真正并发执行
+report 出现后如何映射到 shared object、两条 access paths 和 synchronization contract
+无 report 的严格证据边界
+它与业务 invariant、边界测试、压力运行、hang/timeout、benchmark 分别负责什么
+```
+
+后续 daily 不机械复制完整入门，而应复用基础模型并增加当天专属分析。例如：
+
+```text
+condition_variable / queue：TSan 查 memory race，不证明 predicate、lost wakeup 或无 hang
+class template：STL/header frame 要沿 stack 找到第一条 user-code frame，并同时检查 test harness race
+close lifecycle：必须覆盖 close 与 blocked producer/consumer 的并发 paths
+atomic：TSan clean 不证明 load+store RMW、CAS loop 或多 atomic invariant 正确
+performance：TSan binary 不能用于 timing；false sharing 可以 race-free 但仍然很慢
+```
+
+TSan 推荐教学运行形式可以使用：
+
+```bash
+TSAN_OPTIONS="halt_on_error=1" ./program_tsan
+echo $?
+```
+
+但教程必须解释：`halt_on_error=1` 只是便于先分析第一份报告；`exit 0 + no report` 只表示本次已执行路径没有被 TSan 检测到 data race，不能写成程序已被证明正确。TSan、ASan、UBSan 等工具各自检测范围不同，不把一个 sanitizer 的 clean result 扩大成全部内存与并发正确性。
+
 ### 9.8 课程与外部资料的组织规则
 
 课程型 daily 除了遵守第 5 节 MIT 6.S081 规则，还要做到：
@@ -2602,6 +2661,10 @@ Week7 第二轮资料审计：
     `operation failed` 只说明 operation 没有生效，不自动说明 input ownership 已归还。对于 `bool push(T value)`，parameter 已经 copy/move 构造；失败返回后 parameter 析构，rvalue caller 可能已经 moved-from。教程必须分别说明业务状态与 argument ownership。
     performance 教程要区分“符合机制的现象”和“定位根因的证据”。elapsed time + address layout 可以支持 false-sharing hypothesis，普通 `perf stat` 不能单独定位具体 cache line；`perf c2c`、VTune Memory Access 等属于更强但可选的证据。
     标准标记为 C++17 的 API 仍要检查当前 compiler + standard library implementation availability。若当前 GCC/libstdc++ 不支持，给兼容 fallback 或明确后置，不能为了接口名升级环境打断主线。
+
+Week7 Day3 实际学习反馈：
+    condition_variable 的 predicate overload 只给 signature 和结论仍可能不够。若用户卡在 lost wakeup，应把 `cv.wait(lock, predicate)` 展开成语义上的 `while (!predicate) wait(lock)`，并明确“释放 mutex 与进入等待之间不留下普通代码窗口”，同时说明醒来后先重新获得 mutex、再检查 predicate。
+    unlock-before-notify 的教学应把真实顺序写完整：先在锁内修改 predicate state，再 unlock，再 notify；这样 waiter 被唤醒时 mutex 已可能可用。随后保留 lifetime 例外，避免把该顺序升级成脱离 ownership 的绝对口诀。
 ```
 
 ### 9.11 发布前自检清单
@@ -2825,7 +2888,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6 均已正式完成，Week7 已正式开始。Week7 Day1 最终评分 `91/100`，Week7 Day2 最终评分 `92/100`，均正式通过。Day2 已验收 shared invariant、完整 mutex scope、counter synchronization、snapshot ownership、成功/失败并发 TSan、int64 negative boundary 和 executable test result；当前下一步是 Week7 Day3。所有已生成 daily 的后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
+当前位置：Week5、Week6 均已正式完成，Week7 已正式开始。Week7 Day1 最终 `91/100`、Day2 最终 `92/100`、Day3 最终 `90/100`，均正式通过。Day3 已验收 one-producer/one-consumer 的 not_full/not_empty predicates、wait/modify/notify 主体、fixed-N termination、join、主要固定 cases、50 次重复与 TSan；当前下一步是 Week7 Day4 `BlockingQueue<T>` 组件封装。所有已生成 daily 的后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
 
 Day5 已验收：
 

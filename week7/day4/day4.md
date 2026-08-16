@@ -844,6 +844,48 @@ g++ -std=c++17 -Wall -Wextra -g -O1 -pthread \
 ./blocking_queue_test_tsan
 ```
 
+### 19.1 Day4 不再只看“TSan 没输出”
+
+Day3 已讲过 TSan 的基本模型与 report 结构。今天把它应用到一个 class template：
+
+```text
+TSan report 可能显示 libstdc++ queue/deque frame
+-> 继续沿 stack 找 blocking_queue.hpp 中第一个属于自己的 frame
+-> 判断它来自 push、pop、size/empty getter，还是 test bookkeeping
+```
+
+因为 method definitions 在 `blocking_queue.hpp`，report 指向 header 行号是正常的，不代表“header 不能调试”。
+
+今天读 report 时建立一张口头 matrix：
+
+```text
+shared location / object        writer               possible reader/writer
+container internal state       push                  pop / observer method
+queue size / empty state        push / pop            predicate / getter
+test result vector              consumers             main / other consumers
+test completion flag            worker                main / watcher
+```
+
+若同一行只在一个轻松 case 中没有 report，还不够。固定测试矩阵要让：
+
+```text
+multiple producers 同时进入 push paths
+multiple consumers 同时进入 pop paths
+capacity=1 频繁触发 not_full/not_empty
+result collection 本身采用独立 slots、mutex 或 thread-local 后 join 汇总
+```
+
+推荐运行：
+
+```bash
+TSAN_OPTIONS="halt_on_error=1" ./blocking_queue_test_tsan
+echo $?
+```
+
+报告出现时先修第一条 user-code conflict，再重跑同一 case；不要立刻加 `sleep`，也不要用“给所有地方随便加锁”掩盖 ownership 和 predicate 边界。
+
+TSan clean 仍不证明 FIFO、exactly-once、capacity 不超限或所有 workers 能结束。这些必须由 fixed tests 的 ID 集合、最大 observed size、join completion 等业务证据负责。
+
 重复运行：
 
 ```bash
