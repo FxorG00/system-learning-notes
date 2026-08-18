@@ -214,6 +214,12 @@ thermal throttling
 
 ---
 
+### 2.12 synchronization
+
+synchronization：协调多个 threads 对 shared state 的访问顺序和可见性，使需要互斥或依赖结果的操作不会无约束地并发交错。
+
+---
+
 # Part 2：教程主体
 
 # 教程开始

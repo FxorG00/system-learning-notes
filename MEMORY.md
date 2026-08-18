@@ -1514,6 +1514,29 @@ Codex 独立 harness 已实际覆盖 blocked consumers/producers、close-with-da
 
 允许通过不等于固定测试不重要。Week8 ThreadPool 复用 BlockingQueue 时，需要借真实 shutdown 场景补回这项能力：测试必须先建立目标状态，错误必须影响 exit code，不能只输出 ok。不要回头重复 Day5 的独立 demo。
 
+Week7 Day6 于 2026-08-18 完成检阅，最终评分 `89/100`，正式通过：
+
+```text
+用户选择不机械填写 day6_note/十道验收题，而是在 day6.md 中主动补充 CAS compare/exchange、success/failure 时 expected 的变化、shared maximum 竞争流程、weak spurious failure、lock-free/wait-free 区别以及 atomic load+store 的插入窗口
+Git diff 已逐块检阅；新增的 shared maximum 例子能够正确说明 failure 后为何必须重新判断 candidate，weak/strong 和 lock-free 的第一层解释整体正确
+atomic_counter.cpp 使用真正的 fetch_add RMW，并与 mutex counter、trusted expected total 对照；1x0、1x10000、4x10000、8x10000 均 PASS
+cas_max.cpp 正确处理 one element、递增/递减、duplicates、all-negative 和 workers > elements；shared maximum 从 input[0] 初始化，各 worker 独占自己的 optional result slot，join 后与单线程 maximum 对照
+两份程序均使用 -std=c++17 -Wall -Wextra -g -pthread 零 warning；固定 cases 单次和连续 100 次通过
+两份程序的 g++ TSan build 均零 warning，运行 exit 0、stderr 0 bytes；本次未检测到 data race，同时业务 PASS 证明没有只拿 TSan 代替算法结果
+```
+
+Day6 保留的非阻塞边界：`cas_max::test` 未拒绝 worker_count==0，会在分片时除零；当前所有规定 cases worker_count>0，不阻塞通过，但可在以后公共 helper 中先验证参数。CAS loop 每次失败后重新 load，因此算法正确，但没有直接复用 compare_exchange 写回 expected 的结果；典型写法可把 expected 放在 loop 外并让失败回写直接驱动下一次判断。atomic_counter/cas_max 有较多复制来的无关 headers，后续工程代码应精简。
+
+Day6 daily 用户增补中有三处表达边界：
+
+```text
+“CAS 能 check 观察到提交之间有没有其他 thread 修改”只在本题 maximum 单调递增、不会 ABA 的约束下成立；通用 CAS 只比较操作当下是否仍等于 expected，不能证明历史上从未变化
+“CAS 失败意味着 shared state 被其他 thread 修改”对 strong mismatch 成立，但 weak 还允许 spurious failure；应结合后面的 weak 章节理解，不能写成通用绝对结论
+cpp code fence 中“中间仍然有窗口给其他 thread 插入。”缺少 //，且“但个加一”应为“但整个加一”；属于文档可编译性/笔误，不影响用户机制得分
+```
+
+可复用 daily 编写经验：CAS 首次教学适合用“两个 threads 提交 maximum”的完整 timeline，因为它能同时解释 old snapshot、expected 的 in/out 语义和失败后重新判断；但示例结论必须标注算法前提，避免把 monotonic maximum 的无 ABA 特性误推广到通用 CAS。所有标为 cpp 的片段即使只插入解释句，也必须使用合法 comment syntax，发布前要检查 fenced code 可编译性。
+
 Day2 暴露的可复用教程/验收经验：并发练习的 fixed tests 不能只走 happy path；凡是会写 shared state 的成功、失败、early-return 路径都要有定向并发测试。教程要求的每条 invariant 都应进入 executable assertion/check，且失败必须反映到返回值或 exit code；只输出 `PASS`、循环程序 50 次或最终 sum 相等，都不能单独证明测试通过。
 
 本次 `week7/day2/day2.md` 与 `day2_note.md` 在 review 时仍为 untracked，Git 中没有首次生成 baseline；只能确认 daily 从 2026-08-09 创建后于 2026-08-15 被修改，无法可靠逐块还原用户增补。今后提前生成的 daily 必须在生成当轮立即按 9.12 提交并 push，之后验收才能准确提炼用户修改带来的教学经验；本次不伪造 diff 结论。
@@ -2967,7 +2990,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6 均已正式完成，Week7 已正式开始。Week7 Day1 最终 `91/100`、Day2 最终 `92/100`、Day3 最终 `90/100`、Day4 最终 `91/100`、Day5 最终 `88/100`，均正式通过。Day5 已验收 close/reject/drain/end-state/idempotent-close 与 owner shutdown 主线；用户明确选择不再精修独立测试 harness，保留的测试设计能力将在 Week8 ThreadPool 真实 shutdown tests 中补回，不重复 Day5 demo。当前下一步是 Week7 Day6 atomic/CAS。所有已生成 daily 的后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
+当前位置：Week5、Week6 均已正式完成，Week7 已正式开始。Week7 Day1 最终 `91/100`、Day2 最终 `92/100`、Day3 最终 `90/100`、Day4 最终 `91/100`、Day5 最终 `88/100`、Day6 最终 `89/100`，均正式通过。Day6 已验收 atomic RMW、fetch_add counter、CAS success/failure、expected 回写、weak spurious failure、monotonic cas_max、mutex/atomic 能力边界与 TSan 证据边界；用户未机械填写验收题，Git diff 中的主动增补与代码共同提供理解证据。当前下一步是 Week7 Day7 contention/false sharing 与本周出口验收。所有已生成 daily 的后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
 
 Day5 已验收：
 
