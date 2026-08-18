@@ -640,6 +640,9 @@ template <typename T>
 class Box {
 public:
     T get() const;
+
+private:
+    T value_{};
 };
 ```
 
@@ -1448,6 +1451,147 @@ queue.push(std::move(name)); // ownership may move; name remains valid but unspe
 
 ---
 
+### 14.3.1 lvalue,rvalue
+
+你记得的“能不能放在赋值左边”是一个早期直觉，但不够准确。
+
+更稳的理解是：
+
+```text
+lvalue：一个有稳定身份的 object 的表达式
+        你可以持续用它的名字找到同一个 object。
+
+rvalue：一个即将被使用、通常不再需要保留原内容的值表达式。
+```
+
+例如：
+
+```cpp
+std::string name = "task-7";
+```
+
+这里：
+
+```cpp
+name
+```
+
+是 lvalue，因为它明确指向那个叫 `name` 的 `std::string` object。它当然可以在赋值左边：
+
+```cpp
+name = "new task";
+```
+
+但也完全可以在右边：
+
+```cpp
+std::string copy(name);
+```
+
+所以“lvalue 能放右边吗？”答案是能。真正区别不是左右位置，而是它有没有可持续识别的 object identity。
+
+---
+
+`std::move` 和这个关系非常直接：
+
+```cpp
+std::move(name)
+```
+
+**不移动任何东西。**
+
+它基本可以理解成：
+
+```cpp
+static_cast<std::string&&>(name)
+```
+
+也就是把 `name` 这个表达式从“普通 lvalue”转换成“可以被当作将要耗用的 rvalue 来对待”的表达式。更精确地说，结果是 `xvalue`，属于 rvalue。
+
+```text
+name
+    -> lvalue：我还把它当作正常 object 使用
+
+std::move(name)
+    -> rvalue/xvalue：后面可以把它的资源转交出去；
+       我接受它之后可能不再保留原内容
+```
+
+真正发生移动的是后续的 move constructor 或 move assignment，不是 `std::move` 本身。
+
+```cpp
+std::string name = "task-7";
+
+std::string a(name);            // 调用 copy constructor
+std::string b(std::move(name)); // 调用 move constructor
+```
+
+第二行之后，`name` 仍然是一个活着、合法的 object；只是它的内容不应再被假设仍为 `"task-7"`。
+
+---
+
+映射回今天的：
+
+```cpp
+void push(T value);
+```
+
+假设 `T` 是 `std::string`。
+
+```cpp
+std::string name = "task-7";
+
+queue.push(name);
+```
+
+过程是：
+
+```text
+name 是 lvalue
+-> 用 name copy-construct 函数 parameter value
+-> queue 满则等待
+-> 再把 value move 到 queue 内部 storage
+```
+
+因此 caller 的 `name` 保留原内容。
+
+而：
+
+```cpp
+queue.push(std::move(name));
+```
+
+过程是：
+
+```text
+std::move(name) 是 xvalue/rvalue
+-> 用它 move-construct 函数 parameter value
+-> queue 满则等待
+-> 再把 value move 到 queue 内部 storage
+```
+
+这里真正可能把 `name` 原有资源交给 parameter 的，是这一步：
+
+```text
+move-construct parameter value
+```
+
+不是 `std::move(name)` 那一瞬间。
+
+你那句理解可以微调成：
+
+```text
+std::move 把一个表达式转换成 rvalue/xvalue，
+让 overload resolution 能选择 move constructor / move assignment。
+
+但 std::move 本身不移动 object；
+真正的移动发生在随后调用的 move constructor 或 move assignment 中。
+```
+
+最后一个细节：今天 `push(T value)` 是**按值传参**，所以 parameter `value` 在进入 `push` 之前就已经完成 copy 或 move 了。若 queue 已满，caller 传入的 rvalue 对象可能已经处于 moved-from state，只是在函数内等待最终入队。
+
+---
+
 ### 14.4 capacity = 2 的 MPMC 状态轨迹
 
 设 producer P1、P2，consumer C1，初始 queue 为空：
@@ -1603,6 +1747,30 @@ blocking pop() -> value
 ---
 
 ## 17. 今日产出二：`blocking_queue_test.cpp`
+
+### 17.0 harness 是啥
+
+`harness` 原意是“马具、缰绳”，在软件里引申为“把被测对象接起来、控制起来的一套辅助框架”。
+
+`concurrency test harness` 可以翻译成：
+
+```text
+并发测试支架 / 并发测试驱动框架
+```
+
+它不是你真正要实现的 `BlockingQueue`，而是测试代码：负责创建多个线程、安排它们同时开始、重复运行、收集结果，然后判断有没有错误或卡死。
+
+```text
+test harness
+    |
+    +-- 创建 producer / consumer threads
+    +-- 用 barrier 或条件变量让它们同时开始
+    +-- 重复施压运行
+    +-- join / timeout
+    +-- 检查结果是否正确
+```
+
+所以这里的重点是：`harness` 是为了“驾驭并观察测试”的外围工具，不是业务功能本身。
 
 ### 17.1 这个程序是干什么的
 

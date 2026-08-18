@@ -155,6 +155,97 @@ close 先在 mutex 下设置 closed -> push 观察 closed 并失败
 
 ---
 
+### 2.8 owner
+
+通常是 `main thread`，但 `owner` 不是“必须 main”的意思，而是**负责整个 queue 生命周期的那段执行流**。
+
+在 Day5 的测试里，最自然的安排就是：
+
+```text
+main
+-> 创建 BlockingQueue
+-> 启动 producers / consumers
+-> 等 producers 完成
+-> 调用 queue.close()
+-> join consumers
+-> queue 析构
+```
+
+所以这里 `owner` 就是 main。
+
+以后做 ThreadPool 时，owner 可能是：
+
+```text
+ThreadPool object 的 shutdown() 调用者
+```
+
+它也许仍是 main，也可能是别的管理线程。关键职责不变：它决定“不再接受新任务”，调用 `close()`，再等待所有仍在使用 queue 的 worker 退出。
+
+---
+
+### 2.9 `std::optional<int>`
+
+`std::optional<int>` 表示“这里可能有一个 `int`，也可能没有值”。
+
+Day5 的 `pop()` 可以用它表达两种结果：
+
+```cpp
+std::optional<int> value = queue.pop();
+```
+
+如果 queue 正常取到元素：
+
+```cpp
+return 42;  // 自动包装成 optional<int>{42}
+```
+
+如果 queue 已关闭且为空：
+
+```cpp
+return std::nullopt;  // 没有 int
+```
+
+使用时先判断：
+
+```cpp
+std::optional<int> value = queue.pop();
+
+if (!value) {
+    // 等价于 value.has_value() == false
+    // queue 已关闭且没有剩余元素
+    return;
+}
+
+int number = *value;  // 取出里面的 int
+```
+
+也可以写：
+
+```cpp
+if (value.has_value()) {
+    std::cout << value.value() << '\n';
+}
+```
+
+但通常更喜欢：
+
+```cpp
+if (value) {
+    use(*value);
+}
+```
+
+因为 `value.value()` 在 optional 为空时会抛 `std::bad_optional_access`；`*value` 也必须只在确认有值后使用。
+
+压缩记忆：
+
+```text
+optional<int> = “可能存在的 int”
+nullopt       = “没有值”
+if (opt)      = “有值吗？”
+*opt          = “取出值”
+```
+
 # Part 2：教程主体
 
 # 教程开始
@@ -291,6 +382,47 @@ closed 优先于继续 push
 ```
 
 即使 close 时 queue 恰好也 not_full，新 work 仍不再接受。
+
+### 5.1 close 与 not full 对 waiter 的 predicate 的影响
+
+`push_can_stop_waiting` 不是单纯的“是否 close”，而是 `push()` 的**等待结束条件**。
+
+Day4 中 producer 只能因为 queue 有空位而结束等待：
+
+```text
+not_full = size < capacity
+```
+
+Day5 加入 `close()` 后，producer 还有另一种不必继续等的情况：queue 已关闭。即使它仍然是满的，也不能永远睡下去。
+
+```text
+push_can_stop_waiting = closed || size < capacity
+```
+
+它的含义是：
+
+| `closed` | `size < capacity` | `wait` 返回后 |
+|---|---:|---|
+| false | false | 继续等 |
+| false | true | 可以正常 push |
+| true | false | 停止等待，push 失败/返回 |
+| true | true | 仍停止等待，不能再 push |
+
+所以 wait 返回并重新拿到 mutex 后，逻辑通常是：
+
+```cpp
+not_full_cv_.wait(lock, [this] {
+    return closed_ || queue_.size() < capacity_;
+});
+
+if (closed_) {
+    return false;  // 或抛异常，取决于 Day5 的接口设计
+}
+
+queue_.push(std::move(value));
+```
+
+关键是：`closed_` 让等待者“醒来并退出”；`size < capacity` 让等待者“醒来并继续完成 push”。它们合在一起才叫 `push_can_stop_waiting`。
 
 ---
 

@@ -128,6 +128,10 @@ compare_exchange
 
 概念：
 
+先比较 atomic 的值是否等于 expected，这是 compare；
+
+如果等于的话，进入 set，就是把 desired 的值写入 atomic。
+
 ```text
 如果 atomic 当前值等于 expected
 -> 写入 desired
@@ -187,6 +191,103 @@ atomic operation
 ```
 
 今天不以 lock-free 为学习目标。
+
+---
+
+这里的 `lock-free` 不是“代码里没写 `std::mutex`”这么简单，而是在说：**并发操作卡住时，系统还能不能继续推进。**
+
+先看普通 mutex：
+
+```
+线程 A 拿到 mutex
+-> A 突然被暂停，或者执行很慢
+-> 线程 B 想访问同一份数据
+-> B 只能等 A 释放 mutex
+```
+
+A 不动，B 就完全不能完成操作。
+这种进度依赖某个持锁线程，叫 **blocking**，不是 lock-free。
+
+而 lock-free 的目标是：
+
+```
+多个线程同时尝试更新共享数据
+-> 某个线程可能失败、重试、甚至被暂停
+-> 但只要其他线程还在运行
+-> 至少有一个线程能完成操作
+```
+
+注意这个保证是“整个系统有人能完成”，不是“每个线程都一定很快完成”。
+
+```
+lock-free：
+A 一直失败也没关系，
+只要 B、C 之类还能成功推进共享状态即可。
+
+wait-free：
+更强。
+每一个线程都保证在有限步骤内完成。
+```
+
+你现在学的 CAS loop 很接近这个直觉：
+
+```
+A CAS 失败
+-> 说明 B 可能抢先 CAS 成功
+-> A 虽然没成功
+-> 但 shared state 已经被 B 推进了
+```
+
+所以 A 的失败不一定是“白忙”；可能正说明系统里另一个线程完成了工作。
+
+但 `std::atomic` 只保证：
+
+```
+这次读 / 写 / RMW 是原子的
+不会因为并发访问本身构成 data race
+```
+
+它**不保证**实现底层一定没有锁。
+
+例如：
+
+```
+std::atomic<int> counter;
+```
+
+在大多数常见机器上往往能直接用 CPU 原子指令实现，通常是 lock-free。
+
+但：
+
+```
+std::atomic<VeryLargeStruct> state;
+```
+
+CPU 可能没有“一条指令原子更新这么大的对象”的能力。标准库为了仍提供“原子语义”，可能在内部偷偷用一把锁保护它。
+
+于是：
+
+```
+它仍然是 std::atomic
+但实现可能不是 lock-free
+```
+
+可以查询：
+
+```
+std::atomic<int> value;
+std::cout << value.is_lock_free() << '\n';
+```
+
+压缩记忆：
+
+```
+atomic：操作不可被并发拆开，避免 data race
+lock-free：某线程卡住时，其他线程仍能让整体继续推进
+wait-free：每个线程都保证能在有限步骤内完成
+```
+
+所以你这段 daily 的重点是在提醒你：**不要看到 `std::atomic` 就自动脑补“没有锁、不会阻塞、性能一定高”。**
 
 ---
 
@@ -357,12 +458,14 @@ int expected = 10;
 const bool changed = state.compare_exchange_strong(expected, 20);
 ```
 
+compare: 先看 atomic（也就是 state）的值是否等于 expected。
+
 若调用时 `state == 10`：
 
 ```text
 state becomes 20
 changed == true
-expected remains 10
+expected remains 10，成功时 expected 不变！
 ```
 
 若另一个 thread 已把 state 改成 15：
@@ -370,7 +473,7 @@ expected remains 10
 ```text
 state remains 15
 changed == false
-expected becomes 15
+expected becomes 15，失败后，从 atomic 把实际观察值写入到 expected 中。
 ```
 
 失败时 `expected` 被改写，不是附带细节，而是为了让 caller 获得新的 observed state。
@@ -412,6 +515,123 @@ flowchart TD
 
 ---
 
+### 9.1 上述 shared maximum 的案例啥意思
+
+**这个案例很好地演示了 CAS 能够用来 check 从我观察到的值到我实际去 CAS 中间有没有别的 thread 去修改 atomic。**
+
+这里的 `caller` 就是“调用 `cas_max(candidate)` 的那个线程”。  
+“观察旧 maximum”不是内存读错了，而是它读到一个当时正确、但马上被别的线程更新过的值。
+
+假设一开始：
+
+```text
+maximum = 10
+```
+
+线程 A 想提交 `candidate = 20`，线程 B 想提交 `candidate = 30`。
+
+时间顺序可能是：
+
+```text
+线程 A：
+expected = maximum.load();   // 读到 10
+
+线程 B：
+expected = maximum.load();   // 也读到 10
+CAS(10 -> 30) 成功
+maximum 现在变成 30
+
+线程 A：
+CAS(10 -> 20)
+```
+
+A 的 CAS 会失败，因为它说的是：
+
+```text
+“只有 maximum 现在仍然等于 10，
+我才把它改成 20。”
+```
+
+但 maximum 已经是 30，不再等于 A 手里旧的 `expected == 10`。
+
+CAS 失败时有一个很重要的行为：
+
+```text
+expected 原本是 10
+CAS 失败后，expected 会被改写成当前真实的 maximum，也就是 30
+```
+
+所以 A 现在得到的信息是：
+
+```text
+我原来以为 maximum 是 10；
+但实际上别人已经把它更新到 30 了。
+```
+
+这时 A 必须重新判断：
+
+```text
+candidate = 20
+最新 maximum = 30
+
+20 > 30 吗？
+不大于。
+```
+
+因此 A 什么也不该做。因为“维护最大值”的目标不是把自己的 candidate 硬写进去，而是保证 maximum 不下降。
+
+如果 A 不重新判断，盲目再试：
+
+```text
+CAS(30 -> 20)
+```
+
+它反而会把 maximum 从 30 降成 20，算法就错了。
+
+再看另一种情况。A 的 candidate 是 40：
+
+```text
+A 起初读到 expected = 10
+B 先把 maximum 更新成 30
+A 的 CAS(10 -> 40) 失败
+CAS 把 expected 改成 30
+
+重新判断：
+40 > 30
+仍然成立
+
+于是 A 再尝试 CAS(30 -> 40)
+成功
+```
+
+完整直觉就是：
+
+```text
+load 得到的 expected 只是“我观察到的旧版本”
+
+CAS 成功
+-> 说明从观察到提交之间，没有别人改过 maximum
+-> 可以安全安装 candidate
+
+CAS 失败
+-> 说明有人抢先改了 maximum
+-> expected 带回最新值
+-> 你必须基于新值重新判断业务条件
+```
+
+所以这个循环不是“CAS 失败就无脑重试”，而是：
+
+```text
+CAS 失败（意味着 shared state 遭遇别的 thread 修改）
+-> 获取最新 shared state
+-> 重新判断 candidate 是否还值得更新
+-> 值得才再 CAS
+```
+
+`maximum` 是原子变量，所以这里没有 data race；困难在于多个线程的逻辑操作会交错，旧 snapshot 可能已经不适用于当前业务判断。
+
+---
+
 ## 10. weak 为什么适合 loop
 
 `compare_exchange_weak` 可能 spurious fail，但 loop 本来就会：
@@ -431,6 +651,96 @@ flowchart TD
 ```text
 每次 failure 后 expected 可能变化，algorithm 必须基于新 state 重新决策。
 ```
+
+---
+
+### 10.1 weak 的 spurious fail 是啥？
+
+**其实就是莫名其妙失败了，并不是因为 expected!=atomic。**
+
+你说得基本对：**两者失败时都会返回 `false`，并把 atomic 当前观察到的值写回 `expected`。**
+
+真正的区别只在于：`weak` 多了一种“其实没人抢，但它也允许说自己失败了”的情况。
+
+假设：
+
+```text
+atomic maximum = 10
+expected = 10
+desired = 20
+```
+
+没有其他线程修改 `maximum`。
+
+| 调用 | 允许的结果 |
+|---|---|
+| `compare_exchange_strong(expected, 20)` | 必须成功：`maximum = 20`，返回 `true` |
+| `compare_exchange_weak(expected, 20)` | 可以成功；也允许返回 `false`，但 `maximum` 仍是 10 |
+
+后一种就是 `spurious failure`，中文常译“虚假失败”：
+
+```text
+weak 返回 false
+但不是因为 maximum 已被别人改掉
+maximum 仍然是 10
+expected 被写回 10
+```
+
+于是 caller 再试一次即可。
+
+如果确实有其他线程先把 maximum 改成了 30：
+
+```text
+maximum = 30
+expected 原来是 10
+```
+
+那两者都会正常失败：
+
+```text
+return false
+expected 被更新为 30
+```
+
+所以可以压缩成：
+
+```text
+weak 失败：
+    可能是别人改了值
+    也可能没人改，只是允许虚假失败
+
+strong 失败：
+    只能是比较不相等，也就是值确实不再是 expected
+```
+
+为什么 loop 里通常用 `weak`？
+
+```text
+CAS loop 本来就准备失败后重试
+-> weak 多失败一次没有破坏正确性
+-> 某些 CPU 上更容易映射成高效机器指令
+```
+
+为什么单次尝试常用 `strong`？
+
+```text
+我只想问一次：
+“当前还是 10 吗？是就改成 20，否则告诉我失败。”
+
+如果实际仍是 10，
+我不希望因为虚假失败得到 false。
+```
+
+还有一个容易混淆的点：`strong` 不意味着“更不会被其他线程抢”。它也完全可能失败：
+
+```text
+A 准备 CAS(10 -> 20)
+B 抢先改成 30
+A 的 strong CAS 返回 false
+expected = 30
+```
+
+它只是保证：**没有竞争、值确实相等时，不会额外装作失败。**
 
 ---
 
@@ -628,10 +938,11 @@ negative / duplicate / worker-count boundaries
 
 ```cpp
 int old_value = counter.load();
+中间仍然有窗口给其他 thread 插入。
 counter.store(old_value + 1);
 ```
 
-但整个“加一”仍由两个分离 operations 组成。假设初始 `counter = 0`：
+但个“加一”仍由两个分离 operations 组成。假设初始 `counter = 0`：
 
 ```text
 T1 load  -> 0

@@ -1441,6 +1441,79 @@ Day3 保留的非阻塞代码建议：当前 PASS 只检查 adjacent duplicates�
 
 2026-08-16 进入 Week7 Day4 前，用户明确反馈 class template 语法几乎没有实际使用经验，并授权扩写 `day4.md`。Day4 已在 Part 1 末尾、教程主体使用 `BlockingQueue<T>` 前新增 class-template 第一层前置：从重复 typed classes 的问题出发，解释 `template <typename T>`、parameter/argument、concrete type、compile-time instantiation 与 runtime construction、class 内外 member definition、CTAD 边界、header-only translation-unit 原因、T 的 operation requirements 和常见错误。示例使用独立 `Box<T>`，不泄露 BlockingQueue 练习实现；复杂模板元编程继续后置。Day4 仍未学习/验收，真实进度不变。
 
+Week7 Day4 于 2026-08-17 完成第一次检阅，暂定 `84/100`，当时尚未正式通过：
+
+```text
+BlockingQueue<int> 的核心同步实现成立：capacity invariant、同一 mutex 下检查 predicate/修改 queue、not_full/not_empty 等待、解锁后通知和 sentinel 生命周期主线正确
+规定参数编译零 warning；Codex 外部固定矩阵覆盖 capacity=1 的 1P1C/2P2C、大 N、4P3C、capacity>N、N=0 与 capacity=0 rejection，全部 PASS
+同一固定矩阵在 g++ TSan 下 exit 0、stderr 0 bytes，当前未发现 data race
+用户自己的 blocking_queue_test.cpp 只保存 test(101,4,3,100)，capacity 大于普通元素总数，基本没有验收 queue-full/not_full blocking path；外部 review harness 不能替代项目中的长期 regression tests
+push(T value) 内部使用 q_.push(value)，pop 使用 T value=q_.front()，因此多做 copy 且隐式要求 T copyable；Day4 固定 int 不要求 move-only T，但问题 4 的 ownership path 不能用“看代码”代替，至少应说清 caller -> by-value parameter -> queue 的 copy/move，并建议 parameter 入队时 std::move
+问题 1/2/3/6/8 由笔记和代码覆盖且正确；问题 5 主线基本正确，但准确主体是使用点 translation unit 的 compiler 看不到 definition，无法实例化 Box<int>::get，linker 不负责 T -> int；问题 7 的“保证都能 close”不准确，Day4 没有 close state，一个 sentinel 只会被一个 consumer 取走并使该 consumer return
+blocking_queue.hpp 有重复/无关 include，notify_all 可改 notify_one，属于非阻塞工程清理
+```
+
+本轮还发现 Codex 经授权补入 daily 的 template 编译/链接反例自身有错误：`box.hpp` 示例未声明 `value_`，但 `box.cpp` 的 `get()` 返回 `value_`，因此会在预期的 undefined-reference 之前先编译失败。这是教程质量问题，不计入用户 Day4 分数；后续修正时应补 `T value_{};` 或完整 constructor/member，使实验只暴露它想讲的编译/链接阶段。
+
+Week7 Day4 随后完成极短复检，最终评分 `91/100`，正式通过：
+
+```text
+用户已把 capacity>N、capacity=1 的 1P1C/2P2C、大 N、4P3C 与 capacity=0 exception path 保存进 blocking_queue_test.cpp
+push(T value) 已改为 q_.push(std::move(value))，明确 parameter 入队时采用 move；pop 仍复制 front，Day4 固定 int 且明确不要求 move-only T，因此不阻塞
+普通构建使用 -std=c++17 -Wall -Wextra -g -pthread 零 warning，四组测试全部 PASS，capacity=0 进入预期 invalid_argument path
+同一落盘矩阵使用 g++ TSan 构建并运行，exit 0；stderr 只有程序主动打印的 capacity=0，没有 ThreadSanitizer report
+note 已补 queue 不拥有 threads、caller -> parameter -> queue 的 transfer 主线，并把 sentinel 改准为每个 consumer 取走一个后退出
+问题 5 仍可更精确地区分 compiler instantiation 与 linker，但核心理解正确，不要求机械重写
+```
+
+Day4 保留的非阻塞工程建议：capacity=0 test 应设置“是否捕获预期异常”的 flag，若没有抛异常也必须 FAIL；若以后要求 move-only T，pop 应从 `q_.front()` move；`notify_all` 可按语义评估为 `notify_one`；精简重复/无关 headers。Codex 在 template 教程中引入的 `Box` 反例缺少 `value_`，已在复检当轮补为 private `T value_{}`，使示例能够到达预期的链接阶段；该问题不计入用户分数。
+
+Day4 可复用教程经验：演示 compiler/linker 边界的错误实验必须先单独验证预期 failure stage，不能让无关的源代码错误抢先失败；并发组件教程列出的固定矩阵必须落实为 repository 中可重复运行的 tests，review 临时 harness 只能提供当次证据，不能替代 regression suite；询问 ownership 时，即使测试类型是 int，也要明确每一段 copy/move 的发生位置，不能只用“看代码”或“成功传进去了”代替。
+
+Week7 Day5 于 2026-08-17 完成第一次检阅，暂定 `86/100`，尚未正式通过：
+
+```text
+用户独立完成可关闭的 BlockingQueue<T> V2：closed_ 与 queue state 由同一 mutex 保护；push 等待 closed || not_full，close 后返回 false；pop 等待 closed || not_empty，closed-with-data 继续 drain，closed-empty 返回 nullopt；close 幂等并 notify_all 两组 waiters
+规定参数普通构建与 g++ TSan 构建均零 warning；用户现有 normal MPMC cases 运行通过，连续 50 次无 hang；TSan exit 0，stderr 只有程序主动输出的 capacity=0，没有 sanitizer report
+Codex 独立 review harness 定向覆盖 empty queue blocked consumer、full queue blocked producer、close-with-data、8 个 blocked consumers、8 个 blocked producers、repeated close 和 post-close push；normal 单次、连续 20 次与 TSan 均 PASS
+因此 queue lifecycle implementation 主体正确；本次暂不通过不是因为用户没有机械填写九道验收题，而是项目内测试尚未保存当天最关键的 shutdown regression paths
+用户 blocking_queue_test.cpp 目前主要是“join producers -> close -> join consumers”的 normal path；没有主动制造 close 时仍 blocked 的 consumer/producer，也没有固定 close-with-data/multiple-waiter cases
+push-after-close 只打印成功或失败，即使错误地成功也仍返回 true；capacity=0 也只 catch/print，若未来不抛异常测试不会失败。producer_work 忽略 push 的 bool result，因此不能验证 close-vs-push rejection
+day5_note 的四步设计主线正确；第 2 点“保证没有 producer/consumer sleeping”应理解为 notify_all 后所有受影响 waiter 最终有机会恢复、重新拿锁并返回，不是 close() 返回瞬间所有线程已运行；第 3 点前半句“check 是否为空再 push”是笔误，push 检查的是 not full
+验收题不要求补成九段文字：Q2~Q7 已由 note/implementation 覆盖，Q1/Q8/Q9 可由去掉 sentinel、queue 不拥有 threads、test owner 的 close/join 顺序解释；短复检优先用可执行测试代替重复抄答案
+```
+
+Day5 短复检只要求：把 blocked-consumer、blocked-producer、close-with-data/multiple-waiter 中至少能覆盖全部 lifecycle branches 的定向 cases 保存进 `blocking_queue_test.cpp`，并让 post-close push 和 expected exception 的错误结果真正导致 FAIL；重跑 normal、重复和 TSan。note 只改上述两个短语即可，不要求补写完整九题或重写已经正确的 lifecycle 设计。
+
+Day5 daily 相对 Git baseline 新增了 owner、`std::optional<int>` caller 语义和 push wait predicate truth table。这三处补充技术正确，也反映出可复用教程经验：生命周期组件首次出现 owner/result type/复合 predicate 时，不能只给接口名称；应分别说明谁负责 shutdown、每种返回状态的精确业务含义，以及 predicate true 只是“wait 可以结束”，operation 是否成功仍要在锁内按 state 分支。
+
+Week7 Day5 第一次修改后的第二次短复检仍为 `86/100`，尚未正式通过：
+
+```text
+用户新增 test_close_with_data、test_multiple_blocked_consumers、test_multiple_blocked_producers，并让 producer_work 在 push 返回 false 时停止；方向正确，说明已经开始把 shutdown branches 拆成独立 cases
+新增代码使用 -std=c++17 -Wall -Wextra -g -pthread 可编译运行，50 次重复无 hang，TSan exit 0 且无 sanitizer report
+但新增 tests 尚未形成有效 assertion：三个函数都打印 ok 后无条件 return true，所以目标状态没有形成或结果错误时也会通过
+test_close_with_data 启动 producers 后立即 close，未先确认至少一个 value 已成功入队；随后也不检查 accepted/drained IDs，因此可能实际测试的是 closed-empty
+multiple blocked consumers 在启动 threads 后立即 close，没有 ready/barrier/counter 证明 threads 已进入 pop path；可以作为调度扰动，但不能单独证明“多个 blocked waiters 被唤醒”
+multiple blocked producers 没有先把 capacity=1 queue 填满，也没有记录各 push 返回值；close 可能先发生，threads 直接观察 closed 而从未阻塞
+post-close push 和 capacity=0 exception 仍只打印，不使错误结果 FAIL
+新增代码引入两个 -Wextra warnings：multiple-consumer case 的 N 未使用，multiple-producer case 的 consumer_count 未使用；测试 helper 应只接收真正需要的参数
+day5_note 上次指出的两个短语仍未改：closed 只保证 waiter 最终有机会退出，不是 close 返回时立刻无人 sleeping；push 检查 not full，不是 empty
+```
+
+下一次短复检的最小标准不要求漂亮 harness：每个 case 先建立可观察的前置状态，再 close，再检查 operation result、drained values 与 join；至少让任何一项不符合预期时 return false/exit nonzero。可以使用 atomic ready counter 加短 sleep 扩大窗口，但不能只依赖 sleep 或输出 `ok`。删除无用参数后恢复零 warning，然后重跑 normal/重复/TSan。
+
+用户随后明确选择不再继续手写 Day5 lifecycle tests。结合以下已有证据，Week7 Day5 最终按 `88/100` 正式通过：
+
+```text
+用户已经独立完成 close/drain implementation 和主要设计推导，当前缺口集中在测试 harness 精度，不是 queue lifecycle 机制错误
+Codex 独立 harness 已实际覆盖 blocked consumers/producers、close-with-data、multiple waiters、repeated close 与 post-close rejection，normal/重复/TSan 均通过
+用户已经尝试拆分三类 lifecycle tests，理解要测试哪些状态，只是不愿继续投入重复的测试支架 work
+不要求为了形式补写九道验收题或重写 tests；用户新增测试中的无效 assertion 和两个 unused-parameter warnings 作为保留工程缺口记录
+```
+
+允许通过不等于固定测试不重要。Week8 ThreadPool 复用 BlockingQueue 时，需要借真实 shutdown 场景补回这项能力：测试必须先建立目标状态，错误必须影响 exit code，不能只输出 ok。不要回头重复 Day5 的独立 demo。
+
 Day2 暴露的可复用教程/验收经验：并发练习的 fixed tests 不能只走 happy path；凡是会写 shared state 的成功、失败、early-return 路径都要有定向并发测试。教程要求的每条 invariant 都应进入 executable assertion/check，且失败必须反映到返回值或 exit code；只输出 `PASS`、循环程序 50 次或最终 sum 相等，都不能单独证明测试通过。
 
 本次 `week7/day2/day2.md` 与 `day2_note.md` 在 review 时仍为 untracked，Git 中没有首次生成 baseline；只能确认 daily 从 2026-08-09 创建后于 2026-08-15 被修改，无法可靠逐块还原用户增补。今后提前生成的 daily 必须在生成当轮立即按 9.12 提交并 push，之后验收才能准确提炼用户修改带来的教学经验；本次不伪造 diff 结论。
@@ -2894,7 +2967,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6 均已正式完成，Week7 已正式开始。Week7 Day1 最终 `91/100`、Day2 最终 `92/100`、Day3 最终 `90/100`，均正式通过。Day3 已验收 one-producer/one-consumer 的 not_full/not_empty predicates、wait/modify/notify 主体、fixed-N termination、join、主要固定 cases、50 次重复与 TSan；当前下一步是 Week7 Day4 `BlockingQueue<T>` 组件封装。所有已生成 daily 的后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
+当前位置：Week5、Week6 均已正式完成，Week7 已正式开始。Week7 Day1 最终 `91/100`、Day2 最终 `92/100`、Day3 最终 `90/100`、Day4 最终 `91/100`、Day5 最终 `88/100`，均正式通过。Day5 已验收 close/reject/drain/end-state/idempotent-close 与 owner shutdown 主线；用户明确选择不再精修独立测试 harness，保留的测试设计能力将在 Week8 ThreadPool 真实 shutdown tests 中补回，不重复 Day5 demo。当前下一步是 Week7 Day6 atomic/CAS。所有已生成 daily 的后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
 
 Day5 已验收：
 
