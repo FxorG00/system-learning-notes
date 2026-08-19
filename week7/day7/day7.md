@@ -220,6 +220,44 @@ synchronization：协调多个 threads 对 shared state 的访问顺序和可见
 
 ---
 
+### 2.13 CPU affinity
+
+`affinity` 是英文，原意是“亲和性、倾向于靠近或绑定的关系”。
+
+**CPU affinity** 就是：
+
+```
+操作系统规定某个 process / thread
+允许在哪些 logical CPUs 上运行。
+```
+
+例如机器有 8 个 logical CPUs：
+
+```
+CPU 0 1 2 3 4 5 6 7
+```
+
+但某个程序的 CPU affinity 被设置成：
+
+```
+只允许 CPU 0、1、2、3
+```
+
+那么 scheduler 即使发现 CPU 4~7 空闲，也不会把这个程序调度过去。
+
+这和刚才的 `nproc` 有关：`nproc` 往往会考虑这种限制，可能输出 `4`，而不是机器总共的 `8`。
+
+为什么要设 affinity？
+
+```
+减少 thread 在不同 CPU core 间迁移
+保持 cache 中的数据更容易被复用
+隔离某个服务，避免它占满所有 CPU
+容器 / 虚拟机 / 性能测试限制可用 CPU
+```
+
+---
+
 # Part 2：教程主体
 
 # 教程开始
@@ -435,6 +473,150 @@ struct alignas(kDestructiveSize) PaddedCounter {
 
 ---
 
+### 8.1 上面这个代码什么意思
+
+这段代码不是“实现计数器逻辑”，而是在**为 Day7 的 false sharing 实验准备一种不容易和邻居挤在同一条 cache line 的计数器类型**。
+
+先抓主线：
+
+```text
+如果标准库实现提供“推荐的 cache-line 隔离大小”
+-> 用标准库给出的值
+
+否则
+-> 暂时假设 64 bytes
+
+然后
+-> 让每个 PaddedCounter 按这个大小对齐
+```
+
+`#if / #else / #endif` 属于**预处理阶段**，发生在真正编译 C++ 前。它不是运行时的 `if`。
+
+```cpp
+#if 条件
+    // 条件成立时，保留这里
+#else
+    // 条件不成立时，保留这里
+#endif
+```
+
+整个过程是：
+
+```text
+源文件
+    |
+    v
+preprocessor 先判断 #if
+    |
+    +-- 条件成立：删除 #else 那一支
+    |
+    +-- 条件不成立：删除 #if 那一支
+    |
+    v
+compiler 只看到留下来的普通 C++ 代码
+```
+
+所以这里：
+
+```cpp
+#if defined(__cpp_lib_hardware_interference_size)
+```
+
+意思是：
+
+```text
+“当前你使用的标准库有没有声明
+__cpp_lib_hardware_interference_size 这个 feature-test macro？”
+```
+
+`defined(...)` 的结果只有 true/false。这个宏由标准库自己定义，用来告诉你：
+
+```text
+我实现了 std::hardware_destructive_interference_size 这个 C++17 接口。
+```
+
+不是你自己要定义的变量。名字里有双下划线，也不要自己手写定义它。
+
+如果支持，预处理后大致会变成：
+
+```cpp
+constexpr std::size_t kDestructiveSize =
+    std::hardware_destructive_interference_size;
+```
+
+如果不支持，例如当前 GCC 10 的 libstdc++，预处理后则变成：
+
+```cpp
+constexpr std::size_t kDestructiveSize = 64;
+```
+
+两边都叫 `kDestructiveSize` 不冲突，因为最终只会留下其中一边。
+
+接着看这句：
+
+```cpp
+struct alignas(kDestructiveSize) PaddedCounter {
+```
+
+`alignas` 可以理解为“对齐要求”。
+
+```text
+alignas(64)
+-> 这个 PaddedCounter object 的起始地址必须是 64 的倍数
+```
+
+这样若你有：
+
+```cpp
+PaddedCounter counters[4];
+```
+
+每个 `PaddedCounter` 都会按至少 64-byte 边界排列，通常就不会和相邻 counter 落在同一条 64-byte cache line 中，减少 false sharing。
+
+内部成员：
+
+```cpp
+std::atomic<std::uint64_t> value{0};
+```
+
+意思是：
+
+```text
+std::uint64_t
+    固定 64-bit 的无符号整数
+
+std::atomic<...>
+    多线程对 value 做 load/store/fetch_add 等操作不会产生普通 data race
+
+{0}
+    初始值为 0
+```
+
+所以这个 struct 的意义是：
+
+```text
+普通 Counter：
+多个 threads 的 counters 可能挤在同一 cache line
+-> 虽然各自写不同变量，但 cache line 反复失效
+-> false sharing
+
+PaddedCounter：
+每个 counter 尽量隔开
+-> 减少互相抢同一 cache line
+```
+
+最后，这段 conditional code 的重点不是让你背宏，而是一个很常见的工程习惯：
+
+```text
+C++ 标准规定“可以有这个接口”
+!=
+你当前 GCC + libstdc++ 已经实现了它
+```
+
+所以先检测能不能用；不能用就走已知的 `64` fallback。Day7 你只需理解这个分支逻辑，不需要自己专门练预处理器。
+
+---
+
 ## 9. 为什么 adjacent atomics 是有意设计的实验
 
 实验组：
@@ -485,7 +667,7 @@ padded   = 80 ms
 报告 median 或结果范围
 ```
 
-VM 中 fluctuation 可能很大。真实结论可以是：
+VM 中 fluctuation(波动) 可能很大。真实结论可以是：
 
 ```text
 当前环境没有观察到稳定差异
@@ -621,6 +803,149 @@ const unsigned int hint = std::thread::hardware_concurrency();
 
 ---
 
+### 13.1 nproc,lscpu 都是啥
+
+它们都是 Linux 下查看 CPU 情况的命令。
+
+```bash
+nproc
+```
+
+`nproc` 可以理解为 **number of processing units**。它输出当前这个进程可用的逻辑 CPU 数，例如：
+
+```text
+4
+```
+
+表示系统允许你的程序同时在 4 个逻辑 CPU 上运行。它通常会考虑 CPU affinity、容器/cgroup 限制，所以对“我的程序现在大概能开多少 worker”比较实用。
+
+```bash
+lscpu
+```
+
+`lscpu` 是 **list CPU**，输出更完整的 CPU 拓扑和架构信息，例如：
+
+```text
+CPU(s):                8
+Thread(s) per core:    2
+Core(s) per socket:    4
+Socket(s):             1
+Model name:            ...
+```
+
+这里：
+
+```text
+Socket
+    一颗物理 CPU 插槽
+
+Core
+    物理核心
+
+Thread(s) per core
+    每个物理核心提供几个逻辑 CPU
+    常见 2，通常意味着超线程
+
+CPU(s)
+    操作系统看到的逻辑 CPU 总数
+```
+
+例如：
+
+```text
+1 socket
+4 cores per socket
+2 threads per core
+```
+
+那么 Linux 看到：
+
+```text
+1 * 4 * 2 = 8 个 logical CPUs
+```
+
+所以 Day7 让你测 `1 / 2 / 4 / 当前环境允许时的 8`，是为了让你观察 contention 随并发度变化，而不是说 8 一定是最佳线程数。
+
+对应关系可以先这样记：
+
+```text
+nproc
+    当前进程大概可用几个 logical CPUs
+
+lscpu
+    这些 logical CPUs 背后的硬件拓扑是什么
+
+std::thread::hardware_concurrency()
+    C++ 从 implementation 获得的类似 hint
+```
+
+三者都只能帮助你选实验参数；它们不等于“线程池应该固定开这么多线程”。
+
+---
+
+### 13.2 hint 是什么？
+
+hint：暗示。
+
+`:codex-annotation{index="1"}`
+
+`hint` 就是“提示信息、参考建议”。
+
+```cpp
+std::thread::hardware_concurrency()
+```
+
+返回的不是承诺：
+
+```text
+“你必须创建这么多 threads”
+```
+
+而是 implementation 根据当前环境告诉你：
+
+```text
+“我估计这里大约有这么多个可并行执行的 hardware threads，
+你可以拿它作为初始参考。”
+```
+
+例如：
+
+```cpp
+const unsigned int hint = std::thread::hardware_concurrency();
+```
+
+若返回：
+
+```text
+8
+```
+
+可以先考虑：
+
+```text
+CPU-bound 工作：从 8 个 workers 附近开始测试
+```
+
+但不代表 8 永远最好。实际 worker count 还取决于：
+
+```text
+任务是 CPU-bound 还是 I/O-bound
+是否有锁竞争
+是否存在 false sharing
+是否还有其他程序占 CPU
+容器或虚拟机是否限制了可用 CPU
+```
+
+如果返回 `0`，意思只是：
+
+```text
+当前 C++ implementation 没有办法提供这个提示
+```
+
+不是说机器没有 CPU。
+
+---
+
 ## 14. thread migration 与 affinity
 
 scheduler 可能让同一 thread 在不同 CPU cores 上运行。migration 会改变 cache locality 和 measurement noise。
@@ -681,6 +1006,82 @@ alignas(64) 用于建立本机对照
 
 ---
 
+#### 15.1.1 shared last-level cache 是什么意思？
+
+`shared last-level cache` 就是：**多个 CPU core 共用的、离 main memory 最近的一层 cache**。
+
+先把名字拆开：
+
+```text
+last-level cache
+    CPU 到 RAM 之间，最后一层 cache
+    再往后就是 main memory
+
+shared
+    多个 core 都可以使用这一层 cache
+```
+
+在很多常见 CPU 上，它常常对应 L3 cache：
+
+```text
+Core 0: private L1 / L2
+Core 1: private L1 / L2
+...
+多个 core: shared L3
+RAM
+```
+
+也就是说，Core 0 和 Core 1 各自有自己的 L1/L2；但它们再往外一层，可能连接到同一个 L3。
+
+```text
+Core 0 的 L1/L2 miss
+-> 去 shared L3 找
+
+Core 1 的 L1/L2 miss
+-> 也去同一个 shared L3 找
+
+L3 也 miss
+-> 再去 RAM
+```
+
+“shared”不表示两个 core 的 private cache 自动变成同一个东西。比如同一个 cache line：
+
+```text
+Core 0 的 L1：可能有一份副本
+Core 1 的 L1：也可能有一份副本
+shared L3：也管理/保存相关数据
+```
+
+当 Core 0、Core 1 都在读时，这没问题；但某个 core 要写这一条 line 时，cache coherence 会让其他 core 的旧副本失效或交出修改权限。
+
+所以 false sharing 的痛点仍主要发生在：
+
+```text
+Core 0 写自己的变量
+Core 1 写自己的变量
+但两个变量在同一 cache line
+-> 两边 private cache 中那一整条 line 反复失效、转移写权限
+```
+
+即使底下有 shared L3，也不能消除这种“写同一条 cache line 的所有权来回跑”的成本。
+
+你可以暂时把层级记成：
+
+```text
+private L1/L2
+    最靠近某个 core，最快
+
+shared last-level cache（常见是 L3）
+    多个 core 的较大共享缓冲层
+
+main memory / RAM
+    更大、更慢
+```
+
+“last-level”说的是**cache hierarchy 的最后一级**，不是“最后一次访问”。
+
+---
+
 ### 15.2 false sharing 的 ownership ping-pong 全流程
 
 假设两个 atomics 紧邻：
@@ -713,6 +1114,94 @@ Core 1 mostly owns line B
 ```
 
 它们就不再因为写不同 counters 而不断争夺同一 line。这就是 padded layout 可能更快的因果链。
+
+### 15.2.1 必看 ownership 是什么？
+
+你这个理解已经碰到关键了：**Core 0 最终确实是写自己 cache 里的 Line L；但它不是任何时候都“想写就写”。**
+
+这里的 `ownership` 不是 C++ 的对象所有权，而是 cache coherence 协议里的：
+
+```text
+“当前哪个 core 有权把这一整条 cache line 当作可写版本修改？”
+```
+
+简化成两种权限就够了：
+
+```text
+Shared：可以读，但不能直接写
+Writable / ownership：可以读写
+```
+
+同一时刻，一条 line 可以被多个 core 读；但通常只能有一个 core 持有可写权限。否则：
+
+```text
+Core 0 把 counter_A 写成 1
+Core 1 同时把 counter_B 写成 2
+```
+
+两个 core 各自都拥有 Line L 的可写副本，硬件就很难定义这一整条 line 的“最新版本”。
+
+所以真实过程更像：
+
+```text
+开始：
+Core 0 cache: Line L，只有读权限
+Core 1 cache: Line L，只有读权限
+
+Core 0 想写 counter_A：
+-> 先向 coherence protocol 请求 Line L 的写权限
+-> Core 1 的 Line L 被 invalid
+-> Core 0 获得 Line L 的可写 ownership
+-> Core 0 才在本地 cache 修改 counter_A
+```
+
+此时你说得对：Core 0 后续只要没人来抢 Line L，它可以一直在自己的 cache 里本地写，不需要每次都访问内存。
+
+问题是 Core 1 也在高频写 `counter_B`：
+
+```text
+Core 1 想写 counter_B
+-> 它发现自己的 Line L 已 invalid，不能直接写
+-> 它请求 Line L 的写权限
+-> Core 0 的 Line L 失去可写权限，通常变 invalid
+-> Core 1 获得可写 ownership
+-> Core 1 才能在本地写 counter_B
+```
+
+然后 Core 0 下一次写又得把 Line L 抢回来。
+
+```text
+Core 0 owns writable Line L
+-> Core 1 requests writable Line L
+-> Core 1 owns writable Line L
+-> Core 0 requests it back
+-> Core 0 owns it again
+```
+
+这就是 ping-pong。
+
+所以更准确地说：
+
+```text
+“写完导致 Core 1 invalid”
+```
+
+确实会发生；而 `ownership` 讲的是更前一步：
+
+```text
+Core 0 为了能写，必须先让其他 core 的同一条 line
+不再保持可用的竞争副本，
+自己获得这一条 line 的独占写权限。
+```
+
+padded layout 的好处是：
+
+```text
+Core 0 写 counter_A -> 只需要 line A 的写权限
+Core 1 写 counter_B -> 只需要 line B 的写权限
+```
+
+两边各自长期保留自己的 line，不会因为对方写“另一个变量”而被 invalid。程序结果本来就都对，差别只是高频写时少了这堆硬件协调交通。
 
 ---
 
@@ -964,6 +1453,45 @@ measurement 内不大量输出
 Variant B 最终汇总的少量 additions 与其他 variant 的每次 shared synchronization 不同，这正是 algorithm design 差异；报告中应明确，而不是称为纯粹 mutex-vs-atomic 微基准。
 
 Variant C/D 才是更接近 false-sharing 的 memory-layout 对照。
+
+---
+
+### 16.3 repeat_count 啥意思
+
+`repeat count` 是指：**同一个 Variant 用同样的 workload 重复测多次**，不是把 A、B、C、D 整套 benchmark 重复后只保留一个结果。
+
+你可以把 `testA` 设计成内部循环 `repeat_count` 次，但每次都要：
+
+```text
+重新创建/清零本次 counter
+-> start timer
+-> 创建 workers 并完成固定 increments
+-> join
+-> stop timer
+-> 检查 final_total == worker_count * iterations
+-> 保存这一次 elapsed time
+```
+
+关键点：每次 repeat 的 `expected total` 都是：
+
+```text
+worker_count * iterations
+```
+
+不是再乘 `repeat_count`，因为每次测量应是独立的一轮。
+
+输出上，**不要在计时区间里 `cout`**，它会污染 benchmark。推荐在 `testA` 结束后统一打印：
+
+```text
+Variant A
+repeat 1: 12.3 ms, PASS
+repeat 2: 11.8 ms, PASS
+repeat 3: 12.0 ms, PASS
+median: 12.0 ms
+range: 11.8 ~ 12.3 ms
+```
+
+也就是说：每次 repeat 的时间都要记录；是否逐行打印由你决定，但 Day7 要求“每次 elapsed time + median/range”，所以最终最好都展示出来。
 
 ---
 

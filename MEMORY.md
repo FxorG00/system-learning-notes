@@ -1537,6 +1537,38 @@ cpp code fence 中“中间仍然有窗口给其他 thread 插入。”缺少 //
 
 可复用 daily 编写经验：CAS 首次教学适合用“两个 threads 提交 maximum”的完整 timeline，因为它能同时解释 old snapshot、expected 的 in/out 语义和失败后重新判断；但示例结论必须标注算法前提，避免把 monotonic maximum 的无 ABA 特性误推广到通用 CAS。所有标为 cpp 的片段即使只插入解释句，也必须使用合法 comment syntax，发布前要检查 fenced code 可编译性。
 
+2026-08-19，用户明确选择跳过 Week7 Day7 第 18 节的 BlockingQueue 最终复检，不再重写或重跑 normal MPMC、capacity=1、close empty/full/with-data、multiple waiters、重复 close、post-close push、100 次压力和 TSan 全套矩阵。该选择允许且不阻塞 Day7/Week7 出口，原因是：
+
+```text
+BlockingQueue 在 Day5 后没有发生实现修改
+Day5 已有用户 normal tests、Codex 独立 lifecycle harness、重复运行和 TSan 证据
+Day5 独立 harness 已覆盖 blocked consumers/producers、close-with-data、multiple waiters、repeated close 与 post-close rejection
+同一份未修改 source 重复执行整套矩阵只增加重复 work，不提供新的学习信息
+```
+
+Day7 验收时直接引用 Day5 已有证据，不要求新建 test cases、不要求复制 queue source，也不要求重复运行完整矩阵。只有用户在 Day7 又修改 BlockingQueue implementation 时，才恢复针对变更面的回归测试。Week8 将 BlockingQueue 接入 ThreadPool 后，必须结合真实 task submission、close/drain、worker exit 和 owner join 补集成测试；这才是下一次有价值的复检点。
+
+可复用验收原则：组件 source 与关键依赖均未变化且先前已有足够 normal/edge/sanitizer 证据时，可以引用已有验证，不机械重跑完整矩阵；一旦代码、编译配置、平台或使用方式发生变化，必须按变化面重新验证。避免重复 work 不等于永久免测。
+
+Week7 Day7 于 2026-08-19 完成第一次检阅，暂定 `84/100`；用户完成短修与最终复检后调整为 `92/100`，正式通过，Week7 正式完成：
+
+```text
+用户独立完成 contention_false_sharing.cpp 的 A/B/C/D 四组实现：shared mutex counter、per-thread local、adjacent atomics、padded atomics
+四组 fixed matrices 共 160 次 correctness checks 全部 PASS；-Wall -Wextra 零 warning；TSan 零报告
+Git diff 中主动补充 CPU affinity、hardware_concurrency hint、feature-test macro、alignas、cache hierarchy、coherence ownership ping-pong 和 repeat_count 独立测量，足以替代机械填写验收题并证明主线理解
+BlockingQueue 最终复检按既有豁免引用 Day5 证据，不要求重跑
+Variant C 已在启动 threads 前逐项 store(0)，符合 C++17 atomic 初始化要求
+计时恢复 microseconds 并统一打印 us，避免优化版短任务被 milliseconds 截断为 0
+time_vector 已先排序再取 index size/2；当前采用偶数样本的上中位数，结果与 note 对齐
+day7_note 重新保存 C/D 代表性数据并统一 us，结论限定为“当前环境中 6~9 倍差距”，不再泛化成稳定数量级
+最终 -O2 运行全部 PASS、零 warning；修改后 TSan 全部 160 次 PASS、零报告
+day7.md 中残留 :codex-annotation 标记；代码还应显式 include <new> 与 <cstdint>，重复/无关 headers 可清理。这些属于小型工程项，不否定机制掌握
+```
+
+本次没有要求用户补验收题、重写测试或回头复检 BlockingQueue；用户主动补充的机制解释、实现、benchmark 数据和 sanitizer 证据已经形成完整验收链。Day7 与 Week7 均正式通过。
+
+可复用性能实验验收原则：正确性 PASS 与 TSan clean 只能说明功能/已执行路径未观察到 data race，不能直接证明 benchmark 结论。性能练习必须同时审计 clock、duration unit、输出单位、计时分辨率、warm-up/repeat 是否独立、median 是否真的排序计算、编译优化参数、机器环境以及结论是否限定在当前 workload。教程在要求 median/range 时应给最小统计 API 示例，避免学习者把“数组中间那次运行”误当中位数。
+
 Day2 暴露的可复用教程/验收经验：并发练习的 fixed tests 不能只走 happy path；凡是会写 shared state 的成功、失败、early-return 路径都要有定向并发测试。教程要求的每条 invariant 都应进入 executable assertion/check，且失败必须反映到返回值或 exit code；只输出 `PASS`、循环程序 50 次或最终 sum 相等，都不能单独证明测试通过。
 
 本次 `week7/day2/day2.md` 与 `day2_note.md` 在 review 时仍为 untracked，Git 中没有首次生成 baseline；只能确认 daily 从 2026-08-09 创建后于 2026-08-15 被修改，无法可靠逐块还原用户增补。今后提前生成的 daily 必须在生成当轮立即按 9.12 提交并 push，之后验收才能准确提炼用户修改带来的教学经验；本次不伪造 diff 结论。
@@ -2990,7 +3022,34 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6 均已正式完成，Week7 已正式开始。Week7 Day1 最终 `91/100`、Day2 最终 `92/100`、Day3 最终 `90/100`、Day4 最终 `91/100`、Day5 最终 `88/100`、Day6 最终 `89/100`，均正式通过。Day6 已验收 atomic RMW、fetch_add counter、CAS success/failure、expected 回写、weak spurious failure、monotonic cas_max、mutex/atomic 能力边界与 TSan 证据边界；用户未机械填写验收题，Git diff 中的主动增补与代码共同提供理解证据。当前下一步是 Week7 Day7 contention/false sharing 与本周出口验收。所有已生成 daily 的后续问题在对话中回答，需落盘时写入对应 note 或独立补充文件。
+当前位置：Week5、Week6、Week7 均已正式完成。Week7 Day1 `91/100`、Day2 `92/100`、Day3 `90/100`、Day4 `91/100`、Day5 `88/100`、Day6 `89/100`、Day7 `92/100`，全部正式通过。Day7 已验收 mutex contention、per-thread aggregation、adjacent atomics false sharing、padded atomics、cache-line ownership ping-pong、benchmark repeat/statistics、零 warning 与 TSan 证据；用户未机械填写验收题，其主动增补、代码和实验记录共同提供了充分理解证据。BlockingQueue 重复复检按既有规则豁免，留待 Week8 ThreadPool 集成时做有价值的 lifecycle 验证。Week8 总规划和 Day1 教程均已于 2026-08-19 生成；当前下一步是用户学习 `week8/day1/day1.md`，在 Ubuntu 独立完成 `task_dispatch_demo.cpp` 与 `day1_note.md`，之后由 Codex 检查 Git diff、note、实际代码、warning、fixed tests、重复运行和 TSan，再决定 Day1 是否通过。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
+
+Week8 周规划的固定主线：
+
+```text
+Day1：task abstraction、std::function<void()> 与 worker loop 验证
+Day2：ThreadPool V1、submit/shutdown、close/drain/join
+Day3：future / packaged_task、return value 与 exception propagation
+Day4：GoogleTest、TSan、stress、最小 CMake 与 contract-driven tests
+Day5：AsyncLogger V1、single writer、bounded queue 与 ownership
+Day6：logger backpressure、drain/flush/join、sync/async benchmark
+Day7：ThreadPool + AsyncLogger integration、README、interview.md 与出口验收
+```
+
+Week8 不新增 MIT 6.S081 lecture，不开启 15-445，不扩展 dynamic resize、work stealing、lock-free queue、复杂 memory order、日志轮转或生产级日志生态。Week8 使用一份 canonical component source 持续演进，不按 Day 复制多份 final/v2 源码；daily 仍逐日生成，练习前只给程序目的、contract、ownership、state transition、错误路径和测试矩阵，不提前泄露完整 worker loop、submit template 或 writer loop。
+
+Week8 Day1 教程：
+
+```text
+路径：C:\Users\FxorG\Desktop\gpt_infra\week8\day1\day1.md
+主题：callable -> std::function<void()> Task -> BlockingQueue -> worker -> result
+复用 Week7 真实 BlockingQueue API：push(T value) / pop() / close()
+新增重点：type erasure、closure/capture、task ownership、worker 四种 queue state、close/drain/join、exactly-once evidence
+独立产出：task_dispatch_demo.cpp；不是 ThreadPool class
+练习前没有给完整 worker-loop C++、future、packaged_task 或 generic submit template
+固定验证：normal dispatch、capacity=1、no-task shutdown、different callable types、零 warning、TSan、50 次重复运行
+教程中的 std::function 完整 demo 已用 C++17 + Wall + Wextra 实际编译运行
+```
 
 Day5 已验收：
 
