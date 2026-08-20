@@ -3051,7 +3051,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6、Week7 均已正式完成，Week8 已开始。Week8 Day1 教程已生成；Day2、Day3、Day4、Day5 教程于 2026-08-20 按用户要求依次提前生成，目的是减少后续等待时间，不代表 Day1~Day5 已经完成检阅或正式通过。当前下一步仍是等待用户明确发出 Day1 检阅指令；届时再检查 Day1 Git diff、note、Ubuntu 实际代码、warning、fixed tests、重复运行和 TSan。Day1 通过后可直接按顺序进入已经生成的 Day2~Day5，但不能因后续 daily 已存在而跳过前一日学习和 review。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
+当前位置：Week5、Week6、Week7 均已正式完成，Week8 已开始。Week8 Day1 教程已生成；Day2、Day3、Day4、Day5、Day6 教程于 2026-08-20 按用户要求依次提前生成，目的是减少后续等待时间，不代表 Day1~Day6 已经完成检阅或正式通过。当前下一步仍是等待用户明确发出 Day1 检阅指令；届时再检查 Day1 Git diff、note、Ubuntu 实际代码、warning、fixed tests、重复运行和 TSan。Day1 通过后可直接按顺序进入已经生成的 Day2~Day6，但不能因后续 daily 已存在而跳过前一日学习和 review。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
 
 Week8 周规划的固定主线：
 
@@ -3156,6 +3156,27 @@ I/O failure policy：writer records stream failure but continues draining，避�
 教程只给 program purpose、完整流程、API 小例子、public/member contract、algorithm checklist 和 test scenarios，没有给可复制的完整 AsyncLogger implementation
 技术核对：ofstream open/close/flush/openmode 依据 C++ working draft，durability 边界依据 Linux fsync(2)；一个未写入教程的 reference AsyncLogger 使用用户真实 BlockingQueue header 在本地 C++17 + Wall + Wextra + pthread 零 warning 编译，4 producers / 800 unique records / repeated shutdown / late rejection 运行通过
 证据限制：向 Ubuntu /tmp 上传临时 reference files 被安全策略阻止，因此不能写成 Ubuntu/TSan 已验证；实际 Day5 学习时仍需在用户 Ubuntu canonical project 运行 normal CTest 与 TSan
+```
+
+Week8 Day6 教程：
+
+```text
+路径：C:\Users\FxorG\Desktop\gpt_infra\week8\day6\day6.md
+生成状态：提前生成，Day1~Day5 尚未验收，不得据此跳过顺序学习和 review
+主题：把 Day5 AsyncLogger 的 backpressure、shutdown overlap、drain/flush/join 与 runtime sink failure 变成可信 evidence，再进行 sync/async buffered file logging benchmark
+连续性：继续使用同一份 canonical AsyncLogger 和 Day5 tests；只在 tests 暴露真实 implementation bug 时改 logger source，不复制 v2/final/day6 implementation
+backpressure 边界：queue capacity 限制 backlog，不等于提高 single-writer throughput；small-capacity timing 只作 observation，不把固定毫秒 threshold 当 correctness assertion；Week7 已验证 queue full/close/wakeup，logger 层验证 accepted/rejected/file accounting
+shutdown oracle：每个 attempted record 使用 unique ID；accepted IDs 在 file exactly once，rejected IDs zero times，二者 disjoint 且覆盖 attempted；同一 producer 的 accepted sequence 保序，不断言跨 producers 全局顺序
+证据诚实性：无 writer/queue observation seam 时，black-box test 能证明 accepted-record completion，不能仅凭 records 很多就声称某个 ID 在 close 时必然 pending；Day6 不为重复 queue internals 污染 public API
+lifetime：允许 one-owner shutdown 与 log overlap，但 logger object 必须活到 shutdown 返回且所有 producer threads join；shutdown returned 不自动代表再无 producer 持有 logger reference
+runtime I/O failure：Linux /dev/full 用于 open 成功后的 ENOSPC write/flush failure；预期 writer 继续 drain lifecycle、shutdown 返回 false、component 不 hang；该 case 明确为 Linux-specific
+benchmark 两条 measurement boundaries：producer-visible submission time 与 end-to-end drain/flush/close/join time；只测 submit 不得宣称整体更快
+benchmark fairness：same pre-generated lvalue records、same newline/open/final-flush policy、same filesystem、same Release build、no timed-region console output；Sync baseline 不取得 record ownership，而 AsyncLogger by-value copy 是真实 handoff cost，必须在 note 说明
+C++17 start gate：producer arrive_and_wait，owner wait_until_all_ready 后才记录 begin/open gate，避免把不一致的 thread startup 混入 timed region
+benchmark evidence：1 warm-up + 5 measured repetitions、raw samples、median/min/max、每 case output validation、记录 VM/CPU/compiler/commit/record size/count/producers/capacity；TSan build 只做 race evidence，不参与性能比较
+停止边界：不新增 public runtime flush、fsync durability、drop policy、rotation、lock-free queue、Google Benchmark dependency、p95/p99、CPU affinity 或 perf/flame graph
+教程只给完整因果链、API 小例子、test/benchmark contract、algorithm checklist 和 failure diagnosis；没有给可直接复制的 logger implementation、StartGate method bodies 或完整 benchmark harness
+技术核对：steady_clock/flush 依据 C++ working draft；/dev/full runtime no-space behavior 依据 Linux full(4)；Google Benchmark official guide 只参考 warm-up/repetition/context 方法，不新增依赖；未写入教程的 C++17 StartGate + steady_clock reference 已在本地 MinGW g++ 8.1.0 下用 -Wall -Wextra -g -pthread 零 warning 编译运行
 ```
 
 Day5 已验收：
