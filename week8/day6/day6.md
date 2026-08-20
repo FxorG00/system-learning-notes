@@ -4,7 +4,7 @@
 >
 > 今日主线：先把 backpressure、close/drain/flush/join 和运行期 I/O failure 变成可信证据，再比较 synchronous logging 与 asynchronous logging。
 >
-> 今日产出：扩展 `tests/async_logger_test.cpp`，新增 `bench/async_logger_bench.cpp`，完成 `day6_note.md` 和一份真实 benchmark 结果。
+> 今日产出：扩展 `tests/async_logger_test.cpp`，新增 `benchmark/async_logger_bench.cpp`，完成 `day6_note.md` 和一份真实 benchmark 结果。
 >
 > 今日不新增 MIT 6.S081 lecture，也不进入日志等级、轮转、lock-free ring buffer、`fsync` logger 或生产级日志库源码。
 
@@ -153,7 +153,7 @@ repeated shutdown 仍安全
 新增：
 
 ```text
-bench/async_logger_bench.cpp
+benchmark/async_logger_bench.cpp
 ```
 
 它比较：
@@ -1335,7 +1335,7 @@ async TSan
 
 ```cmake
 add_executable(async_logger_bench
-    bench/async_logger_bench.cpp
+    benchmark/async_logger_bench.cpp
 )
 
 target_link_libraries(async_logger_bench
@@ -1531,7 +1531,7 @@ tests/async_logger_test.cpp
 ### 34.2 新增文件
 
 ```text
-bench/async_logger_bench.cpp
+benchmark/async_logger_bench.cpp
 week8/day6/day6_note.md
 ```
 

@@ -24,7 +24,14 @@
 - 用户：FxorG。
 - 学校与专业：中山大学，计算机科学与技术专业。
 - 当前阶段：2026 年 7 月准大二；按常规四年制节奏推算为 2029 届，如实际毕业时间变化再调整。
-- 已有基础：C 语言、基础算法题、Linux 基本命令、C++ 基础第一轮。
+- 已有基础：C 语言、Linux 基本命令、C++ 基础第一轮；算法与程序设计竞赛基础很强，不应再概括成“只会基础算法题”。
+- 信息学/程序设计竞赛背景（用户于 2026-08-20 提供）：
+  - 第 50 届 ICPC 国际大学生程序设计竞赛亚洲区域赛武汉站银牌（2025 年）。
+  - CCF CSP 认证 450 分，全国前 0.16%（2025 年 9 月）。
+  - NOIP 2021、2022 广东省一等奖。
+  - CSP-S 2022 第二轮一等奖。
+  - CSP-J 2020 第二轮一等奖。
+- 教学节奏含义：常规算法、基础数据结构和熟悉的 STL 使用可以快速通过，避免重复性刷题；重点继续放在工程化 C++、资源生命周期、Linux/OS/网络、并发、测试、benchmark 和项目表达。竞赛能力证明较强的编码与推理基础，但不能据此默认已经掌握系统机制、工程边界或生产级设计，相关内容仍按实际代码和证据验收。
 - 当前已知缺口：计算机硬件基础相对薄弱。讲到 CPU、instruction、register、CSR、MMU、cache、interrupt 等硬件概念时，不能默认已经学过计算机组成原理；应先补足支撑当天 OS 主线的最小硬件模型。
 - 就业目标：本科毕业直接就业，主目标为 AI Infra。
 - AI Infra 主攻：LLM inference systems / serving 与 CUDA/Triton kernel optimization；多 GPU/NCCL 为第二层。
@@ -3051,7 +3058,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6、Week7 均已正式完成，Week8 已开始。Week8 Day1 教程已生成；Day2、Day3、Day4、Day5、Day6 教程于 2026-08-20 按用户要求依次提前生成，目的是减少后续等待时间，不代表 Day1~Day6 已经完成检阅或正式通过。当前下一步仍是等待用户明确发出 Day1 检阅指令；届时再检查 Day1 Git diff、note、Ubuntu 实际代码、warning、fixed tests、重复运行和 TSan。Day1 通过后可直接按顺序进入已经生成的 Day2~Day6，但不能因后续 daily 已存在而跳过前一日学习和 review。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
+当前位置：Week5、Week6、Week7 均已正式完成，Week8 已开始。Week8 Day1~Day7 教程均已生成；其中 Day2~Day7 是用户为减少后续等待时间而要求提前生成的内容，不代表 Day1~Day7 已经完成检阅或正式通过。当前下一步仍是等待用户明确发出 Day1 检阅指令；届时再检查 Day1 Git diff、note、Ubuntu 实际代码、warning、fixed tests、重复运行和 TSan。Day1 通过后可直接按顺序进入已经生成的 Day2~Day7，但不能因后续 daily 已存在而跳过前一日学习和 review。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
 
 Week8 周规划的固定主线：
 
@@ -3177,6 +3184,27 @@ benchmark evidence：1 warm-up + 5 measured repetitions、raw samples、median/m
 停止边界：不新增 public runtime flush、fsync durability、drop policy、rotation、lock-free queue、Google Benchmark dependency、p95/p99、CPU affinity 或 perf/flame graph
 教程只给完整因果链、API 小例子、test/benchmark contract、algorithm checklist 和 failure diagnosis；没有给可直接复制的 logger implementation、StartGate method bodies 或完整 benchmark harness
 技术核对：steady_clock/flush 依据 C++ working draft；/dev/full runtime no-space behavior 依据 Linux full(4)；Google Benchmark official guide 只参考 warm-up/repetition/context 方法，不新增依赖；未写入教程的 C++17 StartGate + steady_clock reference 已在本地 MinGW g++ 8.1.0 下用 -Wall -Wextra -g -pthread 零 warning 编译运行
+```
+
+Week8 Day7 教程：
+
+```text
+路径：C:\Users\FxorG\Desktop\gpt_infra\week8\day7\day7.md
+生成状态：提前生成，Day1~Day6 尚未验收，不得据此跳过顺序学习和 review
+主题：把 canonical ThreadPool 与 AsyncLogger 组合成可运行、可验证、可解释的小项目，并完成 README、interview.md 与 Week8 出口证据
+ownership：main owns ThreadPool/AsyncLogger；tasks 只 borrow logger reference，不为了掩盖生命周期而无必要地改成 shared ownership
+构造与析构：logger 先构造、pool 后构造；局部对象逆序析构使异常 fallback 也先停止 pool、后停止 logger
+正常 shutdown：停止新增提交 -> pool close/drain/join -> 逐个观察 futures 且不因单个 exception 跳过 cleanup -> logger close/drain/flush/close/join -> 读取并验证最终文件
+integration oracle：deterministic task_id/value、每个 TaskResult.log_accepted 为 true、每个 future 结果准确、每个 task_id 在文件中 exactly once、无 unexpected ID；failure 必须通过 non-zero exit code 传播给 shell/CTest
+backpressure：file sink 变慢可沿 logger queue -> pool workers -> task queue -> external submitter 传播；当前 logger writer 独立运行且不反向依赖 pool，因此正常图中没有 dependency cycle；永久阻塞 sink 仍是 V1 limitation
+错误顺序边界：logger 仍存活但先 shutdown 会造成 log rejection/silent loss；logger object 先销毁而 task 仍借用则是 dangling reference/undefined behavior，二者不能混为一谈
+工程产出：demos/component_demo.cpp、project-root README.md、interview.md、day7_note.md；integration demo include 真实 canonical components，不复制 final/v2 implementation
+README：必须给 architecture、ownership/lifecycle、fresh build/test/TSan/benchmark 命令、真实 evidence 与 known limitations，不写 production-ready 或机器绑定的绝对路径
+interview.md：按 conclusion -> mechanism -> trade-off -> evidence -> limitation/next step 回答项目真实问题，不写脱离当前代码的通用八股
+出口验证：normal CTest、targeted repeat、TSan、Release benchmark、README fresh-build smoke 与 git check；已有同 commit/source 的 Day4/Day6 证据可以引用，不重复重写 Week7 queue tests 或制造体力活
+Week9 边界：只指出 ThreadPool submit 与 AsyncLogger log 在 backpressure 下可能阻塞，未来接 EventLoop 时必须分析；Day7 不提前实现 epoll/Reactor
+教程形式：保持前情提要/必要术语 -> 完整 integration 主线 -> 练习/验证/验收，提供程序用途、contracts、流程图和 oracle，不泄露完整 component_demo implementation
+连续性修正：Week8 canonical directory 使用 benchmark/；Day6 教程中原有 bench/async_logger_bench.cpp 已统一为 benchmark/async_logger_bench.cpp
 ```
 
 Day5 已验收：
