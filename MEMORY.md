@@ -3022,7 +3022,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6、Week7 均已正式完成，Week8 已开始。Week8 Day1 教程已生成；Day2、Day3 教程于 2026-08-20 按用户要求依次提前生成，目的是减少后续等待时间，不代表 Day1、Day2 已经完成检阅或正式通过。当前下一步仍是等待用户明确发出 Day1 检阅指令；届时再检查 Day1 Git diff、note、Ubuntu 实际代码、warning、fixed tests、重复运行和 TSan。Day1 通过后可直接进入已经生成的 Day2、Day3，但必须按顺序学习与验收，不能因后续 daily 已存在而跳过前一日 review。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
+当前位置：Week5、Week6、Week7 均已正式完成，Week8 已开始。Week8 Day1 教程已生成；Day2、Day3、Day4 教程于 2026-08-20 按用户要求依次提前生成，目的是减少后续等待时间，不代表 Day1、Day2、Day3 已经完成检阅或正式通过。当前下一步仍是等待用户明确发出 Day1 检阅指令；届时再检查 Day1 Git diff、note、Ubuntu 实际代码、warning、fixed tests、重复运行和 TSan。Day1 通过后可直接按顺序进入已经生成的 Day2、Day3、Day4，但不能因后续 daily 已存在而跳过前一日学习和 review。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
 
 Week8 周规划的固定主线：
 
@@ -3082,6 +3082,28 @@ lifecycle：graceful shutdown 继续 drain 已接受 result tasks，保证成功
 练习前给出了程序目的、完整结果链、独立 API demos、algorithm checklist 和测试矩阵，但没有给可复制的完整 generic submit template body
 固定验证：int/string/void result、value args、显式 std::ref、exception propagation、later-task survival、reverse get order、post-shutdown rejection、零 warning、50 次重复运行和 TSan
 教程提醒同一 pool 内 nested future wait 可能在固定 worker capacity 下 deadlock/starve，V1 通过使用 contract 避免，不在 Day3 扩展调度策略
+```
+
+Week8 Day4 教程：
+
+```text
+路径：C:\Users\FxorG\Desktop\gpt_infra\week8\day4\day4.md
+生成状态：提前生成，Day1、Day2、Day3 尚未验收，不得据此跳过顺序学习和 review
+主题：把 ThreadPool written contract 变成会真实失败的 executable tests，并区分 deterministic test、stress repeat 与 TSan evidence
+程序产出：tests/thread_pool_test.cpp、project-root CMakeLists.txt、week8/day4/day4_note.md；不复制 ThreadPool implementation
+GoogleTest 当前范围：TEST、EXPECT_EQ/TRUE/FALSE、ASSERT 与 EXPECT 的 current-function 差异、EXPECT_THROW/ASSERT_THROW、gtest_main、test binary exit code
+测试设计主线：contract -> controlled scenario -> observable outcome -> assertion -> binary exit code；并发场景额外先设计 cleanup
+关键纪律：assertions 尽量在 test thread；worker 只返回 result 或更新正确同步的 state；不用 fixed sleep 猜 completion/order
+exactly-once oracle：每个 accepted task 使用 unique ID，逐项检查 hit count，避免 missing 与 duplicate 在 final sum 中互相抵消
+deterministic drain scenario：1 worker + capacity 1；A 占 worker 并等待 gate，B 确定 pending，shutdown helper close queue，C submission rejection 证明 acceptance 已关闭，release A 后验证 A/B once、C zero
+contract 边界：只测 sequential repeated shutdown；不擅自把 concurrent shutdown 或 worker-self-shutdown 变成本阶段要求
+CMake 与环境：Ubuntu 实测 g++ 10.5.0、CMake 3.16.3、TSan smoke PASS；libgtest-dev 当前未安装，apt candidate 为 Focal 1.10.0-2
+CMake 3.16 使用 GTest::GTest / GTest::Main imported targets；不照搬较新文档的 GTest::gtest / GTest::gtest_main names
+build 主线：normal build/ 与 separate build-tsan/；gtest_discover_tests 将 test cases 注册给 CTest，并为 hang 设置 timeout
+证据边界：GoogleTest 检查具体 behavior，repeat 探索更多 scheduling interleavings，TSan 检查已执行路径上的 data race；三者互补但不能互相替代
+固定矩阵：construct boundary、zero task、single/void result、many exactly once、future exception + later task、drain、repeated shutdown、post-shutdown rejection、concurrent submitters、destructor lifecycle
+练习前提供了 GoogleTest/CMake 独立 demo、API 解释、scenario/oracle/cleanup 设计和测试矩阵，但没有给完整 ThreadPool test harness
+教程中的 GoogleTest demo 与 CMake 3.16 FindGTest/gtest_discover_tests 已在 Ubuntu 临时解压 package 环境实测：2 tests 编译运行、CTest discovery 和 exit status 全部通过，临时文件已清理
 ```
 
 Day5 已验收：

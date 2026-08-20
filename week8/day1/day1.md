@@ -355,6 +355,79 @@ decltype(x) b = 1; // 根据 x 的类型，声明 b 的类型
 
 ---
 
+### 3.12 同步/异步 task
+
+这里的“异步 task”就是：
+
+```text
+main 现在把一项 work 交出去，
+但不自己立刻执行完、也不等它执行完；
+它会在之后由 worker 执行。
+```
+
+对比一下就很清楚。
+
+同步：
+
+```cpp
+int result = square(i);  // main 在这里执行，并等它返回
+```
+
+流程是：
+
+```text
+main 调用 square(i)
+-> square 执行
+-> 得到结果
+-> main 才继续下一行
+```
+
+异步 task：
+
+```text
+main 把“将来计算 i 的平方”包装成 task
+-> push 到 queue
+-> main 可以继续提交下一个 task
+-> 某个 worker 将来取到它并执行
+```
+
+时间线可能是：
+
+```text
+main:    i=0 -> 提交 task0 -> i=1 -> 提交 task1 -> 循环结束
+worker:                    过一会儿才执行 task0
+```
+
+所以若 task 写成按引用捕获：
+
+```cpp
+[&i]() {
+    // 将来才读取 i
+}
+```
+
+它引用的是循环中那**同一个** `i`。等 worker 真执行时，`i` 可能已经变成最终值，甚至循环已经结束、`i` 已被销毁了。
+
+而按值捕获：
+
+```cpp
+[i]() {
+    // closure 内保存“这一次 i 的副本”
+}
+```
+
+则 task0 保存 `0`，task1 保存 `1`，各自互不影响。
+
+再压缩一句：
+
+```text
+异步 = 提交和实际执行不在同一时刻完成。
+```
+
+它不一定意味着多个 CPU 同时运行；即使只有一个 worker、只是“晚一点执行”，也是异步。
+
+---
+
 # Part 2：教程主体
 
 # 教程开始：worker 不可能提前知道将来要调用哪个函数
@@ -992,6 +1065,79 @@ pointee 仍然存活
 ```
 
 这与前面学过的 dangling pointer 是同一类 lifetime 问题，只是现在延迟到另一个 execution flow 中暴露。
+
+---
+
+### 8.5 pointee /er 啥意思？
+
+对，你的理解是对的。这里要区分 `pointer` 和 `pointee`：
+
+```cpp
+int value = 0;
+int* pointer = &value;
+```
+
+```text
+pointer：这个指针变量，里面存着地址
+pointee：该地址指向的对象，也就是这里的 value
+```
+
+`pointee` 不是 C++ 关键字，只是常用英文，意思是“被指向的对象”。
+
+当你写：
+
+```cpp
+auto task = [pointer]() {
+    // ...
+};
+```
+
+lambda 会得到一份自己的 `pointer` 副本。也就是说它保存了同一个地址，但**没有复制 `value`，也没有拥有 `value`**。
+
+如果 pointee 已经死了，lambda 中的 pointer 数值虽然还在，解引用却非法。
+
+对于你选中的代码：
+
+```cpp
+int value = 0;
+int* pointer = &value;
+```
+
+`value` 是栈上的局部对象，不能 `delete pointer`。它会在作用域结束时自动销毁：
+
+```cpp
+std::function<void()> make_task() {
+    int value = 0;
+    int* pointer = &value;
+
+    return [pointer]() {
+        // *pointer 已经是 dangling pointer，非法
+    };
+} // value 在这里死亡
+```
+
+另一种确实是你说的 `delete` 场景：
+
+```cpp
+int* pointer = new int(42);
+
+auto task = [pointer]() {
+    std::cout << *pointer << '\n';
+};
+
+delete pointer;  // 销毁 heap 上的 int
+
+task();          // pointer 数值还在，但 pointee 已释放，解引用非法
+```
+
+压缩成一句：
+
+```text
+按 value capture pointer：
+复制的是地址，不是地址指向的对象。
+```
+
+所以 lambda 有自己的 `pointer`，但它和外面的 pointer 都指向同一个 pointee；谁销毁 pointee，两个指针都会一起变成 dangling pointer。
 
 ---
 
