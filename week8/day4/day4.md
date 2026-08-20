@@ -1049,17 +1049,38 @@ flowchart TD
     D --> E[test submits Task B]
     E --> F[bounded queue now contains pending B]
     F --> G[test starts helper thread calling shutdown]
-    G --> H[shutdown closes queue then waits for worker]
-    H --> I[test attempts Task C submission]
-    I --> J[closed queue rejects C and submit throws]
-    J --> K[test releases A gate]
-    K --> L[A finishes]
-    L --> M[worker pops and executes accepted B]
-    M --> N[queue closed and empty so worker exits]
-    N --> O[shutdown joins worker and returns]
-    O --> P[test joins shutdown helper]
-    P --> Q[assert A and B ran once C ran zero times]
+    G --> H[test attempts Task C submission]
+    H --> I{has helper closed queue first?}
+    I -- yes --> J[enqueue observes closed and submit throws]
+    I -- no --> K[C waits because queue is full]
+    G --> L[helper closes queue then waits for worker]
+    L --> M[close wakes blocked push]
+    K --> M
+    M --> J
+    J --> N[test releases A gate]
+    N --> O[A finishes]
+    O --> P[worker pops and executes accepted B]
+    P --> Q[queue closed and empty so worker exits]
+    Q --> R[shutdown joins worker and returns]
+    R --> S[test joins shutdown helper]
+    S --> T[assert A and B ran once C ran zero times]
 ```
+
+上图中 test 启动 helper 后就调用 C，但不能假装 scheduler 一定让 helper 先完成 close。这里有两个合法 interleavings：
+
+```text
+close 先线性化
+-> C 直接观察 closed 并被拒绝
+
+C 先进入 enqueue，看到 open + full
+-> C 在 not_full 上等待
+-> helper close 必须 notify blocked push
+-> C 醒来观察 closed 并被拒绝
+```
+
+因此 `EXPECT_THROW` 返回本身就是一个同步证据：此刻 C 已经观察到 closed，而 A 仍被 gate 挡住、B 仍 pending。然后 test 才 release A，才能严格证明“B 在 close 时 pending，随后被 drain”。
+
+不要把 C 移到 `helper.join()` 之后：`shutdown()` 是 blocking operation，必须先 release A 才可能 join；如果 helper 在 release A 后才获得调度，B 可能在 close 前已经执行完，反而失去 pending-at-close 的证明。
 
 这里：
 
@@ -1067,6 +1088,7 @@ flowchart TD
 A waiting：确定 worker 被占用
 B in queue：确定存在 accepted pending task
 C rejected：证明 shutdown 已关闭 acceptance
+A release 前 C 已返回：证明 close 已线性化且 B 仍 pending
 A release：让 drain 能继续
 B executed：证明 accepted pending task 没被丢弃
 ```
@@ -1204,6 +1226,8 @@ pool 仍能处理后续 work
 ```
 
 Day3 已说明 generic packaged task 的 user exception 通常被 shared state 保存，因此不要再要求旧的 `failed_task_count` 必然为每个 future exception 加一。
+
+Day3 的 canonical contract 已决定删除 public `failed_task_count()`。因此迁移 Day2 tests 时必须同步删除 `failed_task_count == 0/1` assertions；Day4 用 `future.get()` 观察业务 exception，并用 later task result 证明 worker/pool 仍可继续工作。不要保留一个名称仍叫“failed task count”、实际却只统计 unexpected wrapper failure 的悬空 API。
 
 ### 20.1 empty `std::function` 是 API 演进回归场景
 
@@ -1912,10 +1936,11 @@ capacity 1
 Task A blocked at gate
 Task B accepted and pending
 helper calls shutdown
-Task C observes rejection
+test submits Task C；它要么直接观察 close，要么先因 full 等待再被 close 唤醒
+Task C throws 后，close 已确定线性化且 A 仍 blocked、B 仍 pending
 release A
-assert A/B once, C zero
 join helper
+assert A/B once, C zero
 ```
 
 ### 35.9 submit after shutdown

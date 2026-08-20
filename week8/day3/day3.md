@@ -68,12 +68,14 @@ std::cout << result.get() << '\n';
 
 ```text
 输入：callable + arguments
-立即输出：std::future<R>
+submission 被 queue accepted 后输出：std::future<R>
 真正执行 callable 的人：pool 中某个 worker
 最终结果：R，或 callable 抛出的 exception
 观察结果的人：持有 future 的 submitter
 正常结束：shutdown drain 已接收 tasks，然后 join workers
 ```
+
+若 bounded queue 已满，`submit()` 本身可以先等待 capacity；future 不是无条件 zero-wait 返回。
 
 成功必须分成两个阶段：
 
@@ -135,7 +137,7 @@ shared_future 深入
 在今天的组件中：
 
 ```text
-submit() 立即把 future 交给 caller
+queue accepted wrapper 后，submit() 把 future 交给 caller
 worker 将来产生 result
 caller 用 future.get() 观察 result
 ```
@@ -1334,9 +1336,25 @@ enqueue accepted
 -> return associated future<R>
 
 enqueue rejected because pool is shutting down/stopped
--> submit throws std::runtime_error immediately
+-> once enqueue observes closed, submit throws std::runtime_error before returning
 -> no unusable future is returned
 ```
+
+这里的“明确失败”不等于每次从 function entry 起都 zero-wait：
+
+```text
+submit starts after shutdown has completed
+-> queue already closed
+-> rejection is observed without waiting for capacity
+
+submit overlaps shutdown while bounded queue is full
+-> enqueue may first wait on not_full
+-> close must notify blocked push
+-> push wakes, observes closed and returns false
+-> submit then throws runtime_error
+```
+
+因此真正的保证是“不会返回永久 pending future，且 rejection 一旦由 queue 决定就通过当前 submit 调用报告”，不是“所有交错下 submit 都立刻返回”。
 
 为什么要在 enqueue 之前先创建 future？
 
@@ -1390,15 +1408,17 @@ user callable throws
 
 除非你另外设计明确机制并测试它。
 
-今天推荐把 public API 的变化写清楚：
+Day3 对 canonical component 作出明确选择：
 
 ```text
 Day2 failed_task_count 是没有 future 时的过渡性观察接口
+Day3 从 public API 删除 failed_task_count()
 Day3 generic result task 的业务失败由对应 future.get() 观察
-public failed_task_count 不再代表“失败的 user tasks 数量”
+Day2 tests 中 failed_task_count == 0/1 的 assertions 同步删除
+对应 exception test 改为 future.get() throws + later task succeeds
 ```
 
-推荐 Day3 从核心 public contract 中移除 `failed_task_count()`，保留 worker outer catch 作为最后的 component containment boundary。若你确实保留 counter，应把它改名/注释为 `unexpected_worker_failure_count` 一类的诊断信息，只统计逃出 wrapper invocation 的异常，不能再拿它和 future 中的业务失败数量比较。
+不要让同一份 canonical source 同时保留一个名为 `failed_task_count()`、却不再统计 generic user-task failures 的接口。worker outer catch 可以继续作为最后的 component containment boundary，但本日不把它暴露成 user-task failure counter。以后若确实需要统计逃出 wrapper invocation 的异常，应另行设计并命名为 `unexpected_worker_failure_count` 一类的 diagnostic API，同时单独定义和测试；不属于 Day3 V1。
 
 这是接口升级带来的语义变化，不是“worker catch 失效”。异常现在在更靠近具体 task result 的位置被保存。
 
@@ -1643,7 +1663,7 @@ owner shutdown
 -> queue closed and workers drained/joined
 -> caller calls submit
 -> wrapper cannot be accepted
--> submit throws runtime_error immediately
+-> submit observes already-closed queue and throws runtime_error
 -> no future is returned
 ```
 
@@ -1680,7 +1700,7 @@ caller submits empty std::function<void()>
 public bool submit(Task) -> public generic submit(...) returning future<R>
 post-shutdown return false -> submit throws runtime_error
 empty Task immediate invalid_argument -> empty std::function exception through future
-failed_task_count -> 不再作为 generic user-task failure 的核心 public contract
+failed_task_count -> 从 Day3 public API 与 canonical tests 中删除
 ```
 
 这些变化必须同步修改 tests 和调用者理解，不能只换 function signature 后继续沿用旧 assertions。
@@ -1773,11 +1793,12 @@ Git 已经负责保存 Day2 到 Day3 的演进历史。
 
 ```text
 caller 提交满足本日 bind-based contract 的 callable 与参数
-submit 立即返回与该 task 对应的 future<R>
+queue 有空间并 accepted 后，submit 返回与该 task 对应的 future<R>
+queue full 时，submit 可能先等待 capacity；shutdown close 会唤醒并拒绝 blocked submission
 pool worker 异步执行 task
 task 的 return value 或 exception 通过 shared state 回到 future
 normal shutdown drain 已接受 tasks 并 join workers
-shutdown 后的新提交立即失败，不返回永久 pending future
+completed shutdown 后的新提交明确失败，不返回永久 pending future
 ```
 
 `tests/thread_pool_test.cpp` 是 executable test entry，用来证明以上 contract，而不是另一个 ThreadPool implementation。
@@ -1804,7 +1825,7 @@ auto submit(F&& function, Args&&... args)
 支持 copyable ordinary value arguments
 显式 std::ref 支持 reference semantics
 user callable exception 由对应 future.get() 观察
-submit after shutdown 立即 throw std::runtime_error
+submit after completed shutdown throw std::runtime_error
 empty std::function 的 std::bad_function_call 由 future.get() 观察
 ```
 
@@ -1827,7 +1848,7 @@ Day2 的低层 queue acceptance 操作建议改成 private `enqueue(Task)`，不
 4. 取得与 packaged task 关联的 future<ReturnType>
 5. 创建一个 copyable void wrapper，使 worker 调用它时会调用 packaged task
 6. 通过 private enqueue 交给现有 BlockingQueue<Task>
-7. 若 enqueue 失败，立即 throw runtime_error
+7. 若 enqueue 返回 rejection，在当前 submit 调用中 throw runtime_error
 8. 若 enqueue 成功，return future
 ```
 
@@ -1852,7 +1873,10 @@ accepted：Task ownership 进入 queue
 rejected：Task 未进入 queue
 blocking：bounded queue full 时仍可等待 space
 synchronization：沿用 BlockingQueue 自己的 mutex/condition variables
+shutdown interaction：close 必须 notify blocked push；它醒来后观察 closed、返回 false
 ```
+
+这条 wakeup contract 保证 queue 满时等待的 submit 不会因为 owner 正在 shutdown 而永久睡在 `not_full` 上。
 
 不要再加一把包住整个 submit 的 pool mutex。queue full 时 submit 可能等待；若持有 shutdown 也需要的外层 mutex，会制造不必要的 lock dependency。
 
@@ -1969,7 +1993,7 @@ pool 仍可继续工作
 ```text
 pool.shutdown()
 尝试 submit
-必须立即观察 runtime_error
+当前 submit 调用必须观察 runtime_error
 不能得到一个之后永远不 ready 的 future
 ```
 
@@ -2214,7 +2238,7 @@ submitter -> packaged_task -> queue wrapper -> worker
 value args 与 explicit std::ref 都有测试
 callable exception 由 future.get 重新观察，worker 继续工作
 empty std::function 由 future.get 观察 bad_function_call，pool 继续工作
-shutdown 后 submit 立即失败，不产生永久 pending future
+completed shutdown 后 submit 明确失败，不产生永久 pending future
 normal build 零 warning
 fixed tests 全部 PASS
 ```
@@ -2251,7 +2275,7 @@ future.get 在 submitter 一侧等待并观察这个 outcome。
 packaged_task 是 move-only，C++17 std::function 要 copyable target；
 copyable lambda 捕获 shared_ptr，可以把两者接起来。
 
-submit after shutdown 必须立即明确失败，不能返回永远不 ready 的 future。
+submit after completed shutdown 必须明确失败，不能返回永远不 ready 的 future；与 shutdown 并发且 queue full 时，调用可以先等到 close notification。
 
 std::bind 只保证按值保存普通 arguments，不保证执行时再次把 stored values 当 rvalue；
 empty std::function 和 failure counter 也必须随 generic API 显式重新定义。

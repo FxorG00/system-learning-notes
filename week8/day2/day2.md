@@ -592,9 +592,13 @@ submitter 读到 accepting=true
 现有 BlockingQueue 的关系：
 
 ```text
-push：在 queue mutex 下等待/检查 closed_，成功后入队
+push：在 queue mutex 下等待 closed_ || not_full，成功后入队
 close：在同一 queue mutex 下把 closed_ 改为 true
+close：notify_all not_empty 与 not_full waiters
+blocked push：被 close 唤醒，重新拿 mutex 后看到 closed_，返回 false，不入队
 ```
+
+最后两行是 ThreadPool shutdown 能和 bounded submit 正确组合的必要 contract，不是可选优化。若 close 只唤醒 blocked consumers、不唤醒 blocked producers，full queue 上等待的 submitter 可能永远无法观察 shutdown。
 
 因此只有两类结果：
 
@@ -835,6 +839,7 @@ flowchart TD
     A[owner calls shutdown] --> B[pool closes task queue]
     B --> C[new submit observes closed and fails]
     B --> D[blocked workers wake]
+    B --> K[blocked submitters wake and push returns false]
     D --> E{queued Task remains?}
     E -- yes --> F[worker pops and executes Task]
     F --> E
@@ -1259,6 +1264,7 @@ reject empty Task according to contract
 delegate final acceptance to BlockingQueue::push
 return true only if queue accepted Task
 return false after close
+if blocked because queue is full, close must wake this push and make it return false
 do not execute task in submitter
 do not hold an unrelated pool mutex while a bounded queue push blocks
 ```
@@ -1514,18 +1520,20 @@ failed_task_count == 0
 
 ---
 
-### Test 4：drain queued tasks
+### Test 4：accepted-work completion baseline
 
 ```text
 workers=2
 capacity 较小
 submit 明显多于 worker_count 的 tasks
-submit 完成后立即 shutdown
+submit 完成后调用 shutdown
 ```
 
 不要使用 sleep 猜“肯定还有任务在 queue”。
 
-通过 task 数量和少量受控 gate/state，或至少通过最终 exact results，证明 shutdown 没有把 accepted tasks 丢掉。
+只检查最终 exact results，可以证明 accepted tasks 没有丢失，但不能单独证明 `shutdown()` 开始时 queue 中确实存在 pending task。快机器可能已经在 shutdown 前完成全部 work。
+
+如果今天愿意加入少量受控 gate/state，可以进一步建立 pending state；否则把本测试准确记为 accepted-work completion baseline，不把它当作严格 drain-timing evidence。
 
 Day4 会把“确实建立 pending state”的 deterministic test 做得更严格；今天先确保业务结果完整。
 
@@ -1716,7 +1724,7 @@ echo "stress PASS"
 [PASS] invalid construction
 [PASS] zero-task shutdown
 [PASS] normal exact execution
-[PASS] drain accepted tasks
+[PASS] accepted-work completion baseline
 [PASS] submit after shutdown
 [PASS] empty task
 [PASS] exception isolation

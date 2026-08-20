@@ -2814,6 +2814,15 @@ Week8 Day2~Day4 第二轮教程审计：
     代码能编译不等于教程技术上完整。还要检查示例是否真的表现正文声称的语义，失败路径是否可观察，测试自身是否能退出和 cleanup，命令的 working directory 是否前后一致，以及示例是否无意要求了本日尚未教授的能力。
     批量生成多份 daily 时，先分别完成每篇纵向审计，再按 day1 -> dayN 做一次横向串联审计；篇幅相近、章节齐全或模板一致都不能代替逐篇技术核对。
     若 check 发现 daily 与 week.md/总规划冲突，先判断是 daily 偏航还是规划确实需要调整。默认修正 daily；只有用户进度或路线真实变化时才修改 week.md/总规划，不能为了给当前教程圆场而悄悄改路线。
+
+Week8 Day2~Day4 全量勘误复核：
+    外部错误清单不能按严重度标签直接照收，必须回到 cumulative curriculum、真实前置 component contract、actual code 和目标 test state 逐项验证。Week7 BlockingQueue 已明确 `close -> notify_all(not_full) -> blocked push wakes -> sees closed -> false`，所以“整个课程完全未定义”不成立；但 Week8 Day2/Day3 复用该能力时写得不够显式，已补成 ThreadPool shutdown 的必要 inherited contract。
+    Day4 原 deterministic drain test 的核心设计成立：A blocked、B pending 后启动 shutdown helper，再同步 submit C。C 要么直接观察 close，要么先因 full 等待后被 close 唤醒；`EXPECT_THROW` 返回证明 close 已线性化，此时 A 未 release、B 仍 pending，之后才 release/drain。原 flowchart 错在把两种 interleavings 画成“close 必然先于 C”，现已修成分支。
+    不能采用“release A -> helper.join -> 再 submit C”的所谓修复：shutdown 是 blocking 的，必须先 release 才能 join；若 helper 在 release 后才获得调度，B 可能在 close 前完成，测试反而不能证明 pending-at-close。并发测试修法也必须重新验证目标 state，不可只消除表面 hang。
+    Day3 `failed_task_count` 不能继续保留为推荐二选一。canonical contract 已固定为删除 public counter 与 Day2 的 `failed_task_count == 0/1` assertions；generic user exception 改由 future.get 观察，later task success 证明 pool survival。若以后需要 unexpected wrapper failure diagnostics，另设新 API 和 tests。
+    `submit` 返回 future 不是所有状态下 zero-wait：bounded queue full 时 submission 可以阻塞；与 shutdown overlap 时由 close notification 唤醒并报告 rejection。教程中的“立即返回/立即抛错”已改为“accepted 后返回”与“enqueue 观察 closed 后在当前调用中抛错”。
+    Day2 仅用 final exact results 只能证明 accepted work 未丢，不能证明 shutdown 开始时确有 pending task；已重命名为 completion baseline，严格 pending-at-close evidence 留给 Day4 gate test。
+    本轮确认不属于技术错误：`EXPECT_THROW(ThreadPool(0, 8), type)` 的圆括号保护内部逗号；queue_capacity=0 可同时是 ThreadPool observable contract 且由 BlockingQueue member 执行校验；invalid argument throw 与 lifecycle rejection return false 可以是有意 error model；invoke_result/bind value-category mismatch 已属于 V1 明示限制；shutdown 永久等待与 destructor fallback 的关系原文已有足够事实；发行版 GTest ABI 备注不构成本日错误。
 ```
 
 ### 9.11 发布前自检清单
@@ -3078,10 +3087,10 @@ Week8 Day2 教程：
 生成状态：提前生成，Day1 尚未验收，不得据此跳过 Day1 review
 主题：把 task queue、workers、worker loop 和 shutdown responsibility 封装为 ThreadPool V1
 核心：fixed-size ownership、RUNNING/DRAINING/STOPPED、submit-vs-shutdown acceptance、close/drain/join、destructor lifecycle
-新增 error path：worker_count/empty task、constructor partial-thread rollback、task exception boundary、sequential idempotent shutdown
+新增 error path：worker_count/empty task、constructor partial-thread rollback、task exception boundary、sequential idempotent shutdown；close 必须唤醒 blocked submitters 并使 push 返回 false
 V1 policy：std::function<void()> task；task exception 计入 atomic failure count；Day3 再用 packaged_task/future 传播逐 task exception
 练习前只给 public contract、state flow、API 小例子和测试矩阵；没有给完整 worker-loop 或 class implementation
-固定验证：invalid construction、zero-task shutdown、exact execution、drain、post-shutdown submit、empty task、exception isolation、destructor、repeated shutdown、TSan、50 次重复运行
+固定验证：invalid construction、zero-task shutdown、exact execution、accepted-work completion baseline、post-shutdown submit、empty task、exception isolation、destructor、repeated shutdown、TSan、50 次重复运行；严格 pending-at-close drain evidence 由 Day4 gate test 承担
 教程中的 interface/exception/joinable API 组合示例已用 C++17 + Wall + Wextra + pthread 实际编译运行
 ```
 
@@ -3096,11 +3105,11 @@ Week8 Day3 教程：
 关键边界：future 不是 thread；get 可能 blocking 且普通 future 是 one-shot；packaged_task 是 move-only；C++17 std::function target 要 copyable
 桥接设计：shared_ptr 指向唯一 packaged_task，copyable lambda 只复制 shared_ptr，再进入 std::function<void()> queue
 API 演进：public generic submit 返回 future<R>；Day2 低层 bool submit(Task) 建议收成 private enqueue(Task)，避免职责混杂和同名 overload 干扰
-错误 contract：shutdown 后 submission 立即 throw runtime_error，不返回永远 pending 的 future；accepted callable 的业务异常由对应 future.get() 重新观察
+错误 contract：completed shutdown 后 submission throw runtime_error；与 shutdown overlap 且 queue full 时可先等到 close notification，但不返回永远 pending 的 future；accepted callable 的业务异常由对应 future.get() 重新观察
 第二轮审计补充：std::bind-based V1 支持 copyable ordinary values 和显式 std::ref，不承诺 move-only value arguments 或只接受 T&& 的 parameters；forward 只保留进入 bind storage 时的 value category
 empty contract 演进：empty std::function 被 accepted 后在 worker 调用时抛 bad_function_call，由 future.get 观察；若要 immediate rejection，需另设 overload/type-specific validation
 lifecycle：graceful shutdown 继续 drain 已接受 result tasks，保证成功返回的 future 最终 ready with value or exception
-工程边界：generic packaged_task 会保存 user callable exception；推荐移除 Day2 过渡性的 public failed_task_count，或明确重命名为只统计 unexpected wrapper failures 的诊断 counter
+工程边界：generic packaged_task 会保存 user callable exception；Day3 canonical API 明确删除 Day2 过渡性的 public failed_task_count 及其旧 assertions；unexpected wrapper diagnostics 若需要必须以后另设 API
 练习前给出了程序目的、完整结果链、独立 API demos、algorithm checklist 和测试矩阵，但没有给可复制的完整 generic submit template body
 固定验证：int/string/void result、value args、显式 std::ref、exception propagation、empty std::function regression、later-task survival、reverse get order、post-shutdown rejection、零 warning、50 次重复运行和 TSan
 教程提醒同一 pool 内 nested future wait 可能在固定 worker capacity 下 deadlock/starve，V1 通过使用 contract 避免，不在 Day3 扩展调度策略
@@ -3117,7 +3126,7 @@ GoogleTest 当前范围：TEST、EXPECT_EQ/TRUE/FALSE、ASSERT 与 EXPECT 的 cu
 测试设计主线：contract -> controlled scenario -> observable outcome -> assertion -> binary exit code；并发场景额外先设计 cleanup
 关键纪律：assertions 尽量在 test thread；worker 只返回 result 或更新正确同步的 state；不用 fixed sleep 猜 completion/order
 exactly-once oracle：每个 accepted task 使用 unique ID，逐项检查 hit count，避免 missing 与 duplicate 在 final sum 中互相抵消
-deterministic drain scenario：1 worker + capacity 1；A 占 worker 并等待 gate，B 确定 pending，shutdown helper close queue，C submission rejection 证明 acceptance 已关闭，release A 后验证 A/B once、C zero
+deterministic drain scenario：1 worker + capacity 1；A 占 worker 并等待 gate，B 确定 pending；启动 shutdown helper 后 test submit C，C 要么直接观察 close，要么先因 full 等待再被 close 唤醒；C throw 返回证明 close 已线性化且 B 仍 pending，再 release A、join helper，验证 A/B once、C zero
 contract 边界：只测 sequential repeated shutdown；不擅自把 concurrent shutdown 或 worker-self-shutdown 变成本阶段要求
 CMake 与环境：Ubuntu 实测 g++ 10.5.0、CMake 3.16.3、TSan smoke PASS；libgtest-dev 当前未安装，apt candidate 为 Focal 1.10.0-2
 CMake 3.16 使用 GTest::GTest / GTest::Main imported targets；不照搬较新文档的 GTest::gtest / GTest::gtest_main names
