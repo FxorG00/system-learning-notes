@@ -3022,7 +3022,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6、Week7 均已正式完成。Week7 Day1 `91/100`、Day2 `92/100`、Day3 `90/100`、Day4 `91/100`、Day5 `88/100`、Day6 `89/100`、Day7 `92/100`，全部正式通过。Day7 已验收 mutex contention、per-thread aggregation、adjacent atomics false sharing、padded atomics、cache-line ownership ping-pong、benchmark repeat/statistics、零 warning 与 TSan 证据；用户未机械填写验收题，其主动增补、代码和实验记录共同提供了充分理解证据。BlockingQueue 重复复检按既有规则豁免，留待 Week8 ThreadPool 集成时做有价值的 lifecycle 验证。Week8 总规划和 Day1 教程均已于 2026-08-19 生成；当前下一步是用户学习 `week8/day1/day1.md`，在 Ubuntu 独立完成 `task_dispatch_demo.cpp` 与 `day1_note.md`，之后由 Codex 检查 Git diff、note、实际代码、warning、fixed tests、重复运行和 TSan，再决定 Day1 是否通过。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
+当前位置：Week5、Week6、Week7 均已正式完成，Week8 已开始。Week8 Day1 教程已生成，Day2 教程于 2026-08-20 按用户要求提前生成，但这不代表 Day1 已经完成检阅或正式通过。当前下一步仍是等待用户明确发出 Day1 检阅指令；届时再检查 Day1 Git diff、note、Ubuntu 实际代码、warning、fixed tests、重复运行和 TSan。Day1 通过后可直接进入已经生成的 Day2；在此之前不提前评价 Day1 产出。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
 
 Week8 周规划的固定主线：
 
@@ -3049,6 +3049,20 @@ Week8 Day1 教程：
 练习前没有给完整 worker-loop C++、future、packaged_task 或 generic submit template
 固定验证：normal dispatch、capacity=1、no-task shutdown、different callable types、零 warning、TSan、50 次重复运行
 教程中的 std::function 完整 demo 已用 C++17 + Wall + Wextra 实际编译运行
+```
+
+Week8 Day2 教程：
+
+```text
+路径：C:\Users\FxorG\Desktop\gpt_infra\week8\day2\day2.md
+生成状态：提前生成，Day1 尚未验收，不得据此跳过 Day1 review
+主题：把 task queue、workers、worker loop 和 shutdown responsibility 封装为 ThreadPool V1
+核心：fixed-size ownership、RUNNING/DRAINING/STOPPED、submit-vs-shutdown acceptance、close/drain/join、destructor lifecycle
+新增 error path：worker_count/empty task、constructor partial-thread rollback、task exception boundary、sequential idempotent shutdown
+V1 policy：std::function<void()> task；task exception 计入 atomic failure count；Day3 再用 packaged_task/future 传播逐 task exception
+练习前只给 public contract、state flow、API 小例子和测试矩阵；没有给完整 worker-loop 或 class implementation
+固定验证：invalid construction、zero-task shutdown、exact execution、drain、post-shutdown submit、empty task、exception isolation、destructor、repeated shutdown、TSan、50 次重复运行
+教程中的 interface/exception/joinable API 组合示例已用 C++17 + Wall + Wextra + pthread 实际编译运行
 ```
 
 Day5 已验收：

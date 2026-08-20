@@ -333,6 +333,28 @@ task 可能在原作用域结束以后才执行。
 
 ---
 
+### 3.11 decltype
+
+`decltype` 是 **declared type** 的缩写，可以理解为“声明类型”。
+
+它让编译器根据一个表达式推导出其类型，常用于模板和泛型代码。例如：
+
+```cpp
+int x = 3;
+decltype(x) y = 4;  // y 的类型也是 int
+```
+
+它和 `auto` 都能推导类型，但方向相反：
+
+```cpp
+auto a = x;        // 根据右侧 x，推导左侧 a 的类型
+decltype(x) b = 1; // 根据 x 的类型，声明 b 的类型
+```
+
+在你 Day1 的语境里，不同 lambda 的 `decltype(first)`、`decltype(second)` 往往不同，因为每个 lambda expression 都有独立的 closure type。
+
+---
+
 # Part 2：教程主体
 
 # 教程开始：worker 不可能提前知道将来要调用哪个函数
@@ -557,6 +579,207 @@ wrapper interface 相同
 !=
 内部 callable 行为相同
 ```
+
+---
+
+### 6.4 独立例子注解以及 operator()
+
+`wrapper` 可以直译成“包装器”。这里 `std::function<void()>` 的意思是：
+
+```text
+它在外面提供统一的 task() 接口，
+里面保存某个具体 callable。
+```
+
+所以它把原本类型不同的 free function、lambda、Functor “包起来”，worker 不必知道内部到底是哪一种，只要统一写：
+
+```cpp
+task();
+```
+
+就行。
+
+这句实际发生的是：
+
+```cpp
+std::function<void()> second = Functor{};
+```
+
+```text
+Functor{}                    创建一个临时 Functor object
+-> std::function<void()>     把这个 object 保存/包装起来
+-> second                    成为统一的 Task wrapper
+```
+
+之后：
+
+```cpp
+second();
+```
+
+逻辑上等价于：
+
+```text
+std::function 的 operator() 被调用
+-> 它转而调用内部保存的 Functor object
+-> Functor::operator()() 被调用
+```
+
+---
+
+`Functor` 这个 struct 的关键是：
+
+```cpp
+struct Functor {
+    void operator()() const {
+        std::cout << "functor\n";
+    }
+};
+```
+
+`operator()` 是 C++ 的“函数调用运算符重载”。
+
+普通 object 原本不能这样调用：
+
+```cpp
+Functor f;
+f();  // 为什么 class object 也能像函数一样调用？
+```
+
+因为你定义了：
+
+```cpp
+void operator()() const
+```
+
+编译器会把：
+
+```cpp
+f();
+```
+
+理解为：
+
+```cpp
+f.operator()();
+```
+
+拆开看：
+
+```cpp
+operator()  // 函数名：重载“调用对象()”这个运算符
+()          // 这个成员函数自己的参数列表：这里没有参数
+void        // 调用后不返回值
+const       // 调用它不会修改这个 Functor object
+```
+
+因此这两段代码的效果相同：
+
+```cpp
+Functor f;
+f();
+```
+
+```cpp
+Functor f;
+f.operator()();
+```
+
+`Functor{}` 则只是“构造一个没有成员数据的临时 `Functor` object”。它还没被 `std::function` 包装前，也可以直接调用：
+
+```cpp
+Functor{}();
+```
+
+输出：
+
+```text
+functor
+```
+
+所以今天可以先这样记：
+
+```text
+Functor：一个通过 operator() 伪装成函数的 class object
+std::function：一个能统一包装不同 callable 的外层 object
+second()：调用 wrapper
+-> wrapper 再调用里面的 Functor::operator()()
+```
+
+---
+
+### 6.5 complier 会为 operator 做些什么？
+
+对，作为直觉可以这样理解。
+
+如果 `Node` 里定义的是成员运算符：
+
+```cpp
+class Node {
+public:
+    int operator+(const Node& rhs) const;
+};
+```
+
+那么：
+
+```cpp
+Node f;
+Node g;
+
+f + g;
+```
+
+会经过运算符重载解析，调用效果等价于：
+
+```cpp
+f.operator+(g);
+```
+
+这里：
+
+```cpp
+operator+              // 函数名：重载二元 +
+const Node& rhs        // 右操作数 g
+const                  // 允许 const Node 也参与 f + g
+```
+
+而 `f` 是左操作数，它隐含为成员函数的 `this`。
+
+不过这不是简单的“文本替换”。编译器会先做**运算符重载解析**：检查有哪些可用的 `operator+`，再按类型、`const`、引用等规则选最匹配的版本。
+
+还有另一种常见写法：把 `operator+` 写成非成员函数。
+
+```cpp
+Node operator+(const Node& lhs, const Node& rhs);
+```
+
+这时：
+
+```cpp
+f + g;
+```
+
+效果等价于：
+
+```cpp
+operator+(f, g);
+```
+
+所以可以先记：
+
+```text
+成员 operator+：
+f + g  ->  f.operator+(g)
+
+非成员 operator+：
+f + g  ->  operator+(f, g)
+
+成员 operator()：
+f()    ->  f.operator()()
+```
+
+`operator()` 比较特殊，它只能是非静态成员函数，因此 `f()` 只能对应 `f.operator()()`。
 
 ---
 
