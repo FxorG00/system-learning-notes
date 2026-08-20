@@ -783,6 +783,57 @@ f()    ->  f.operator()()
 
 ---
 
+### 6.6 什么是非静态成员函数
+
+基本理解对，但补一个很重要的修正：**每个 object 不会各自存一份成员函数代码**。成员函数的代码通常只有一份，所有对象共用。
+
+非静态成员函数的关键是它调用时绑定一个具体 object，编译器会隐含传入 `this`：
+
+```cpp
+class Node {
+public:
+    void print() const;
+};
+
+Node f;
+f.print();  // 概念上：Node::print(&f)
+```
+
+因此 `print()` 内部可以直接访问 `f` 自己的非静态成员。
+
+静态成员函数则没有 `this`：
+
+```cpp
+class Node {
+public:
+    static void show_count();
+};
+```
+
+它可以写成：
+
+```cpp
+Node::show_count();
+```
+
+但不能直接访问某个具体 object 的普通成员，因为它根本不知道“你指的是哪一个 Node”。
+
+所以你可以这样记：
+
+```text
+非静态成员函数：
+属于 class 的接口，但每次调用都对应一个具体 object；
+有隐含 this。
+
+静态成员函数：
+也属于 class 的接口，但不绑定具体 object；
+没有 this。
+```
+
+而 `operator()` 必须是非静态成员函数，正是因为 `f()` 必须知道“到底是哪一个 `f` 被调用了”。 注释 1
+
+---
+
 ## 7. `std::function` 为统一接口付出了什么
 
 `std::function` 很适合当前第一版，但不是零成本魔法。
