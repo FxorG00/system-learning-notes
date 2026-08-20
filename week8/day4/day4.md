@@ -1205,6 +1205,20 @@ pool 仍能处理后续 work
 
 Day3 已说明 generic packaged task 的 user exception 通常被 shared state 保存，因此不要再要求旧的 `failed_task_count` 必然为每个 future exception 加一。
 
+### 20.1 empty `std::function` 是 API 演进回归场景
+
+Day2 的 `submit(Task)` 可以在 submission stage 用 `!task` 立即拒绝 empty `std::function<void()>`。Day3 改成 generic submit 后，本教程选择的新 contract 是：
+
+```text
+empty std::function 被 queue accepted
+-> worker 调用时抛 std::bad_function_call
+-> packaged_task 将异常存入 shared state
+-> future<void>.get() 重新抛出
+-> later normal task 仍能完成
+```
+
+Day4 必须为这条显式变化保留 test，防止 API 重构后仍沿用 Day2 的 `invalid_argument` assertion，或完全漏掉该边界。
+
 ---
 
 ## 21. repeated shutdown 与 concurrent shutdown 不要混写
@@ -1241,6 +1255,7 @@ both return normally
 | void task completion | `CompletesVoidTask` | synchronized side effect |
 | many tasks exactly once | `ExecutesEachAcceptedTaskExactlyOnce` | each ID hit == 1 |
 | task exception | `PropagatesTaskExceptionAndKeepsPoolAlive` | throw + later result |
+| empty std::function | `PropagatesBadFunctionCallAndKeepsPoolAlive` | future throws + later result |
 | shutdown drains | `DrainsAcceptedPendingTaskDuringShutdown` | deterministic gate |
 | repeated shutdown | `AllowsSequentialRepeatedShutdown` | both calls return |
 | post-shutdown submit | `RejectsSubmissionAfterShutdown` | runtime_error |
@@ -1287,12 +1302,13 @@ cmake --build build -j
 
 ### 23.3 test
 
-你的 CMake 3.16 环境使用：
+从 project root 使用：
 
 ```bash
-cd build
-ctest --output-on-failure
+cmake -E chdir build ctest --output-on-failure
 ```
+
+`cmake -E chdir build ...` 表示让 CMake 先把该 command 的 working directory 切到 `build/`，再执行后面的 `ctest`；command 结束后，不会改变你当前 interactive shell 的目录。这样后续 `./build/thread_pool_test` 仍明确以 project root 为起点。
 
 `--output-on-failure`：通过时保持简洁，失败时显示 test output。
 
@@ -1589,9 +1605,7 @@ cmake -S . -B build-tsan \
     -DENABLE_TSAN=ON
 
 cmake --build build-tsan -j
-
-cd build-tsan
-ctest --output-on-failure
+cmake -E chdir build-tsan ctest --output-on-failure
 ```
 
 也可以直接 g++ 验证：
@@ -1877,7 +1891,18 @@ failing task future.get -> runtime_error
 later normal task future.get -> expected value
 ```
 
-### 35.7 deterministic drain during shutdown
+### 35.7 empty `std::function` regression
+
+```text
+submit default-constructed std::function<void()>
+future<void>.get -> std::bad_function_call
+submit later normal task
+later future.get -> expected value
+```
+
+这验证 Day3 明确选择的 generic-submit contract，并证明该 execution failure 不会终止 worker。
+
+### 35.8 deterministic drain during shutdown
 
 按第 17 节的：
 
@@ -1893,14 +1918,14 @@ assert A/B once, C zero
 join helper
 ```
 
-### 35.8 submit after shutdown
+### 35.9 submit after shutdown
 
 ```text
 shutdown returns
 new submit -> runtime_error
 ```
 
-### 35.9 multiple concurrent submitters
+### 35.10 multiple concurrent submitters
 
 ```text
 multiple caller threads
@@ -1910,7 +1935,7 @@ join submitters
 get and verify all results
 ```
 
-### 35.10 destructor lifecycle
+### 35.11 destructor lifecycle
 
 ```text
 future lives outside pool scope
@@ -1958,16 +1983,17 @@ random sleep-based scheduling
 3. 故意制造 assertion failure，确认 exit code non-zero
 4. 写 project CMakeLists.txt
 5. 先迁移 single result / exception tests
-6. 补 construct、zero-task、repeated shutdown
-7. 补 unique-ID exactly-once
-8. 补 deterministic drain gate
-9. 补 concurrent submitters
-10. 补 destructor lifecycle
-11. normal CTest full suite
-12. direct binary filter targeted tests
-13. fresh-process repeat 50 次
-14. separate build-tsan
-15. 读 TSan output 并记录能力边界
+6. 补 empty std::function 的 future exception regression
+7. 补 construct、zero-task、repeated shutdown
+8. 补 unique-ID exactly-once
+9. 补 deterministic drain gate
+10. 补 concurrent submitters
+11. 补 destructor lifecycle
+12. normal CTest full suite
+13. direct binary filter targeted tests
+14. fresh-process repeat 50 次
+15. separate build-tsan
+16. 读 TSan output 并记录能力边界
 ```
 
 若某个 test 卡住，先 filter 单项；不要让整套 suite 每次都陪它等 timeout。
@@ -1996,9 +2022,7 @@ CMake configure 没有缺失 dependency
 
 ```bash
 ./build/thread_pool_test
-
-cd build
-ctest --output-on-failure
+cmake -E chdir build ctest --output-on-failure
 ```
 
 若 binary path 因 generator 不同而变化，以 CMake build output 为准，不手工复制 executable。
@@ -2023,9 +2047,7 @@ cmake -S . -B build-tsan \
     -DCMAKE_BUILD_TYPE=Debug \
     -DENABLE_TSAN=ON
 cmake --build build-tsan -j
-
-cd build-tsan
-ctest --output-on-failure
+cmake -E chdir build-tsan ctest --output-on-failure
 ```
 
 记录时分开写：
@@ -2134,6 +2156,7 @@ GoogleTest/CMake 环境可用
 test binary failure 会产生 non-zero exit code
 test names 能说清 scenario + expected behavior
 核心 ThreadPool contract 均有 executable assertions
+Day2 到 Day3 改变的 empty-task contract 有明确 regression test
 pending-task shutdown 由 gate 确定性建立
 exactly-once 使用 unique IDs，不只检查 sum
 tests 不依赖固定 sleep 猜顺序

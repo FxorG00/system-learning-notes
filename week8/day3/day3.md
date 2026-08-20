@@ -1147,6 +1147,37 @@ int main() {
 
 `std::ref` 不延长 `value` 的 lifetime，也不提供 mutex。
 
+### 13.4 当前 `std::bind` 方案的能力边界
+
+`std::forward` 可以让 rvalue 在进入 `std::bind` 时被 move 到 bind object 中，但这不等于 bind object 将来调用时一定把该对象再次作为 rvalue 传出。
+
+对普通 bound argument，`std::bind` 将来调用 original callable 时，通常把自己保存的 argument 作为 lvalue 交给 callable。因此当前 V1 明确支持：
+
+```text
+copyable value arguments
+可以从保存值的 lvalue 正常调用的 parameter types
+通过 std::ref / std::cref 显式传递的 references
+```
+
+当前 V1 不承诺：
+
+```text
+move-only argument 按 value 传给 function
+只接受 T&& 的 function parameter
+每个 bound argument 在执行时再次被 move
+```
+
+例如，bind object 即使已经 move-own 一个 `std::unique_ptr<int>`，以后调用一个要求按 value 接收 `std::unique_ptr<int>` 的 function 时，仍可能因为 bind 试图从 stored lvalue 传参而无法编译。
+
+这不是 `std::forward` 失效，而是两个时刻不同：
+
+```text
+submit 时：forward 决定怎样把 argument 交给 bind storage
+worker 执行时：bind 的 operator() 决定怎样把 stored argument 交给 original callable
+```
+
+要完整支持 move-only arguments，需要以后改用 tuple + invoke + move 等更精细的包装；今天不扩展该实现，也不把“generic submit”误写成“支持所有可能 callable/argument combinations”。
+
 ---
 
 ## 14. `std::forward` 在今天只负责保留 value category
@@ -1207,6 +1238,8 @@ std::ref 显式改变保存引用的语义
 ```
 
 三者不是一回事。
+
+还要加上第 13.4 节的边界：forward 保留的是进入 storage 时的 value category，不保证 `std::bind` 将来以同一 value category 调用 original callable。
 
 ---
 
@@ -1357,14 +1390,41 @@ user callable throws
 
 除非你另外设计明确机制并测试它。
 
-今天推荐把现有 counter 的边界写清楚：
+今天推荐把 public API 的变化写清楚：
 
 ```text
-它仍可统计逃出 queue wrapper invocation 的 infrastructure/detached-task failure
-generic result task 的业务失败由对应 future.get() 观察
+Day2 failed_task_count 是没有 future 时的过渡性观察接口
+Day3 generic result task 的业务失败由对应 future.get() 观察
+public failed_task_count 不再代表“失败的 user tasks 数量”
 ```
 
+推荐 Day3 从核心 public contract 中移除 `failed_task_count()`，保留 worker outer catch 作为最后的 component containment boundary。若你确实保留 counter，应把它改名/注释为 `unexpected_worker_failure_count` 一类的诊断信息，只统计逃出 wrapper invocation 的异常，不能再拿它和 future 中的业务失败数量比较。
+
 这是接口升级带来的语义变化，不是“worker catch 失效”。异常现在在更靠近具体 task result 的位置被保存。
+
+### 18.1 Day2 的 empty Task contract 也必须显式演进
+
+Day2 的 public input type 就是 `std::function<void()>`，因此可以统一检查：
+
+```text
+!task -> immediate invalid_argument
+```
+
+Day3 的 public input 变成满足当前模板约束的 `F`。不同 callable types 没有统一的“empty”查询接口，所以不能假装 generic submit 仍能对所有 `F` 做同一种空值检查。
+
+本日选择的简化 contract：
+
+```text
+提交一个 empty std::function<void()>
+-> template/type deduction 成功
+-> wrapper 被 queue accepted
+-> worker 调用时 std::function throws std::bad_function_call
+-> packaged_task 把异常保存进 shared state
+-> future<void>.get() rethrows std::bad_function_call
+-> worker/pool 继续工作
+```
+
+也就是说，这一项从 Day2 的 submission-stage programming error 变成 Day3 的 execution-stage exception。若以后坚持“empty std::function 必须立即拒绝”，需要为该类型增加明确 overload 或 type-specific validation；今天不引入 `if constexpr` type branching。
 
 ---
 
@@ -1598,9 +1658,32 @@ caller submit side-effect callable
 -> caller get returns normally with no value
 ```
 
+### 24.5 empty `std::function<void()>`
+
+```text
+caller submits empty std::function<void()>
+-> generic submit creates future<void> and queue accepts wrapper
+-> worker invokes packaged task
+-> empty std::function throws std::bad_function_call
+-> packaged task stores exception
+-> future.get rethrows std::bad_function_call
+-> later normal task still completes
+```
+
 ---
 
-## 25. 今天不应偷偷改变的 Day2 contract
+## 25. Day2 contract 的“显式变化”与“保持不变”
+
+先列出这次 API upgrade 明确改变的部分：
+
+```text
+public bool submit(Task) -> public generic submit(...) returning future<R>
+post-shutdown return false -> submit throws runtime_error
+empty Task immediate invalid_argument -> empty std::function exception through future
+failed_task_count -> 不再作为 generic user-task failure 的核心 public contract
+```
+
+这些变化必须同步修改 tests 和调用者理解，不能只换 function signature 后继续沿用旧 assertions。
 
 升级 result channel 时，以下语义保持：
 
@@ -1689,7 +1772,7 @@ Git 已经负责保存 Day2 到 Day3 的演进历史。
 升级后的 `thread_pool.hpp` 定义一个 fixed-size ThreadPool component：
 
 ```text
-caller 提交任意可调用对象与参数
+caller 提交满足本日 bind-based contract 的 callable 与参数
 submit 立即返回与该 task 对应的 future<R>
 pool worker 异步执行 task
 task 的 return value 或 exception 通过 shared state 回到 future
@@ -1718,11 +1801,14 @@ auto submit(F&& function, Args&&... args)
 支持 R = std::string
 支持 R = void
 支持零个或多个 arguments
-普通 arguments 以 value semantics 进入异步 task
+支持 copyable ordinary value arguments
 显式 std::ref 支持 reference semantics
 user callable exception 由对应 future.get() 观察
 submit after shutdown 立即 throw std::runtime_error
+empty std::function 的 std::bad_function_call 由 future.get() 观察
 ```
+
+当前不要求 move-only value arguments 或只接受 rvalue-reference 的 parameters；不能因为 interface 使用 forwarding references 就宣称这两类已经支持。
 
 Day2 的低层 queue acceptance 操作建议改成 private `enqueue(Task)`，不再作为使用者主要 public API。
 
@@ -1887,7 +1973,18 @@ pool.shutdown()
 不能得到一个之后永远不 ready 的 future
 ```
 
-### 28.9 optional enhancement
+### 28.9 empty `std::function`
+
+```text
+submit default-constructed std::function<void()>
+submit 返回 future<void>
+future.get() 必须 throw std::bad_function_call
+随后提交的正常 task 仍能完成
+```
+
+这组测试证明 Day2 到 Day3 的 empty-input contract 已被明确更新，而不是在 API 重构中无意丢失。
+
+### 28.10 optional enhancement
 
 若主线测试全通过，可额外测试 move-only result：
 
@@ -2103,7 +2200,7 @@ submitter -> packaged_task -> queue wrapper -> worker
 4. `std::invoke_result_t<F, Args...>` 在 compile time 做什么？它会不会执行 `F`？
 5. 普通 value argument 与 `std::ref(argument)` 进入异步 task 后，在 ownership、lifetime 和 synchronization 上有什么区别？
 6. 为什么 submit after shutdown 不能返回一个永远 pending 的 future？今天选择了什么错误 contract？
-7. 一个 task 成功入队但 callable 最终抛异常，算 submission failure 还是 execution failure？由谁观察？
+7. Day2 的 empty Task 和 `failed_task_count` 在 generic submit 出现后为什么不能原样解释？本日分别选择了什么新 contract？
 
 ---
 
@@ -2116,6 +2213,7 @@ submitter -> packaged_task -> queue wrapper -> worker
 同一份 ThreadPool 支持 int/string/void results
 value args 与 explicit std::ref 都有测试
 callable exception 由 future.get 重新观察，worker 继续工作
+empty std::function 由 future.get 观察 bad_function_call，pool 继续工作
 shutdown 后 submit 立即失败，不产生永久 pending future
 normal build 零 warning
 fixed tests 全部 PASS
@@ -2154,6 +2252,9 @@ packaged_task 是 move-only，C++17 std::function 要 copyable target；
 copyable lambda 捕获 shared_ptr，可以把两者接起来。
 
 submit after shutdown 必须立即明确失败，不能返回永远不 ready 的 future。
+
+std::bind 只保证按值保存普通 arguments，不保证执行时再次把 stored values 当 rvalue；
+empty std::function 和 failure counter 也必须随 generic API 显式重新定义。
 ```
 
 下一天将从“功能看起来能跑”转向“怎样用 GoogleTest、lifecycle tests、stress 与 sanitizer 证明 ThreadPool 的 contract”。今天先把 result channel 的设计、代码和测试做实。

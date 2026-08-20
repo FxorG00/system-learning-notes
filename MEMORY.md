@@ -2799,6 +2799,12 @@ Week7 Day3 实际学习反馈：
 Week7 Day4 template 前置反馈：
     不能因为用户已经学过普通 class、vector 和 initializer list，就默认其熟悉 class template。第一次把 template 作为独立练习骨架时，应先用与主练习无关的最小类型示例讲清“为什么需要 -> declaration syntax -> 使用语法 -> 编译期实例化 -> header/translation unit -> T 的操作要求 -> 常见错误”，再进入主组件。
     必须主动区分 template parameter `T`、template argument `int`、concrete type `BlockingQueue<int>`、object 和 runtime constructor argument；也要区分 compiler 实例化具体 class code 与 runtime constructor 创建 object。复杂 specialization/SFINAE/concepts 不随基础语法一起展开。
+
+Week8 Day2~Day4 第二轮教程审计：
+    连续多日演进同一 component 时，不能只检查每天内部是否正确；必须建立一张跨日 API/contract diff，逐项说明旧 return type、错误路径、观测接口和 tests 在新 API 下是保留、替换还是删除。
+    forwarding reference + std::forward 只描述 argument 进入下一层时的 value category，不能自动推出 storage wrapper 将来怎样调用。使用 std::bind 时必须明确：普通 stored arguments 通常以 lvalue 参与 invocation；move-only value arguments 和只接受 T&& 的 parameters 不应被无条件宣称支持。
+    `bool submit(Task)` 升级为 generic `future<R> submit(...)` 后，post-shutdown false、empty Task immediate invalid_argument、failed_task_count 等旧 contract 都必须显式重新定义，并给 regression test；不能只改 function signature 后继续沿用或悄悄丢失旧 assertions。
+    测试日除检查 component contract，还要检查 test code 自身是否能 cleanup。并发 gate test 中 fatal assertion、helper thread、working directory 和 timeout 都可能让测试代码自己 hang 或产生误导。
 ```
 
 ### 9.11 发布前自检清单
@@ -3077,10 +3083,12 @@ Week8 Day3 教程：
 桥接设计：shared_ptr 指向唯一 packaged_task，copyable lambda 只复制 shared_ptr，再进入 std::function<void()> queue
 API 演进：public generic submit 返回 future<R>；Day2 低层 bool submit(Task) 建议收成 private enqueue(Task)，避免职责混杂和同名 overload 干扰
 错误 contract：shutdown 后 submission 立即 throw runtime_error，不返回永远 pending 的 future；accepted callable 的业务异常由对应 future.get() 重新观察
+第二轮审计补充：std::bind-based V1 支持 copyable ordinary values 和显式 std::ref，不承诺 move-only value arguments 或只接受 T&& 的 parameters；forward 只保留进入 bind storage 时的 value category
+empty contract 演进：empty std::function 被 accepted 后在 worker 调用时抛 bad_function_call，由 future.get 观察；若要 immediate rejection，需另设 overload/type-specific validation
 lifecycle：graceful shutdown 继续 drain 已接受 result tasks，保证成功返回的 future 最终 ready with value or exception
-工程边界：generic packaged_task 会保存 user callable exception，Day2 worker outer catch/failure counter 不再等于统计每个 generic task 的业务失败
+工程边界：generic packaged_task 会保存 user callable exception；推荐移除 Day2 过渡性的 public failed_task_count，或明确重命名为只统计 unexpected wrapper failures 的诊断 counter
 练习前给出了程序目的、完整结果链、独立 API demos、algorithm checklist 和测试矩阵，但没有给可复制的完整 generic submit template body
-固定验证：int/string/void result、value args、显式 std::ref、exception propagation、later-task survival、reverse get order、post-shutdown rejection、零 warning、50 次重复运行和 TSan
+固定验证：int/string/void result、value args、显式 std::ref、exception propagation、empty std::function regression、later-task survival、reverse get order、post-shutdown rejection、零 warning、50 次重复运行和 TSan
 教程提醒同一 pool 内 nested future wait 可能在固定 worker capacity 下 deadlock/starve，V1 通过使用 contract 避免，不在 Day3 扩展调度策略
 ```
 
@@ -3100,8 +3108,9 @@ contract 边界：只测 sequential repeated shutdown；不擅自把 concurrent 
 CMake 与环境：Ubuntu 实测 g++ 10.5.0、CMake 3.16.3、TSan smoke PASS；libgtest-dev 当前未安装，apt candidate 为 Focal 1.10.0-2
 CMake 3.16 使用 GTest::GTest / GTest::Main imported targets；不照搬较新文档的 GTest::gtest / GTest::gtest_main names
 build 主线：normal build/ 与 separate build-tsan/；gtest_discover_tests 将 test cases 注册给 CTest，并为 hang 设置 timeout
+命令主线：使用 cmake -E chdir build/build-tsan 运行 CTest，避免教程中的 cd 改变 shell cwd 后又按 project-root path 执行 binary
 证据边界：GoogleTest 检查具体 behavior，repeat 探索更多 scheduling interleavings，TSan 检查已执行路径上的 data race；三者互补但不能互相替代
-固定矩阵：construct boundary、zero task、single/void result、many exactly once、future exception + later task、drain、repeated shutdown、post-shutdown rejection、concurrent submitters、destructor lifecycle
+固定矩阵：construct boundary、zero task、single/void result、many exactly once、future exception + later task、empty std::function + later task、drain、repeated shutdown、post-shutdown rejection、concurrent submitters、destructor lifecycle
 练习前提供了 GoogleTest/CMake 独立 demo、API 解释、scenario/oracle/cleanup 设计和测试矩阵，但没有给完整 ThreadPool test harness
 教程中的 GoogleTest demo 与 CMake 3.16 FindGTest/gtest_discover_tests 已在 Ubuntu 临时解压 package 环境实测：2 tests 编译运行、CTest discovery 和 exit status 全部通过，临时文件已清理
 ```
