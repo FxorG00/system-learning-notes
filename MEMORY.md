@@ -3058,7 +3058,23 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6、Week7 均已正式完成，Week8 已开始。Week8 Day1~Day7 教程均已生成；其中 Day2~Day7 是用户为减少后续等待时间而要求提前生成的内容，不代表 Day1~Day7 已经完成检阅或正式通过。当前下一步仍是等待用户明确发出 Day1 检阅指令；届时再检查 Day1 Git diff、note、Ubuntu 实际代码、warning、fixed tests、重复运行和 TSan。Day1 通过后可直接按顺序进入已经生成的 Day2~Day7，但不能因后续 daily 已存在而跳过前一日学习和 review。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
+当前位置：Week5、Week6、Week7 均已正式完成，Week8 Day1 已于 2026-08-20 正式通过，最终评分 94/100；系统主线下一步进入已经提前生成的 Week8 Day2。Day2~Day7 教程已生成但尚未学习或验收，不能因为文件已存在而跳过顺序 review。Day1 已证明 callable -> std::function Task -> BlockingQueue -> worker -> result 的完整链路、value/reference capture 生命周期、close/drain/join 和 executable exactly-once verification；用户选择不机械抄写验收题，由代码、daily 主动补充和实测证据替代。AI Infra 理论伴随线规划已于 2026-08-21 生成，T1 可从当前低强度开始，但默认每周约 3 小时、只占 10%~20%，不能替代或阻塞 Week8 Day2 及后续系统主线。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
+
+AI Infra 理论伴随线规划（2026-08-21）：
+
+```text
+路径：C:\Users\FxorG\Desktop\gpt_infra\AI_Infra理论伴随线规划.md
+定位：plan_strengthened.md 的理论伴随线，不改变 C++ -> Linux/OS -> 网络 -> Reactor -> Mini Redis 系统主线
+时间：默认每周 2~3 sessions、合计约 3 小时；主线 80%~90%，理论线 10%~20%；主线有 correctness bug、考试或睡眠不足时主动降速
+T1~T8：Python/NumPy、shape/dtype、向量矩阵、matmul/broadcasting、gradient/chain rule、概率最低入口、stable softmax、linear/softmax regression 与 ML workflow
+T9~T16：PyTorch Tensor/layout、Module/inference_mode、autograd、MLP、generalization、ResNet forward、embedding/mask、single-head attention
+T17~T24：multi-head/Transformer block、decoder-only forward、sampling、training-vs-inference memory、prefill/decode/KV Cache、continuous batching、correctness/benchmark、tiny Transformer reference
+验收方式：每周短 note + 可运行代码 + shape/value/tolerance assertions + AI Infra 映射；视频看完或公式抄完不算通过
+三个 Theory Gates：NumPy/math -> PyTorch/DL -> Transformer/inference；Gate 3 后再进入 mini-infer-cpu，CUDA 仍必须单独满足总规划 Gate C
+B 站资源：3Blue1Brown 官方账号负责线代/微积分直觉；李沐 D2L 为主课；小土堆只补 PyTorch API；李宏毅只选 ML/attention/Transformer 关键章节；我是傅傅猪后置到 CPU inference
+资源纪律：优先原作者/官方账号、大学官方课程和框架官方文档；不追“最新版几百集/三天精通/资料包”，视频时间必须落到代码和验证
+当前状态：规划已生成，T1 尚未开始；系统主线下一步仍是 Week8 Day2
+```
 
 Week8 周规划的固定主线：
 
@@ -3085,6 +3101,49 @@ Week8 Day1 教程：
 练习前没有给完整 worker-loop C++、future、packaged_task 或 generic submit template
 固定验证：normal dispatch、capacity=1、no-task shutdown、different callable types、零 warning、TSan、50 次重复运行
 教程中的 std::function 完整 demo 已用 C++17 + Wall + Wextra 实际编译运行
+```
+
+Week8 Day1 首次验收（2026-08-20）：
+
+```text
+用户产出：Ubuntu canonical demos/task_dispatch_demo.cpp；Windows week8/day1/day1_note.md；并在 daily 中主动补充 lambda value capture 存入 closure object 的解释
+代码主线：lambda/free-function wrapper/Functor -> std::function<void()> -> BlockingQueue<Task> -> workers -> close/drain/join -> result verification，整体方向正确
+ownership/capture：task_id 按值进入 closure；results 按引用/指针借用 main scope object；main 在 workers join 后才验证，当前生命周期成立
+Codex 实测：g++ -std=c++17 -Wall -Wextra -g -pthread 零 warning；3/4/20、4/1/100、3/2/0 三组通过；50 次重复通过；TSan 编译运行通过且无 data-race report
+真实阻塞问题 1：test() 无论 success_flag 都 return true，可能打印 FAIL 但 process 仍返回 0
+真实阻塞问题 2：push false 表示 queue 已永久 closed；while 重试同一个已经 std::move 的 task 可能无限循环，应该记录失败并结束该 test/control flow
+真实阻塞问题 3：note 写了 executed_count.fetch_add，但代码未实现；当前 final values 能发现 missing result，却没有把 accepted/executed/exactly-once contract完整落到可执行证据
+note 表达缺口：worker 不是“暂时没有 task 就结束”，而是 pop 观察到 closed-and-empty/nullopt 才结束；main 的步骤必须明确 close 后再 join
+非阻塞工程建议：demo 应直接 include 自己使用的 functional/vector/thread/optional/iostream 等 headers，不依赖 blocking_queue.hpp 的 transitive includes
+首次评分：84/100，暂不进入 Day2；不要求机械补写六道验收题，只要求修正上述代码和 note 中能影响机制/正确性的点
+```
+
+本次 daily 差异带来的可复用教学经验：讲 lambda capture 时，应明确“按值捕获的数据成为 closure object 的成员，并随 lambda -> std::function -> queue -> worker 这条对象生命周期链移动/复制”；按引用捕获只保存访问外部对象的关系，不复制对象也不延长其生命周期。这个对象模型比只写 `[i]` / `[&i]` 规则更容易让用户真正理解异步 capture 安全性。
+
+Week8 Day1 第二次复检（2026-08-20）：
+
+```text
+已撤销旧问题：test() 现在 success 返回 true、failure 返回 false，main 能把 test failure 传播为 non-zero；worker 已在每次 task 调用完成后 atomic fetch_add
+最新实测：规定 warning 参数零 warning；3/4/20、4/1/100、3/2/0 均 PASS 且 printed executed count 分别为 20/100/0；50 次重复 PASS；TSan PASS 且无报告
+仍需修正 1：executed_count 当前只输出，success_flag 仍只检查 result values；需要让 count mismatch 真实导致 test failure
+仍需修正 2：push false 代表 queue 已关闭，不会通过重试恢复；当前 while(1) 会继续提交 moved-from std::function 并可能永久循环
+仍需修正 3：day1_note 仍漏掉 main close queue，并把 worker termination 写成“没有任务就结束”；正确边界是 open-and-empty 等待、closed-and-empty/nullopt 才退出、close 后 join
+第二次评分：89/100，暂不进入 Day2；三个修改都直接服务 correctness/mechanism，不要求补抄未回答的验收题
+非阻塞建议：补齐 demo 自己直接使用的 headers，避免依赖 BlockingQueue header 的 transitive includes
+```
+
+Week8 Day1 最终验收（2026-08-20）：
+
+```text
+最终状态：通过，可以进入 Week8 Day2
+最终评分：94/100
+最终修正：executed_count == task_count 已进入 success condition；push 不再重试 moved-from task；note 已把 worker 退出条件改为 queue closed 且 empty
+Codex 最终实测：g++ -std=c++17 -Wall -Wextra -g -pthread 零 warning；3/4/20、4/1/100、3/2/0 均 PASS；executed_count 分别精确为 20/100/0；50 次重复 PASS；TSan 编译运行 PASS 且无 data-race report
+验收题证据：六个问题均能由代码、daily 中 closure 补充和口头理解覆盖；第 4/6 题以实际 close -> drain -> join 代码为主要证据，不要求机械誊写答案
+不阻塞提醒 1：note 的编号清单仍可显式在 push 与 join 之间加一句 main close queue，使文字流程与代码完全同构
+不阻塞提醒 2：当前 push false 分支在 single-owner、main 尚未 close 的 Day1 orchestration 中不可达；若未来变成 concurrent shutdown，不能在 joinable workers 存在时直接 return，应先 close/join 再传播 failure
+不阻塞提醒 3：demo 仍可补齐直接使用的 standard headers，避免依赖 BlockingQueue header 的 transitive includes
+用户明确认为在机制已由设计、实现和运行证据证明后，重复抄验收题属于 dirty work；本日按既定规则接受代码证据替代，不安排补抄
 ```
 
 Week8 Day2 教程：

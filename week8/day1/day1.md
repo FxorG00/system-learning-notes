@@ -316,6 +316,76 @@ task 可能在原作用域结束以后才执行。
 
 ---
 
+### 3.9.1 lambda capture 闭包对象空间
+
+也就是这个 lambda capture 的东西如果是按值的话会保存到闭包对象的空间里？这样被调用的时候就能获取到。
+
+对，完全是这个意思。
+
+```cpp
+int i = 3;
+
+auto task = [i]() {
+    std::cout << i << '\n';
+};
+```
+
+概念上 compiler 会生成一个类似这样的 closure class：
+
+```cpp
+class GeneratedClosure {
+public:
+    int saved_i;  // 保存按值捕获的副本
+
+    void operator()() const {
+        std::cout << saved_i << '\n';
+    }
+};
+```
+
+然后：
+
+```cpp
+auto task = [i]() { /* ... */ };
+```
+
+概念上类似：
+
+```cpp
+GeneratedClosure task{i};
+```
+
+所以之后即使外面的 `i` 改了，甚至离开作用域了：
+
+```cpp
+i = 100;
+```
+
+task 内部仍然保存最初捕获时那份 `3`。
+
+在今天的链路中，这个 closure object 会继续被包装、复制或移动：
+
+```text
+lambda closure
+-> std::function<void()> Task
+-> BlockingQueue<Task>
+-> worker pop 出 Task
+-> worker 调用 task()
+```
+
+只要这条链上的 Task 还活着，按值捕获的那份数据也跟着活着；worker 调用 `task()` 时，读取的是 closure 自己保存的成员。
+
+对比：
+
+```cpp
+[i]   // closure 保存 i 的副本
+[&i]  // closure 保存“访问外部 i”的引用关系
+```
+
+后者没有保存 `i` 本身，所以外部 `i` 死亡后，task 再调用就可能出问题。
+
+---
+
 ### 3.10 exactly once
 
 `exactly once`：恰好一次。
