@@ -2805,6 +2805,15 @@ Week8 Day2~Day4 第二轮教程审计：
     forwarding reference + std::forward 只描述 argument 进入下一层时的 value category，不能自动推出 storage wrapper 将来怎样调用。使用 std::bind 时必须明确：普通 stored arguments 通常以 lvalue 参与 invocation；move-only value arguments 和只接受 T&& 的 parameters 不应被无条件宣称支持。
     `bool submit(Task)` 升级为 generic `future<R> submit(...)` 后，post-shutdown false、empty Task immediate invalid_argument、failed_task_count 等旧 contract 都必须显式重新定义，并给 regression test；不能只改 function signature 后继续沿用或悄悄丢失旧 assertions。
     测试日除检查 component contract，还要检查 test code 自身是否能 cleanup。并发 gate test 中 fatal assertion、helper thread、working directory 和 timeout 都可能让测试代码自己 hang 或产生误导。
+
+本次 check 提炼出的通用生成后审计流程：
+    每份 daily 完成初稿后必须再做一次独立 check，不能把“已经写完”当成“已经正确”。第一轮做纵向审计，检查本篇从前情提要、主线机制、练习到验收是否自洽；第二轮做横向审计，检查它与总规划、当前 week.md、前一天 daily/note 以及后续计划之间是否连续。
+    横向审计至少建立一张简短对齐表：总规划当前阶段、本周目标、前一天已经产出的能力、今天唯一新增量、今天复用或改变的接口、今天为下一天提供的前置。若其中一项说不清，说明 daily 可能重复、跳步、越界或遗漏过渡。
+    连贯性不只是标题顺序一致。还要核对同一术语、类型、函数签名、return/error contract、ownership/lifetime、thread-safety、shutdown semantics 和测试 oracle 是否在跨日演进中保持一致；发生变化时必须明确写出“旧语义 -> 新语义 -> 为什么改变 -> 哪些 tests 同步变化”。
+    技术复检不能只依赖文字读起来顺畅。对容易出错的语言规则、system call 语义、并发时序、工具命令和 build/test 路径，应优先查 primary source，并用当前 C++17/compiler/Linux 环境运行最小示例或最小实验。验证结论要区分“已实际证明”“只支持 hypothesis”和“今天明确不覆盖”。
+    代码能编译不等于教程技术上完整。还要检查示例是否真的表现正文声称的语义，失败路径是否可观察，测试自身是否能退出和 cleanup，命令的 working directory 是否前后一致，以及示例是否无意要求了本日尚未教授的能力。
+    批量生成多份 daily 时，先分别完成每篇纵向审计，再按 day1 -> dayN 做一次横向串联审计；篇幅相近、章节齐全或模板一致都不能代替逐篇技术核对。
+    若 check 发现 daily 与 week.md/总规划冲突，先判断是 daily 偏航还是规划确实需要调整。默认修正 daily；只有用户进度或路线真实变化时才修改 week.md/总规划，不能为了给当前教程圆场而悄悄改路线。
 ```
 
 ### 9.11 发布前自检清单
@@ -2813,6 +2822,9 @@ Week8 Day2~Day4 第二轮教程审计：
 
 ```text
 [ ] 是否对齐总规划、周计划、真实进度和最近 note？
+[ ] 是否完成“本篇纵向自洽 + 跨日横向连续”两轮审计，而不只是通读一遍？
+[ ] 是否能列出前一天已具备能力、今天唯一新增量，以及今天为下一天留下的明确前置？
+[ ] 同一 component 跨日演进时，API、contract、ownership、错误路径和 tests 的保留/变化是否逐项明确？
 [ ] 是否能用一句话说出今天唯一的核心问题？
 [ ] 是否删除了已经掌握且没有新增约束的重复 work？
 [ ] 如果本次批量生成多份 daily，是否对每一份分别完成了同等深度的独立审计？
@@ -2828,7 +2840,9 @@ Week8 Day2~Day4 第二轮教程审计：
 [ ] 课程原文、教程补充和 Linux/架构差异是否分开？
 [ ] 必要 API 是否在正文给足，练习答案是否仍留给用户？
 [ ] 每个非平凡新 API 是否有最小调用例子、返回值判断和成功后的状态说明？
-[ ] 所有代码和命令是否实际验证？
+[ ] 容易误写的技术结论是否核对 primary source，并在当前环境用最小示例或实验验证？
+[ ] 所有代码和命令是否实际验证，working directory、退出条件和 cleanup 是否正确？
+[ ] 是否区分了已证明结论、有限证据支持的推断和本日明确不覆盖的边界？
 [ ] 标题编号是否单调、没有重复章节和重复产出文件？
 [ ] 核心任务、错误路径、工程增强是否分层？
 [ ] 验收题是否少而有效，今天停止边界是否明确？
@@ -3028,7 +3042,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6、Week7 均已正式完成，Week8 已开始。Week8 Day1 教程已生成；Day2、Day3、Day4 教程于 2026-08-20 按用户要求依次提前生成，目的是减少后续等待时间，不代表 Day1、Day2、Day3 已经完成检阅或正式通过。当前下一步仍是等待用户明确发出 Day1 检阅指令；届时再检查 Day1 Git diff、note、Ubuntu 实际代码、warning、fixed tests、重复运行和 TSan。Day1 通过后可直接按顺序进入已经生成的 Day2、Day3、Day4，但不能因后续 daily 已存在而跳过前一日学习和 review。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
+当前位置：Week5、Week6、Week7 均已正式完成，Week8 已开始。Week8 Day1 教程已生成；Day2、Day3、Day4、Day5 教程于 2026-08-20 按用户要求依次提前生成，目的是减少后续等待时间，不代表 Day1~Day5 已经完成检阅或正式通过。当前下一步仍是等待用户明确发出 Day1 检阅指令；届时再检查 Day1 Git diff、note、Ubuntu 实际代码、warning、fixed tests、重复运行和 TSan。Day1 通过后可直接按顺序进入已经生成的 Day2~Day5，但不能因后续 daily 已存在而跳过前一日学习和 review。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
 
 Week8 周规划的固定主线：
 
@@ -3113,6 +3127,26 @@ build 主线：normal build/ 与 separate build-tsan/；gtest_discover_tests 将
 固定矩阵：construct boundary、zero task、single/void result、many exactly once、future exception + later task、empty std::function + later task、drain、repeated shutdown、post-shutdown rejection、concurrent submitters、destructor lifecycle
 练习前提供了 GoogleTest/CMake 独立 demo、API 解释、scenario/oracle/cleanup 设计和测试矩阵，但没有给完整 ThreadPool test harness
 教程中的 GoogleTest demo 与 CMake 3.16 FindGTest/gtest_discover_tests 已在 Ubuntu 临时解压 package 环境实测：2 tests 编译运行、CTest discovery 和 exit status 全部通过，临时文件已清理
+```
+
+Week8 Day5 教程：
+
+```text
+路径：C:\Users\FxorG\Desktop\gpt_infra\week8\day5\day5.md
+生成状态：提前生成，Day1~Day4 尚未验收，不得据此跳过顺序学习和 review
+主题：从 synchronous logging 的 caller-visible I/O latency 出发，建立 producer -> bounded queue -> single writer -> file sink 的 AsyncLogger V1
+复用边界：已通过 SSH 读取用户真实 Week7 BlockingQueue API，继续使用 push(T value) / pop() / close()，不在 logger 中重写 mutex/CV/closed protocol
+核心 ownership：producer owns input before handoff；queue owns accepted records；writer owns popped record and exclusively accesses ofstream；owner controls shutdown/destruction
+核心状态：RUNNING -> DRAINING -> STOPPED；概念状态由 queue close/data、writer return 和 join 表达，不额外复制 running flag
+结果边界：log true 只表示 accepted；明确区分 accepted / written / flushed / durable；C++ stream flush 不等于 Linux fsync durability
+V1 API contract：file-open failure throws；multiple producers may call log；one owner sequentially calls shutdown；close/drain/flush/close-file/join；repeated shutdown allowed；post-shutdown log false；copy/move disabled
+I/O failure policy：writer records stream failure but continues draining，避免 sink failure 导致 full queue/producers/lifecycle 永久卡住；explicit shutdown 返回 final status，destructor 只做 lifecycle fallback
+工程连续性：沿用 Day4 canonical include/src/tests layout、GoogleTest、CTest、separate TSan build 和 project-root working-directory discipline
+固定 basic matrix：zero capacity、open failure、single-producer order、multiple-producer unique IDs exactly once、post-shutdown rejection、sequential repeated shutdown、destructor drain
+停止边界：Day5 不做受控 full-queue timing、复杂 shutdown interleavings、runtime disk-failure injection、sync/async benchmark、levels/rotation/fsync；这些留给 Day6 或后续
+教程只给 program purpose、完整流程、API 小例子、public/member contract、algorithm checklist 和 test scenarios，没有给可复制的完整 AsyncLogger implementation
+技术核对：ofstream open/close/flush/openmode 依据 C++ working draft，durability 边界依据 Linux fsync(2)；一个未写入教程的 reference AsyncLogger 使用用户真实 BlockingQueue header 在本地 C++17 + Wall + Wextra + pthread 零 warning 编译，4 producers / 800 unique records / repeated shutdown / late rejection 运行通过
+证据限制：向 Ubuntu /tmp 上传临时 reference files 被安全策略阻止，因此不能写成 Ubuntu/TSan 已验证；实际 Day5 学习时仍需在用户 Ubuntu canonical project 运行 normal CTest 与 TSan
 ```
 
 Day5 已验收：
