@@ -434,7 +434,133 @@ production logger library comparison
 
 # Part 2：教程主体
 
-# 教程开始：先证明压力下没有撒谎，再讨论谁更快
+# 教程开始：先做第一版证据，再校正生命周期与测量边界
+
+# Round 1：到这里停止阅读，先独立设计证据和 benchmark V1
+
+Day6 不要求你重写 logger。第一轮要训练的是：面对一个已经能工作的 component，你能否自己决定“还缺什么证据”和“性能问题到底测什么”。
+
+先不要看第 7 节之后的 backpressure 路径、shutdown oracle、benchmark timer 边界和实现 checklist。
+
+本轮继续修改：
+
+```text
+tests/async_logger_test.cpp          增加 lifecycle/pressure scenarios
+```
+
+本轮新增：
+
+```text
+benchmark/async_logger_bench.cpp     可执行 benchmark，不是新 logger
+week8/day6/day6_note.md              保存原始设计、环境、samples 与结论
+```
+
+`async_logger_bench.cpp` 的用途必须在写代码前明确：
+
+```text
+生成同一批 fixed-size records
+-> 分别运行 synchronous baseline 与真实 AsyncLogger
+-> 记录 caller-visible submission time
+-> 记录直到所有 records 完成的 end-to-end time
+-> 在计时结束后验证 output file
+-> 打印一行可保存的 structured result
+```
+
+第一版可以把 configuration 写成 source constants，不要求 command-line parser：
+
+```text
+total record count
+record bytes
+producer count
+async queue capacity
+output path
+```
+
+每个 case 至少输出这些字段：
+
+```text
+mode,producers,capacity,records,record_bytes,submit_ms,end_to_end_ms,valid
+```
+
+例如：
+
+```text
+async,4,64,100000,128,41.82,133.57,true
+```
+
+数字只是格式示例，不是预期性能。
+
+### Round1 benchmark API 工具箱
+
+`steady_clock` 用来测 elapsed time：
+
+```cpp
+#include <chrono>
+
+const auto begin = std::chrono::steady_clock::now();
+// measured operation
+const auto end = std::chrono::steady_clock::now();
+
+const std::chrono::duration<double> elapsed = end - begin;
+const double seconds = elapsed.count();
+```
+
+读取 output lines：
+
+```cpp
+#include <fstream>
+#include <string>
+
+std::ifstream input(path);
+std::string line;
+while (std::getline(input, line)) {
+    // feed line into correctness validation
+}
+```
+
+第一版先保存 raw samples；median 与更严格的计时边界放到 Round2/3 再修正。
+
+### Round1 编译入口
+
+```bash
+cd ~/code/system-learning/cpp/week8
+mkdir -p benchmark build
+g++ -std=c++17 -Wall -Wextra -g -O2 -pthread \
+  -Iinclude src/async_logger.cpp benchmark/async_logger_bench.cpp \
+  -o build/async_logger_bench
+./build/async_logger_bench
+```
+
+正确性 test 仍使用非优化 normal/TSan builds；只有 benchmark executable 使用 optimized build。不要拿 TSan binary 计时。
+
+独立完成一份 V1 方案并开始编码：
+
+```text
+在现有 async_logger_test.cpp 增加至少两个 lifecycle/pressure scenarios
+新增 benchmark/async_logger_bench.cpp
+设计 synchronous baseline 与 AsyncLogger case
+至少记录 caller 提交阶段和全部日志完成两个时间
+每个 case 结束后验证 output，不允许只打印耗时
+```
+
+动手前在 `day6_note.md` 写下你的原始判断：
+
+```text
+什么叫 accepted record？
+shutdown overlap 时怎样判断一条 record 应该出现还是不出现？
+sync 与 async 的 timed region 分别从哪里开始、到哪里结束？
+queue capacity 变化时，你预测哪个时间会改变？
+```
+
+这轮允许 benchmark 有测量漏洞，也允许测试场景不够确定；先得到第一份真实代码、原始数据和疑问，再看后文逐项校正。
+
+**阅读闸门：没有 V1 test/benchmark 设计和至少一次运行结果前，停在这里。**
+
+---
+
+# Round 2：用生命周期 oracle 与测量边界审查 V1
+
+下面的内容用于解释你的第一份结果为什么可信或不可信，不是动手前的标准答案。
 
 ## 7. 一条 record 在今天可能走哪几条路径
 
@@ -1506,9 +1632,13 @@ write a conclusion no stronger than the evidence
 
 # Part 3：收尾、练习、测试与验收
 
-## 34. 今日独立练习
+# Round 3：修正证据缺口并完成可复现结果
 
-### 34.1 继续使用 canonical source
+## 34. Round3 最终证据与 benchmark 复检
+
+Round1 已经产生 test/benchmark V1、原始数据和最小 API 调用。这里增加的是确定性 oracle、公平计时、重复样本和 failure evidence，不要求另写一份 logger 或 benchmark。
+
+### 34.1 canonical source 复检
 
 不要创建：
 
@@ -1528,7 +1658,7 @@ tests/async_logger_test.cpp
 
 只有 test 真正暴露 implementation bug 时才修改 logger source。
 
-### 34.2 新增文件
+### 34.2 benchmark 交付复检
 
 ```text
 benchmark/async_logger_bench.cpp

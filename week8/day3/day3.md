@@ -109,18 +109,61 @@ shared_future 深入
 
 `result`：结果。
 
-今天的 asynchronous result 指：提交者发起 work 后，不要求在 `submit()` 返回前就得到最终计算结果；结果可以由另一个 worker 将来产生。
+你这个质疑是对的。原句写得不准确，容易让人以为“task 一定等 `submit()` 返回后才进入 queue”，但实际不是。
 
-它不是：
+更准确的说法是：
+
+> `submit()` 返回的条件是“这项 work 已被接受或被拒绝”，不是“这项 work 已执行完成”。  
+> 当 `submit()` 真正返回给 caller 时，结果可能已经 ready，也可能还没 ready。
+
+关键在于：task 是在 `submit()` 的函数内部进入 queue 的，不是在它返回之后才进入。
 
 ```text
-一定并行
-一定更快
-提交者永远不等待
-忽略执行错误
+caller 调用 submit(...)
+    |
+    v
+submit 内部创建 future 和 task wrapper
+    |
+    v
+submit 内部把 wrapper push 进 queue
+    |
+    +--> 此刻 worker 已经可能 pop 并开始执行
+    |          |
+    |          +--> 甚至可能在 submit 返回前执行完
+    |
+    v
+submit 返回 future 给 caller
 ```
 
-当 submitter 调用 `future.get()` 而结果尚未 ready 时，它仍可能 blocking。
+所以有两种合法情况：
+
+```text
+情况 A：task 很快
+push 进 queue
+-> worker 立刻执行完
+-> submit 返回 future
+-> 此时 future 已经 ready
+-> future.get() 立刻拿到结果
+```
+
+```text
+情况 B：task 较慢，或 worker 正忙
+push 进 queue
+-> submit 返回 future
+-> task 以后才执行
+-> caller 调用 future.get()
+-> get 发现 not ready，于是 blocking 等待
+```
+
+“asynchronous result”的重点不是说“结果必须在 `submit` 返回后产生”，而是：
+
+```text
+submit 不承诺等 task 执行完成才返回。
+它只把一个 future<R> 交给 caller，
+让 caller 将来再观察结果。
+```
+
+你原本的理解只差一个时间点：不是 `submit` 返回后 task 才能进 queue，而是 `submit` 内部完成 `push` 后，worker 就已经可以和 `submit` 并发运行了。
 
 ---
 
@@ -332,12 +375,100 @@ template <class... Args> // Args 是 template parameter pack
 void call(Args... args); // args 是 function parameter pack
 ```
 
-今天只需要建立第一层直觉：
+我们这么来理解
+
+```cpp
+template <class Args> 就只代表一种类型，就是 Args
+加了 ...，代表有一包类型，也就是 class... Args。
+```
+
+---
+
+#### 小注解
+
+前两句对，第三句要改一下。
+
+```cpp
+template <class Args>
+```
+
+这里 `Args` 是一个类型，例如：
 
 ```text
-Args... 表示零个或多个 argument types
-args... 表示与这些 types 对应的零个或多个 function arguments
+Args = int
 ```
+
+所以：
+
+```cpp
+void call(Args args);
+```
+
+概念上就是：
+
+```cpp
+void call(int args);
+```
+
+只有一个参数。
+
+而：
+
+```cpp
+template <class... Args>
+```
+
+这里 `Args` 不再是一个类型，而是一包类型，例如：
+
+```text
+Args... = int, double, const char*
+Args... 在后面加 ... 就是解包出来
+```
+
+这时不能写：
+
+```cpp
+Args args;  // 不对
+```
+
+因为 `Args` 不是“这包类型中的某一个类型”，而是整包类型；编译器不知道你想选 `int`、`double` 还是 `const char*`。
+
+要写：
+
+```cpp
+void call(Args... args);
+```
+
+它表示让这包类型逐个对应一包函数参数：
+
+```text
+Args... = int, double, const char*
+args... = 10, 3.14, "hi"
+```
+
+概念上相当于：
+
+```cpp
+void call(int arg0, double arg1, const char* arg2);
+```
+
+所以可以压缩成：
+
+```text
+template <class T>
+T 是一个类型
+T value 是一个对应参数
+
+template <class... Args>
+Args 是一包类型
+Args... args 是一包一一对应的参数
+```
+
+不是“`Args` 表示一包类型中的某个类型”，而是：
+
+> 不带 `...` 的 `Args` 是一个类型；带 `...` 声明出来的 `Args` 是整包类型。
+
+---
 
 它让同一个 `submit` 可以接受：
 
@@ -423,7 +554,7 @@ std::function<void()> 在 C++17 要求内部 callable 可复制
 
 所以不能想当然地把 move-only packaged task 直接塞进要求 copyable target 的 `std::function<void()>`。
 
-今天会用 `std::shared_ptr` 做一座很小的桥：lambda 按值捕获一个 copyable `shared_ptr`，真正的 move-only packaged task 由该 shared pointer 指向。
+今天要解决这两个类型边界怎样衔接，但这里先不公布桥接方案。学完 `packaged_task`、`future` 和 template 的必要语法后，你会先独立尝试把它们接入 ThreadPool，再对照后半部分复盘。
 
 ---
 
@@ -480,16 +611,25 @@ g++ -std=c++17 -Wall -Wextra -g packaged_task_basic.cpp -o packaged_task_basic
 
 ```mermaid
 flowchart TD
-    A[main creates packaged_task<int()>] --> B[packaged_task owns callable]
-    B --> C[main calls get_future]
-    C --> D[future<int> refers to same shared state]
-    D --> E[shared state is not-ready]
-    E --> F[main calls task()]
-    F --> G[callable returns 42]
-    G --> H[packaged_task stores 42 in shared state]
-    H --> I[shared state becomes ready]
-    I --> J[result.get() returns 42]
+    A["main creates packaged_task for int()"] --> B["packaged_task owns callable"]
+    B --> C["main calls get_future"]
+    C --> D["future for int refers to the same shared state"]
+    D --> E["shared state is not ready"]
+    E --> F["main calls task()"]
+    F --> G["callable returns 42"]
+    G --> H["packaged_task stores 42 in shared state"]
+    H --> I["shared state becomes ready"]
+    I --> J["result.get() returns 42"]
 ```
+
+原来的 C++ 类型可以在图下面文字写：
+
+```
+A 中的 packaged_task 实际类型是 std::packaged_task<int()>。
+D 中的 future 实际类型是 std::future<int>。
+```
+
+这反而更清楚：流程图负责画对象和事件，复杂 C++ 类型放到图外解释。
 
 这里最重要的观察是：
 
@@ -502,6 +642,83 @@ future 负责“将来怎样观察结果”
 ---
 
 ## 5. `std::packaged_task<R()>` API
+
+---
+
+### 5.0 怎么样去理解 packaged_task 与 function
+
+**packaged_task 比起普通 function，就是先调用再把相关运行信息写入到 shared state。**
+
+在今天这个范围里，你可以先这样理解：
+
+```text
+std::packaged_task
+= callable wrapper
++ 把这次执行的 value 或 exception 写入 shared state 的能力
+```
+
+所以你的“`function + 写`”方向是对的，但把“写什么”说准确一点：
+
+```text
+不是写所有运行信息，
+而是写这次执行的最终 outcome：
+正常结果 value，或 exception。
+```
+
+对比：
+
+```cpp
+std::function<int()> function([] {
+    return 42;
+});
+
+int value = function(); // 42 直接返回给当前调用者
+```
+
+```cpp
+std::packaged_task<int()> task([] {
+    return 42;
+});
+
+std::future<int> result = task.get_future();
+
+task();                  // 执行 callable，并把 42 写入 shared state
+int value = result.get(); // 从 shared state 取出 42
+
+task(); // packaged_task::operator() 的返回类型是 void
+```
+
+异常时也是同一条链：
+
+```text
+普通 callable throw
+-> 异常在当前调用点直接往外传播
+
+packaged_task 内部 callable throw
+-> packaged_task 把 exception 写入 shared state
+-> future.get() 时再在 future 所在的 thread 重新抛出
+```
+
+不过不要把它理解成：
+
+```text
+std::packaged_task = std::function + 一个 write 函数
+```
+
+这不是实际类型关系。更准确的心智模型是：
+
+```text
+packaged_task
+= 保存一个任意 callable
++ 独占这次异步结果的生产权
++ 调用时把 outcome 放入 shared state
+```
+
+一句压缩记忆：
+
+> `std::function` 统一“怎么调用”；`packaged_task` 在此基础上还统一“执行结果将来交给谁”。
+
+---
 
 ### 5.1 header 与当前使用形态
 
@@ -572,6 +789,103 @@ move constructor：supported
 ```
 
 原因可以先从 ownership 理解：一个 packaged task 对应一个异步结果生产端，不应随便复制出两个都声称拥有同一份执行责任的独立对象。
+
+这里的“异步结果生产端”可以理解成：
+
+> 谁拥有“执行 callable，并把最终结果或异常写进 shared state”的唯一权利。
+
+`packaged_task` 就是这个唯一生产者。
+
+```cpp
+std::packaged_task<int()> task([] {
+    return 42;
+});
+
+std::future<int> result = task.get_future();
+```
+
+此时关系是：
+
+```text
+task：
+    保存 callable
+    将来负责执行它
+    将来负责把 42 或 exception 写入 shared state
+
+result：
+    将来从同一个 shared state 读取 42 或 exception
+```
+
+为什么不能 copy？假设它能复制：
+
+```cpp
+auto copied = task; // 假设允许
+```
+
+会出现很尴尬的问题。
+
+第一种可能：两份 `packaged_task` 指向同一个 shared state。
+
+```cpp
+task();   // 执行 callable，shared state 写入 42，变 ready
+copied(); // 又执行一次，谁还能再往同一个结果位置写？
+```
+
+一个 `future<int>` 对应的结果槽位只能从：
+
+```text
+not ready
+-> ready with value
+```
+
+或：
+
+```text
+not ready
+-> ready with exception
+```
+
+不能有两个 producer 都去填同一个“一次性结果槽位”。
+
+第二种可能：copy 时创建一份新的 shared state。
+
+```text
+task      -> shared state A -> result
+copied    -> shared state B
+```
+
+那 `copied` 执行出的结果又没有对应的 `future` 给 caller 观察；而且一次 copy 意外复制出一份“可能执行同样 work”的责任，也很奇怪。
+
+所以 C++ 规定：`packaged_task` 的执行责任只能转移，不能复制。
+
+```cpp
+std::packaged_task<int()> task([] {
+    return 42;
+});
+
+std::future<int> result = task.get_future();
+
+auto moved_task = std::move(task); // 执行责任转给 moved_task
+
+moved_task();
+std::cout << result.get() << '\n'; // 42
+```
+
+可以这样记：
+
+```text
+lambda closure：
+保存“怎么执行”
+
+packaged_task：
+保存“怎么执行”
++ 独占“谁负责生产这次结果”的权利
+
+future：
+独占“谁负责领取这次结果”的权利
+```
+
+另外还有一个实际原因：`packaged_task` 保存的 callable 本身也可能是 move-only，例如 lambda 按值捕获了 `std::unique_ptr`。如果 `packaged_task` 能 copy，就也无法保证内部 callable 一定能 copy。
 
 ---
 
@@ -650,6 +964,76 @@ std::cout << result.valid() << '\n'; // false
 
 ---
 
+### 6.4 future 不能 copy
+
+`std::future` 不能 copy，只能 move。
+
+```cpp
+std::future<int> first = task.get_future();
+
+std::future<int> second = first;            // 编译错误
+std::future<int> second = std::move(first); // 正确
+```
+
+`std::move` 后：
+
+```text
+first：不再关联 shared state，first.valid() == false
+second：继续关联原来的 shared state
+```
+
+你的“它像访问 shared state 的 handle”这个直觉没错，但 `std::future` 被设计成一种“独占结果领取权”：
+
+```text
+一个 packaged_task / promise
+-> 一个 std::future
+-> 由一个 owner 最终 get 一次
+```
+
+因为普通 `future` 的：
+
+```cpp
+result.get();
+```
+
+会消费这份关联。调用后：
+
+```cpp
+result.valid() == false
+```
+
+不能再 `get()` 一次。
+
+这就是它不能 copy 的原因：如果随便复制，会出现两个 `future` 都认为自己拥有“领取这份一次性结果”的权利，语义会变复杂。
+
+如果你确实需要多个地方都观察同一个结果，用：
+
+```cpp
+std::shared_future<int>
+```
+
+```cpp
+std::future<int> future = task.get_future();
+std::shared_future<int> shared = future.share();
+
+std::shared_future<int> another = shared; // 可以 copy
+
+shared.get();         // 可以观察
+another.get();        // 也可以观察同一结果
+shared.get();         // 还可以再次观察
+```
+
+压缩记忆：
+
+```text
+std::future：move-only，一次性领取结果
+std::shared_future：copyable，多个观察者可反复读取同一结果
+```
+
+所以 `future` 不是普通“无所有权的只读指针式 handle”，更像是一个带独占领取语义的 handle。
+
+---
+
 ## 7. exception 为什么能跨 thread 被重新观察
 
 先看一个不含 ThreadPool 的最小例子。
@@ -709,6 +1093,423 @@ submitter stack：以后调用 get，library 在这里重新 throw
 不是同一个 exception object 在两个 call stacks 之间直接跳跃。
 
 ---
+
+## 7.1 必看：讲清楚 packaged_task 与 shared_state 与 future 的关系
+
+你的直觉大方向是对的：`std::packaged_task<int()> task(...)` 确实是一个 C++ object，库内部也确实会维护一些状态和成员。
+
+但有一个关键修正：
+
+> `packaged_task` 不是把 shared state 简单地“作为它自身内部的一个普通成员对象”保存；更准确地说，它和 `future` 共同关联到一个独立的 shared state。
+
+可以先这样画对象关系：
+
+```text
+lambda closure object
+    |
+    | 被 packaged_task 保存，用于将来执行
+    v
+packaged_task object
+    |
+    | producer side：负责把结果/异常写进去
+    v
+shared state
+    ^
+    | consumer side：负责将来读取
+    |
+future object
+```
+
+这段代码里：
+
+```cpp
+std::packaged_task<int()> task([]() -> int {
+    throw std::runtime_error("calculation failed");
+});
+```
+
+发生的是：
+
+```text
+创建一个 lambda closure object
+-> 用它构造 packaged_task object
+-> packaged_task 保存“将来怎样执行计算”
+-> 同时建立/拥有与结果相关联的 shared state
+```
+
+然后：
+
+```cpp
+std::future<int> result = task.get_future();
+```
+
+不是复制结果，也不是执行 task；只是得到另一个 handle：
+
+```text
+task：将来负责生产 int 或 exception
+result：将来负责观察 int 或 exception
+两者关联同一份 shared state
+```
+
+当调用：
+
+```cpp
+task();
+```
+
+流程是：
+
+```text
+packaged_task 调用它保存的 lambda
+-> lambda 抛 runtime_error
+-> packaged_task 在内部捕获这个 exception
+-> 把 exception 信息写入 shared state
+-> shared state 变为 ready
+```
+
+随后：
+
+```cpp
+result.get();
+```
+
+会去同一个 shared state 观察结果：
+
+```text
+发现其中保存的不是 int
+而是 exception
+-> 在当前 main thread 重新抛出 runtime_error
+```
+
+你拿 closure object 类比非常合适，不过两者职责不同：
+
+```text
+closure object：
+保存 lambda 的 captures + operator()
+
+packaged_task：
+保存/管理 callable
++ 负责执行 callable
++ 负责把 value 或 exception 交给 shared state
+
+future：
+不执行 callable
+只从 shared state 观察最终 value 或 exception
+```
+
+之所以不要把 shared state 理解成“完全嵌在 `packaged_task` 身体里”，是因为下面这种情况必须成立：
+
+```cpp
+std::future<int> result;
+
+{
+    std::packaged_task<int()> task([] { return 42; });
+    result = task.get_future();
+    task();
+} // task 已析构
+
+std::cout << result.get() << '\n'; // 仍然能得到 42
+```
+
+`task` 已经没了，但 `future` 还能够拿到结果。因此 shared state 在逻辑上是一个能独立存活的对象；具体实现可能通过动态分配和内部 handle 来管理，但标准不要求它必须使用某种特定 member 布局。
+
+---
+
+# Round 1：到这里停止阅读，先独立升级 result-returning submit
+
+到这里你已经学过今天开工所需的最小机制：
+
+```text
+packaged_task 负责执行 callable 并写入 shared state
+future 负责以后观察 value / void / exception
+```
+
+先不要看第 8 节及之后的对象关系、move-only 桥接方案和 generic submit 拆解。
+
+本轮不新增一份 `thread_pool_v2.hpp`。继续修改：
+
+```text
+include/thread_pool.hpp
+tests/thread_pool_test.cpp
+week8/day3/day3_note.md
+```
+
+文件职责：
+
+```text
+thread_pool.hpp
+    把 Day2 的 void task submission 升级为 result-returning generic submit
+
+thread_pool_test.cpp
+    提交真实 callables，通过 future 检查 value、void 和 exception
+
+day3_note.md
+    记录第一次 compiler error、对象关系判断和最终修法
+```
+
+升级后的程序用途是：
+
+```text
+caller 提交 callable 与 arguments
+-> submit accepted 后返回 future<R>
+-> worker 异步执行 callable
+-> value 或 exception 进入 shared state
+-> caller 通过 future.get() 观察结果
+```
+
+Round1 的输入与输出：
+
+```text
+输入：callable object、零个或多个 arguments、ThreadPool 当前 lifecycle state
+输出：accepted submission 对应的 future<R>，或 submission rejection
+future 最终观察：R value、void completion 或 user exception
+```
+
+在 Day2 的 canonical `thread_pool.hpp` 上独立尝试实现与下面语义等价的接口：
+
+```cpp
+template <class F, class... Args>
+auto submit(F&& function, Args&&... args)
+    -> std::future<std::invoke_result_t<F, Args...>>;
+```
+
+### Round1 API 工具箱
+
+第 4~7 节已经讲过 `packaged_task` 和 `future`。下面补齐开工所需的语法入口，但不告诉你它们在 `submit` 中应按什么顺序组合。
+
+需要的 headers：
+
+```cpp
+#include <functional>
+#include <future>
+#include <memory>
+#include <type_traits>
+#include <utility>
+```
+
+`std::invoke_result_t` 只计算调用结果 type：
+
+```cpp
+int add(int lhs, int rhs) {
+    return lhs + rhs;
+}
+
+using Result = std::invoke_result_t<decltype(add), int, int>;
+// Result 是 int；这行不调用 add。
+```
+
+`std::bind` 把 callable 与参数保存成稍后可调用的 object：
+
+```cpp
+auto later = std::bind(add, 20, 22);
+const int value = later(); // 42
+```
+
+`std::forward` 用在 forwarding-reference template 中：
+
+```cpp
+void consume(int) {}
+
+template <class T>
+void relay(T&& value) {
+    consume(std::forward<T>(value));
+}
+```
+
+它保留这次调用进入 `relay` 时的 value category，不等于“不发生 copy”。
+
+`std::make_shared` 建立共享所有权 object：
+
+```cpp
+auto number = std::make_shared<int>(42);
+auto another_owner = number;
+```
+
+这里仅说明 API：两个 `shared_ptr` 指向同一个 `int`，最后一个 owner 消失时对象销毁。是否需要它、共享的到底应是什么，由你的第一版设计决定。
+
+### Round1 编译入口
+
+ThreadPool 仍是 header-only：
+
+```bash
+cd ~/code/system-learning/cpp/week8
+g++ -std=c++17 -Wall -Wextra -g -pthread \
+  -Iinclude tests/thread_pool_test.cpp \
+  -o build/thread_pool_test
+./build/thread_pool_test
+```
+
+本轮只规定外部行为：
+
+```text
+accepted callable -> caller 得到 future<R>
+callable returns R -> future.get() 得到 R
+callable returns void -> future<void>.get() 正常返回
+callable throws -> future.get() 在 caller 一侧重新抛出
+submission 观察到 pool 已关闭 -> 当前 submit 调用报告 rejection
+```
+
+你需要先自己回答：
+
+```text
+怎样把 function 和 arguments 保存到 task 中？
+queue 仍只接受 std::function<void()> 时，新的 task object 怎样进入 queue？
+future 在 enqueue 前还是后取得？
+enqueue 失败时，已经创建的 result channel 会怎样？
+```
+
+先写出能通过 `int`、`void` 和 exception 三个最小场景的 V1。遇到 compiler error 也保留错误信息，它正是这一轮最有价值的证据。
+
+**阅读闸门：没有独立尝试并记录第一处真实问题前，停在这里。**
+
+---
+
+### 做完后 gpt 老师的评价
+
+对，你这个自我评价更准确：
+
+> **方向想对了，但具体转换为什么能成立，当时没有完全理解，因此实现可用，却多套了一层。**
+
+你真正独立想对的是：
+
+```text
+R 不应该成为 queue element type 的一部分
+worker 不需要取得 R
+R 应该通过 shared state 交给 future
+queue 只需要一种固定的可执行类型
+```
+
+这是核心设计判断，确实值得肯定。
+
+但你当时没有观察到：
+
+```cpp
+std::packaged_task<R()>::operator()()
+```
+
+本身返回 `void`，所以误以为 `static_cast` 是把不同 `R` 的 task“强制抹成 void”。实际上编译器构造了另一层 `packaged_task<void()>`，把原 task 当作 callable 保存。
+
+因此你的版本是：
+
+```text
+queue
+-> outer packaged_task<void()>
+-> inner packaged_task<R()>
+-> actual callable
+```
+
+教程路线是：
+
+```text
+queue
+-> std::function<void()> wrapper
+-> packaged_task<R()>
+-> actual callable
+```
+
+教程路线的语义更直接：
+
+```text
+std::function<void()>：只表达“这里有一项可以执行的 work”
+packaged_task<R()>：只负责结果通道
+```
+
+你的路线则让外层调度任务也拥有一份无人观察的 shared state，职责有些重叠。不过它也有一个客观特点：`packaged_task<void()>` 本身支持 move-only，因而避开了 C++17 `std::function` 要求 target 可复制的问题。
+
+所以最公平的评价是：
+
+```text
+不是最佳的职责划分
+也不是纯粹碰巧写对
+而是在核心抽象正确的基础上，
+因为没看清 packaged_task 的调用语义，绕出了一条确实可运行的替代路线
+```
+
+这正适合 R1：先独立做出 V1，暴露“为什么这个 cast 居然能编译”，然后在 Round2 对照标准路线，理解两种设计各自付出了什么。这样的弯路其实比直接照着教程写更能留下印象。
+
+---
+
+### 为啥说我避开了 std::function 要求内部 target 也能复制
+
+这句话本身有点容易误导。准确说法是：
+
+> `std::packaged_task<void()>` 是 move-only 类型；而 C++17 的 `std::function<void()>` 要求它保存的 target 必须可复制。  
+> 所以 `packaged_task` 不能直接放进 `std::function`；要靠后面会学到的 `shared_ptr` bridge 来接上。
+
+先看两个对象的复制规则：
+
+```text
+std::packaged_task<void()>
+可以 move
+不能 copy
+
+std::function<void()>
+自己可以 copy
+并且它内部保存的 callable 也必须能 copy
+```
+
+所以这会失败：
+
+```cpp
+std::packaged_task<void()> task([] {
+    // do work
+});
+
+std::function<void()> wrapper = std::move(task); // C++17 编译失败
+```
+
+原因是：`task` 虽然可以 move 进 `wrapper`，但 `std::function` 要求“我将来自己能被复制”，因此它内部 target 也必须能复制；但 `packaged_task` 不可复制。
+
+这就是矛盾：
+
+```text
+queue 当前元素类型：std::function<void()>
+    -> 要求 copyable target
+
+我们想放进去的对象：packaged_task<void()>
+    -> move-only
+```
+
+真正的解法是让 `std::function` 保存一个可复制的 lambda，而 lambda 里保存可复制的 `shared_ptr`：
+
+```cpp
+auto task = std::make_shared<std::packaged_task<void()>>([] {
+    // do work
+});
+
+std::function<void()> wrapper = [task] {
+    (*task)();
+};
+```
+
+对象关系：
+
+```text
+std::function<void()>
+    -> 保存 copyable lambda
+        -> 保存 copyable shared_ptr
+            -> 指向 move-only packaged_task<void()>
+```
+
+因此不是 `packaged_task` 自己“避开了” `std::function` 的复制要求；恰好相反，它制造了这个类型不匹配。真正避开问题的是：
+
+```text
+shared_ptr + copyable lambda
+```
+
+另外：
+
+```cpp
+std::packaged_task<void()>
+```
+
+里的 `void()` 表示“调用这个 task 时不直接返回值”；它仍能把“正常完成”或“抛出的异常”写进 shared state，对应 `std::future<void>`。
+
+---
+
+# Round 2：用对象关系和类型边界复盘你的 V1
+
+从下面开始会揭示一种 C++17 实现路线。阅读时先对照自己的版本，不要把后文直接当成第一遍抄写步骤。
 
 ## 8. 接入 ThreadPool 后的完整对象关系
 
@@ -1763,9 +2564,13 @@ flowchart TD
 
 # Part 3：收尾、练习、测试与验收
 
-## 27. 今日独立练习
+# Round 3：修正 contract 演进并完成测试证据
 
-### 27.1 产出文件
+## 27. Round3 最终 API 与 contract 复检
+
+Round1 已经完成文件命名、用途、最小模板/API 入口和第一次编译。这里给的是 generic submit 的最终能力范围与回归要求，不是重新开始另一份实现。
+
+### 27.1 canonical files 复检
 
 继续修改 Week8 canonical files：
 
@@ -1787,7 +2592,7 @@ Git 已经负责保存 Day2 到 Day3 的演进历史。
 
 ---
 
-### 27.2 今天这份代码最终是干什么的
+### 27.2 最终程序用途复检
 
 升级后的 `thread_pool.hpp` 定义一个 fixed-size ThreadPool component：
 
@@ -1805,7 +2610,7 @@ completed shutdown 后的新提交明确失败，不返回永久 pending future
 
 ---
 
-### 27.3 public contract
+### 27.3 final public contract
 
 在保留 Day2 constructor、shutdown、destructor 和 deleted copy/move 的基础上，public submit 演进为：
 

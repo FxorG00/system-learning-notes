@@ -365,6 +365,139 @@ written contract
 
 ---
 
+# Part 2：教程主体
+
+# 教程开始：先独立实现，再用 ownership 与 lifecycle 复盘
+
+# Round 1：到这里停止阅读，先独立写出 AsyncLogger V1
+
+你已经知道今天要解决的问题、复用的 BlockingQueue API，以及最终文件必须可验证。先不要看下面的 ownership map、状态机、single-writer 理由和 shutdown 算法。
+
+本轮新增和修改：
+
+```text
+include/async_logger.hpp         声明 public interface；你自己设计 private state
+src/async_logger.cpp             实现 file open、log、writer lifecycle 与 shutdown
+tests/async_logger_test.cpp      只通过 public API 验证最终文件与 lifecycle
+CMakeLists.txt                   增加 AsyncLogger source/test targets
+week8/day5/day5_note.md          记录 V1 设计和真实问题
+```
+
+不要复制 `blocking_queue.hpp`，继续 include canonical component。
+
+### Round1 程序用途
+
+三个代码文件从外部形成：
+
+```text
+test/producer 提供 output path、capacity 和 string records
+-> AsyncLogger 接受或拒绝 records
+-> background writer 把 accepted records 写入指定 file
+-> shutdown 返回后 test 读取 file
+-> exact content 正确则通过，否则 test failure
+```
+
+本轮只给最小 public contract：
+
+```cpp
+AsyncLogger(std::string output_path, std::size_t capacity);
+~AsyncLogger();
+
+bool log(std::string record);
+bool shutdown();
+```
+
+### Round1 文件 API 工具箱
+
+这些例子只教 file stream 的基本调用，不包含 AsyncLogger 的线程控制流。
+
+打开并截断 output file：
+
+```cpp
+#include <fstream>
+
+std::ofstream output("logger_api_demo.txt",
+                     std::ios::out | std::ios::trunc);
+if (!output.is_open()) {
+    // open failed
+}
+```
+
+写入、检查、刷新和关闭：
+
+```cpp
+output << "record-7" << '\n';
+if (!output) {
+    // a write operation has failed
+}
+
+output.flush();
+const bool flush_ok = static_cast<bool>(output);
+output.close();
+```
+
+`flush()` 只要求把 C++ stream buffer 交给下层，不等于 `fsync` durability。
+
+shutdown 后读取最终文件：
+
+```cpp
+#include <fstream>
+#include <string>
+
+std::ifstream input("logger_api_demo.txt");
+std::string line;
+while (std::getline(input, line)) {
+    // test records one complete line
+}
+```
+
+不要在 writer 仍可能写文件时，把暂时读不到的行判成最终丢失。
+
+### Round1 编译入口
+
+在 CMake target 完成前，可先直接编译第一版：
+
+```bash
+cd ~/code/system-learning/cpp/week8
+g++ -std=c++17 -Wall -Wextra -g -pthread \
+  -Iinclude src/async_logger.cpp tests/async_logger_test.cpp \
+  -lgtest_main -lgtest \
+  -o build/async_logger_test
+./build/async_logger_test
+```
+
+外部可观察需求：
+
+```text
+constructor 打开一个新的 output file；失败时报告错误
+多个 producers 可以调用 log
+log true 表示该 record 已被 logger 接受
+后台 execution flow 把 accepted records 写成一行一条
+shutdown 停止接受新 records，并在返回前处理完已接受 records
+shutdown 后 log 返回 false
+destructor 不留下仍访问 logger members 的 thread
+```
+
+先独立决定：
+
+```text
+哪些 objects 是 members
+谁拥有 output stream
+writer 从哪里退出
+log 与 shutdown 共享哪些状态
+怎样让 tests 在 shutdown 后检查文件
+```
+
+完成一个能通过“单 producer 顺序写入、多 producer 不丢不重、shutdown 后拒绝”三个基本场景的 V1。若你暂时没处理 file runtime failure、queue 满时 shutdown 或 repeated shutdown，先把它们记作疑问，不要提前读答案。
+
+**阅读闸门：AsyncLogger V1 尚未编译运行前，停在这里。**
+
+---
+
+# Round 2：拿 V1 对照 ownership、状态机与关闭竞态
+
+下面开始揭示完整设计问题。每节先检查你的代码已经如何处理，再决定是修 bug、补 contract，还是明确写成 V1 limitation。
+
 ## 7. 今天的 ownership map
 
 先把 objects 放对位置：
@@ -424,10 +557,6 @@ thread object 是否已经 join
 不要为了“看起来像状态机”复制一份与 queue 可能不一致的 `running_` flag。
 
 ---
-
-# Part 2：教程主体
-
-# 教程开始：把 file I/O 从 producer 手里交给唯一 writer
 
 ## 9. 先看 synchronous logging 的完整路径
 
@@ -1349,9 +1478,13 @@ ownership + queue + single writer + lifecycle
 
 # Part 3：收尾、练习、测试与验收
 
-## 27. 今日独立练习
+# Round 3：按复盘结果完成组件与基础测试
 
-### 27.1 产出文件
+## 27. Round3 最终 AsyncLogger contract 复检
+
+Round1 已经建立文件、程序用途、file API 和基础 scenarios。这里用 Round2 的 ownership/lifecycle 分析补齐最终 contract，不重新复制一套 logger。
+
+### 27.1 canonical files 复检
 
 在 canonical Week8 project 中新增：
 
@@ -1370,7 +1503,7 @@ CMakeLists.txt
 
 不要复制 BlockingQueue implementation；复用 Week7 已验收的 `include/blocking_queue.hpp` canonical copy。
 
-### 27.2 这三个代码文件分别干什么
+### 27.2 三个代码文件最终职责复检
 
 `async_logger.hpp`：
 
@@ -1400,7 +1533,7 @@ CMakeLists.txt
 让 assertion failure 影响 process exit code
 ```
 
-### 27.3 public contract
+### 27.3 final public contract
 
 你需要实现与下面语义等价的 interface：
 

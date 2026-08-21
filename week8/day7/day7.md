@@ -425,7 +425,101 @@ AsyncLogger writer 不向 ThreadPool 反向 submit
 
 # Part 2：教程主体
 
-# 教程开始：先画 dependency graph，再写第一行 integration code
+# 教程开始：先独立组合，再审查 dependency、lifetime 与证据
+
+# Round 1：到这里停止阅读，先独立完成 integration V1
+
+Day7 的第一次产出不该从标准 dependency graph 和标准 shutdown order 开始。你已经拥有两个通过各自 tests 的 components，也知道它们的 public contracts；现在先用自己的设计把它们组合起来。
+
+先不要看第 7 节及之后的 ownership map、构造/析构顺序、backpressure chain 和 README 答题框架。
+
+第一轮新增：
+
+```text
+demos/component_demo.cpp
+README.md 初稿
+interview.md 初稿
+```
+
+三个文件各自负责：
+
+```text
+demos/component_demo.cpp
+    使用真实 ThreadPool 和 AsyncLogger public APIs
+    运行一条可自验证的 integration scenario
+    success return 0，任何 contract violation return non-zero
+
+README.md
+    告诉另一个人项目做什么、怎样 fresh build/run/test、目前边界是什么
+
+interview.md
+    用自己的项目代码解释 design choice、trade-off、evidence 和 limitation
+```
+
+第一版 demo 不读取 stdin，也不要求 command-line parser。可以先使用稳定常量：
+
+```text
+worker_count = 4
+task_queue_capacity = 16
+logger_queue_capacity = 8
+task_count = 100
+output_path = component_demo.log
+```
+
+这些只是 correctness configuration，不是性能参数结论。
+
+`component_demo.cpp` 只规定最终功能：
+
+```text
+main 创建 ThreadPool 与 AsyncLogger
+submit 多个会产生计算结果并记录日志的 tasks
+caller 最终取得所有 task outcomes
+所有 accepted log records 在进程成功退出前进入 output file
+任一结果、日志或 lifecycle 检查失败时返回 non-zero
+```
+
+可观察输出至少包含一份 summary，而不是打印每个 thread 的调度顺序：
+
+```text
+tasks submitted
+future results checked
+logs accepted
+unique log IDs found
+integration result: PASS / FAIL
+```
+
+### Round1 build/run 入口
+
+沿用 Day4~Day6 的 project CMake。新增 executable target 名称固定为 `component_demo`，然后：
+
+```bash
+cd ~/code/system-learning/cpp/week8
+cmake -S . -B build
+cmake --build build --target component_demo -j
+cmake -E chdir build ./component_demo
+echo $?
+```
+
+`echo $?` 应在成功时得到 `0`。README 初稿里的命令必须和你实际运行成功的命令一致。
+
+今天没有新的核心 C++ API：主要复用 `submit/future/shutdown/log`、`std::ifstream + std::getline` 和已经学过的 CMake target。Round1 的难点是组合与验证，不是寻找新 library。
+
+在写代码前自己画两张图：
+
+```text
+ownership / borrowing graph
+从 construction 到 process exit 的 lifecycle 顺序
+```
+
+然后按自己的判断决定：谁先构造、谁先 shutdown、task 捕获什么、何时检查 futures、何时读取日志文件。README 和 interview 先写你当前真实理解，不必提前迎合后面的推荐答案。
+
+**阅读闸门：integration demo 尚未独立运行，且两张图尚未完成前，停在这里。**
+
+---
+
+# Round 2：用 dependency、lifetime 与 backpressure 审查 V1
+
+从下面开始再把你的方案与完整机制对照。重点不是把代码改成唯一写法，而是检查是否存在 dangling borrow、错误 shutdown order、无法证明的 output 或 dependency cycle。
 
 ## 7. 两个 components 的 dependency graph
 
@@ -1538,9 +1632,13 @@ flowchart TD
 
 # Part 3：收尾、练习、验证与验收
 
-## 41. 今日独立练习
+# Round 3：完善项目表达并完成 Week8 出口证据
 
-### 41.1 新增文件
+## 41. Round3 最终项目交付复检
+
+Round1 已经生成 integration V1、README/interview 初稿和真实运行结果。这里根据 Round2 的 dependency/lifetime 审查修正它们，并补齐 Week8 出口证据；不要创建第二套 final components。
+
+### 41.1 canonical deliverables 复检
 
 Ubuntu canonical project：
 

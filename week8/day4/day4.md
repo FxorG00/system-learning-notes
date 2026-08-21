@@ -954,6 +954,90 @@ EXPECT_EQ(result.get(), 42);
 
 ---
 
+# Round 1：到这里停止阅读，先为自己的 ThreadPool 写第一版 tests
+
+你现在已经知道 GoogleTest 的基本运行链、常用 assertions，以及怎样从 public contract 写出 scenario。先不要继续看第 15 节之后的确定性同步、exactly-once oracle 和 shutdown gate 设计。
+
+Round1 使用这些 canonical files：
+
+```text
+include/blocking_queue.hpp      已有 component，不在今天重写
+include/thread_pool.hpp         Day3 最终 component
+tests/thread_pool_test.cpp      今天主要修改的 executable tests
+week8/day4/day4_note.md         记录 test design 与证据缺口
+```
+
+`tests/thread_pool_test.cpp` 的程序用途不是再实现一个 pool，而是：
+
+```text
+创建真实 ThreadPool
+-> 只通过 public API 建立 scenario
+-> 在 test thread 观察 value / exception / lifecycle outcome
+-> assertion 把错误变成 test failure
+-> test binary 用 non-zero exit status 把 failure 交给外部工具
+```
+
+第一轮暂时不用先写完整 CMake。先直接得到一个能运行的 GoogleTest binary：
+
+```bash
+cd ~/code/system-learning/cpp/week8
+mkdir -p build
+g++ -std=c++17 -Wall -Wextra -g -pthread \
+  -Iinclude tests/thread_pool_test.cpp \
+  -lgtest_main -lgtest \
+  -o build/thread_pool_test
+./build/thread_pool_test
+```
+
+这里链接 `gtest_main`，因此 test source 不需要自己写 `main()`。若你的发行版没有预编译 library，先按第 7 节已经给出的 Ubuntu 环境步骤处理，不要靠复制未知来源的 `.a` 文件解决。
+
+Round1 的输入和输出很明确：
+
+```text
+输入：每个 TEST 中写死的小型 controlled scenario
+输出：GoogleTest pass/fail summary + process exit status
+成功：所有 assertions 通过，binary exit 0
+失败：任一 assertion/uncaught exception 使 binary non-zero，hang 不能算通过
+```
+
+只根据 Day3 最终 public contract，独立选择并实现第一批 tests。最低覆盖：
+
+```text
+constructor 参数边界
+返回 int / void 的 task
+task exception 通过 future 传播
+shutdown 后 submission 被拒绝
+多个 tasks 最终完成
+```
+
+每个 test 在动手前先写五行草稿：
+
+```text
+contract
+Arrange
+Act
+Assert / oracle
+Cleanup
+```
+
+这一轮不要求测试设计已经完美。你可以暂时使用自己想到的同步方法，但要在 `day4_note.md` 标出：
+
+```text
+哪一条 test 依赖 sleep 或 scheduling 运气？
+哪一条只能证明总数，不能证明 exactly once？
+哪一条失败时可能无法 cleanup？
+```
+
+先让 test binary 能编译、能出现真实 pass/fail，再阅读后半部分强化它。
+
+**阅读闸门：第一版 test suite 尚未运行前，停在这里。**
+
+---
+
+# Round 2：用确定性、oracle 和 cleanup 审查第一版 tests
+
+下面的内容不是让你照抄一套固定 tests，而是用来审查第一版证据哪里太弱、哪里可能自己挂住。
+
 ## 15. 完成关系优先使用 future，不使用 sleep
 
 如果测试只需要知道某个 result task 是否完成：
@@ -1798,9 +1882,13 @@ flowchart TD
 
 # Part 3：收尾、练习、测试与验收
 
-## 34. 今日独立练习
+# Round 3：补齐工程证据并运行完整验证
 
-### 34.1 产出文件
+## 34. Round3 最终 test project 复检
+
+Round1 已经得到第一个可运行的 GoogleTest binary。这里才把它升级为完整 CMake/CTest/TSan 证据集，不要求重写已经正确的 basic tests。
+
+### 34.1 canonical files 复检
 
 继续使用 canonical project：
 
@@ -1816,7 +1904,7 @@ week8/day4/day4_note.md
 
 ---
 
-### 34.2 这份 test program 是干什么的
+### 34.2 test program 最终职责复检
 
 `tests/thread_pool_test.cpp` 要把 ThreadPool 的 public contract 变成 executable evidence：
 

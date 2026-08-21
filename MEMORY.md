@@ -2928,6 +2928,40 @@ git push repo master
 - 外部标准文档和 `man` page 只作为可选深入资料，不能代替 daily 中的基础接口教学。最小独立调用形式可以讲清单个 API 语法，但仍不能提前给出练习要求的完整函数、完整控制流或多个 API 的标准组合答案。
 - 让用户先画数据关系、写伪代码或手推关键流程。
 - 完整代码拆解、参考实现和手推可以放在用户独立实现之后。
+- “没有贴完整代码”不等于“没有泄露答案”。如果在第一次 coding 前已经给出 private members、模块拆分、状态机、锁职责、竞态线性化点、algorithm checklist 或完整控制流，仍然会把设计训练降成照着填空。
+- 练习型、组件型 daily 默认使用渐进披露，而不是把全部教程讲完后才在 Part 3 写“独立练习”：
+
+```text
+Round 1：程序目的 + 最小 public contract + 可观察成功标准 + 必要新 API
+-> 明确“到这里停止阅读”
+-> 用户独立设计、实现并运行 V1，保留真实 compiler/runtime 问题
+
+Round 2：拿 V1 对照 ownership、state、race、error path 和 limitation
+-> 每节先问“我的 V1 怎样处理”
+-> 再解释机制与一种可靠方案
+-> 修正 bug，明确 contract 或保留合理边界
+
+Round 3：补 deterministic tests、TSan/stress/benchmark、README 与最终证据
+```
+
+- Round 1 的 contract 只规定 caller 可观察的行为，不应顺手规定内部使用哪些 members、哪把锁、哪个 flag、怎样排列函数调用；这些属于设计空间。必要的新语言/API 语法可以在闸门前用与主练习无关的最小 demo 教清，但不能把多个 API 组合成主练习答案。
+- Round 1 允许首版不完整。constructor rollback、shutdown overlap、backpressure、deterministic oracle 等复杂 case 可以成为 Round 2 的 code-review 问题；先让用户暴露自己的真实判断，再逐轮打磨，比动手前列完全部坑点更能训练设计能力。
+- 阅读闸门不是排版装饰。生成后必须做一次“截断测试”：假设 Round2/3 完全不可见，只阅读到 Round1 末尾，用户是否已经能实际创建文件、开始 coding、编译并运行第一版。Round1 至少自包含：
+
+```text
+准确的文件名与目录
+每个文件分别负责什么，哪个是 executable entry
+程序/组件从使用者视角到底完成什么
+输入从哪里来，输出写到哪里
+第一版 public contract 与成功/non-zero failure 标准
+当天明确不做什么
+开工必需的新 API：header、调用形态、参数/返回值和独立小例子
+第一条真实 compile/run command
+到哪里停止阅读，以及 V1 允许暂时缺少哪些复杂 case
+```
+
+- 新 API 不能第一次出现在 Round2/3 的“允许查阅”或最终 checklist 中，却要求用户在 Round1 使用。复杂设计方案可以后置，但语法和单个 API 的基本用法必须前置。反过来，API 小例子只能展示单一调用，不得悄悄把 ThreadPool/Logger 的完整组合答案拼出来。
+- Round3 可以给最终 contract、完整 test matrix 和工程验收，因此会比 Round1 更严格；但文件命名、程序用途、基础输入输出和第一条编译命令不能等到 Round3 才首次出现。若后文重复这些内容，应明确它是最终复检，而不是开工说明。
 - 对已经写过且已掌握的练习不要求重复实现，除非新练习增加了明确的新约束或新机制。
 - 验收关注边界、复杂度、不变量、错误路径和可解释性，不只看“能跑”。
 
@@ -3058,7 +3092,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6、Week7 均已正式完成，Week8 Day1 已于 2026-08-20 正式通过，最终评分 94/100；系统主线下一步进入已经提前生成的 Week8 Day2。Day2~Day7 教程已生成但尚未学习或验收，不能因为文件已存在而跳过顺序 review。Day1 已证明 callable -> std::function Task -> BlockingQueue -> worker -> result 的完整链路、value/reference capture 生命周期、close/drain/join 和 executable exactly-once verification；用户选择不机械抄写验收题，由代码、daily 主动补充和实测证据替代。AI Infra 理论伴随线规划已于 2026-08-21 生成，T1 可从当前低强度开始，但默认每周约 3 小时、只占 10%~20%，不能替代或阻塞 Week8 Day2 及后续系统主线。所有已生成 daily 的后续问题默认在对话中回答，需落盘时写入对应 note 或独立补充文件，不擅自回写 daily。
+当前位置：Week5、Week6、Week7 均已正式完成；Week8 Day1、Day2 已正式通过，系统主线下一步进入 Week8 Day3。Day2 最终 ThreadPool 已通过完整 custom tests、100 次重复与 TSan；Day3~Day7 教程已提前生成但尚未验收，不能因为文件已存在而跳过顺序 review。Day1 已证明 callable -> std::function Task -> BlockingQueue -> worker -> result 的完整链路；Day2 已完成 fixed workers、task acceptance、exception isolation、close/drain/join、constructor rollback 与 destructor fallback。用户选择不机械抄写验收题，并允许把测试体力活委托给 Codex，由代码、daily 主动补充和实测证据替代。2026-08-21 用户指出练习教程即使不贴完整代码，也不能在首次 coding 前泄露状态机、竞态和实现职责；Week8 Day2~Day7 已重排为 Round 1 独立 V1、Round 2 对照复盘、Round 3 工程证据，并完成 Round1 文件命名、用途、必要 API 和编译入口的自包含审计。AI Infra 理论伴随线规划已生成，T1 可低强度开始，但不能替代或阻塞系统主线。所有已生成 daily 的后续问题默认在对话中回答；只有用户明确要求回写时才修改 daily。
 
 AI Infra 理论伴随线规划（2026-08-21）：
 
@@ -3088,7 +3122,29 @@ Day6：logger backpressure、drain/flush/join、sync/async benchmark
 Day7：ThreadPool + AsyncLogger integration、README、interview.md 与出口验收
 ```
 
-Week8 不新增 MIT 6.S081 lecture，不开启 15-445，不扩展 dynamic resize、work stealing、lock-free queue、复杂 memory order、日志轮转或生产级日志生态。Week8 使用一份 canonical component source 持续演进，不按 Day 复制多份 final/v2 源码；daily 仍逐日生成，练习前只给程序目的、contract、ownership、state transition、错误路径和测试矩阵，不提前泄露完整 worker loop、submit template 或 writer loop。
+Week8 不新增 MIT 6.S081 lecture，不开启 15-445，不扩展 dynamic resize、work stealing、lock-free queue、复杂 memory order、日志轮转或生产级日志生态。Week8 使用一份 canonical component source 持续演进，不按 Day 复制多份 final/v2 源码。练习第一轮只给程序目的、最小 public contract、必要新 API 和可观察成功标准；ownership、state transition、race/error-path analysis、algorithm checklist 与强化测试延后到 V1 运行之后，不能因为没贴完整函数就误以为没有泄露设计答案。
+
+Week8 Day2~Day7 渐进披露修订（2026-08-21）：
+
+```text
+Day2：contract 后立即停读，独立封装 ThreadPool V1；再看 lifecycle/race/rollback
+Day3：先学 packaged_task/future 最小机制并独立尝试 generic submit；再看 move-only bridge 与 contract 演进
+Day4：先按 contract 写第一版 GoogleTests；再审查 deterministic synchronization、oracle 与 cleanup
+Day5：先按最小 AsyncLogger contract 写 V1；再看 ownership、single writer、shutdown overlap
+Day6：先独立设计 lifecycle tests 与 benchmark V1；再校正 accepted/rejected oracle 和 timer boundary
+Day7：先独立组合两个 components 并画自己的图；再审查 dependency、lifetime、backpressure 和项目表达
+```
+
+第二轮 Round1 自包含审计：
+
+```text
+Day2：前移 thread_pool.hpp/thread_pool_test.cpp 职责、Thread/vector/function/atomic API 与直接编译命令
+Day3：前移 canonical files、result-channel 程序用途、invoke_result/bind/forward/make_shared 最小 API 与编译入口
+Day4：前移 test executable 用途、canonical filenames、直接 GoogleTest build/run 与 pass/fail output contract
+Day5：前移 AsyncLogger 三个 source/test 文件职责、ofstream/ifstream 最小 API 与直接编译入口
+Day6：前移 benchmark 文件用途、configuration/result row、steady_clock/ifstream API 与 optimized build command
+Day7：前移三个交付文件职责、稳定 correctness configuration、summary output 与 component_demo build/run
+```
 
 Week8 Day1 教程：
 
@@ -3150,14 +3206,61 @@ Week8 Day2 教程：
 
 ```text
 路径：C:\Users\FxorG\Desktop\gpt_infra\week8\day2\day2.md
-生成状态：提前生成，Day1 尚未验收，不得据此跳过 Day1 review
+学习状态：Day1 已通过，用户正在学习 Day2；本篇已按渐进披露原则重排
 主题：把 task queue、workers、worker loop 和 shutdown responsibility 封装为 ThreadPool V1
 核心：fixed-size ownership、RUNNING/DRAINING/STOPPED、submit-vs-shutdown acceptance、close/drain/join、destructor lifecycle
 新增 error path：worker_count/empty task、constructor partial-thread rollback、task exception boundary、sequential idempotent shutdown；close 必须唤醒 blocked submitters 并使 push 返回 false
 V1 policy：std::function<void()> task；task exception 计入 atomic failure count；Day3 再用 packaged_task/future 传播逐 task exception
-练习前只给 public contract、state flow、API 小例子和测试矩阵；没有给完整 worker-loop 或 class implementation
+Round 1 在 public contract 后设置硬闸门，要求先独立完成可编译运行的 V1；state flow、submit/shutdown race、rollback、完整 requirements 和测试强化均放到 Round 2/3
 固定验证：invalid construction、zero-task shutdown、exact execution、accepted-work completion baseline、post-shutdown submit、empty task、exception isolation、destructor、repeated shutdown、TSan、50 次重复运行；严格 pending-at-close drain evidence 由 Day4 gate test 承担
 教程中的 interface/exception/joinable API 组合示例已用 C++17 + Wall + Wextra + pthread 实际编译运行
+```
+
+Week8 Day2 Round1 首次验收（2026-08-21）：
+
+```text
+用户产出：Ubuntu include/thread_pool.hpp、tests/thread_pool_test.cpp；Windows week8/day2/day2_note.md，并在 daily 中主动补充 member construction/destruction 与 header-only compile/translation-unit 解释
+实现主线：fixed workers + BlockingQueue<Task> + per-task catch + atomic failure count + submit/close/drain/join，normal path 方向正确
+用户 note 判断正确：BlockingQueue close state 是 V1 task acceptance 的 single source of truth；submit/shutdown 谁赢由 queue mutex 下的 push/close 顺序决定，不必再复制一份 pool running flag
+Codex 实测：规定 g++ 参数零 warning；当前 normal case PASS/exit 0；100 次重复 PASS；TSan build 运行 PASS 且无已执行路径 data-race report
+阻塞问题 1：test() 无论 success_flag 都 return true，main 也忽略 test return；结果 mismatch 时仍可能 process exit 0，形成 false PASS
+阻塞问题 2：Round1 test 只有 normal execution，没有真正覆盖 task exception + worker survival + failed count、post-shutdown rejection 等本轮 minimum behaviors
+Round2 必修问题：constructor thread creation failure 的 catch 直接 join；已创建 workers 可能仍阻塞在 open-and-empty queue，必须先建立退出条件再 join；throw error 会按 std::exception base object 重新抛出并丢失原动态类型，应保留原 exception
+非阻塞工程问题：thread_pool.hpp/tests 依赖 blocking_queue.hpp 的 transitive includes；实现实际使用 thread/optional/utility/vector/iostream 等时应自行 include；static work 更适合作为 private implementation detail；executed_count 当前既不暴露也不参与 oracle
+当前状态：Round1 暂不通过；先修 test exit-status 链并补最小 exception/post-shutdown evidence，再复检。constructor rollback 可在进入 Round2 时修，但不能把当前代码描述成已正确处理 partial construction failure
+```
+
+Week8 Day2 Round1 第二次复检（2026-08-21）：
+
+```text
+已修复 constructor rollback：catch(...) 后先 tasks.close()，再 join 已创建 workers，最后 bare throw 保留原 exception；原先潜在 open-and-empty join hang 与 exception slicing 问题均撤销
+main 已开始把 test false 转成 process exit 1，但 test() 末尾仍无条件 return true；success_flag mismatch 仍只能打印 FAIL、不能传播为 non-zero，这是当前唯一 Round1 correctness blocker
+用户明确选择把 task exception、post-shutdown rejection 等完整 test matrix 留到 Round3；该安排符合渐进披露/分轮打磨原则，不再作为 Round1 阻塞项。Round1 只要求 normal-path V1 与可信的 normal oracle
+复检实测：规定参数零 warning，当前 normal case PASS/exit 0
+当前状态：Round1 尚差一行 exit-status 修复；test() 应返回真实 success_flag，之后可通过 Round1 并进入 Round2。transitive includes、public static work、unused executed_count 仍是非阻塞工程建议
+```
+
+Week8 Day2 Round1 最终验收（2026-08-21）：
+
+```text
+最终修复：test() 返回真实 success_flag，main 将 false 转为 process exit 1；normal oracle 不再可能只打印 FAIL 却返回成功
+最终实测：g++ -std=c++17 -Wall -Wextra -g -pthread 零 warning；normal PASS/exit 0；100 次重复 PASS；TSan build PASS 且无已执行路径 data-race report
+constructor rollback 保持 close -> join created workers -> bare throw，normal shutdown 保持 close -> drain -> join；用户 note 对 BlockingQueue single source of truth 与 V1 exception policy 的理解正确
+Round1 测试边界按用户决定只验 normal-path V1；exception/post-shutdown/完整 test matrix 延后 Round3，不作为本轮重复体力活
+最终状态：Week8 Day2 Round1 通过，可以继续阅读 Round2 并拿当前 V1 对照 lifecycle、race 与 error paths；整个 Day2 尚未完成
+Round1 评分：88/100。非阻塞改进：return success_flag 可替代三目表达式；补直接 includes；把 static work 收为 private；决定 executed_count 是删除还是成为真实 observable/test oracle
+```
+
+Week8 Day2 最终验收（2026-08-21）：
+
+```text
+用户确认 ThreadPool 主实现完成，并将剩余测试体力活委托给 Codex；Codex 只修改 Ubuntu tests/thread_pool_test.cpp，没有改 ThreadPool implementation
+custom test runner 覆盖 9 类 contract：zero worker、zero capacity、zero-task + repeated shutdown、100 tasks exact execution、capacity=1 accepted-work completion、post-shutdown rejection、empty task + later usability、task exception isolation、destructor drain
+测试设计不依赖固定 sleep；每个 case 独立输出 PASS/FAIL，unexpected exception 变成 failure，main 汇总后以 0/non-zero 提供 executable oracle
+最终实测：规定参数零 warning；9/9 tests PASS、exit 0；100 次重复 PASS；TSan build 9/9 PASS 且无已执行路径 data-race report
+ThreadPool 最终 contract 证据：BlockingQueue 是 acceptance single source of truth；submit/close 由 queue lock 线性化；constructor rollback 为 close -> join created workers -> bare throw；normal/destructor shutdown 为 close -> drain -> join；task exception 增加 failed count 且 worker 继续
+最终状态：Week8 Day2 正式通过，可以进入 Day3
+最终评分：92/100。保留非阻塞工程建议：直接 include 自己使用的 headers；把 static work 收为 private；executed_count 若不成为 observable/test oracle 可删除；Day4 再迁移到 GoogleTest/CMake deterministic suite
 ```
 
 Week8 Day3 教程：
@@ -3176,9 +3279,22 @@ API 演进：public generic submit 返回 future<R>；Day2 低层 bool submit(Ta
 empty contract 演进：empty std::function 被 accepted 后在 worker 调用时抛 bad_function_call，由 future.get 观察；若要 immediate rejection，需另设 overload/type-specific validation
 lifecycle：graceful shutdown 继续 drain 已接受 result tasks，保证成功返回的 future 最终 ready with value or exception
 工程边界：generic packaged_task 会保存 user callable exception；Day3 canonical API 明确删除 Day2 过渡性的 public failed_task_count 及其旧 assertions；unexpected wrapper diagnostics 若需要必须以后另设 API
-练习前给出了程序目的、完整结果链、独立 API demos、algorithm checklist 和测试矩阵，但没有给可复制的完整 generic submit template body
+Round 1 只先讲 packaged_task/future 的独立 API 机制并要求独立尝试 generic submit；object relationship、shared_ptr bridge、algorithm checklist、contract 演进和测试矩阵延后到 Round 2/3
 固定验证：int/string/void result、value args、显式 std::ref、exception propagation、empty std::function regression、later-task survival、reverse get order、post-shutdown rejection、零 warning、50 次重复运行和 TSan
 教程提醒同一 pool 内 nested future wait 可能在固定 worker capacity 下 deadlock/starve，V1 通过使用 contract 避免，不在 Day3 扩展调度策略
+```
+
+Week8 Day3 Round1 首次检阅（2026-08-22）：
+
+```text
+用户独立识别了核心类型边界：return type R 属于 future/shared state，worker 只需要执行一种固定的 void work；note 中也主动发现 enqueue rejection 与已经创建的 result channel 之间存在未闭环问题
+实际实现选择把 queue element 从 std::function<void()> 改为 std::packaged_task<void()>，并把 packaged_task<R()> 作为 callable 移进外层 packaged_task<void()>；该设计类型成立，会形成“外层统一调度 task + 内层真实结果 task”两层包装
+Ubuntu 规定参数编译零 warning；用户原测试得到 int result 24、exit 0；额外临时探针确认 int、void 和 user exception propagation 均正确
+当前 submit 忽略 BlockingQueue::push 的 bool result；completed shutdown 后 submit 仍返回 future，随后 future.get() 抛 broken_promise，不符合本日“当前 submit 调用直接报告 rejection”的 Round1 contract
+由于 user exception 已由内层 packaged_task 写入 shared state，worker 外层 catch 看不到该 exception，Day2 failed_task_count 不再表示 user task failure；必须在 Round2 明确删除、改名或重新定义，不能沿用旧解释
+当前 std::bind 只 forward function，未 forward args；packaged_task 又从 lvalue later 构造，因此 ordinary copyable callable/value args 可用，但 move-only callable/argument 能力受限。先作为 Round2 类型边界复盘项，不抹杀本轮核心突破
+用户只保存了 int result test；Codex 临时探针已经补验 void 与 exception，因此无需为了 R1 重复写机械测试，但 final suite 仍需保留可执行证据
+当前状态：核心抽象与主要结果链已经正确，Round1 尚差 submission rejection 闭环；这是 incomplete contract，不是对 packaged_task/future 的理解错误
 ```
 
 Week8 Day4 教程：
@@ -3200,7 +3316,7 @@ build 主线：normal build/ 与 separate build-tsan/；gtest_discover_tests 将
 命令主线：使用 cmake -E chdir build/build-tsan 运行 CTest，避免教程中的 cd 改变 shell cwd 后又按 project-root path 执行 binary
 证据边界：GoogleTest 检查具体 behavior，repeat 探索更多 scheduling interleavings，TSan 检查已执行路径上的 data race；三者互补但不能互相替代
 固定矩阵：construct boundary、zero task、single/void result、many exactly once、future exception + later task、empty std::function + later task、drain、repeated shutdown、post-shutdown rejection、concurrent submitters、destructor lifecycle
-练习前提供了 GoogleTest/CMake 独立 demo、API 解释、scenario/oracle/cleanup 设计和测试矩阵，但没有给完整 ThreadPool test harness
+Round 1 在 GoogleTest 基础语法后要求用户先从 contract 独立写第一版 tests；deterministic synchronization、stronger oracle、cleanup pitfalls 和完整测试矩阵延后到 Round 2/3
 教程中的 GoogleTest demo 与 CMake 3.16 FindGTest/gtest_discover_tests 已在 Ubuntu 临时解压 package 环境实测：2 tests 编译运行、CTest discovery 和 exit status 全部通过，临时文件已清理
 ```
 
@@ -3219,7 +3335,7 @@ I/O failure policy：writer records stream failure but continues draining，避�
 工程连续性：沿用 Day4 canonical include/src/tests layout、GoogleTest、CTest、separate TSan build 和 project-root working-directory discipline
 固定 basic matrix：zero capacity、open failure、single-producer order、multiple-producer unique IDs exactly once、post-shutdown rejection、sequential repeated shutdown、destructor drain
 停止边界：Day5 不做受控 full-queue timing、复杂 shutdown interleavings、runtime disk-failure injection、sync/async benchmark、levels/rotation/fsync；这些留给 Day6 或后续
-教程只给 program purpose、完整流程、API 小例子、public/member contract、algorithm checklist 和 test scenarios，没有给可复制的完整 AsyncLogger implementation
+Round 1 只给 program purpose、最小 public contract 与 basic observable scenarios，要求先独立实现 AsyncLogger V1；ownership map、member responsibilities、algorithm checklist、shutdown overlap 和强化 tests 延后到 Round 2/3
 技术核对：ofstream open/close/flush/openmode 依据 C++ working draft，durability 边界依据 Linux fsync(2)；一个未写入教程的 reference AsyncLogger 使用用户真实 BlockingQueue header 在本地 C++17 + Wall + Wextra + pthread 零 warning 编译，4 producers / 800 unique records / repeated shutdown / late rejection 运行通过
 证据限制：向 Ubuntu /tmp 上传临时 reference files 被安全策略阻止，因此不能写成 Ubuntu/TSan 已验证；实际 Day5 学习时仍需在用户 Ubuntu canonical project 运行 normal CTest 与 TSan
 ```
@@ -3241,7 +3357,7 @@ benchmark fairness：same pre-generated lvalue records、same newline/open/final
 C++17 start gate：producer arrive_and_wait，owner wait_until_all_ready 后才记录 begin/open gate，避免把不一致的 thread startup 混入 timed region
 benchmark evidence：1 warm-up + 5 measured repetitions、raw samples、median/min/max、每 case output validation、记录 VM/CPU/compiler/commit/record size/count/producers/capacity；TSan build 只做 race evidence，不参与性能比较
 停止边界：不新增 public runtime flush、fsync durability、drop policy、rotation、lock-free queue、Google Benchmark dependency、p95/p99、CPU affinity 或 perf/flame graph
-教程只给完整因果链、API 小例子、test/benchmark contract、algorithm checklist 和 failure diagnosis；没有给可直接复制的 logger implementation、StartGate method bodies 或完整 benchmark harness
+Round 1 要求先独立设计 lifecycle tests、sync/async benchmark 边界并取得首份结果；完整因果链、oracle、timer boundary、algorithm checklist 和 failure diagnosis 作为 Round 2/3 复盘材料
 技术核对：steady_clock/flush 依据 C++ working draft；/dev/full runtime no-space behavior 依据 Linux full(4)；Google Benchmark official guide 只参考 warm-up/repetition/context 方法，不新增依赖；未写入教程的 C++17 StartGate + steady_clock reference 已在本地 MinGW g++ 8.1.0 下用 -Wall -Wextra -g -pthread 零 warning 编译运行
 ```
 
@@ -3262,7 +3378,7 @@ README：必须给 architecture、ownership/lifecycle、fresh build/test/TSan/be
 interview.md：按 conclusion -> mechanism -> trade-off -> evidence -> limitation/next step 回答项目真实问题，不写脱离当前代码的通用八股
 出口验证：normal CTest、targeted repeat、TSan、Release benchmark、README fresh-build smoke 与 git check；已有同 commit/source 的 Day4/Day6 证据可以引用，不重复重写 Week7 queue tests 或制造体力活
 Week9 边界：只指出 ThreadPool submit 与 AsyncLogger log 在 backpressure 下可能阻塞，未来接 EventLoop 时必须分析；Day7 不提前实现 epoll/Reactor
-教程形式：保持前情提要/必要术语 -> 完整 integration 主线 -> 练习/验证/验收，提供程序用途、contracts、流程图和 oracle，不泄露完整 component_demo implementation
+教程形式：保持前情提要/必要术语 -> Round 1 独立 integration V1 -> Round 2 dependency/lifetime/backpressure 复盘 -> Round 3 项目表达与出口证据；不再把完整设计分析放在第一次 coding 前
 连续性修正：Week8 canonical directory 使用 benchmark/；Day6 教程中原有 bench/async_logger_bench.cpp 已统一为 benchmark/async_logger_bench.cpp
 ```
 

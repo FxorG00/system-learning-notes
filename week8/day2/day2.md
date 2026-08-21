@@ -270,7 +270,7 @@ destructor 返回时没有 worker 再访问 pool members
 
 今天 worker 调用的是 user-provided task。若 task exception 穿过 `std::thread` 顶层入口，程序会 `std::terminate`。
 
-所以 worker 每次调用 task 的位置必须形成 exception boundary。
+**所以 worker 每次调用 task 的位置必须形成 exception boundary。**
 
 ---
 
@@ -278,13 +278,13 @@ destructor 返回时没有 worker 再访问 pool members
 
 `rollback`：回滚、撤销已经完成的部分工作。
 
-如果 constructor 打算创建 4 个 workers，但创建第 3 个时抛 exception：
+如果 constructor 打算**创建 4 个 workers，但创建第 3 个时抛 exception**：
 
 ```text
 前 2 个 workers 已经存在
 ```
 
-constructor 不能直接离开，让包含 joinable threads 的 vector 析构；必须先 close queue、让已创建 workers 退出并 join，再重新抛出原 exception。
+constructor 不能直接离开，让包含 joinable threads 的 vector 析构；**必须先 close queue、让已创建 workers 退出并 join，再重新抛出原 exception。**
 
 这叫 constructor failure rollback。
 
@@ -308,6 +308,104 @@ close 先发生，task 被拒绝
 ```
 
 现有 `BlockingQueue::push` 与 `close` 使用同一 queue mutex 修改/检查 `closed_`，因此 acceptance decision 不会处于“半成功”状态。
+
+---
+
+### 3.12 myclass 与 member 的构造/析构先后顺序
+
+`MyClass` 里的 `vector` 是 member object。顺序是：
+
+```cpp
+class MyClass {
+public:
+    MyClass() {
+        // 此时 values_ 已经构造好了
+    }
+
+    ~MyClass() {
+        // 此时 values_ 还活着，还可以访问
+    }
+
+private:
+    std::vector<int> values_;
+};
+```
+
+构造时：
+
+```text
+先构造 values_
+-> 进入 MyClass 构造函数 body
+```
+
+析构时：
+
+```text
+先执行 MyClass 析构函数 body
+-> 再析构 values_
+-> MyClass 对象生命周期结束
+```
+
+所以在 `~MyClass()` 里面，`values_` 仍然可用；析构函数 body 结束后，编译器自动调用 `values_` 的析构函数，你不用手动清理。
+
+多个成员时，构造按“成员声明顺序”，析构按相反顺序，和初始化列表里写的顺序无关。
+
+---
+
+对，这里的区别要稍微抠一下：
+
+```cpp
+class MyClass {
+public:
+    MyClass() : values_(5) {}
+
+private:
+    std::vector<int> values_;
+};
+```
+
+`values_(5)` 确实是在对成员 `values_` 做初始化；而这个初始化的具体方式，就是调用 `std::vector<int>` 的“创建 size 为 5 的 vector”的构造函数。
+
+所以完整过程是：
+
+```text
+开始构造 MyClass 对象
+-> 构造 values_ 这个 vector 成员，并用参数 5 初始化它
+-> 进入 MyClass 构造函数 body
+```
+
+这里的关键是：`values_` 不是“先存在，再被改成 size 5”，而是它诞生时就是 size 为 5。
+
+对比这两种：
+
+```cpp
+MyClass() : values_(5) {}
+```
+
+```cpp
+MyClass() {
+    values_ = std::vector<int>(5);
+}
+```
+
+第一种：
+
+```text
+直接构造一个 size 为 5 的 values_
+```
+
+第二种：
+
+```text
+先默认构造一个空 values_
+-> 进入 MyClass 构造函数 body
+-> 再创建临时 vector(5)
+-> 用赋值运算符把它赋给 values_
+```
+
+因此 `: values_(5)` 叫 member initializer list，名字里有“初始化”，但它发生在构造 `MyClass` 的过程中。可以把它理解成：
+
+> 构造 `MyClass` 时，指定它的成员要怎样被构造出来。
 
 ---
 
@@ -468,6 +566,255 @@ destructor 返回后，没有 worker 再访问 pool members
 destructor 不能让一个已经 dangling 的 `this` 继续被其他 execution flows 调用。
 
 ---
+
+# Round 1：到这里停止阅读，先独立写出 ThreadPool V1
+
+现在你已经知道两件足以开工的事：
+
+```text
+这个 component 是干什么的
+它对 caller 承诺哪些 observable behaviors
+```
+
+先不要继续看第 6 节及之后的状态机、竞态和 shutdown 分析。它们属于你写完第一版后的 code review 材料。
+
+本轮新增：
+
+```text
+include/thread_pool.hpp
+tests/thread_pool_test.cpp
+```
+
+两个文件不是同一种东西：
+
+```text
+include/thread_pool.hpp
+    定义 fixed-size ThreadPool class
+    本日采用 header-only，里面放 public declarations 与 implementation
+    它本身没有 main，不单独运行
+
+tests/thread_pool_test.cpp
+    include thread_pool.hpp
+    在 main 中构造和使用真实 ThreadPool
+    检查任务结果与 lifecycle；任一检查失败 return non-zero
+```
+
+第一版程序从外部看应完成这条路径：
+
+```text
+main 给出 worker_count、queue_capacity 和若干 void() tasks
+-> ThreadPool 接受 tasks
+-> pool-owned workers 异步执行
+-> main 发起 shutdown
+-> 已接受 tasks 完成，workers 被回收
+-> test 根据 observable results 返回 0 或 non-zero
+```
+
+今天继续使用第 5 节已经确定的名字：
+
+```cpp
+using Task = std::function<void()>;
+
+ThreadPool(std::size_t worker_count, std::size_t queue_capacity);
+bool submit(Task task);
+void shutdown();
+std::size_t failed_task_count() const;
+~ThreadPool();
+```
+
+### Round1 API 工具箱
+
+下面只说明怎样调用单个标准库 API，不规定你的 ThreadPool 内部控制流。
+
+`std::thread::joinable()` / `join()`：
+
+```cpp
+#include <thread>
+
+std::thread worker([] {});
+if (worker.joinable()) {
+    worker.join();
+}
+```
+
+`join()` 等待对应 execution flow 结束，并把 thread object 变成 non-joinable。不要用 `detach()` 绕过 ownership。
+
+`std::vector::emplace_back()` / `reserve()`：
+
+```cpp
+#include <thread>
+#include <vector>
+
+std::vector<std::thread> workers;
+workers.reserve(4);              // 只预留 capacity，size 仍为 0
+workers.emplace_back([] {});     // 直接构造一个 element，size 变为 1
+workers.front().join();
+```
+
+`std::function::operator bool`：
+
+```cpp
+#include <functional>
+
+std::function<void()> task;
+if (!task) {
+    // empty：没有 callable target
+}
+```
+
+`std::invalid_argument` 表示 caller 给出的 argument 违反 public contract：
+
+```cpp
+#include <cstddef>
+#include <stdexcept>
+
+void validate_worker_count(std::size_t worker_count) {
+    if (worker_count == 0) {
+        throw std::invalid_argument("worker_count must be positive");
+    }
+}
+```
+
+`std::atomic<std::size_t>`：
+
+```cpp
+#include <atomic>
+#include <cstddef>
+
+std::atomic<std::size_t> failures{0};
+failures.fetch_add(1);
+const std::size_t snapshot = failures.load();
+```
+
+第一版使用默认 memory order；今天不展开复杂 `memory_order`。
+
+### Round1 编译入口
+
+```bash
+cd ~/code/system-learning/cpp/week8
+mkdir -p include tests build
+g++ -std=c++17 -Wall -Wextra -g -pthread \
+  -Iinclude tests/thread_pool_test.cpp \
+  -o build/thread_pool_test
+./build/thread_pool_test
+```
+
+如果编译器报错，先保留第一份 diagnostic；不要为了尽快通过而跳到 Round2 抄控制流。
+
+#### 这些编译命令干啥的
+
+这组命令的核心意思是：**编译 `thread_pool_test.cpp` 这一个真正的 `.cpp` 程序；它 `#include` 进来 `thread_pool.hpp`，所以 header 也已经参与编译了。**
+
+```bash
+cd ~/code/system-learning/cpp/week8
+```
+
+切换到 Week8 项目目录。后面的相对路径 `include/...`、`tests/...` 都以这里为起点。
+
+```bash
+mkdir -p include tests build
+```
+
+确保这三个目录存在：
+
+```text
+include/  放 .hpp
+tests/    放 test .cpp
+build/    放编译生成的可执行文件
+```
+
+`-p` 表示目录已经存在也不报错。
+
+```bash
+g++ -std=c++17 -Wall -Wextra -g -pthread \
+  -Iinclude tests/thread_pool_test.cpp \
+  -o build/thread_pool_test
+```
+
+拆开看：
+
+```text
+g++                         调用 C++ 编译器
+-std=c++17                  使用 C++17
+-Wall -Wextra               打开常见 warning
+-g                          保留调试信息，方便 gdb
+-pthread                    启用并链接线程支持
+-Iinclude                   让 #include "thread_pool.hpp" 去 include/ 目录找
+tests/thread_pool_test.cpp  编译的主源文件
+-o build/thread_pool_test   输出的可执行文件名和位置
+```
+
+其中行尾的 `\` 只是 Bash 的“这条命令下一行继续写”的意思。把它写成一行也完全等价：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -g -pthread -Iinclude tests/thread_pool_test.cpp -o build/thread_pool_test
+```
+
+然后：
+
+```bash
+./build/thread_pool_test
+```
+
+运行刚生成的程序。
+
+你说的“先编译 `.hpp`，再编译 test”通常没必要。因为过程其实是：
+
+```text
+thread_pool_test.cpp
+-> #include "thread_pool.hpp"
+-> 预处理器把 hpp 内容展开进这个 cpp
+-> g++ 编译这一整个 translation unit
+-> 链接成 thread_pool_test
+```
+
+`thread_pool.hpp` 在这里是 header-only component：它没有独立 `main()`，不应当当作一个普通程序单独编译。单独编译它有时看起来能跑，但对这个项目没有帮助；如果 header 里定义的普通函数又被 `.cpp` 编译了一遍，反而可能造成 duplicate symbol。
+
+只有将来出现这种结构时，才需要同时把两个 `.cpp` 交给编译器：
+
+```bash
+g++ -Iinclude src/async_logger.cpp tests/async_logger_test.cpp -o build/async_logger_test
+```
+
+因为 `async_logger.cpp` 是独立实现文件，不会被 header 自动展开进去。
+
+---
+
+复用已经验收的 `BlockingQueue<Task>`，独立决定：
+
+```text
+ThreadPool 需要哪些 private members
+constructor 怎样创建 workers
+worker 怎样取得并执行 task
+shutdown 怎样让 workers 最终退出
+destructor 怎样完成兜底 cleanup
+```
+
+V1 首轮只要求用 public API 证明：
+
+```text
+合法参数能构造
+多个 accepted tasks 最终都执行
+task 抛 exception 不终止整个 process
+shutdown 能返回且不会留下 joinable workers
+shutdown 后 submit 被拒绝
+```
+
+这一轮允许你的设计不完整。若你暂时没有考虑 constructor 中途失败、submit/shutdown overlap、重复 shutdown 或 bounded queue 满时的行为，不要先往下偷看答案；把自己的处理方式或疑问记在 `day2_note.md`，完成能编译运行的 V1 后再继续。
+
+**阅读闸门：V1 尚未编译运行前，停在这里。**
+
+---
+
+# Round 2：拿你的 V1 对照状态、竞态和错误路径
+
+从下面开始，不再是“动手前提示”，而是第一轮实现后的设计复盘。每读一节，先回答：
+
+```text
+我的 V1 是怎样处理这件事的？
+它依赖了什么 invariant？
+这一节暴露的是 bug、未定义 contract，还是可接受的 V1 边界？
+```
 
 ## 6. 为什么 V1 禁止 copy 和 move
 
@@ -682,7 +1029,7 @@ flowchart TD
 
 ```text
 std::terminate
--> 整个 process 被终止
+-> 整个 process 被终止，自然包括所有 thread。
 ```
 
 它不是“只让当前 task 失败”。
@@ -1145,9 +1492,13 @@ ThreadPool 不只是“threads + queue”；
 
 # Part 3：收尾、练习、测试与验收
 
-## 19. 今日独立练习
+# Round 3：根据复盘结果打磨并留下工程证据
 
-### 19.1 产出文件
+## 19. Round3 最终 contract 复检
+
+Round1 已经给过文件命名、基础用途、最小 API 和直接编译入口。这里不要求重新创建文件，而是把 V1 经 Round2 复盘后扩展到完整 Day2 contract。
+
+### 19.1 canonical files 复检
 
 在 Week8 canonical source 中新增：
 
@@ -1174,7 +1525,7 @@ Day3 会继续修改同一份 `thread_pool.hpp`，由 Git 保存演进。
 
 ---
 
-### 19.2 `thread_pool.hpp` 程序用途
+### 19.2 `thread_pool.hpp` 最终用途复检
 
 它定义一个 fixed-size ThreadPool component：
 
@@ -1190,7 +1541,7 @@ accepted tasks are drained before all workers join
 
 ---
 
-### 19.3 public contract
+### 19.3 final public contract
 
 必须支持：
 
@@ -1321,74 +1672,20 @@ must not throw under the component's valid-use contract
 
 ---
 
-## 20. 允许查阅的最小 API
+## 20. Round2 修复时新增的 API：try / catch / rethrow
 
-### 20.1 `std::invalid_argument`
-
-所属头文件：
+Round1 已经给过 `invalid_argument`、`vector`、`thread::join`、`atomic` 和 empty `std::function` 的开工用法，这里不再重复。constructor rollback 新增需要的是重新抛出当前 exception：
 
 ```cpp
-#include <stdexcept>
-```
+void create_resource_that_may_throw();
 
-最小例子：
-
-```cpp
-#include <cstddef>
-#include <stdexcept>
-
-void require_positive(std::size_t value) {
-    if (value == 0) {
-        throw std::invalid_argument("value must be positive");
+void perform_with_rollback() {
+    try {
+        create_resource_that_may_throw();
+    } catch (...) {
+        // cleanup current scope resources here
+        throw;
     }
-}
-```
-
-表示 caller 提供的 argument 不满足 API contract。
-
----
-
-### 20.2 `std::vector::reserve`
-
-```cpp
-#include <vector>
-
-std::vector<int> values;
-values.reserve(4);
-```
-
-作用：至少为 4 个 elements 预留 capacity，但 `size()` 仍是 0。
-
-在 workers vector 中，reserve 可以减少逐项 `emplace_back` 时的 reallocation。
-
-它不创建 worker，也不改变 thread lifecycle。
-
----
-
-### 20.3 `std::thread::joinable` / `join`
-
-```cpp
-#include <thread>
-
-std::thread worker([]() {});
-
-if (worker.joinable()) {
-    worker.join();
-}
-```
-
-成功 join 后，该 thread object 不再 joinable。
-
----
-
-### 20.4 try / catch / rethrow
-
-```cpp
-try {
-    require_positive(0);
-} catch (...) {
-    // cleanup current scope resources here
-    throw;
 }
 ```
 
@@ -1404,62 +1701,9 @@ constructor rollback 需要这种“先 cleanup，再 rethrow”。
 
 ---
 
-### 20.5 `std::atomic<std::size_t>`
+## 21. Round3 build 复检
 
-```cpp
-#include <atomic>
-#include <cstddef>
-
-std::atomic<std::size_t> failures{0};
-failures.fetch_add(1);
-const std::size_t snapshot = failures.load();
-```
-
-今天用它记录 task failure count。默认 sequential consistency 足够，不展开 memory order。
-
----
-
-### 20.6 `std::function::operator bool`
-
-```cpp
-#include <functional>
-#include <stdexcept>
-
-std::function<void()> task;
-
-if (!task) {
-    throw std::invalid_argument("empty task");
-}
-```
-
-空 `std::function` 没有 callable target。直接调用会抛 `std::bad_function_call`。
-
----
-
-## 21. 编译方式
-
-在 Ubuntu：
-
-```bash
-cd ~/code/system-learning/cpp/week8
-mkdir -p tests build
-```
-
-编译：
-
-```bash
-g++ -std=c++17 -Wall -Wextra -g -pthread \
-  -Iinclude tests/thread_pool_test.cpp \
-  -o build/thread_pool_test
-```
-
-运行：
-
-```bash
-./build/thread_pool_test
-```
-
-今天保持 header-only ThreadPool，暂时不增加单独 `.cpp` translation unit。Day4 再建立 CMake / GoogleTest。
+继续使用 Round1 的同一条 `g++ -std=c++17 -Wall -Wextra -g -pthread` 命令。Round3 只增加 tests 和修复实现，不创建新的 `.cpp` translation unit；Day4 再建立 CMake / GoogleTest。
 
 ---
 
