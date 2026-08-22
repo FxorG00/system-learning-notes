@@ -3110,6 +3110,36 @@ B 站资源：3Blue1Brown 官方账号负责线代/微积分直觉；李沐 D2L 
 当前状态：规划已生成，T1 尚未开始；系统主线下一步仍是 Week8 Day2
 ```
 
+AI Infra 理论伴随线的实际教学方式（2026-08-23）：
+
+```text
+AI_Infra理论伴随线规划.md 只负责 T1~T24 的路线、范围与 gate；它不是可直接开学的完整教程。真正进入某个 T 时，Codex 再结合当时系统主线进度、前一个 T note 和真实资源，单独生成 Txx.md
+不一次性提前生成 24 份 T 教程。按 T1 -> review -> T2 顺序逐个生成，让后续内容吸收用户真实问题和掌握速度；一个 T 可以跨两个自然周，不和系统 WeekN 强行对齐
+每份 Txx.md 必须明确“去哪里学”：列出主资料、精确章节/视频、看到哪里停止，以及必看/选看/当前不看；生成前实际核对官方文档、正式课程或可靠教材，不只扔课程名和搜索关键词
+Txx.md 是每周约 3 小时的轻量学习入口，不复制 30KB 级 daily encyclopedia。默认拆成 Session A 概念与顺讲、Session B 独立 coding、Session C 复盘与验证；每个 session 可单独停止，避免要求一次全文读完
+固定包含：本 T 从哪个问题出发、必要术语/数学硬件补注、资源阅读顺序、Codex 顺着资料的自包含讲解、shape/formula 小例子、独立代码需求、assert/tolerance 验证、与 AI Infra 的连接、通过标准和 Txx_note.md 建议
+练习仍采用渐进披露：先给自包含 Round1 的文件名/用途/API/输入输出/第一条运行命令，让用户独立写 reference；之后再给机制复盘、数值陷阱和完整测试，不在首次 coding 前泄露组合实现
+资料和教程控制认知负荷：已掌握内容允许快扫，纯扩展内容明确标 optional；数学目标以能解释和实现 inference reference 为准，不把整门证明型课程塞进一个 T
+建议 Windows 路径为 gpt_infra/ai_theory/Txx/Txx.md 与 Txx_note.md；Ubuntu code 继续使用 ~/code/system-learning/ai-theory/tXX_topic/。目录按实际进入的 T 逐个建立
+```
+
+AI Infra Theory T1 教程已生成（2026-08-23）：
+
+```text
+教程路径：C:\Users\FxorG\Desktop\gpt_infra\ai_theory\T1\T1.md
+Ubuntu code 目录已建立：~/code/system-learning/ai-theory/t01_numpy_basics
+固定产出：numpy_basics.py；完成后由用户创建 Windows T1_note.md
+主题：Python/NumPy 最低入口与 ndarray object model，核心是 shape/ndim/size/dtype/itemsize/nbytes、axis 第一层、创建/indexing/same-shape elementwise/reshape 与 incompatible-shape ValueError
+实际环境检查：Ubuntu 20.04 当前 Python 3.8.10，pip 与 NumPy 尚未安装，venv module 可 import。教程在正文前提供 environment gate；不未经用户操作安装 system packages
+环境方案：安装 python3-pip/python3-venv，在 t01 目录创建 .venv，并 pin NumPy 1.24.4；NumPy 官方 release note 确认该版本支持 Python 3.8~3.11
+资料主线：Python official Lists 仅作 10 分钟补缺；NumPy 1.24 Absolute Beginner 指定 8 个小节并明确跳过 sorting/stacking/newaxis/broadcasting/Pandas；Quickstart 只作 3D printing/shape 查缺
+教程结构：Session A environment+concept+resources，Session B Round1 independent numpy_basics.py，Round2 对照五个误区，Session C verification+AI Infra memory estimate；一个 Session 可以独立停止，T1 可跨两个自然周
+Round1 截断审计通过：已有精确文件名/用途、必要 Python syntax、API 小例子、固定 arrays、metadata/assert/error contract、py_compile/run commands 与阅读闸门；未提供完整 numpy_basics.py
+范围边界：不深入 broadcasting、stride、view/copy 全规则、matrix multiplication、PyTorch 或 CUDA；NumPy 作为以后 C++/CUDA operator 的小规模 correctness reference
+文档审计：约 21KB，Markdown fences 成对；核心 shape/index/reshape/error 示例已用 bundled NumPy 2.3.5 实跑通过，使用的基础 API 与目标 NumPy 1.24.4 兼容
+当前状态：T1.md 已就绪但用户尚未执行 environment gate、Session A 或代码验收；系统主线 Week8 Day3 已通过，下一步仍可按精力进入 Week8 Day4，理论线不抢主线
+```
+
 Week8 周规划的固定主线：
 
 ```text
@@ -3295,6 +3325,32 @@ Ubuntu 规定参数编译零 warning；用户原测试得到 int result 24、exi
 当前 std::bind 只 forward function，未 forward args；packaged_task 又从 lvalue later 构造，因此 ordinary copyable callable/value args 可用，但 move-only callable/argument 能力受限。先作为 Round2 类型边界复盘项，不抹杀本轮核心突破
 用户只保存了 int result test；Codex 临时探针已经补验 void 与 exception，因此无需为了 R1 重复写机械测试，但 final suite 仍需保留可执行证据
 当前状态：核心抽象与主要结果链已经正确，Round1 尚差 submission rejection 闭环；这是 incomplete contract，不是对 packaged_task/future 的理解错误
+```
+
+Week8 Day3 Round1 最终验收（2026-08-22）：
+
+```text
+用户已把 queue element 的构造改为显式 Task task_element(std::move(task))，明确表达外层 packaged_task<void()> 对内层 packaged_task<R()> 的 ownership；R != void 时是两层包装，R == void 时目标与源类型相同，主要是 move construction
+submit 现在检查 BlockingQueue::push 的 bool result：accepted 才返回 future；closed rejection 在当前 submit 调用中直接抛 runtime_error，不再返回随后才观察 broken_promise 的 future
+Ubuntu 规定参数编译零 warning；当前 rejection 演示输出预期 runtime_error，证明 rejection path 已闭环。此前临时探针已经确认 int、void 与 user exception propagation，不要求用户为 Round1 重写重复测试
+当前 tests/thread_pool_test.cpp 把预期 rejection catch 后 return 1，因此作为 executable test 会把正确行为标成 failure，并且当前只演示 rejection；这是非阻塞测试-oracle 问题，Day4/本日 Round3 test suite 需要让 expected rejection -> PASS/exit 0、missing rejection -> FAIL/non-zero
+note 保留“先误以为 static_cast 只是强制抹平 return type -> 再理解 class-type static_cast 会构造目标对象”的真实认知过程，正确且有价值
+最终状态：Week8 Day3 Round1 正式通过，可以阅读 Round2 对照 canonical std::function<void()> + shared_ptr bridge 路线、failure counter 语义和 forwarding 边界
+Round1 最终评分：92/100。非阻塞项是当前 negative-path test 的 exit-status/oracle，以及当前 nested packaged_task 路线的额外 shared state 与 Day2 failed_task_count 语义不再成立
+```
+
+Week8 Day3 最终验收（2026-08-22）：
+
+```text
+用户读完 Round2 后已把 canonical queue element 恢复为 std::function<void()>，generic submit 使用 invoke_result_t + bind/forward + packaged_task<R()> + make_shared move construction + copyable lambda wrapper；push rejection 在 submit 中直接抛 runtime_error
+Day2 failed_task_count 已从实现删除；generic user exception 由 packaged_task 写入 shared state，再由对应 future.get() 观察。int/string/void、ordinary value arguments、std::ref、empty std::function、shutdown/drain 等本日 contract 均成立
+用户 day3_note 逐步记录了 R1 固定 queue type 的判断、nested packaged_task 绕路、class-type static_cast 的真实构造语义、push rejection，以及 R2 shared_ptr bridge。R2 末句“shared_ptr 指向原先创建的 task”略不精确：make_shared(std::move(task)) 指向的是 heap 上 move-constructed 的新 packaged_task object，原 local task 变为 moved-from；用户在 daily 新增 make_shared 章节中已经理解并写清该边界
+用户对 day3.md 的主动补充已逐块复核：ordinary function/function pointer/function object/closure 的层次，move-only lambda 与 C++17 std::function copyable-target 冲突，function signature 与 concrete callable type，make_shared copy/move construction，bind object 模型等核心解释正确。make_shared “control block + T 一块内存”应作为常见/典型实现模型理解，不把具体 allocation layout 当作 portable contract
+Codex 按用户请求补全 tests/thread_pool_test.cpp，未修改 include/thread_pool.hpp。custom runner 共 11 cases：int/string/void、deterministic value lifetime、std::ref、exception propagation + worker survival、reverse get order、post-shutdown rejection、empty function + worker survival、shutdown drain、move-only result
+最终实测：g++ -std=c++17 -Wall -Wextra -g -pthread 零 warning；11/11 PASS、exit 0；100 次重复 PASS；TSan build 11/11 PASS、exit 0、无已执行路径 race report；测试无 fixed sleep，expected exceptions 计为 PASS，任何 failure 汇总成 non-zero exit
+实现非阻塞边界：worker 当前没有教程建议的 outer safety catch，但按现有 nonempty wrapper + exactly-once packaged_task invariant，user exception 已由 packaged_task 捕获，当前测试和主 contract 不受影响；thread_pool.hpp 仍依赖部分 transitive includes、work 仍 public static、bind object 以 lvalue 复制进 packaged_task，这些留作后续工程清理，不阻塞 Day3
+最终状态：Week8 Day3 正式通过，可以进入 Day4 GoogleTest/CMake/deterministic lifecycle evidence
+最终评分：94/100
 ```
 
 Week8 Day4 教程：
