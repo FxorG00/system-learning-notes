@@ -1,8 +1,8 @@
 # Week8 Day5：日志 I/O 为什么要和业务 execution flow 分开
 
-> 今日定位：从已经完成设计的 `BlockingQueue<T>` 与 ThreadPool 测试纪律，进入第二个并发组件 `AsyncLogger V1`。
+> 今日定位：Week8 Day4 已正式通过。你已经有可返回结果的 ThreadPool、10 个 GoogleTest cases、CMake/CTest、重复运行和真实 TSan build 证据；今天进入第二个并发组件 `AsyncLogger V1`。
 >
-> 今天只建立 `producer -> bounded queue -> single writer -> file` 的完整主线、ownership 和基本 lifecycle。Day6 再专门处理受控 backpressure、复杂 shutdown 交错、完整 lifecycle tests 与 benchmark。
+> 今天的核心产出是 logger component，不是再学一遍测试工具。只建立 `producer -> bounded queue -> single writer -> file` 的完整主线、ownership 和基本 lifecycle。Day6 再专门处理受控 backpressure、复杂 shutdown 交错、强化 lifecycle evidence 与 benchmark。
 
 ---
 
@@ -20,7 +20,19 @@ submitter
 -> future
 ```
 
-Day4 又把 ThreadPool 的 written contract 变成了 GoogleTest、repeat 和 TSan 能检查的 executable evidence。
+Day4 又把 ThreadPool 的 written contract 变成了 GoogleTest、repeat 和 TSan 能检查的 executable evidence。你已经实际完成：
+
+```text
+10 个 ThreadPool GoogleTest cases
+deterministic pending-task drain
+exactly-once oracle
+exception / empty-callable 后 worker survival
+concurrent submitters 与 destructor lifecycle
+CMake normal build + separate TSan build
+CTest 10/10、50 次重复运行、TSan clean on exercised paths
+```
+
+所以今天不重新讲 `TEST`、`EXPECT_*`、`gtest_discover_tests` 或 CMake 的完整入门。它们只负责验证新的 `AsyncLogger`，不能抢走 component design 这条主线。
 
 今天不继续给 ThreadPool 堆功能，而是复用已经掌握的并发骨架，解决另一种工作：
 
@@ -50,7 +62,7 @@ ThreadPool result：通常由每个 future 单独观察
 AsyncLogger result：通常形成一个顺序文件，并由组件级状态反映 I/O failure
 ```
 
-当前 Day1~Day4 教程已经提前生成，不等于已经学习或验收。Day5 只依赖这些教程最终会按顺序完成，不修改真实进度。
+当前真实进度是：Week8 Day1~Day4 已按顺序完成，Day4 最终评分 `94/100`。今天可以直接复用已经通过的 ThreadPool 工程结构和测试纪律，不需要补做重复性前置练习。
 
 ---
 
@@ -373,17 +385,26 @@ written contract
 
 你已经知道今天要解决的问题、复用的 BlockingQueue API，以及最终文件必须可验证。先不要看下面的 ownership map、状态机、single-writer 理由和 shutdown 算法。
 
-本轮新增和修改：
+Round1 只回答一个问题：
+
+> 你能否只根据程序用途和 public contract，独立写出第一版 `AsyncLogger`，让 producer 不再直接承担 file I/O？
+
+本轮核心实现文件：
 
 ```text
 include/async_logger.hpp         声明 public interface；你自己设计 private state
 src/async_logger.cpp             实现 file open、log、writer lifecycle 与 shutdown
-tests/async_logger_test.cpp      只通过 public API 验证最终文件与 lifecycle
-CMakeLists.txt                   增加 AsyncLogger source/test targets
-week8/day5/day5_note.md          记录 V1 设计和真实问题
 ```
 
-不要复制 `blocking_queue.hpp`，继续 include canonical component。
+先用一个很小的 public-API smoke program，或 `tests/async_logger_test.cpp` 中最小的 1~3 个 cases 验证 V1。Round1 不要求先完成最终 GoogleTest matrix，也不要求先改完 CMake；否则很容易把“测试工程能构建”误当成“logger 已设计完成”。
+
+本轮同步记录：
+
+```text
+week8/day5/day5_note.md          只记录 V1 设计、实际报错和暂未解决的问题
+```
+
+不要复制 `blocking_queue.hpp`，继续 include canonical component。不要先阅读后面的 member checklist，再照着把答案翻译成代码。
 
 ### Round1 程序用途
 
@@ -453,9 +474,9 @@ while (std::getline(input, line)) {
 
 不要在 writer 仍可能写文件时，把暂时读不到的行判成最终丢失。
 
-### Round1 编译入口
+### Round1 编译与最小观察入口
 
-在 CMake target 完成前，可先直接编译第一版：
+Round1 可以先直接用 `g++` 编译，不以 CMake 是否完成作为本轮门槛。若你先写的是 GoogleTest smoke：
 
 ```bash
 cd ~/code/system-learning/cpp/week8
@@ -465,6 +486,17 @@ g++ -std=c++17 -Wall -Wextra -g -pthread \
   -o build/async_logger_test
 ./build/async_logger_test
 ```
+
+若你先写普通 `main`，只需把最后一个 source 换成自己的 smoke file，并去掉 GoogleTest libraries。最小 smoke 应能从外部观察：
+
+```text
+log A/B/C 返回 true
+shutdown 返回
+重新打开 output file 后恰好读到 A/B/C
+shutdown 后 log("late") 返回 false
+```
+
+这只是帮助你快速判断主链是否成立，不是最终测试套件。
 
 外部可观察需求：
 
@@ -488,9 +520,9 @@ log 与 shutdown 共享哪些状态
 怎样让 tests 在 shutdown 后检查文件
 ```
 
-完成一个能通过“单 producer 顺序写入、多 producer 不丢不重、shutdown 后拒绝”三个基本场景的 V1。若你暂时没处理 file runtime failure、queue 满时 shutdown 或 repeated shutdown，先把它们记作疑问，不要提前读答案。
+完成一个能通过“单 producer 顺序写入、多 producer 不丢不重、shutdown 后拒绝”三个基本场景的 V1。你可以先用少量手写检查证明它们，不必为了 Round1 立刻写完整 test matrix。若你暂时没处理 file runtime failure、queue 满时 shutdown 或 repeated shutdown，先把它们记作疑问，不要提前读答案。
 
-**阅读闸门：AsyncLogger V1 尚未编译运行前，停在这里。**
+**阅读闸门：`async_logger.hpp/.cpp` 的 V1 尚未编译，并且最小 smoke 尚未观察到真实 file output 前，停在这里。**
 
 ---
 
@@ -1221,6 +1253,19 @@ final shutdown returns false
 
 ## 21. shutdown 的完整因果链
 
+先区分两个层次：
+
+```text
+最容易证明的 normal path：先阻止新业务 work，join producers，再 shutdown logger
+V1 允许的 overlap：owner shutdown 时，某个已经进入 log() 的 producer 仍可能等待 queue
+```
+
+无论采用哪一种，必须先建立同一个 lifetime 前提：
+
+> 从 shutdown 开始到所有 producer calls 返回，`AsyncLogger` object 必须仍然活着；shutdown 返回不等于 owner 可以立刻无视仍持有 logger reference 的 producer。
+
+normal path 的完整链是：
+
 ```text
 owner has stopped/joins all producer threads that may call log
     |
@@ -1256,6 +1301,19 @@ join returns to owner
     v
 shutdown returns final I/O status
 ```
+
+如果 owner 需要用 shutdown 的 `queue.close()` 去释放一个 blocked producer，则顺序改成：
+
+```text
+owner prevents any brand-new log call
+-> owner calls shutdown; queue.close wakes blocked producer
+-> blocked log returns false
+-> shutdown drains and joins writer
+-> owner joins producer thread
+-> only now may owner destroy logger
+```
+
+Day5 只要求你能解释这条 overlap，不要求把它做成确定性测试；Day6 再建立 gate 和 accepted/rejected file oracle。
 
 关键不是背函数名，而是回答：
 
@@ -1480,6 +1538,28 @@ ownership + queue + single writer + lifecycle
 
 # Round 3：按复盘结果完成组件与基础测试
 
+先明确这一轮相对 Round1 的 concrete delta：
+
+```text
+Round1 已有：能 open、accept、background write、shutdown 的 AsyncLogger V1
+
+Round2 复盘后要改进 implementation：
+    open-before-thread-start
+    single-writer stream ownership
+    close-before-join
+    closed-with-data drain
+    remembered I/O failure
+    sequential repeated shutdown
+    destructor fallback
+
+implementation 稳定后再补 execution evidence：
+    public-API GoogleTest scenarios
+    CMake targets / CTest registration
+    normal build、定向运行、TSan
+```
+
+今天的核心仍是第一栏的 component behavior。CMake/CTest/TSan 只运行这份 strengthened implementation 和 tests，不是另一份独立产出。
+
 ## 27. Round3 最终 AsyncLogger contract 复检
 
 Round1 已经建立文件、程序用途、file API 和基础 scenarios。这里用 Round2 的 ownership/lifecycle 分析补齐最终 contract，不重新复制一套 logger。
@@ -1650,6 +1730,16 @@ do not attempt to report status through destructor return value
 
 今天使用 GoogleTest，但 test bodies 由你自己写。
 
+下面列的是必须覆盖的 **behaviors**，不是强制要求六个一模一样的 `TEST` bodies。只要 test name 和 failure diagnosis 仍清楚，可以把相近边界合并，例如：
+
+```text
+zero capacity + output open failure          -> constructor boundaries
+single-producer order + repeated shutdown
+    + post-shutdown rejection                -> normal lifecycle
+```
+
+不要为了减少 test 数量，把多个互不相关的并发场景塞进一个失败后无法定位的巨型 test。
+
 ### 28.1 `RejectsZeroCapacity`
 
 ```text
@@ -1773,16 +1863,16 @@ int main() {
 
 ## 30. CMake target requirements
 
-在 Day4 的 `CMakeLists.txt` 上新增，不重写整个工程。
+在 Day4 已通过的 `CMakeLists.txt` 上只增加 target delta，不重学 CMake，也不重写整个工程。
 
 `async_logger` library target：
 
 ```text
 source: src/async_logger.cpp
-public include directory: include/
-C++17
--Wall -Wextra -g
-Threads::Threads
+PUBLIC include directory: include/
+PUBLIC C++17 compile feature（public headers 依赖 C++17 BlockingQueue）
+PRIVATE -Wall -Wextra -g compile options
+PUBLIC Threads::Threads（让 static-library consumers 获得真实 link dependency）
 ```
 
 `async_logger_test` executable target：
@@ -1802,6 +1892,13 @@ test/user including async_logger.hpp also needs the same include directory
 ```
 
 Day4 中 thread_pool header-only target 怎样表达，以你的现有 CMake 为准；今天不要为了 logger 大规模重构 ThreadPool build。
+
+这里的 `PUBLIC/PRIVATE` 不是风格装饰：
+
+```text
+consumer 需要知道 include path、C++ standard 和 thread link requirement
+consumer 不需要继承 logger 自己的 warning/debug compile options
+```
 
 ---
 
