@@ -1,3616 +1,900 @@
-﻿# plan_strengthened.md：C++ 系统工程 / AI Infra 求职路线（Week9 校准版）
+# C++ 系统工程 / AI Infra 求职总规划
 
-> 版本：2026-08-26
-> 定位：Week1 ~ Week8 已完成，当前从 **epoll / Reactor** 进入可写进简历的系统项目阶段。继续以 **C++ / Linux / OS / 网络 / 系统项目 / 性能证据 / 面试表达** 为主；课程只为当前工程问题补底座，不按课程目录平铺。
-> 学习者背景：中山大学计算机科学与技术专业，2026 年 7 月处于准大二阶段；按常规四年制节奏对应 2029 届，如实际毕业时间变化再同步调整。
-> 总目标：本科毕业直接就业，主目标为 AI Infra，优先聚焦 LLM inference systems / serving 与 CUDA kernel optimization；C++ 基础设施、中间件和高性能服务端既是必修底座，也是第一段实习与岗位选择的可靠入口。
+> 版本：2026-08-26，Week9 / 腾讯实习目标校准版
+> 学习者：FxorG，中山大学计算机科学与技术专业，按当前学制为 2029 届
+> 当前进度：Week1 ~ Week8 已完成，下一站是 non-blocking I/O、epoll 与 Reactor
+> 近期目标：2026 年 12 月形成第一版简历，2027 年 1 月开始投递后台开发、C++ Infra 与 AI 业务基础设施相关实习
+> 长期目标：本科就业进入 AI Infra，重点发展 LLM inference systems / serving 与 CUDA kernel optimization
+
+这份文件只回答四个问题：
+
+```text
+现在已经会什么？
+离目标岗位还缺什么？
+接下来按什么顺序产出证据？
+哪些课程和技术现在不应该抢主线？
+```
+
+详细 daily 教学规范、个人偏好和每一天的验收记录放在 `MEMORY.md`，不在总规划中重复。
 
 ---
 
-## 本版强化说明：根据 200 篇 C++ / Infra / AI Infra 面经调整
+## 1. 总判断
 
-这版不推倒原路线，而是在原来的 **C++ 主线 + 6.S081 + 15-445** 上做强化。
-
-### A. 权重上调
-
-```text
-MySQL / 数据库：从后置补充上调为中间件阶段必修
-存储系统：从了解上调为 15-445 伴随线
-生产级代码：从项目加分项上调为项目验收项
-性能压测：从后期优化上调为每个系统项目必做
-排查工具：从工具池上调为项目排查能力
-RPC / 协议：从可选项上调为 Reactor / Mini Redis 后的补充模块
-项目深挖：从简历准备上调为每个项目的硬性产出
-```
-
-### B. 不变的主线
-
-```text
-C++ 主线不变
-Linux / OS 主线不变
-网络 / Reactor 主线不变
-Mini Redis 主项目不变
-Go 仍然暂时不回主线
-AI Infra 不抢当前 C++ / Linux / OS 主线，但不再等到 2028 年才从零启动；按能力门槛分阶段预热和切入
-```
-
-### C. 面经雷达机制
-
-以后每周末抽 5~10 篇同类面经，不逐篇背，只做三件事：
-
-```text
-1. 记录不会回答的问题
-2. 标记和当前主线相关的问题
-3. 把高频问题变成下一周任务
-```
-
-输出格式：
-
-```markdown
-## 本周面经雷达
-
-### 高频但我不会的
-- ...
-
-### 和当前项目相关的
-- ...
-
-### 下周要补的
-- ...
-
-### 暂时不碰的
-- ...
-```
-
-时间控制在每周 30~60 分钟，不让面经抢主线。
-
-### D. 生产级代码标准
-
-学习期 demo 的标准：
-
-```text
-能编译
-能运行
-能观察现象
-能解释输出
-```
-
-项目期代码的标准：
-
-```text
-接口清楚
-边界明确
-错误处理
-资源释放可靠
-线程安全说明
-有基本测试
-有 README
-有性能数据
-能讲设计取舍
-```
-
-从 ThreadPool / AsyncLogger 开始，项目代码提交前过一遍：
-
-```text
-边界输入处理了吗？
-错误返回设计了吗？
-资源释放可靠吗？
-是否可能内存泄漏？
-是否可能 double free？
-是否有数据竞争？
-线程退出能否 graceful shutdown？
-日志够不够定位问题？
-有没有最小单元测试？
-有没有基本压测？
-README 能不能让别人跑起来？
-```
-
-### E. 项目深挖硬性产出
-
-每个项目都维护一个 `interview.md`：
-
-```markdown
-# 项目面试问答
-
-## 1. 为什么做这个项目？
-
-## 2. 整体架构是什么？
-
-## 3. 为什么这么设计？
-
-## 4. 最难的 bug 是什么？
-
-## 5. 怎么压测？
-
-## 6. 性能瓶颈在哪里？
-
-## 7. 如果让你继续优化，你会怎么做？
-
-## 8. 和真实 Redis / Nginx / muduo / MySQL 的差距在哪里？
-```
-
-项目 README 至少包含：
-
-```text
-项目简介
-功能列表
-架构图
-构建方式
-使用示例
-测试方式
-压测结果
-踩坑总结
-后续优化
-```
-
----
-
-## 本次 Week9 校准结论
-
-这次调整不改变大方向，只修正执行顺序和课程边界：
-
-```text
-1. Week1 ~ Week8 归档为已完成底座，不再把旧 Day1 当“当前进度”。
-2. Week9 起先打穿 epoll -> Reactor -> HTTP -> Mini Redis，不在项目之前同时开多门重课。
-3. CSAPP 进入“按主题选学”，不从第一页重刷；它负责补硬件、链接、虚拟内存、系统 I/O 和并发的横向整合。
-4. MIT 6.S081 保留为必须最终完整通关的长期 OS 线，但分阶段推进，不连续挤占项目周。
-5. CS144 完整课、15-445 projects、编译原理、6.824 都不进入当前并行主线；只在满足对应 gate 后开启。
-6. Mini Redis 从“练习项目”升级为 2027 第一段实习前的主简历项目，Reactor/HTTP 是它的技术底座和副项目证据。
-7. 投递准备前移到 2027 年 1 月；不再等到 2027 年 4 月才开始整理简历和岗位。
-8. 自然周只用于记录时间，真正推进依据 milestone gate，不因进度快而重复 work，也不因课程很有名就插队。
-```
-
-旧版把 MySQL / 15-445 固定塞进 Week13 ~ Week14、把 RPC 固定塞进 Week15，容易在 Mini Redis 尚未闭环时分散注意力。本版删除这个固定占位，改为：Mini Redis V1 完成后，再按项目真实问题开启存储课程选学；RPC 是后续扩展，不抢主项目。
-
----
-
-## 0. 当前总决策
-
-### 0.1 主线不变：C++ 系统工程优先
-
-近期不把 Go 放进主线。
-
-Go 的定位：
-
-```text
-未来可选副线
-不是当前 Week1 ~ Week8 主线
-不作为每天 .md 的默认内容
-等 C++ / Linux / OS / 网络 / 系统项目稳定后，再评估是否补
-```
-
-当前主线：
-
-```text
-C/C++ 基础
-→ C++11 / 现代 C++
-→ Linux 系统编程
-→ OS 基础
-→ 数据结构在工程里的应用
-→ 必要设计模式
-→ C++ 基础组件
-→ 网络编程 / 高性能网络
-→ Redis / MySQL / Nginx / Kafka 等中间件
-→ 测试 / 调试 / 性能分析
-→ C++ 项目实战
-→ 分布式 / 云原生
-→ AI Infra
-```
-
-这条线的核心不是“学一堆课”，而是：
-
-```text
-知识点
-+ 小 demo 验证
-+ 项目落地
-+ 性能/调试工具
-+ 面试表达
-```
-
----
-
-### 0.2 一条主线、两条伴随线、一个课程池
-
-```text
-系统工程主线：C++ -> Linux/OS -> 网络 -> Reactor -> Mini Redis
-OS 伴随线：MIT 6.S081，最终完整通关，按主线需要分段推进
-AI 理论伴随线：T1 ~ T24，每周低强度，不阻塞系统主线
-课程池：CSAPP / CS144 / 15-445 / compiler / 6.824，按 gate 调用，不同时开课
-```
-
-当前课程优先级：
-
-```text
-现在：Week9 epoll/Reactor；6.S081 只恢复与当前机制直接相关的内容
-项目过程中：CSAPP 按主题查缺，不完整重刷
-Mini Redis V1 后：15-445 storage / buffer pool / index / WAL 第一轮
-Mini Redis 闭环后：评估 CS144 checkpoint 或 Proxy/系统实验，不阻塞简历主项目
-更后面：编译原理、6.824、完整 ML systems 课程按方向选择
-```
-
----
-
-### 0.3 当前进度
-
-```text
-Week1 ~ Week3：C++ 对象、资源管理、现代 C++、STL 与工程数据结构，通过
-Week4 ~ Week5：Linux 系统编程、OS、6.S081 第一轮核心机制，通过
-Week6：网络原理与阻塞 TCP 编程，通过
-Week7：C++ 多线程、同步、BlockingQueue 与性能实验，通过
-Week8：ThreadPool、AsyncLogger、GoogleTest、TSan、benchmark、CMake integration，通过
-当前：进入 Week9，主题为 non-blocking I/O、epoll 与 Reactor 第一轮
-AI 理论线：T1 教程已生成，尚未验收；保持低强度，不抢 Week9
-```
-
-当前不再用“学过多少天”判断进度。后面保持：
-
-```text
-熟悉内容快速过
-关键内容代码验证
-薄弱内容重点补
-每天根据实际进度动态调整
-```
-
----
-
-## 1. 规划依据
-
-### 1.1 你的个人目标
-
-你当前的明确背景与目标是：
-
-```text
-中山大学计算机科学与技术专业
-2026 年 7 月准大二，处于本科能力建设早期
-目标本科毕业直接就业，不以读研作为默认前提
-主目标是 AI Infra，而不是普通 CRUD 后端或纯模型算法研究
-优先寻找技术密度高、能积累 C++ / 系统 / GPU / 推理经验的实习
-```
-
-职业方向按优先级收敛为：
-
-```text
-主攻：LLM inference engine / serving system
-主攻：CUDA / Triton kernel 与算子性能优化
-第二层：多 GPU 推理、NCCL 通信、分布式 serving
-可靠入口：C++ 基础设施、高性能后端、中间件、存储与 AI 部署工程
-后置选修：训练系统、AI 编译器、完整 MLOps 平台
-不作为主目标：纯模型算法、论文导向研究、普通业务 CRUD
-```
-
-所以当前主线必须以：
+大的方向不需要推倒：
 
 ```text
 C++
-Linux
-OS
-网络
-系统项目
-中间件
-性能分析
+-> Linux / OS
+-> 网络
+-> 并发组件
+-> epoll / Reactor
+-> HTTP Server
+-> Mini Redis
+-> AI inference systems
 ```
 
-为核心；之后自然接入：
+需要调整的是目标优先级和项目表达：
 
-```text
-Python / NumPy / PyTorch inference
-Tensor / operator / computation graph
-CUDA / GPU architecture / profiling
-Transformer / KV Cache / quantization
-Triton / vLLM / serving / distributed inference
-```
+1. 2027 年第一段实习以 **C++ 后台 / Linux 后台 / 系统基础设施** 为主投方向。
+2. **AI 业务中的后台或机器学习基础设施** 是冲刺方向，尤其关注存储、向量检索、参数服务、模型服务外围系统。
+3. **大模型推理引擎 / CUDA AI Infra** 是长期主目标，不把它伪装成 2027 年 1 月已经完全匹配的岗位。
+4. Reactor 和 HTTP Server 是 Mini Redis 的技术底座，不强行拆成三个注水项目。
+5. BlockingQueue、ThreadPool、AsyncLogger 是重要组件证据，但不是三份独立简历项目。
+6. 课程按项目暴露的问题调用，不再平铺 CSAPP、CS144、15-445、编译原理和分布式系统。
 
-前半段不是“绕远路”。AI Infra 的核心工作最终仍在处理内存、并发、调度、通信、编译、性能和工程可靠性；当前系统底座会被后半段直接复用。
+一句话版本：
 
----
-
-### 1.2 面试真实趋势
-
-近两年 C++ 大厂面经体现出几个趋势：
-
-```text
-C++ 不再只问孤立定义，而是问对象生命周期、RAII、拷贝/移动、STL 行为、智能指针、异常安全怎么在项目里用。
-OS/Linux、网络、项目深挖经常绑在一起问。
-线程模型、锁、虚拟内存、mmap、TCP、epoll、Reactor 是高频主线。
-面试官特别爱追问为什么这么设计、异常情况、性能验证、线上排查。
-手撕题通常不离谱，但要可运行、边界完整、复杂度清楚。
-```
-
-所以新规划必须显式加入：
-
-```text
-异常安全
-对象内存布局 / 虚函数表 / 多态
-STL 细节：vector 扩容、迭代器失效、容器选型
-OS demo：fork/COW、mmap、锁竞争
-调试排查：gdb、strace、valgrind、日志、benchmark
-项目表达：STAR + 技术取舍 + 指标验证
-少量长期手撕题训练
-```
+> 先凭扎实的 C++ / Linux / 网络 / 并发和一个可信的 Mini Redis 拿到系统方向实习，再把这套能力迁移到推理引擎、模型服务与 GPU 优化。
 
 ---
 
-### 1.3 为什么加入 MIT 6.S081
+## 2. 当前真实能力基线
 
-6.S081 对你有价值，因为它能解释：
+### 2.1 已完成的 Week1 ~ Week8
 
-```text
-system call
-trap
-user mode / kernel mode
-page table
-process
-scheduler
-context switch
-file descriptor
-virtual memory
-```
-
-这些内容会直接支撑：
-
-```text
-Linux 系统编程
-OS 面试
-网络 IO
-epoll / Reactor
-C++ 系统项目
-```
-
-但注意：
-
-```text
-现在不急着全刷 lab
-先看核心 lecture
-配合 Linux 小 demo 和笔记
-能解释概念优先
-```
-
----
-
-### 1.4 为什么加入 CMU 15-445
-
-15-445 对你后面有价值，因为它能解释：
-
-```text
-数据库存储
-buffer pool
-page
-B+ tree
-hash index
-query execution
-concurrency control
-transaction
-WAL / recovery
-```
-
-这些内容会直接支撑：
-
-```text
-MySQL 原理
-Mini Redis 后续深化
-KVStore / 存储项目
-数据库 / 中间件面试
-AI Infra 中的数据和存储系统理解
-```
-
-但注意：
-
-```text
-15-445 不现在主开
-等 C++ / STL / Linux / OS 第一轮完成后再穿插
-更适合放在 Mini Redis / MySQL 阶段
-```
-
----
-
-## 2. 学习原则
-
-### 2.1 每周有总计划，每天动态调整
-
-每周先给一个 week plan，但每天生成 `.md` 时，不机械照搬周计划，而是综合：
-
-```text
-1. 本周总目标
-2. 前一天实际完成情况
-3. 笔记里暴露出的薄弱点
-4. 当前最该补的知识
-5. 面试高频程度
-6. 项目路线和找工作价值
-7. 6.S081 / 15-445 是否适合穿插
-```
-
-也就是说，每天的 `.md` 是动态调整版，不是死课表。
-
----
-
-### 2.2 主线和伴随线的比例
-
-当前阶段默认比例：
-
-```text
-C++ / Linux / OS / 网络主线：80%
-6.S081：20% 以内
-15-445：暂时 0%，后面中间件阶段再开始
-```
-
-等进入中间件阶段后：
-
-```text
-C++ 项目 / Mini Redis：60%
-Redis / MySQL / 15-445：30%
-测试 / 性能 / 面试表达：10%
-```
-
----
-
-### 2.3 讲解风格
-
-以后讲知识点不机械使用 `What / Why / How` 这种标题。
-
-默认风格：
-
-```text
-先建立直觉
-再给必要术语
-再解释底层机制
-再写代码验证
-中途穿插检查问题
-最后给验收题
-```
-
-术语要有，但不堆砌。
-
-目标是：
-
-```text
-能和别人交流
-能看懂代码
-能解释给面试官
-```
-
----
-
-### 2.4 代码和笔记习惯
-
-```text
-代码：默认放 Ubuntu 的 ~/code/system-learning
-笔记：按自己的习惯存，不强制放 Ubuntu
-提交：每个学习日尽量有一次 git commit
-```
-
-建议仓库结构逐渐变成：
-
-```text
-system-learning/
-├── cpp/
-│   ├── week1/
-│   ├── week2/
-│   └── components/
-├── linux/
-│   ├── fd/
-│   ├── process/
-│   └── mmap/
-├── os/
-│   └── 6s081-notes/
-├── network/
-│   ├── tcp/
-│   ├── epoll/
-│   └── reactor/
-├── db/
-│   ├── redis/
-│   ├── mysql/
-│   └── 15445-notes/
-└── projects/
-    ├── threadpool/
-    ├── async_logger/
-    ├── reactor/
-    └── mini_redis/
-```
-
-不用现在一次建完，后面按模块自然增长。
-
----
-
-### 2.5 不追求“大而全”
-
-现在最重要的是：
-
-```text
-C++ 对象和资源管理
-Linux 系统调用和工具链
-OS 进程 / 线程 / 虚拟内存 / IO
-网络 TCP / HTTP / socket / epoll
-C++ 系统项目：线程池、Reactor、Mini Redis
-调试 / 测试 / 性能验证
-```
-
-暂时不要被这些内容分散：
-
-```text
-DPDK
-io_uring 深入
-完整 Nginx 源码
-Ceph
-TiDB
-Skynet
-OpenResty WAF
-Firewall / netfilter
-完整 Kafka 实现
-readiness gate 未满足时深入 CUDA / Triton
-复杂模板元编程
-当前项目阶段连续硬刷 15-445 全部 projects
-当前项目阶段连续硬刷 6.S081 全部 labs（最终完整通关目标不变）
-```
-
----
-
-## 3. 总路线图
-
-### 3.1 阶段总览
-
-| 阶段 | 时间 | 主目标 | 关键词 |
-|---|---|---|---|
-| 阶段 0 | 2026.07 ~ 2026.08，已完成 | C++ / Linux / OS / 网络 / 并发底座 | RAII、STL、syscall、VM、TCP、BlockingQueue、ThreadPool、AsyncLogger、测试工具 |
-| 阶段 1 | 2026.08 ~ 2026.10，当前 | 事件驱动网络主线 | non-blocking I/O、epoll、Reactor、HTTP Server、CMake、stress/TSan/benchmark |
-| 阶段 2 | 2026.10 ~ 2026.12 | 主简历项目 Mini Redis | RESP、KV、TTL、事件循环、持久化、测试、benchmark、可观测性、README |
-| 阶段 3 | 2026.12 ~ 2027.02 | 项目收口 + 第一轮投递 | 简历、项目讲稿、模拟面试、CSAPP/15-445 定向补缺、持续投递 |
-| 阶段 4 | 2027.02 ~ 2027.06 | 实习窗口 + CPU inference 小闭环 | 边投递边补短板；NumPy/PyTorch、mini tensor/operator 或 CPU inference baseline |
-| 阶段 5 | 2027 暑假 | 第一份技术实习 | 优先 AI 部署/推理/C++ Infra；拿不到完全对口时，C++ 基础设施、中间件、存储、网络同样有效 |
-| 阶段 6 | 2027.7 ~ 2028.1 | AI Infra 桥接主线 | CPU 推理框架、CUDA 基础、kernel-lab、Transformer inference、单卡 mini LLM |
-| 阶段 7 | 2028.1 ~ 2028.6 | AI Infra 求职项目主线 | CUDA profiling/optimization、Triton、KV Cache、continuous batching、vLLM/nano-vLLM、开源贡献 |
-| 阶段 8 | 2028 暑假 | 关键实习 | 目标 AI Infra / 推理引擎 / 算子 / GPU 系统；形成真实工程经历和推荐信/转正可能 |
-| 阶段 9 | 2028.7 ~ 2028.10 | 2029 届秋招 | AI Infra 主投，C++ Infra / HPC / 存储 / 高性能服务端作为相邻岗位池 |
-| 阶段 10 | 2028.10 之后 | 深化与补短板 | 多 GPU/NCCL、分布式推理、训练系统或 AI 编译器按岗位反馈选一条深入 |
-
-日期是节奏参考，不是机械门槛。你推进速度快，真正是否进入下一阶段由后文的 readiness gate 决定；可以提前，但不能跳过依赖。
-
----
-
-## 4. 优先级分层
-
-### P0：现在必须进入主线
-
-```text
-C++ 基础和现代 C++
-RAII / 拷贝控制 / 移动语义 / 智能指针
-STL 行为：vector、string、map、unordered_map、迭代器失效
-Linux 工具链：git / gdb / cmake / make / ssh / strace
-OS：进程、线程、锁、虚拟内存、fd、IO 模型
-网络原理：TCP / UDP / HTTP / DNS / Socket
-高性能 IO：select / poll / epoll
-Reactor 模型
-C++ 多线程：thread / mutex / condition_variable / atomic
-MIT 6.S081 核心 lecture：system call / page table / trap / process / scheduler / file system 基础
-```
-
----
-
-### P1：Week9 起重点推进
-
-```text
-BlockingQueue 阻塞队列
-ThreadPool 线程池
-AsyncLogger 异步日志
-Timer 定时器
-RingBuffer
-TCP Echo Server
-Epoll Server
-Reactor 框架
-HTTP Server 初步
-MemoryPool 初步
-ConnectionPool 初步
-Mini Redis
-Redis 协议和数据结构
-MySQL 索引、事务、MVCC、锁
-CMU 15-445 选学：storage / buffer pool / B+ tree / transaction / concurrency / recovery
-RPC / 协议设计初步：请求响应、序列化、超时、错误码
-gtest / benchmark / valgrind / strace / gdb
-项目 README / 架构图 / 性能数据 / 面试讲稿 / 排查记录
-系统项目稳定后开始 AI Infra 预热：Python 工程、NumPy、线代、PyTorch inference
-```
-
----
-
-### P2：项目打磨和平台能力
-
-```text
-Nginx 基础：反向代理、负载均衡、worker 模型、事件驱动
-Kafka 基础：topic、partition、consumer group、offset
-Docker
-Kubernetes
-Prometheus / Grafana
-Raft
-Mini KV
-RocksDB / LSM Tree 初步
-15-445 project 思路选读
-CPU Tensor / operator / computation graph
-CUDA kernel-lab：vector add / reduce / softmax / matmul / RMSNorm
-单卡 Mini LLM inference
-Triton 与 vLLM/nano-vLLM 第一轮
-```
-
----
-
-### P3：暂时不碰，后面按方向选修
-
-```text
-DPDK
-io_uring 深入
-完整 Nginx 源码模块开发
-Ceph
-TiDB
-FUSE
-OpenResty WAF
-Firewall / netfilter
-Skynet
-ZeroMQ
-MQTT
-完整 Kafka 实现
-复杂模板元编程
-当前 readiness gate 未满足时直接深挖 CUDA / CUTLASS / Tensor Core
-同时展开训练系统、推理系统、AI 编译器和完整 MLOps
-一上来逐行阅读 PyTorch / vLLM / TensorRT-LLM 大型源码
-当前项目阶段连续强刷 MIT 6.S081 全部 labs（最终完整通关目标不变）
-CMU 15-445 全部 project 强刷
-```
-
----
-
-## 5. Week1 ~ Week8 已完成基线
-
-本节保留为学习轨迹和前置依赖索引，不再表示“当前待执行计划”。真实验收结果以各周 `weekN.md`、`dayN_note.md` 和 `MEMORY.md` 为准；已掌握内容不因为课程建议而重复重做。
-
-### Week 1：C++ 对象和内存基础
-
-目标：把 C++ 对象、指针、引用、const、构造析构、new/delete、RAII 第一层打牢。
-
-```text
-Day1：环境搭建：VMware Ubuntu + VS Code SSH + g++ / gdb / cmake / git
-Day2：指针 / 引用 / const
-Day3：class / struct / 构造函数 / 析构函数 / this / const 成员函数
-Day4：new / delete / new[] / delete[] / RAII 初步
-Day5：拷贝构造 / 拷贝赋值 / 浅拷贝 / 深拷贝
-Day6：复盘 + 小型 String/Buffer 类练习
-```
-
-6.S081 / 15-445：
-
-```text
-不正式开。
-最多看 6.S081 课程简介，了解它是干什么的。
-15-445 不开。
-```
-
-产出：
-
-```text
-system-learning 仓库
-Day1 ~ Day6 小代码
-git commit 记录
-每日至少一份简短总结
-```
-
----
-
-### Week 2：拷贝控制 + 移动语义 + 智能指针 + 异常安全初步
-
-目标：理解 C++ 对象复制、移动、资源所有权和异常时资源如何释放。
-
-学习内容：
-
-```text
-拷贝构造
-拷贝赋值
-析构函数
-Rule of Three
-Rule of Five
-浅拷贝 / 深拷贝
-move 语义
-std::move
-右值引用
-unique_ptr
-shared_ptr
-weak_ptr 初步
-异常安全初步
-noexcept 初步
-copy-and-swap 初步
-```
-
-6.S081 / 15-445：
-
-```text
-不正式开。
-可以听 6.S081 Lecture 1，但只当作背景，不写重笔记。
-15-445 不开。
-```
-
-产出：
-
-```text
-手写 IntBuffer / StringLike
-演示浅拷贝 double delete
-修成深拷贝版本
-修成禁止拷贝 + 支持 move 版本
-unique_ptr 管理资源 demo
-异常路径下 RAII 自动释放 demo
-```
-
----
-
-### Week 3：STL + 工程数据结构第一轮
-
-目标：把 STL 从“会用”升级到“知道工程含义和面试细节”。
-
-学习内容：
-
-```text
-vector 扩容
-capacity / size
-push_back / emplace_back
-迭代器失效
-string 基本机制
-map / set 与红黑树
-unordered_map / unordered_set 与哈希表
-哈希冲突
-rehash
-erase 时迭代器怎么处理
-pair / tuple / optional 初步
-算法库常用函数
-```
-
-工程数据结构映射：
-
-```text
-hash table → Redis dict / unordered_map
-skiplist → Redis zset
-B+ tree → MySQL 索引
-heap → 定时器
-ringbuffer → 网络 buffer / 日志队列
-LRU → 缓存淘汰
-bitmap → 状态压缩
-Bloom Filter → 快速判断不存在
-```
-
-6.S081 / 15-445：
-
-```text
-6.S081 可轻看 Lecture 2：OS organization / system calls。
-15-445 仍不正式开。
-```
-
-产出：
-
-```text
-vector 扩容观察 demo
-迭代器失效 demo
-unordered_map 哈希冲突 demo
-简化 LRU Cache
-简化 RingBuffer
-```
-
----
-
-### Week 4：Linux 系统编程第一轮 + 6.S081 正式穿插
-
-目标：从 C++ 语法进入 Linux 程序的真实运行环境。
-
-学习内容：
-
-```text
-file descriptor
-open / read / write / close
-stat
-lseek
-dup / dup2
-pipe
-fork / exec / wait
-exit / _exit
-signal 初步
-mmap 初步
-errno
-strace
-lsof
-ss
-ps / top / htop
-```
-
-6.S081 穿插：
-
-```text
-Lecture：system calls / OS organization / page table 前置
-重点问题：
-- 用户程序怎么进内核？
-- system call 是什么？
-- fd 为什么可以代表文件、pipe、socket？
-- fork 为什么能复制进程？
-```
-
-15-445：
-
-```text
-不开。
-```
-
-产出：
-
-```text
-mycat：读取文件并输出
-copyfile：文件复制
-pipe demo：父子进程通信
-fork-exec demo
-mmap demo
-strace 观察系统调用笔记
-6.S081 system call / fd 对应笔记
-```
-
----
-
-### Week 5：OS 第一轮 + 6.S081 核心 lecture
-
-目标：把 MIT 6.S081 / OSTEP 的核心概念和 Linux 编程对应起来。
-
-学习内容：
-
-```text
-user mode / kernel mode
-system call
-process / thread
-context switch
-scheduler 基本思想
-lock
-condition_variable
-virtual memory
-page table
-file descriptor
-blocking IO
-fork / COW
-mmap
-```
-
-6.S081 穿插：
-
-```text
-重点 lecture：
-- page tables
-- traps
-- system calls
-- scheduling
-- locks
-- file system 可先了解
-
-暂时不强求：
-- 全部 lab
-- xv6 源码逐行看
-```
-
-产出：
-
-```text
-system call 笔记
-process / thread 对比笔记
-fd 机制图
-虚拟内存直觉图
-fork/COW demo 笔记
-mmap demo 笔记
-6.S081 page table / trap / syscall 笔记
-```
-
----
-
-### Week 6：网络原理第一轮
-
-目标：能写 TCP client/server，并知道网络 API 背后在干什么。
-
-学习内容：
-
-```text
-TCP / UDP
-三次握手 / 四次挥手
-TIME_WAIT / CLOSE_WAIT
-可靠传输直觉
-滑动窗口大概思想
-拥塞控制大概思想
-HTTP 请求响应
-DNS 基本流程
-socket
-bind
-listen
-accept
-connect
-recv
-send
-close
-阻塞 IO
-```
-
-6.S081：
-
-```text
-作为背景资料，不占主线。
-可以把 fd / blocking IO / sleep-wakeup 和网络 IO 联系起来。
-```
-
-15-445：
-
-```text
-不开。
-```
-
-产出：
-
-```text
-TCP echo server
-TCP client
-HTTP 请求文本解析 demo
-用 ss 查看监听端口
-用 nc/telnet 测试服务
-```
-
----
-
-### Week 7：C++ 多线程和同步
-
-目标：为阻塞队列、线程池和高性能服务端做准备。
-
-学习内容：
-
-```text
-std::thread
-join / detach
-mutex
-lock_guard
-unique_lock
-condition_variable
-producer-consumer
-BlockingQueue
-atomic 基础
-CAS 初步
-false sharing 了解即可
-```
-
-6.S081 穿插：
-
-```text
-看 locks / scheduling 相关内容。
-把课程里的 sleep / wakeup 和 C++ condition_variable 联系起来。
-```
-
-15-445：
-
-```text
-不开。
-```
-
-产出：
-
-```text
-多线程计数器 demo
-condition_variable wait/notify demo
-生产者消费者 BlockingQueue
-atomic counter demo
-锁竞争 demo
-```
-
----
-
-### Week 8：线程池 + 异步日志 + 测试 / benchmark 初步
-
-目标：写出第一个真正有工程味的 C++ 基础组件组合。
-
-学习内容：
-
-```text
-task queue
-worker threads
-condition_variable
-future / packaged_task 初步
-graceful shutdown
-BlockingQueue 复用
-AsyncLogger 异步日志
-gtest 初步
-benchmark 初步
-```
-
-6.S081：
-
-```text
-可作为并发背景，不新增 lecture 压力。
-```
-
-15-445：
-
-```text
-不开。
-```
-
-产出：
-
-```text
-ThreadPool V1
-AsyncLogger V1
-单元测试
-简单 benchmark
-README：设计、接口、使用示例、踩坑
-```
-
----
-
-## 6. Week9 之后：按项目里程碑推进
-
-Week 编号继续用于组织 daily，但不假装每个 Week 必须占七个自然日。每个阶段只有在出口证据成立后才进入下一阶段。
-
-### Milestone A：Week9，non-blocking I/O 与 epoll
-
-要解决的问题：一个 execution flow 怎样同时管理多个 socket，而不是在某个 client 的 `read` 上睡死。
-
-```text
-blocking / non-blocking fd
-fcntl 与 O_NONBLOCK
-readiness，而不是“数据已经完整处理”
-select / poll / epoll 的对象关系和差异
-epoll_create1 / epoll_ctl / epoll_wait
-LT / ET 与 drain-until-EAGAIN
-accept/read/write 的非阻塞循环
-per-connection input/output buffer
-```
-
-产出与出口：
-
-```text
-Epoll Echo Server
-多 client correctness test
-partial read/write 与 disconnect 路径可解释
-strace / ss 观察证据
-零 warning，关键路径有 sanitizer 或重复运行证据
-```
-
-Week9 先学清 epoll。不要在尚不能解释 readiness、EAGAIN 和 fd lifetime 时提前套 Reactor 类名。
-
-### Milestone B：Week10，Reactor V1
-
-把 Week9 的过程式 epoll server 重构为清楚的 ownership 和 callback 模型：
-
-```text
-EventLoop：拥有 poll cycle 与当前 execution flow
-Channel：描述一个 fd 关注哪些 events、发生后调用什么
-Acceptor：只负责建立新 connection
-Connection：拥有 socket state、buffers 与 callbacks
-Timer：只做满足项目需要的最小版本
-```
-
-产出与出口：
-
-```text
-Reactor V1
-明确 EventLoop/Channel/Connection 生命周期
-处理 connection close、fd reuse 与 callback lifetime
-固定 integration tests
-一份 architecture/ownership 图
-```
-
-ThreadPool 和 AsyncLogger 只在有明确跨 execution-flow handoff 时接入，不为了“组件齐全”强行组合。
-
-### Milestone C：Week11，HTTP Server V1
-
-HTTP Server 是 Reactor 的应用验证和副项目，不是新的长期大坑。
-
-```text
-HTTP/1.1 request line 与 headers 第一层
-GET、固定文件或固定 response
-Content-Length
-Connection: close / keep-alive
-incremental parse：一次 read 不等于一条完整 request
-malformed request 与 size limit
-```
-
-出口：
-
-```text
-curl 可复现
-并发 client 可运行
-keep-alive 基本正确
-错误输入不会拖垮 EventLoop
-有最小吞吐/延迟数据，但不追逐夸张 QPS
-README 能构建、启动、请求和停止
-```
-
-### Milestone D：Week12 ~ Week16，Mini Redis 主简历项目
-
-Mini Redis 不再压成两周 demo，而是分五个可验收增量。每个 Week 的实际内容仍会根据上一轮代码调整。
-
-```text
-Week12：项目骨架、RESP incremental parser、command/result model、单线程 KV core
-Week13：Reactor 网络接入、多 client、SET/GET/DEL/EXISTS 与错误响应
-Week14：TTL、过期语义、timer/heap 取舍；LRU 只在容量策略需要时加入
-Week15：AOF 第一版、restart replay、partial/corrupt tail 的明确边界；RDB 只作 optional
-Week16：correctness/stress/benchmark、profiling、graceful shutdown、README/interview/resume evidence
-```
-
-Mini Redis V1 的硬出口：
-
-```text
-真实 client 能通过 RESP 与服务交互
-parser 能处理拆包、粘包、连续 commands 和 malformed input
-核心 commands 与 TTL 语义有 executable tests
-连接、buffer、timer、store、persistence ownership 清楚
-AOF 或等价持久化路径能通过 restart 验证
-benchmark 保存机器、编译参数、workload、原始结果和结论边界
-README 能让陌生人构建运行
-能讲出至少一个真实 bug、一次设计取舍和一个性能瓶颈
-```
-
-以下不阻塞 V1：cluster、replication、Lua、完整 Redis 数据类型、生产级 allocator、无锁结构、完整 Redis 源码阅读。
-
-### Milestone E：Mini Redis V1 后的定向补强
-
-顺序由项目暴露的问题和实习岗位决定，不预先把所有课程都开成 daily：
-
-```text
-1. 15-445 selected：storage、buffer pool、hash/B+ tree、concurrency、WAL/recovery
-2. MySQL：index、buffer pool、transaction、MVCC、lock、redo/undo/binlog
-3. CSAPP selected：memory hierarchy、linking、ECF、VM、system I/O、network、concurrency
-4. RPC：仅当 Mini Redis 已闭环且需要第二个协议项目时进入
-5. CS144 / 6.824 / compiler：依据后文 course gate 决定
-```
-
-### Milestone F：2027 第一轮实习投递
-
-不等“所有课学完”才投。时间窗口：
-
-```text
-2026.11 起：持续收集 C++ Infra / AI deployment / inference 相邻岗位要求
-2026.12：形成第一版中文简历与项目讲稿
-2027.01：开始正式投递、模拟面试和按反馈补缺
-2027.02 起：持续投递春招/日常实习，不把岗位名必须含 AI Infra 作为唯一标准
-```
-
-第一轮岗位池：
-
-```text
-C++ 基础设施 / 高性能服务端
-中间件 / KV / 存储 / 数据库工程
-网络 / RPC / 可观测性基础设施
-AI 部署 / inference backend / model serving 初级岗位
-HPC / 性能工程相邻岗位
-```
-
-第一份实习的任务是获得真实协作、测试、性能和系统经验。若工作内容能积累 C++/Linux/并发/网络/部署能力，即使标题不是 AI Infra，也属于正确路径。
-
----
-
-## 7. MIT 6.S081 穿插路线
-
-### 7.1 学习定位
-
-6.S081 是必须最终完整通关的长期 OS 伴随线，但不是 Week9 每天都要并行推进的第二主线。
-
-“完整通关”指课程主线、核心代码路径与 labs 最终都形成可验证理解；“分阶段”只是在安排顺序，不是把课程永久缩成几节概念课。当前它首先服务这些问题：
-
-```text
-system call 是怎么发生的？
-为什么用户程序不能直接访问硬件？
-进程和线程到底是什么？
-虚拟地址怎么变成物理地址？
-trap 是什么？
-scheduler 为什么能切换程序？
-file descriptor 为什么这么统一？
-```
-
----
-
-### 7.2 建议学习顺序
-
-```text
-第一轮：已随 Week4 ~ Week5 学习 system call、page table、trap、process、lock 等核心机制
-第二轮：随 Reactor / Mini Redis 继续补 sleep/wakeup、file system、buffer cache、logging 等对应内容
-第三轮：安排独立课程周期完成剩余 lectures 和 labs，并做完整出口验收
-```
-
-当前第一轮重点：
-
-```text
-Lecture 1：Introduction / OS overview
-Lecture 2：OS organization / system calls
-Lecture 3：Page tables
-Lecture 4：Traps
-Lecture 5：Copy-on-write / memory
-Lecture 6：Multithreading / locks
-Lecture 7：Scheduling
-Lecture 8：File system 了解
-```
-
-当前项目期不用立刻连续做完：
-
-```text
-xv6 syscall lab
-page table lab
-traps lab
-cow lab
-thread lab
-file system lab
-```
-
-项目里程碑稳定后，先完成高相关 labs，再继续其余课程要求：
-
-```text
-syscall
-page table
-traps
-cow
-thread
-```
-
----
-
-### 7.3 和主线的对应关系
-
-```text
-Linux fd / open / read / write → 6.S081 system call / file descriptor
-fork / exec / wait → 6.S081 process
-mmap / virtual memory → 6.S081 page table
-signal / trap → 6.S081 trap
-thread / lock → 6.S081 scheduling / locks
-blocking IO → OS sleep / wakeup
-```
-
----
-
-### 7.4 6.S081 验收标准
-
-不用一上来能改 xv6。第一轮只要求：
-
-```text
-能解释用户态 / 内核态
-能解释 system call 大概流程
-能解释 page table 的意义
-能解释 trap 是什么
-能解释 fork 为什么能创建进程
-能解释 COW 是什么
-能解释 scheduler 为什么能切换进程
-能解释 fd 为什么能统一文件、pipe、socket
-```
-
----
-
-## 8. CMU 15-445 穿插路线
-
-### 8.1 学习定位
-
-15-445 是数据库 / 存储伴随线，后置到中间件阶段。
-
-它服务的是：
-
-```text
-MySQL 原理
-Mini Redis 深化
-KVStore
-存储引擎
-B+ tree
-buffer pool
-transaction
-concurrency control
-recovery
-```
-
-现在不正式开，是因为你还需要先打好：
-
-```text
-C++
-STL
-Linux
-OS
-网络
-Reactor
-Mini Redis 网络层
-```
-
----
-
-### 8.2 建议开始时间
-
-推荐从这个阶段开始：
-
-```text
-Mini Redis V1 已完成网络、核心命令、TTL 与持久化第一版之后
-MySQL 原理学习前
-大约 Week16 之后；若项目进度变化，以 milestone gate 为准
-```
-
-不要一开始就追求完整刷完 project。
-
----
-
-### 8.3 第一轮只看这些
-
-```text
-Database system overview
-Storage hierarchy
-Disk / page / tuple
-Buffer pool
-Hash table
-B+ tree index
-Query execution 了解
-Transaction 了解
-Concurrency control
-Recovery / WAL
-```
-
-先不深挖：
-
-```text
-完整 query optimizer
-复杂 SQL execution
-全部 BusTub project
-分布式数据库
-高级事务理论
-```
-
----
-
-### 8.4 和主线的对应关系
-
-```text
-STL / 工程数据结构 → hash table / B+ tree
-Linux IO / mmap / page cache → storage / buffer pool
-MySQL 索引 → B+ tree
-MySQL 事务 / MVCC → concurrency control
-持久化 / AOF / WAL → recovery
-Mini Redis / KVStore → storage system 思想
-```
-
----
-
-### 8.5 15-445 验收标准
-
-第一轮只要求：
-
-```text
-能解释数据库为什么需要 buffer pool
-能解释 page 是什么
-能解释 B+ tree 为什么适合磁盘索引
-能解释 hash index 和 B+ tree index 的区别
-能解释 transaction 要解决什么问题
-能解释 WAL 为什么能帮助恢复
-能把 15-445 的概念挂到 MySQL / Mini KV / Mini Redis 上
-```
-
----
-
-## 8A. CS DIY 课程取舍与开启 Gate
-
-CS DIY 是高质量课程目录，不是必须逐项通关的培养方案。课程是否进入当前路线，按三个问题判断：
-
-```text
-它是否补当前项目的真实依赖？
-它是否能在合理时间内形成代码或可验证理解？
-它是否比继续打磨主项目更接近 2027 实习目标？
-```
-
-本次核对入口：
-
-- [CS DIY 课程总目录](https://csdiy.wiki/)
-- [CSAPP 官方站](https://csapp.cs.cmu.edu/) / [CS DIY CSAPP](https://csdiy.wiki/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%B3%BB%E7%BB%9F%E5%9F%BA%E7%A1%80/CSAPP/)
-- [Stanford CS144](https://web.stanford.edu/class/cs144/) / [CS DIY CS144](https://csdiy.wiki/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/CS144/)
-- [Stanford CS143](https://web.stanford.edu/class/cs143/) / [CS DIY CS143](https://csdiy.wiki/%E7%BC%96%E8%AF%91%E5%8E%9F%E7%90%86/CS143/)
-- [CMU 15-445](https://15445.courses.cs.cmu.edu/) / [CS DIY 15-445](https://csdiy.wiki/%E6%95%B0%E6%8D%AE%E5%BA%93%E7%B3%BB%E7%BB%9F/15445/)
-- [MIT 6.824](https://pdos.csail.mit.edu/6.824/schedule.html) / [CS DIY 6.824](https://csdiy.wiki/%E5%B9%B6%E8%A1%8C%E4%B8%8E%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/MIT6.824/)
-- [CMU Deep Learning Systems](https://dlsyscourse.org/)
-
-### 8A.1 CSAPP：现在开始按主题选学，不开 150 小时完整副本
-
-CSAPP 从 programmer perspective 串起 hardware、OS、compiler 与 network，内容包括 machine code、memory hierarchy、linking、exceptional control flow、virtual memory、system I/O、network 和 concurrency。它非常适合补齐当前知识之间的横向连接，但 Week1 ~ Week8 已经覆盖其中不少主题，按章节从头重学会制造大量重复。
-
-当前使用方式：
-
-| 时机 | 选学内容 | 服务对象 |
+| 阶段 | 已完成内容 | 已形成的证据 |
 |---|---|---|
-| Reactor 前后 | Ch. 10 system-level I/O、Ch. 11 network programming、Ch. 12 concurrency 查缺 | epoll/Reactor、thread model |
-| build/link 问题出现时 | Ch. 7 linking，配合 ELF、static/shared library、symbol | CMake、链接错误、ABI 第一层 |
-| VM/性能问题出现时 | Ch. 6 memory hierarchy、Ch. 8 exceptional control flow、Ch. 9 virtual memory | cache、signal/process、mmap/page fault |
-| HTTP Server 后 | Proxy Lab 思路或等价实验，避免照抄 | network + concurrency 综合验证 |
-| allocator/性能阶段 | Cache Lab / Malloc Lab 二选一 | cache locality 或 memory management |
+| Week1 | 对象、内存、RAII、深拷贝、Rule of Three | `Buffer` / `StringLike`、ASan 初步 |
+| Week2 | 移动语义、Rule of Five、智能指针、异常安全 | copy elision 观察、copy-and-swap、`noexcept` |
+| Week3 | STL、迭代器、容器失效、RingBuffer、LRU | 可运行数据结构实现与边界分析 |
+| Week4 | Linux fd、文件 I/O、process、pipe、mmap、6.S081 第一轮 | `mycat`、copyfile、重定向、pipe 实验 |
+| Week5 | trap、page fault、thread、mutex、condition variable | OS 流程梳理、线程观察、同步实验 |
+| Week6 | IP、TCP、socket、client/server、协议与状态观察 | blocking TCP server/client、抓包与状态解释 |
+| Week7 | 并发抽象、condition variable、BlockingQueue | bounded MPMC queue、close contract、TSan |
+| Week8 | ThreadPool、future、AsyncLogger、GoogleTest、CMake | 组件代码、CTest、TSan、benchmark、integration harness |
 
-完成一组主题的标准不是“看完视频”，而是能把内容挂到自己的代码、warning、trace 或 benchmark 上。Bomb/Attack/Arch Labs 很经典，但不为 Mini Redis 的当前 gate 服务，暂不插队。
+Week1 ~ Week8 已正式通过。以后只在项目需要或面试复盘时回查，不再把这些周的完整 daily 复制进总规划。
 
-### 8A.2 Stanford CS144：有价值，但不与 Reactor/Mini Redis 抢主线
-
-CS144 的核心项目是用 C++ 逐步实现 reliable byte stream、TCP sender/receiver、network interface 和 router。它训练的是“TCP/IP protocol implementation”；当前 Week9 训练的是“使用 Linux kernel 提供的 TCP socket 和 epoll 构建 event-driven server”。两者相关，但不是同一任务。
-
-开启条件：
-
-```text
-Reactor/HTTP/Mini Redis 至少完成一个稳定闭环
-仍希望进一步夯实 TCP、reassembly、retransmission、ARP/router
-能单独拿出约一个课程阶段，不让简历主项目停摆
-```
-
-届时两种选择二选一：
+### 2.2 当前优势
 
 ```text
-选学：checkpoint 0 的 ByteStream + checkpoint 1 的 reassembler，补协议状态思维
-完整：把 CS144 作为独立项目周期，认真读 framework code 并完成全部 checkpoints
+算法与数据结构基础强
+ICPC 亚洲区域赛银牌
+CCF CSP 450，全国前 0.16%
+NOIP / CSP-S / CSP-J 奖项
+学习推进速度快，能独立推导和修改设计
+已经有 C++ 资源管理、并发、测试和构建的连续代码证据
+能够解释机制，不只会调用 API
 ```
 
-不要一边写 Reactor，一边把完整 TCP stack 也塞进 daily。
+这些优势对腾讯后台实习有直接价值，尤其能支撑算法面、编码面和“学习能力”判断。
 
-### 8A.3 编译原理：当前只补 toolchain literacy，完整课程后置
+### 2.3 当前短板
 
-Stanford CS143 需要实现 lexer、parser、semantic analysis、code generation，并继续到 optimization/register allocation；这是一条完整且昂贵的专业主线。当前找 C++/AI Infra 实习所需的近期知识是：
+```text
+还没有 non-blocking I/O / epoll / Reactor 的完整实现
+还没有一个真实协议驱动、可对外演示的主项目
+数据库与 Redis 使用、持久化语义还未形成工程证据
+项目还缺稳定的性能数据、故障案例和简历表达
+Python / NumPy / PyTorch 尚未形成可投递证据
+CUDA、推理框架、算子优化尚未开始正式 gate
+缺少真实团队协作、代码评审和线上环境经验
+```
+
+前三项由 Week9 ~ Week16 正面解决；最后一项只能由实习、实验室、开源协作或多人项目补齐。
+
+---
+
+## 3. 腾讯岗位匹配审计
+
+### 3.1 岗位 A：C++ / Linux 后台开发实习
+
+当前公开的腾讯微信安全后台日常实习要求集中在：
+
+```text
+C/C++/Java 之一
+Linux 网络编程
+数据结构与算法
+编码风格与系统设计
+C++ 项目、竞赛或开源经历加分
+每周约 4 天、持续至少 4 个月
+```
+
+#### 当前匹配
+
+```text
+强匹配：算法竞赛、C++ 基础、Linux、TCP/socket、并发、测试意识
+部分匹配：系统设计、工程代码、性能分析
+尚缺证据：epoll/Reactor、完整 C++ 网络项目、长期可用性、真实协作
+```
+
+结论：
+
+> 这是 2027 年 1 月最现实的主投方向。Week8 结束时已经具备明显基础，但简历项目仍偏组件化；完成 Reactor + Mini Redis V1 后，岗位画像会闭合得多。
+
+### 3.2 岗位 B：AI 业务后台 / 机器学习基础设施
+
+腾讯当前相关岗位名称包括：
+
+```text
+后台开发工程师 - AI 方向
+机器学习基础设施开发 - 存储 / 向量检索 / 参数服务器
+模型服务后台、AI 平台或数据基础设施
+```
+
+这类岗位通常仍重视：
+
+```text
+C++ / Python
+Linux 与高并发服务
+存储、缓存、检索或调度
+可靠性、可扩展性和性能
+一定的机器学习系统上下文
+```
+
+#### 当前匹配
+
+```text
+已经具备：C++、Linux、并发、服务端底座
+即将补齐：Reactor、协议、KV、TTL、持久化、benchmark
+仍需补齐：Python、NumPy/PyTorch inference、向量/模型服务的最小上下文
+```
+
+结论：
+
+> 这是 2027 年的冲刺方向。最好的桥梁不是立刻堆 CUDA 名词，而是把 Mini Redis 做成可信系统项目，并补一个小而真实的 Python/PyTorch inference 证据。
+
+### 3.3 岗位 C：大模型推理引擎 / CUDA AI Infra
+
+腾讯当前大模型推理引擎岗位公开要求包含：
+
+```text
+C/C++ 和 Python
+CUDA / 异构芯片编程
+vLLM / SGLang / TensorRT-LLM 等推理框架
+深度学习网络与算子底层实现
+推理调试、性能分析和优化经验
+```
+
+#### 当前匹配
+
+```text
+已有可迁移底座：C++、资源管理、并发、系统调试、benchmark 意识
+关键缺口：Python/PyTorch、Transformer inference、CUDA、GPU profiling、真实推理框架贡献
+```
+
+结论：
+
+> 2027 年 1 月不把“直接大模型推理引擎实习”设为必须命中的目标。可以投、可以冲，但主线成功标准仍是拿到高质量 C++/系统/AI 业务基础设施经历。长期 AI Infra 目标不变。
+
+### 3.4 招聘批次与时间条件
+
+用户按当前学制为 2029 届。需要把两种实习分开：
+
+```text
+正式暑期实习 / 校招批次：常按毕业年份限制，2027 年初未必面向 2029 届
+日常实习 / 导师直招：更看当前能力、到岗时间和连续实习时长
+```
+
+因此 2027 年第一轮重点不是只盯统一校招入口：
+
+```text
+腾讯招聘官网持续投递
+牛客 / 实习信息渠道筛选日常实习
+校友、竞赛圈、实验室和导师内推
+开源社区或技术群中的直接招聘
+广州 / 深圳岗位优先关注
+```
+
+实习可用性是硬条件。投递前必须诚实确认：
+
+```text
+每周能到岗几天？
+能持续几个月？
+寒假后开学如何协调课程？
+是否能在广州 / 深圳线下？
+```
+
+如果 2027 年春季无法连续每周 3~4 天，技术匹配也可能被时间条件挡住。此时应把窗口转为暑期、实验室或远程开源协作，不把它误判为技术路线失败。
+
+---
+
+## 4. 2026 年底简历应该有什么
+
+### 4.1 竞赛经历
+
+竞赛已经足够强，简历只需准确、紧凑地列出：
+
+```text
+ICPC 亚洲区域赛银牌
+CCF CSP 450 / 全国前 0.16%
+NOIP / CSP-S 代表性奖项
+```
+
+不要继续靠增加普通算法题数量提高简历。算法维持手感即可。
+
+### 4.2 主项目：Mini Redis
+
+简历上的主项目不是“模仿 Redis 命令”，而是一个可以解释的 C++ event-driven KV server。
+
+最低闭环：
+
+```text
+TCP server + non-blocking fd + epoll
+Reactor ownership 和 callback 边界
+RESP parser，支持粘包、半包和 malformed input
+SET / GET / DEL / EXISTS
+多 client 与连接生命周期
+TTL / expiration
+AOF append + restart recovery
+错误处理与 graceful shutdown
+GoogleTest / CTest / ASan / TSan
+benchmark 与一份可复现结果
+README、架构图、运行示例、已知限制
+```
+
+推荐增强项只在 V1 稳定后选择：
+
+```text
+LRU / LFU 或内存上限
+incremental rehash 或更清楚的数据结构实验
+event-loop latency / throughput 分析
+简单 metrics
+与 Redis 的协议或性能对比
+```
+
+不做：
+
+```text
+完整 Redis replication / cluster
+完整 Redis 源码复刻
+为了数量同时开多个半成品 server
+没有数据支撑的“高性能”描述
+```
+
+### 4.3 副证据：Reactor / HTTP / 并发组件
+
+简历表达方式：
+
+```text
+Reactor / HTTP 可以作为 Mini Redis 的底层演进过程，或一个独立但较短的网络服务证据
+ThreadPool / AsyncLogger / BlockingQueue 写在项目技术细节或 GitHub 组件目录中
+不把每个组件包装成“生产级项目”
+```
+
+面试必须能回答：
+
+```text
+为什么使用 epoll？
+readable 不等于一次 read 完，代码如何处理？
+ET / LT 的边界是什么？
+fd 关闭后如何防止 stale event？
+EventLoop、Connection、Buffer 分别拥有谁？
+backpressure 在哪里出现？
+shutdown 如何避免丢任务、死锁和 use-after-free？
+测试和 benchmark 分别证明了什么？
+```
+
+### 4.4 AI 伴随证据
+
+2026 年底不要求 CUDA 大项目。若系统主线按时闭环，增加一个小证据：
+
+```text
+Python 基础 + NumPy
+PyTorch tensor / module / inference / no_grad
+能解释 batch、shape、dtype、device、operator、latency、throughput
+用一个小模型完成 CPU/GPU inference benchmark，记录环境和结果
+```
+
+这项证据的作用是证明你知道 AI workload 长什么样，不是冒充已经做过推理引擎。
+
+---
+
+## 5. Week9 之后的项目里程碑
+
+自然周只是标签，是否进入下一阶段由 exit evidence 决定。
+
+### Milestone A / Week9：non-blocking I/O 与 epoll
+
+核心问题：
+
+> blocking socket 为什么限制单线程服务多个连接，readiness 到底承诺了什么？
+
+学习与实现：
+
+```text
+fcntl / O_NONBLOCK
+EAGAIN / EWOULDBLOCK
+partial read / partial write
+epoll_create1 / epoll_ctl / epoll_wait
+LT / ET 第一层
+accept/read/write 的 drain loop
+连接状态与输出缓冲区
+Epoll Echo Server
+```
+
+出口证据：
+
+```text
+多 client 可同时通信
+一个慢 client 不阻塞其他 client
+能处理半包、partial write、peer close
+无明显 fd leak
+能用 strace / ss 解释关键行为
+能画出 event -> handler -> state change 流程
+```
+
+### Milestone B / Week10：Reactor V1
+
+核心问题：
+
+> 如何把过程式 epoll loop 拆成 ownership 清楚、可继续演进的组件？
+
+建议边界：
+
+```text
+EventLoop：等待事件、分发 callback
+Channel：fd 关注的事件与 callback
+Connection：socket lifetime、input/output buffer、协议状态
+Acceptor：监听 fd 与新连接建立
+Buffer：增量读写，不假设一次完成
+```
+
+出口证据：
+
+```text
+每个 fd 和 Connection 的 owner 可解释
+remove / close / callback 生命周期可解释
+支持 write buffering 和 writable interest 切换
+有 deterministic tests 或可复现实验覆盖关键边界
+```
+
+不提前做多 EventLoop、多线程 Reactor、io_uring 或 lock-free。
+
+### Milestone C / Week11：HTTP Server V1
+
+核心问题：
+
+> Reactor 如何承载一个真正的 application protocol？
+
+最低范围：
+
+```text
+HTTP/1.0 或受限 HTTP/1.1
+incremental request parser
+GET 静态响应或少量固定 route
+Content-Length
+malformed request 的明确响应
+keep-alive 是否支持要写清 contract
+curl + 自写 tests
+```
+
+出口证据：
+
+```text
+协议 parser 与 transport 分离
+半包 / 多次 read 能正确推进 parser state
+curl 可复现实验
+错误输入不会让 server 崩溃
+```
+
+### Milestone D / Week12：Mini Redis V1 - RESP 与 KV
+
+```text
+RESP2 最小 parser / encoder
+SET / GET / DEL / EXISTS
+错误响应
+多个 client
+协议测试
+```
+
+出口：网络层、协议层、命令层和存储层边界清楚。
+
+### Milestone E / Week13：Mini Redis V2 - 生命周期与 TTL
+
+```text
+TTL / EXPIRE / PTTL 中选择最小命令集合
+lazy expiration
+必要时增加周期性清理
+连接 idle / shutdown 行为
+时钟注入或可控测试
+```
+
+出口：过期语义有 deterministic evidence，不靠长时间 sleep 测试。
+
+### Milestone F / Week14：Mini Redis V3 - AOF 与恢复
+
+```text
+append-only command log
+启动 replay
+partial/corrupted tail 的明确策略
+flush policy 的范围说明
+crash consistency 只做到能证明的层次
+```
+
+出口：重启后数据可恢复，有故障实验，不声称完整 Redis durability。
+
+### Milestone G / Week15：测试、故障与性能
+
+```text
+parser / command / TTL / AOF unit tests
+multi-client integration tests
+ASan / TSan
+fd / memory leak 检查
+throughput 与 latency baseline
+固定环境、workload、样本与统计方式
+perf / flame graph 只在真实瓶颈出现后使用
+```
+
+出口：每条性能结论能从命令、环境和结果复现。
+
+### Milestone H / Week16：简历项目收口
+
+```text
+README
+架构图
+build / run / test / benchmark instructions
+设计取舍
+最难 bug
+已知限制
+与真实 Redis 的差距
+2 分钟与 10 分钟项目讲稿
+```
+
+出口：一个不了解仓库的人能按 README 跑起来；简历上的每句话都能指向代码或实验。
+
+Week16 同时留一个短的岗位补缺窗口，不开完整数据库课程：
+
+```text
+Redis 常见数据结构、过期、淘汰、RDB/AOF 第一层
+MySQL B+ tree index、transaction、ACID、isolation level 第一层
+把概念挂回 Mini Redis 的设计，不机械背题库
+```
+
+---
+
+## 6. 2026-08 到 2027-02 时间表
+
+| 时间 | 主任务 | 必须形成的结果 |
+|---|---|---|
+| 2026.08 下旬 | Week9 | Epoll Echo Server，多 client 与 partial I/O 证据 |
+| 2026.09 | Week10~11 | Reactor V1、HTTP Server V1 |
+| 2026.10~11 | Week12~15 | Mini Redis RESP/KV/TTL/AOF、测试和 benchmark |
+| 2026.12 | Week16 + 求职准备 | README、项目讲稿、第一版简历、岗位清单 |
+| 2027.01 | 第一轮投递 | 日常实习、导师直招、后台/C++ Infra 主投，AI infra 相关岗位冲刺 |
+| 2027.02 起 | 投递反馈驱动补缺 | 面试复盘、项目修订、短板专题，不重新开一堆课程 |
+
+如果实际学习继续明显快于日历，不靠增加教程字数拖慢：
+
+```text
+先扩大真实测试和故障场景
+再增强项目边界与性能证据
+然后提前投递
+最后才开启下一门课程或 CUDA gate
+```
+
+---
+
+## 7. 求职准备不是最后一周才开始
+
+### 7.1 从 Week9 开始维护 evidence ledger
+
+每个里程碑记录：
+
+```text
+实现了什么
+为什么这样设计
+踩过什么 bug
+怎么定位
+测试证明什么
+benchmark 环境和数字
+目前不支持什么
+下一步如何优化
+```
+
+这不是要求每个 demo 写完整 `interview.md`。只对简历候选项目做正式整理。
+
+### 7.2 每两周做一次岗位雷达
+
+只抽取 5~10 个同类 JD，记录：
+
+```text
+高频硬要求
+当前已有证据
+还缺什么
+是否值得改变下一个 milestone
+```
+
+原则：只有多个目标岗位重复出现、且能通过项目形成证据的缺口，才调整主线。
+
+### 7.3 面试知识面
+
+2027 年第一轮后台实习前，至少能解释：
+
+```text
+C++ object lifetime、RAII、copy/move、smart pointer
+virtual function / object layout 第一层
+STL complexity 与 iterator invalidation
+thread、mutex、condition variable、data race、deadlock
+process/thread、virtual memory、page fault、system call
+fd / open file description / mmap
+TCP handshake/close、flow control、socket API
+non-blocking I/O、epoll、LT/ET、partial I/O
+Reactor ownership、connection lifecycle、backpressure
+Redis 基础数据与常见语义
+MySQL index / transaction / isolation 第一层
+项目测试、debug、benchmark 和 trade-off
+```
+
+算法训练：
+
+```text
+每周 1~2 次保持手感
+以限时编码、边界和表达为主
+不再把大量简单题当主线进度
+```
+
+### 7.4 简历投递版本
+
+第一版简历建议结构：
+
+```text
+教育背景
+竞赛荣誉
+Mini Redis 主项目
+Reactor/HTTP 或并发组件的补充证据
+技能：只写能被追问的内容
+GitHub / 博客 / 视频总结：有高质量内容再放
+```
+
+不要写：
+
+```text
+精通尚未深入的技术
+没有 benchmark 的“高性能”
+没有故障语义的“高可用”
+把课程跟练包装成原创生产系统
+把还没开始的 CUDA/vLLM 写进技能栏
+```
+
+---
+
+## 8. 课程如何进入主线
+
+### 8.1 MIT 6.S081：长期完整通关
+
+6.S081 是 OS 主伴随线，最终需要完整通关，但不与项目每天双开。
+
+```text
+Reactor 前后：interrupt、sleep/wakeup、file descriptor、driver 与 I/O 相关部分
+Mini Redis 持久化阶段：file system、buffer cache、logging
+项目阶段间隙：补完剩余 lecture/lab，形成完整通关记录
+```
+
+标准：能把课程机制映射到代码、trace 和实验，不只是看完中文讲义。
+
+### 8.2 CSAPP：现在按主题选学
+
+不从第一页完整重刷。按项目问题调用：
+
+```text
+linking / ELF：构建、符号、静态库、动态库问题出现时
+ECF / system I/O：Reactor 与 signal/error path
+network programming：Week9~11
+concurrency：线程池和 EventLoop 边界复盘
+memory hierarchy：benchmark 与 cache 问题出现时
+virtual memory：mmap、allocator 或性能问题出现时
+```
+
+可选实验：Proxy Lab 与当前网络项目高度相关，但不能阻塞 Mini Redis。
+
+### 8.3 Stanford CS144：Reactor/Mini Redis 闭环后评估
+
+CS144 实现 TCP/IP protocol；当前主线使用 Linux kernel TCP 写 application server。两者相关但不是同一任务。
+
+开启 gate：
+
+```text
+Reactor / HTTP / Mini Redis 至少一个稳定闭环
+确实需要加深 TCP protocol implementation
+不会推迟第一版简历和投递
+```
+
+可以先选 ByteStream / reassembler，也可以之后完整做 checkpoints。
+
+### 8.4 CMU 15-445：Mini Redis V1 后选学
+
+第一轮只选与存储项目直接相关的内容：
+
+```text
+storage layout
+buffer pool / memory management
+hash index / B+ tree
+concurrency control
+logging / recovery
+```
+
+relational optimizer/executor 和完整 BusTub 不作为 Mini Redis 前置。
+
+### 8.5 编译原理：完整课程后置
+
+当前只需要 toolchain literacy：
 
 ```text
 preprocess -> compile -> assemble -> link
 translation unit
 symbol / relocation
-ELF object/executable/shared object
+ELF
 static / dynamic linking
 ABI 第一层
-compiler optimization 对 benchmark 的影响
 ```
 
-这些先由 CMake 实验、`nm/readelf/objdump`、CSAPP linking 章节补齐。只有在未来明确转向 AI compiler、Triton/MLIR/LLVM 或编译器岗位时，才把完整编译原理提升为主线。
+由 CMake 实验、`nm/readelf/objdump` 和 CSAPP linking 补齐。明确转向 AI compiler / LLVM / MLIR / Triton 后，再完整学编译原理。
 
-### 8A.4 CMU 15-445：Mini Redis V1 后选学，不默认刷完 BusTub
+### 8.6 MIT 6.824：分布式阶段后置
 
-15-445 的 storage、buffer pool、index、concurrency control、logging/recovery 与存储岗位高度相关，但 relational executor/optimizer 并不是 Mini Redis V1 的前置。第一轮按项目相关顺序：
-
-```text
-database overview
-storage I/II
-memory management / buffer pool
-hash table / tree index
-concurrency control
-logging / recovery
-```
-
-BusTub project 是否做，由 Mini Redis 完成度、实习岗位反馈和时间共同决定；不把“完整课程”当简历项目数量。
-
-### 8A.5 MIT 6.824：明确后置
-
-6.824 以论文和 Raft KV labs 为核心，依赖并发、系统与分布式基础，且主要使用 Go。当前同时违反“Go 不进近期主线”和“Mini Redis 尚未闭环”两个边界。
-
-开启 gate：
+6.824 使用 Go 并以 Raft / distributed KV 为主。开启 gate：
 
 ```text
 Mini Redis V1 完成
-15-445 / storage 第一轮完成
-确实要进入 replication / consensus / distributed KV
-愿意为 Go 和 Raft 单独安排一个完整阶段
+storage 第一轮完成
+明确要进入 replication / consensus
+愿意单独安排 Go 与分布式系统阶段
 ```
 
-在此之前只允许为了理解 replication/consistency 查阅单个概念，不开启 labs。
+### 8.7 计算机组成与硬件基础
 
-### 8A.6 Deep Learning Systems / ML Systems：由 AI 理论 Gate 接管
-
-CMU 10-414/714 涵盖 autodiff、NDArray CPU/CUDA backend 和 deep learning framework；ML Systems 课程进一步涉及 GPU、distributed training 与 LLM inference。它们方向正确，但官方先修本身要求系统编程、线代、概率、Python/C++ 和基本 ML。
-
-因此：
+当前不并行开完整 CS61C/Nand2Tetris。先补项目所需的最小模型：
 
 ```text
-当前继续 AI_Infra理论伴随线 T1 ~ T24
-Theory Gate 1 前不正式开完整 DL systems
-Theory Gate 2 后，可把 Needle 的 selected assignment 与 mini-infer-cpu 二选一
-系统项目未闭环时，不因“更像 AI Infra”而提前切走
+data representation
+instruction / register / stack
+cache / locality / cache line
+virtual address / page table / physical memory
+atomic / memory ordering 第一层
 ```
 
-### 8A.7 计算机组成与体系结构：补必须的 programmer view
-
-当前硬件基础相对薄弱，但不需要再并行开启一整门 Nand2Tetris/CS61C。先借学校计组课程和 CSAPP 补四块：
-
-```text
-binary / integer / floating-point representation
-machine instruction、register、stack 与 function call
-cache hierarchy、locality、cache line 与 false sharing
-virtual memory 与 physical memory、page cache、DMA 的边界
-```
-
-学习深度以“能解释自己的 C++/network/benchmark 为什么这样运行”为准。进入 CUDA Gate 前再检查 memory hierarchy、parallel hardware 和 roofline/performance model 的前置是否满足；缺口存在时安排独立补强周。
-
-课程选择最终压缩为：
-
-```text
-必须长期完成：MIT 6.S081
-现在按需选学：CSAPP
-Mini Redis 后选学：CMU 15-445
-项目闭环后再评估：Stanford CS144
-方向明确后再开：compiler / 6.824 / full DL systems
-```
+进入 CUDA Gate 前再做一次体系结构 prerequisite audit。
 
 ---
 
-## 9. 各模块详细路线
+## 9. AI Infra 长期路线
 
-## 9.1 C/C++ 基础
+AI 理论伴随线的详细周计划见：
 
-学习内容：
-
-```text
-指针 / 引用 / const
-const int* / int* const / const int* const
-const reference
-static
-作用域
-头文件 / 源文件
-编译 / 链接
-class / struct
-构造函数 / 析构函数
-this
-const 成员函数
-new / delete
-new[] / delete[]
-RAII 初步
-```
-
-学到什么程度：
-
-```text
-能解释对象生命周期
-能解释栈对象和堆对象区别
-能解释 new = 分配内存 + 构造对象
-能解释 delete = 析构对象 + 释放内存
-能解释为什么裸 new/delete 危险
-```
-
----
-
-## 9.2 C++11 / 现代 C++
-
-学习内容：
-
-```text
-auto
-nullptr
-range-for
-enum class
-lambda
-std::function
-move 语义
-右值引用
-unique_ptr / shared_ptr / weak_ptr
-thread / mutex / condition_variable
-atomic
-optional 初步
-noexcept 初步
-```
-
-学到什么程度：
-
-```text
-会写现代 C++ 风格代码
-不乱用裸指针拥有资源
-能用 RAII 管资源
-能用智能指针表达所有权
-能写基本多线程程序
-能解释 move 和 copy 的区别
-```
-
----
-
-## 9.3 C++ 对象模型 / 多态 / 内存布局
-
-这个模块不是一开始学，但必须在智能指针和 STL 后补上。
-
-学习内容：
-
-```text
-对象内存布局
-成员变量布局
-this 指针
-成员函数不存进每个对象
-虚函数
-虚表 vtable
-虚指针 vptr
-动态绑定
-虚析构函数
-对象切片
-多态
-多继承了解即可
-```
-
-学到什么程度：
-
-```text
-能解释为什么基类析构函数常需要 virtual
-能解释虚函数调用为什么有运行时分派
-能解释对象切片是什么
-能画出简单对象内存布局
-```
-
----
-
-## 9.4 异常安全
-
-学习内容：
-
-```text
-异常传播时局部对象自动析构
-RAII 和异常安全
-基本异常安全
-强异常安全
-不抛异常保证
-copy-and-swap
-noexcept
-move 构造为什么常写 noexcept
-```
-
-学到什么程度：
-
-```text
-知道异常时资源不能泄漏
-能解释为什么 RAII 比手写 delete 更安全
-能解释 vector 扩容时 move 如果不是 noexcept 可能影响行为
-能写一个简单 copy-and-swap 赋值
-```
-
----
-
----
-
-### 9.4A C++ 学习细化：结合当前实际进度
-
-这一小节是对 `cpp基础.md` 的吸收和细化，用来指导当前到 Week8 的 C++ 学习。核心原则不变：不是把 C++ 当考试科目刷语法，而是把它学成能支撑 Mini Redis、RPC、线程池、Reactor、AI Infra 底层服务的系统语言。
-
-当前你的实际情况：
-
-```text
-中大计科大一
-有 OI / ACM 背景，算法和写代码手感不差
-当前主要短板不是“不会写程序”，而是工程化 C++、资源管理、Linux/OS/网络系统底座
-已经完成 Day1 ~ Day5
-正在 Day6：Buffer / StringLike 复盘资源管理
-```
-
-所以 C++ 部分的学习策略是：
-
-```text
-熟悉语法快速过
-对象生命周期和资源管理必须写熟
-现代 C++ 不追花活，只学工程项目会用的
-STL 不只会调 API，要知道容器行为和工程含义
-模板先够看懂常见泛型代码，不提前深挖元编程
-并发必须落到 BlockingQueue / ThreadPool
-性能意识和调试工具跟项目一起补
-```
-
----
-
-#### C++-0：当前阶段，C++ 对象和资源管理第一轮
-
-对应阶段：Week1 + Week2 前半。
-
-要学什么：
-
-```text
-指针 / 引用 / const
-const int* / int* const / const int* const
-class / struct
-构造函数 / 析构函数
-this 指针
-const 成员函数
-new / delete
-new[] / delete[]
-RAII
-owning pointer
-memory leak / dangling pointer / double delete
-默认拷贝
-浅拷贝 / 深拷贝
-拷贝构造
-拷贝赋值
-self-assignment
-Rule of Three
-```
-
-学到什么程度：
-
-```text
-能解释对象从构造到析构发生了什么
-能解释栈对象和堆对象生命周期区别
-能解释 new = 分配内存 + 构造对象
-能解释 delete = 析构对象 + 释放内存
-知道裸 owning pointer 为什么危险
-看到类里有裸指针，能立刻想到拷贝控制问题
-能画出浅拷贝两个指针指向同一块资源
-能画出深拷贝两个对象拥有不同资源但内容相同
-能写出 Buffer / StringLike 的 Rule of Three
-能处理 self-assignment
-能解释 operator= 为什么返回 T&
-能用 ASan 初步检查 double free / use-after-free / leak
-```
-
-代码产出：
-
-```text
-01_buffer_no_copy.cpp：禁止拷贝版 Buffer
-02_buffer_deep_copy.cpp：深拷贝版 Buffer
-03_string_like.cpp：最小 StringLike，处理 size_ + 1 和 '\0'
-04_review_questions.md：Day4 ~ Day6 资源管理复盘
-```
-
-验收问题：
-
-```text
-1. 为什么有析构函数的资源类通常要考虑 Rule of Three？
-2. 拷贝构造和拷贝赋值的区别是什么？
-3. 为什么 copy assignment 要判断 this == &other？
-4. 为什么 copy assignment 推荐先 new 新资源，再 delete 旧资源？
-5. data_ 是资源本身还是资源地址？真正资源在哪里？
-6. StringLike 为什么要分配 size_ + 1 个 char？
-7. '\0' 在 C 字符串里起什么作用？
-8. ASan 能帮你抓哪些内存问题？
-```
-
-当前不要提前深挖：
-
-```text
-move constructor
-move assignment
-std::move 深入
-copy-and-swap 完整版
-allocator
-placement new
-SSO 小字符串优化
-复杂模板
-```
-
----
-
-#### C++-1：移动语义、智能指针、异常安全初步
-
-对应阶段：Week2。
-
-要学什么：
-
-```text
-右值引用
-std::move
-移动构造
-移动赋值
-Rule of Five
-unique_ptr
-shared_ptr
-weak_ptr 初步
-异常传播时局部对象自动析构
-RAII 和异常安全
-noexcept 初步
-copy-and-swap 初步
-```
-
-学到什么程度：
-
-```text
-能解释 copy 和 move 的区别
-知道 std::move 本身不移动，只是把对象转成右值表达式
-能写一个禁止拷贝、支持移动的 Buffer
-默认优先用 unique_ptr 表达独占所有权
-知道 shared_ptr 是共享所有权，不是“更安全的裸指针”
-知道 weak_ptr 用来打破循环引用
-知道异常发生时局部对象会自动析构
-能解释为什么 RAII 比手写 delete 更安全
-知道 move 构造常写 noexcept 的原因，先不深挖标准细节
-```
-
-代码产出：
-
-```text
-Buffer move-only 版本
-unique_ptr 管理数组 / 对象 demo
-shared_ptr / weak_ptr 循环引用小 demo
-异常路径下 RAII 自动释放 demo
-copy-and-swap 赋值小 demo
-```
-
-验收问题：
-
-```text
-1. std::move 到底做了什么？
-2. 移动后对象还能不能析构？应该处于什么状态？
-3. unique_ptr 为什么不能拷贝？
-4. shared_ptr 的引用计数解决什么问题，又带来什么问题？
-5. weak_ptr 为什么能解决循环引用？
-6. 异常发生时 RAII 如何保证资源释放？
-7. noexcept 和 vector 扩容时的 move 有什么关系？
-```
-
-暂时不深挖：
-
-```text
-完美转发
-万能引用复杂规则
-enable_shared_from_this
-自定义 deleter 深入
-allocator / memory_resource
-复杂异常安全分类证明
-```
-
----
-
-#### C++-2：STL 和工程数据结构第一轮
-
-对应阶段：Week3。
-
-要学什么：
-
-```text
-vector：size / capacity / 扩容 / 连续内存
-string：基本行为 / c_str / 拷贝和移动成本
-map / set：有序结构，红黑树直觉
-unordered_map / unordered_set：哈希表，冲突和 rehash
-deque / queue / priority_queue
-iterator 基本使用和失效场景
-algorithm：sort / find / lower_bound / remove_if
-optional 初步
-pair / tuple 初步
-```
-
-学到什么程度：
-
-```text
-知道 vector 为什么扩容，扩容时元素会搬家
-能解释迭代器失效为什么发生
-能根据场景选择 vector / deque / list / map / unordered_map
-知道 unordered_map 最坏情况会退化，不只背平均 O(1)
-能把 STL 容器和系统项目场景对应起来
-能用 STL 写可读的工程代码，不乱造轮子
-```
-
-工程映射：
-
-```text
-vector：连续内存、cache 友好、连接列表 / buffer 管理
-unordered_map：KV 存储、连接 fd 到 Connection 的映射
-map / set：有序任务、范围查询
-priority_queue：定时器堆
-deque / queue：任务队列雏形
-string：协议解析、命令存储、日志文本
-```
-
-代码产出：
-
-```text
-vector 扩容观察 demo
-迭代器失效 demo
-unordered_map rehash demo
-LRU Cache 简化版
-RingBuffer 简化版
-TimerHeap 简化版
-```
-
-验收问题：
-
-```text
-1. vector 的 size 和 capacity 区别是什么？
-2. vector push_back 什么时候导致迭代器失效？
-3. map 和 unordered_map 怎么选？
-4. 为什么 Redis dict 类似 hash table？
-5. 为什么 MySQL 索引不用普通 vector / hash table 解决所有问题？
-6. 为什么定时器常用 heap？
-```
-
-暂时不深挖：
-
-```text
-STL allocator 实现
-红黑树旋转细节
-哈希表工业级实现
-复杂模板技巧
-ranges 深入
-```
-
----
-
-#### C++-3：对象模型、多态和内存布局
-
-对应阶段：智能指针和 STL 后补，不放在 Week1 硬塞。
-
-要学什么：
-
-```text
-对象内存布局
-成员变量布局和对齐直觉
-this 指针
-成员函数不存进每个对象
-虚函数
-vtable / vptr
-动态绑定
-virtual 析构函数
-对象切片
-多态
-多继承了解即可
-```
-
-学到什么程度：
-
-```text
-能解释为什么普通成员函数不增加每个对象大小
-能解释虚函数为什么需要运行时分派
-能解释为什么基类析构函数常要 virtual
-能解释对象切片是什么
-能画出简单单继承对象布局
-知道多态适合接口抽象，但不要滥用继承
-```
-
-代码产出：
-
-```text
-sizeof 对象布局观察 demo
-virtual / non-virtual 析构对比 demo
-对象切片 demo
-基类指针调用派生类函数 demo
-```
-
-验收问题：
-
-```text
-1. this 指针是什么？
-2. 成员函数存在每个对象里吗？
-3. vptr / vtable 大概是什么？
-4. 为什么 delete Base* 指向 Derived 时，Base 析构通常要 virtual？
-5. 对象切片怎么发生？
-```
-
-暂时不深挖：
-
-```text
-多继承复杂布局
-虚继承
-ABI 细节
-手写 vtable 模拟器
-```
-
----
-
-#### C++-4：并发编程和基础组件
-
-对应阶段：Week7 ~ Week8。
-
-要学什么：
-
-```text
-std::thread
-join / detach
-mutex
-lock_guard
-unique_lock
-condition_variable
-producer-consumer
-BlockingQueue
-atomic 基础
-CAS 初步
-future / packaged_task 初步
-```
-
-学到什么程度：
-
-```text
-能解释 race condition
-能解释锁保护的是共享状态，不是代码块本身
-能写生产者消费者模型
-能写 BlockingQueue
-能写 ThreadPool V1
-知道 condition_variable 为什么要配合 while 判断条件
-知道 graceful shutdown 为什么重要
-能用简单日志定位线程执行路径
-```
-
-代码产出：
-
-```text
-多线程计数器错误版 / 加锁版 / atomic 版
-condition_variable wait/notify demo
-BlockingQueue
-ThreadPool V1
-AsyncLogger V1
-简单 benchmark
-```
-
-验收问题：
-
-```text
-1. 什么是数据竞争？
-2. mutex 保护的是什么？
-3. condition_variable 为什么可能虚假唤醒？
-4. BlockingQueue 如何退出？
-5. ThreadPool 析构时如何 graceful shutdown？
-6. atomic 适合替代所有锁吗？
-```
-
-暂时不深挖：
-
-```text
-lock-free 队列
-复杂内存序
-协程
-线程池工业级调度
-work stealing
-```
-
----
-
-#### C++-5：工程化和性能意识
-
-对应阶段：贯穿 Week2 之后，项目期加强。
-
-要学什么：
-
-```text
-头文件 / 源文件拆分
-CMake 初步
-gdb 基本调试
-ASan / valgrind 初步
-日志定位
-简单单元测试
-const 引用传参 vs 值传参
-copy / move 成本
-cache locality 直觉
-emplace vs push_back
-```
-
-学到什么程度：
-
-```text
-能把代码从单文件逐步拆成 .h / .cpp
-能写最小 CMakeLists.txt
-能用 gdb 看 backtrace / 变量
-能用 ASan 检查内存错误
-知道什么时候用 const T& 传参
-知道什么时候值传递反而可以接受
-能解释 vector 连续内存为什么 cache 友好
-能在 README 写清构建、运行、测试方式
-```
-
-代码产出：
-
-```text
-Buffer / StringLike 拆分头文件和源文件
-最小 CMake demo
-gdb 调试一次段错误
-ASan 检查一次 use-after-free / double-free
-README：如何编译运行
-```
-
-验收问题：
-
-```text
-1. 头文件里放声明还是定义？
-2. 为什么项目不能永远只有 main.cpp？
-3. gdb backtrace 能帮你定位什么？
-4. ASan 和 valgrind 大概检查什么？
-5. const std::string& 和 std::string 值传递怎么选？
-6. 为什么频繁 new/delete 可能影响性能？
-```
-
-暂时不深挖：
-
-```text
-大型 CMake 工程
-clang-tidy 规则体系
-perf / 火焰图深入
-链接模型复杂细节
-```
-
----
-
-#### 当前 C++ 学习的阶段验收总表
-
-```text
-C++-0 资源管理：能不看答案写 Buffer / StringLike Rule of Three
-C++-1 现代 C++：能写 move-only Buffer，能用 unique_ptr 表达所有权
-C++-2 STL：能解释 vector / unordered_map 行为，并写 LRU / RingBuffer
-C++-3 对象模型：能解释 virtual 析构、对象切片、简单对象布局
-C++-4 并发：能写 BlockingQueue / ThreadPool V1
-C++-5 工程化：能拆文件、用 CMake、用 gdb/ASan、写 README
-```
-
-这一整段 C++ 学习的最终目标不是“背完语法”，而是为这些系统项目铺底：
-
-```text
-BlockingQueue
-ThreadPool
-AsyncLogger
-TCP Server
-Epoll Server
-Reactor
-Mini Redis
-RPC demo
-```
-
-## 9.5 Linux 系统编程
-
-学习内容：
-
-```text
-fd
-open / read / write / close
-stat / lseek
-dup / dup2
-pipe
-fork / exec / wait
-signal 初步
-mmap 初步
-errno
-blocking / non-blocking
-strace / lsof / ss / top / htop
-```
-
-学到什么程度：
-
-```text
-知道用户态程序如何通过系统调用请求内核服务
-能用 fd 理解文件、socket、pipe
-能写简单 Linux 小工具
-能用 strace 看程序调用了什么系统调用
-```
-
----
-
-## 9.6 OS 基础
-
-学习内容：
-
-```text
-用户态 / 内核态
-系统调用
-进程 / 线程
-上下文切换
-调度
-锁
-条件变量
-虚拟内存
-页表
-文件系统基础
-IO 模型
-fork / COW
-mmap
-页缓存了解
-```
-
-学到什么程度：
-
-```text
-能解释 fork / exec / wait
-能解释线程和进程区别
-能解释虚拟内存为什么存在
-能解释锁为什么需要
-能解释阻塞 IO 为什么阻塞
-能解释 COW 大概是什么
-```
-
-资料：
-
-```text
-MIT 6.S081：核心 lecture + xv6 概念
-OSTEP：概念补充和查漏
-```
-
----
-
-## 9.7 数据结构在工程里的应用
-
-学习方式：不是重新刷算法，而是问“这个结构在系统里解决什么问题”。
-
-重点：
-
-```text
-动态数组 vector：扩容、连续内存、cache 友好
-hash table：快速查找、冲突、rehash
-红黑树：有序 map / set，范围查询
-skiplist：Redis zset
-B+ tree：MySQL 索引
-heap：定时器、优先队列
-ringbuffer：网络 buffer、日志队列、生产者消费者
-LRU：缓存淘汰
-bitmap：状态压缩、布隆过滤器前置
-Bloom Filter：快速判断不存在
-```
-
-产出：
-
-```text
-LRU Cache
-RingBuffer
-TimerHeap
-HashTable 小实现或源码阅读笔记
-```
-
----
-
-## 9.8 必要设计模式
-
-不学设计模式大全，只学项目会用的。
-
-重点：
-
-```text
-RAII：资源管理核心
-Singleton：只了解，少用
-Factory：对象创建解耦
-Observer / Callback：事件通知
-Strategy：策略替换
-Producer-Consumer：任务队列
-Reactor：高性能网络核心结构
-```
-
-学到什么程度：
-
-```text
-能在项目里说清为什么这么组织代码
-能避免把所有逻辑堆在 main.cpp
-能写出 EventLoop / Channel / Connection 这种基本结构
-```
-
----
-
-## 9.9 C++ 基础组件
-
-组件顺序：
-
-```text
-BlockingQueue
-ThreadPool
-AsyncLogger
-RingBuffer
-Timer
-Logger
-MemoryPool 初步
-ConnectionPool 初步
-Config Parser
-```
-
-每个组件都要有：
-
-```text
-代码
-测试
-README
-设计图或文字说明
-至少一个踩坑总结
-面试追问：为什么这么设计，有什么缺陷，怎么优化
-```
-
-优先级：
-
 ```text
-阻塞队列：必须
-线程池：必须
-异步日志：必须
-定时器：必须
-ringbuffer：建议
-内存池：初步即可
-连接池：和 MySQL 阶段结合
+AI_Infra理论伴随线规划.md
 ```
 
----
+系统主线不变，AI 线按 readiness gate 开启。
 
-## 9.10 网络编程 / 高性能网络
+### Gate A：AI workload literacy
 
-学习内容：
+前置：Reactor/Mini Redis 主线稳定推进，不因伴随线停工。
 
 ```text
-TCP / UDP / HTTP
-socket API
-阻塞 IO
-非阻塞 IO
-select / poll / epoll
-LT / ET
-Reactor
-Connection 封装
-Buffer 封装
-HTTP Parser 初步
+Python
+NumPy
+概率统计与线性代数最小集合
+PyTorch tensor / autograd / module / inference
+Transformer forward、attention、KV Cache 第一层
 ```
 
-项目递进：
+出口：能运行并解释一个小模型 inference，记录 latency、throughput、memory。
 
-```text
-TCP Echo Server
-多客户端阻塞版 Server
-select/poll 版 Server
-epoll 版 Server
-Reactor 版 Server
-HTTP Server 初步
-Mini Redis 网络层
-```
-
-学到什么程度：
-
-```text
-能解释 socket / bind / listen / accept / recv / send
-能解释 epoll 为什么适合大量连接
-能解释 Reactor 如何把 fd 事件分发到回调
-能写一个可维护的 C++ 网络小框架
-```
-
----
-
-## 9.11 Redis / MySQL / Nginx / Kafka 中间件
-
-### Redis
-
-学习层次：
-
-```text
-第一层：会用 string / hash / list / set / zset / expire
-第二层：懂 RESP、dict、skiplist、过期策略、淘汰策略、事件循环
-第三层：了解 RDB / AOF、主从、哨兵、Cluster
-```
-
-项目：
-
-```text
-Mini Redis V1：RESP + SET/GET/DEL
-Mini Redis V2：epoll/Reactor + 多客户端 + TTL
-Mini Redis V3：LRU/LFU + 简单持久化 + benchmark + README
-```
-
----
-
-### MySQL
-
-学习层次：
-
-```text
-会用：SQL、join、索引、事务、explain
-懂原理：B+树、聚簇索引、二级索引、MVCC、undo/redo/binlog、隔离级别、锁
-项目结合：连接池、慢查询、索引优化案例
-```
-
----
-
-### Nginx
-
-学习层次：
-
-```text
-会配置反向代理
-会配置负载均衡
-理解 worker 进程模型
-理解事件驱动大概原理
-暂不深挖完整源码
-```
-
----
-
-### Kafka
-
-学习层次：
-
-```text
-producer / consumer
-topic / partition
-consumer group
-offset
-broker
-削峰填谷
-异步解耦
-```
-
-不要求实现 Kafka，只要求能用、能讲。
-
----
-
-## 9.12 测试 / 调试 / 性能分析
-
-学习内容：
-
-```text
-gtest
-Google Benchmark
-valgrind
-strace
-gdb backtrace
-core dump 初步
-日志定位问题
-perf 初步
-火焰图后置
-top / htop / ss / lsof
-```
-
-每个系统项目至少要有：
-
-```text
-单元测试
-基本压测
-QPS 结果
-内存泄漏检查
-性能瓶颈分析
-问题定位记录
-```
-
----
-
-## 10. 项目线
-
-### 项目线 A：C++ 系统项目线，主线
-
-```text
-BlockingQueue
-→ ThreadPool
-→ AsyncLogger
-→ TCP Echo Server
-→ Epoll Server
-→ Reactor
-→ HTTP Server 初步
-→ Mini Redis
-```
-
-这是 2027 实习前最核心的项目线。
-
----
-
-### 项目线 B：工程组件线
-
-```text
-RingBuffer
-Timer
-Logger
-MemoryPool 初步
-ConnectionPool
-Config Parser
-```
-
-这些组件为系统项目服务，不单独为了写而写。
-
----
-
-### 项目线 C：中间件理解线
-
-```text
-Redis 原理
-MySQL 原理
-Nginx 基础
-Kafka 基础
-CMU 15-445 选学
-```
-
-目标不是实现所有中间件，而是能在项目和面试中讲清核心机制。
-
----
-
-### 项目线 D：OS 伴随线
-
-```text
-MIT 6.S081 核心 lecture
-Linux demo 验证
-fork / COW / mmap / syscall / trap / page table 笔记
-```
-
-目标是让你的 OS 知识不是背八股，而是能和代码、系统调用、项目连接起来。
-
----
-
-### 项目线 E：分布式 / 云原生线，后置
-
-```text
-Raft demo
-Mini KV
-Docker 镜像化
-K8s 部署
-Prometheus 监控
-```
-
----
-
-### 项目线 F：AI Infra 线，分阶段提前启动
-
-```text
-系统底座阶段：C++ / Linux / OS / 网络 / 并发 / benchmark
-低强度预热：Python / NumPy / 线代 / PyTorch inference
-CPU 推理阶段：Tensor / operator / computation graph / model execution
-GPU 阶段：CUDA kernel / memory / stream / event / Nsight
-LLM 阶段：Transformer / RoPE / RMSNorm / Attention / MLP / KV Cache / quantization
-Serving 阶段：prefill/decode / continuous batching / PagedAttention / scheduler / streaming
-扩展阶段：Triton / PyTorch custom op / vLLM contribution / NCCL multi-GPU
-```
-
-AI Infra 不是 2028 年突然切换的新专业，而是当前系统能力在 GPU 和模型执行场景中的延伸。详细进入门槛、学习深度、项目和求职节奏见下一节。
-
----
-
-## 10.1 AI Infra 主线细化：面向 2029 届本科就业
-
-### 10.1.1 方向定义
-
-本规划里的 **AI Infra** 主要指：
-
-```text
-让模型被正确、高效、稳定地执行和服务
-```
-
-优先覆盖三层：
-
-```text
-Layer 1：算子与 kernel
-CUDA / Triton、访存、并行、数值正确性、profiling、optimization
-
-Layer 2：推理引擎
-Tensor、operator、模型加载、执行流程、显存管理、KV Cache、quantization
-
-Layer 3：Serving system
-请求队列、continuous batching、prefill/decode、streaming、调度、监控、多 GPU
-```
-
-当前不同时展开：
-
-```text
-大规模分布式训练系统
-深度学习编译器 / MLIR / LLVM 后端
-完整 MLOps 平台
-模型算法研究与论文复现主线
-```
-
-这些方向以后可以选一条深化，但本科求职前先形成“单机推理 + kernel + serving”的完整证据链。
-
----
-
-### 10.1.2 为什么当前系统路线必须保留
-
-当前内容与 AI Infra 的映射：
-
-| 当前主线 | 未来直接复用 |
-|---|---|
-| RAII / move / smart pointer | Tensor、显存、stream、event、handle 的资源管理 |
-| STL / 数据结构 | scheduler、KV block table、request queue、cache |
-| Linux / fd / process / mmap | 模型加载、共享内存、进程 worker、profiling 与部署 |
-| OS / virtual memory | pinned memory、unified memory、page fault、KV cache 管理直觉 |
-| thread / mutex / condition_variable | CPU executor、异步任务、数据准备与并发控制 |
-| socket / epoll / Reactor | online serving、streaming response、连接与 backpressure |
-| Redis / storage / RPC | cache、协议、状态管理、分布式服务接口 |
-| benchmark / perf / tracing | kernel 和 serving 性能证据 |
-
-所以近期不改变：
-
-```text
-C++ -> Linux -> OS -> 网络 -> 多线程 -> ThreadPool/Reactor -> Mini Redis
-```
-
-改变的是后续出口：不再只落到传统 C++ 后端，而是有计划地接到 PyTorch、CUDA 和 LLM serving。
-
----
-
-### 10.1.3 五个 readiness gate
-
-日期只能提醒节奏，进入阶段必须看 gate。
-
-#### Gate A：开始 AI 低强度预热
-
-满足：
-
-```text
-能独立完成 C++17 小项目
-理解 RAII / move / STL / basic concurrency
-会 Linux / Git / CMake / gdb / strace
-至少一个系统 demo 有测试与 README
-当前 C++/OS 主线没有明显断层
-```
-
-进入内容：
-
-```text
-Python 语法与工程环境
-NumPy ndarray / shape / stride / broadcasting
-线性代数：向量、矩阵乘、转置、范数
-PyTorch Tensor、dtype、device、Module、inference_mode
-```
-
-比例控制：每周 `10%~20%`，不能挤掉系统主线。
-
-#### Gate B：开始 CPU 推理框架
-
-满足：
-
-```text
-能用 NumPy/PyTorch 写并验证 matmul / softmax / normalization
-知道 Tensor 的 shape、stride、dtype、layout 第一层含义
-能讲 ResNet 或 Transformer 的前向数据流之一
-完成 ThreadPool / Reactor / Mini Redis 中至少一个较完整项目
-会写最小单测和 benchmark
-```
-
-进入内容：
+### Gate B：CPU inference 小闭环
 
 ```text
-Tensor storage / shape / stride
-operator interface 与 registration
-computation graph / DAG / topological execution
-模型权重加载与前向执行
-ReLU / pooling / conv / matmul / softmax 等 CPU operator
-跑通一个小模型 inference
+Tensor / shape / dtype / layout
+operator abstraction
+matmul / activation / normalization
+graph 或 execution plan 第一层
+测试与 benchmark
 ```
 
-#### Gate C：开始 CUDA 主线
-
-满足：
-
-```text
-C++ 指针、数组、内存生命周期、并发和错误处理稳定
-能解释 CPU matmul / reduce / softmax 的正确性和复杂度
-会用 PyTorch 生成 reference output
-CPU inference 项目至少形成一个闭环
-有可持续使用的 NVIDIA GPU 环境，或明确的实验室/服务器/云端资源
-```
-
-进入内容：
-
-```text
-host / device
-kernel / grid / block / thread
-global / shared / local memory
-cudaMalloc / cudaMemcpy / cudaFree
-synchronization / error checking
-stream / event
-coalesced access / shared memory / occupancy 第一层
-Nsight Systems / Nsight Compute
-```
-
-没有 GPU 时不要硬买硬件来制造进度。先完成 CPU inference、PyTorch reference 和 benchmark harness；获得稳定 GPU 环境后再正式进入 CUDA。
-
-#### Gate D：开始 Triton / vLLM
-
-满足：
-
-```text
-至少独立写过 3 个 CUDA kernel
-至少一个 kernel 有 naive / optimized 两版和 profiler 证据
-能讲 Transformer forward、prefill/decode 和 KV Cache
-完成或基本完成单卡 mini LLM inference
-能区分 kernel latency、模型 throughput 和 serving latency
-```
-
-进入内容：
-
-```text
-Triton vector add / reduce / softmax / matmul / attention
-同一 operator 的 PyTorch / CUDA / Triton 对照
-vLLM engine / worker / executor / scheduler 第一轮
-PagedAttention 与 KV block management
-continuous batching / streaming / cancellation
-TTFT / TPOT / throughput / GPU memory metrics
-```
-
-#### Gate E：开始多 GPU / 分布式推理
-
-满足：
-
-```text
-单 GPU inference 与 serving 项目稳定
-能定位 CPU、GPU、memory、network 四类瓶颈
-掌握基础网络与并发
-理解 Transformer 参数和 KV Cache 如何占用显存
-可以使用至少双 GPU 或实验室集群
-```
-
-进入内容：
-
-```text
-NCCL collectives：AllReduce / AllGather / ReduceScatter
-tensor parallel / pipeline parallel 第一层
-rank / world size / topology
-通信与计算 overlap
-多进程 worker 与故障边界
-multi-node serving 后置
-```
-
----
-
-### 10.1.4 本科时间轴与求职节点
-
-按 2026 年 7 月准大二、常规 2029 届推算：
-
-#### 2026.07 ~ 2026.08：系统底座，已完成第一轮
-
-主线：
-
-```text
-现代 C++、Linux、OS、网络、6.S081、工具链
-```
-
-AI Infra：
-
-```text
-不主动开 CUDA
-不刷 vLLM 源码
-只在 Gate A 满足后，每周少量 Python/NumPy/线代
-```
-
-#### 2026.08 ~ 2026.10：Reactor / HTTP 与 Python 入口
-
-主线：
-
-```text
-已完成 BlockingQueue / ThreadPool / AsyncLogger / blocking TCP
-继续 epoll / Reactor / HTTP Server
-```
-
-AI Infra 伴随：
-
-```text
-Python 工程环境
-NumPy shape/stride/broadcasting
-PyTorch Tensor/device/dtype/inference_mode
-矩阵乘、softmax、normalization 的 reference 实现
-```
-
-#### 2026.10 ~ 2026.12：Mini Redis + inference 基础
-
-主线：
-
-```text
-Mini Redis / benchmark / testing / persistence
-RPC 与 MySQL 不固定插入这一阶段，先保证主项目闭环
-```
-
-AI Infra 伴随：
-
-```text
-继续 AI 理论线，按实际 gate 推进 NumPy、数学、PyTorch 与 attention 第一层
-不因日历到 12 月就强制开始 mini-infer-cpu
-```
-
-#### 2026.12 ~ 2027.02：项目收口与第一段实习投递
-
-投递池：
-
-```text
-C++ 后端 / 基础设施 / 中间件 / 存储 / 网络
-AI 部署 / 推理工程 / HPC / 算子初级岗位
-```
-
-2026 年 12 月形成第一版简历，2027 年 1 月开始投递，不等待所有课程和 AI Infra 项目全部完成。第一份实习不必强求职位名称完全是 AI Infra；能进入高质量 C++、性能、系统或模型部署工作，就是有效路径。
-
-#### 2027.02 ~ 2027.06：持续投递 + CPU inference 小闭环
-
-```text
-根据面试反馈补 C++ / OS / 网络 / 数据库短板
-继续 AI 理论线与 PyTorch inference
-mini-infer-cpu 或 operator lab 形成第一版
-持续投递日常实习和暑期实习
-不因为暂时没有完全对口岗位停止系统主线
-```
-
-#### 2027 暑假：第一份实习与方向校准
-
-必须积累：
-
-```text
-真实代码协作
-issue / review / test / benchmark
-一次具体性能或稳定性问题的定位记录
-明确下一段更偏 kernel、engine 还是 serving
-```
-
-#### 2027.07 ~ 2028.01：AI Infra 桥接主线
-
-目标：
-
-```text
-完成 mini-infer-cpu
-完成 kernel-lab 第一版
-进入 CUDA 正式学习
-实现单卡 mini LLM inference 的核心路径
-```
-
-#### 2028.01 ~ 2028.06：关键实习准备
-
-目标：
-
-```text
-CUDA kernel 有 profiler 与优化数据
-理解 KV Cache / prefill / decode / batching
-完成 mini-serving 或 nano-vLLM 深入改动
-至少一次可说明的开源 issue / PR / benchmark contribution
-形成 AI Infra 专项简历与面试讲稿
-```
-
-#### 2028 暑假：关键实习
-
-优先：
-
-```text
-推理引擎
-大模型 serving
-CUDA / Triton 算子
-AI 系统 / GPU 平台
-高性能计算
-```
-
-这是 2029 届秋招前最重要的真实工程证据。
-
-#### 2028.07 ~ 2028.10：秋招
-
-主投：
-
-```text
-AI Infra Engineer
-Inference Engine / LLM Serving Engineer
-CUDA / GPU Kernel / Operator Engineer
-ML Systems / HPC Engineer
-```
-
-相邻岗位池：
-
-```text
-C++ Infrastructure
-高性能服务端
-存储 / 数据库内核
-分布式系统
-模型部署与推理平台
-```
-
----
-
-### 10.1.5 各知识块学到什么程度
-
-| 知识块 | 本科求职目标深度 | 暂时不要求 |
-|---|---|---|
-| Python | 能写工程脚本、测试、benchmark、模型加载与服务胶水；会 venv/conda、pytest、typing 基础 | Web 全栈、复杂元编程 |
-| 数学 | 理解矩阵乘、向量化、softmax、norm、attention、数值稳定性和量化误差 | 证明导向高数、研究级优化理论 |
-| 深度学习 | 能讲 forward、参数、activation、dtype；掌握 ResNet 与 Transformer 至少一个完整前向 | 从零训练大模型、论文海量复现 |
-| PyTorch | Tensor/device/dtype/layout、Module、checkpoint、inference_mode、profiler、custom op 第一层 | autograd engine / dispatcher 全源码 |
-| C++ | 能写资源安全、并发、可测试、可 profile 的系统组件 | 复杂模板元编程 |
-| CUDA | kernel launch、SIMT、memory hierarchy、sync、stream/event、error check、profiling、常见优化 | 一开始就深挖 PTX/SASS、CUTLASS internals |
-| Triton | 能实现并 benchmark reduce/softmax/matmul/attention，能解释 tile 与访存 | 编译器后端和 MLIR 深入 |
-| LLM inference | Transformer forward、prefill/decode、KV Cache、quantization、sampling、memory estimate | 训练对齐、复杂 MoE 训练 |
-| Serving | queue、continuous batching、streaming、scheduler、PagedAttention、observability | 一开始就做跨地域超大集群 |
-| Distributed | NCCL collectives、TP/PP、通信开销和拓扑第一层 | 完整训练容错、参数服务器历史全线 |
-
-“会用”不算完成。每个知识块至少要达到：
-
-```text
-能解释对象和数据流
-能写最小正确实现
-能与 reference 对比正确性
-能做 benchmark
-能说出一个瓶颈和一个优化取舍
-```
-
----
-
-### 10.1.6 AI Infra 项目证据链
-
-#### 项目 0：系统底座作品
-
-```text
-ThreadPool / Reactor / Mini Redis
-```
-
-价值：证明 C++、Linux、网络、并发、调试和工程能力。它不是 AI 项目，但会让后面的 serving 项目可信。
-
-#### 项目 1：`mini-infer-cpu`
-
-建议范围：
-
-```text
-Tensor：shape / stride / dtype / storage
-5~8 个 CPU operator
-operator registration
-computation graph / execution order
-模型权重加载
-跑通 ResNet、YOLO 小模型或极小 Transformer 中一个
-正确性测试与 benchmark
-```
-
-验收：
-
-```text
-不看视频也能画出 model -> graph -> operator -> tensor -> output
-至少一个 operator 有朴素版和改进版
-README 能让别人复现
-```
-
-#### 项目 2：`kernel-lab`
-
-建议顺序：
-
-```text
-vector add
-reduce
-softmax
-RMSNorm / LayerNorm
-matmul / GEMV
-RoPE 或 attention 子算子
-```
-
-每个 kernel 至少保存：
-
-```text
-PyTorch/CPU reference
-correctness tolerance
-naive version
-optimized version
-输入 shape / dtype
-GPU model / CUDA version
-warmup / repetition / synchronization 方法
-latency / bandwidth / throughput
-Nsight 观察与瓶颈解释
-```
+出口：一个可验证的 CPU inference component，不只会调用 PyTorch。
 
-#### 项目 3：`mini-llm-cuda`
+### Gate C：CUDA 与 kernel
 
-建议范围：
+前置：稳定 NVIDIA GPU、CPU inference 闭环、硬件基础复核。
 
 ```text
-读取一个小型 LLaMA/Qwen 系模型权重
-embedding / RMSNorm / RoPE / attention / MLP
-prefill 与 decode 第一层区分
-KV Cache
-sampling
-关键 CUDA kernel
-至少一种量化或低精度路径的理解/实验
+thread / block / grid
+memory hierarchy
+coalescing
+shared memory
+reduction / softmax / matmul 初步
+Nsight Systems / Compute
 ```
 
-目标是单卡正确、可测、可解释，不追求复制完整工业框架。
+出口：至少 3 个 kernel，有 correctness tests、baseline 和 profiling 数据。
 
-#### 项目 4：`mini-serving` 或 `nano-vllm-study`
+### Gate D：Triton / vLLM serving
 
-建议范围：
+前置：CUDA 证据 + Transformer/KV Cache 理解。
 
 ```text
-request queue
-streaming output
-prefill/decode scheduling
+Triton kernel
 continuous batching
-KV block manager
-cancellation / timeout 第一层
-TTFT / TPOT / throughput / GPU memory
-Prometheus 或最小 metrics endpoint
+PagedAttention / KV Cache management
+request scheduling
+prefill / decode
+latency / throughput / memory trade-off
+vLLM 或 SGLang 源码级小贡献
 ```
 
-二选一：
+### Gate E：multi-GPU / distributed inference
 
 ```text
-A. 自己写一个小型 serving skeleton，强调系统设计
-B. 深入 nano-vLLM/vLLM，完成一个真实 issue、测试、benchmark 或 PR
+NCCL collectives
+tensor / pipeline / expert parallel
+communication-computation overlap
+failure and observability
 ```
 
-不要同时做两个半成品。
-
-#### 项目 5：多 GPU 扩展，后置加分
-
-```text
-NCCL collective demo
-tensor parallel 第一层
-通信/计算时间分解
-双 GPU correctness 与 scaling 记录
-```
-
-只有 Gate E 满足且硬件可用时再做。
+没有多 GPU 资源和单卡 serving 闭环时不提前展开。
 
 ---
 
-### 10.1.7 benchmark 硬标准
-
-AI Infra 项目不能只写“加速了 30%”。每次性能结果至少记录：
+## 10. 近期明确不做
 
 ```text
-硬件：GPU / CPU / memory
-软件：driver / CUDA / PyTorch / compiler / commit
-输入：shape / batch / sequence length / dtype
-基线：PyTorch、CPU、naive CUDA 或上一版本
-正确性：reference 与 tolerance
-方法：warmup / repetition / synchronization
-结果：latency、throughput、memory；serving 增加 p50/p95、TTFT、TPOT
-解释：瓶颈证据、改动、为何有效、在哪些 shape 下失效
-```
-
-kernel 重点指标：
-
-```text
-latency
-effective bandwidth / achieved throughput
-occupancy 第一层
-memory access / warp divergence / launch overhead
-```
-
-serving 重点指标：
-
-```text
-TTFT：Time To First Token
-TPOT：Time Per Output Token
-end-to-end latency
-tokens/s
-concurrency
-GPU memory usage
-queue time
-```
-
-必须保留原始命令、环境和结果文件，避免只留截图。
-
----
-
-### 10.1.8 学习资料使用顺序
-
-#### 官方资料优先
-
-```text
-CUDA：NVIDIA CUDA C++ Programming Guide + Best Practices Guide
-PyTorch：官方 Tensor / profiler / custom C++ and CUDA operator tutorials
-Triton：官方 tutorials，从 vector add / softmax / matmul 开始
-vLLM：官方 architecture / PagedAttention / metrics 文档与仓库
-NCCL：NVIDIA NCCL User Guide
-```
-
-入口：
-
-- [CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-programming-guide/contents.html)
-- [PyTorch Custom C++ and CUDA Operators](https://docs.pytorch.org/tutorials/advanced/cpp_custom_ops.html)
-- [Triton Tutorials](https://triton-lang.org/main/getting-started/tutorials/)
-- [vLLM Architecture Overview](https://docs.vllm.ai/en/latest/design/arch_overview/)
-- [vLLM Production Metrics](https://docs.vllm.ai/en/latest/usage/metrics/)
-- [NCCL User Guide](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/overview.html)
-
-#### “我是傅傅猪”内容的定位
-
-本地盘点：[我是傅傅猪 UP 主视频盘点与 AI Infra 学习路线](我是傅猪猪/我是傅傅猪_UP主视频盘点与AI_Infra学习路线.md)。
-
-使用顺序：
-
-```text
-1. KuiperInfer 重制版：CPU Tensor / operator / graph 主线
-2. KuiperLlama/CUDA 选集：显存、RMSNorm、Softmax、KV Cache、Attention、Nsight
-3. Triton 选集：Reduce -> Softmax -> Matmul -> Attention
-4. vLLM 选集：KV Cache -> block manager -> PagedAttention -> engine/worker/executor
-5. 求职视频：项目已有结果后再看简历、面试和路线校准
-```
-
-规则：
-
-```text
-不按发布时间刷完 114 条
-重制版作主线，旧版只补断点
-视频时间不超过 AI Infra 学习时间的 20%
-看一段后必须落到代码、测试、benchmark 或图
-课程项目不能原样冒充独立项目，必须有自己的设计、问题和数据
-```
-
----
-
-### 10.1.9 在中山大学阶段怎样借力
-
-课程与项目对齐：
-
-```text
-数据结构 -> scheduler / cache / graph
-计算机组成 -> CPU/GPU memory hierarchy 与 performance
-操作系统 -> process / virtual memory / synchronization
-计算机网络 -> serving / RPC / distributed inference
-线性代数 / 概率 -> Tensor / attention / numerical behavior
-编译原理 -> 后续理解 Triton/MLIR 的接口，不要求提前深挖
-```
-
-资源策略：
-
-```text
-优先争取校内实验室、课程服务器、导师项目或竞赛中的稳定 GPU 使用机会
-找老师/实验室时优先关注 ML systems、推理部署、GPU、分布式系统、高性能计算
-不因“没有个人 GPU”暂停基础学习，也不急着为学习路线购买昂贵硬件
-用课程项目、系统项目和开源贡献建立与老师/实习团队合作的可信度
-```
-
-本科就业不等于忽略学校课程。OS、网络、计组、数据结构、线代和概率是 AI Infra 面试与长期上限的一部分。
-
----
-
-### 10.1.10 简历与岗位验收
-
-每个 AI Infra 项目都应回答：
-
-```text
-模型或请求的数据流是什么？
-CPU/GPU 内存由谁拥有，何时释放？
-正确性怎样验证？
-基线是什么？
-性能瓶颈怎样找到？
-改动为什么有效？
-结果是否能复现？
-失败案例和适用边界是什么？
-```
-
-2027 第一段实习前最低证据：
-
-```text
-一个扎实 C++ 系统项目
-一个可复现 benchmark/性能分析案例
-PyTorch/NumPy inference 基础
-mini-infer-cpu 或 operator lab 的起步成果
-```
-
-2028 关键实习前目标证据：
-
-```text
-系统项目 1 个
-CPU inference 项目 1 个
-CUDA kernel-lab 1 个
-单卡 LLM inference 或 serving 项目 1 个
-至少一个真实 issue / PR / benchmark contribution
-完整 README、测试、性能表和 interview.md
-```
-
-不要求仓库数量越多越好。`2~3` 个真正独立、可复现、能深挖的项目，胜过 `8` 个跟课半成品。
-
----
-
-### 10.1.10A 最终项目的产品化标准
-
-参考完整系统项目时，学习的是**工程闭环和证据链**，不是照抄技术栈，也不是以模块数量判断项目价值。
-
-例如 [InazumaPlasma](https://github.com/Yao-shuai/InazumaPlasma/tree/main) 把 KV 引擎、AI API Gateway、语义缓存、聊天服务、Dashboard、配置部署和性能测试串成了一条可运行链路。它适合作为“项目怎样形成产品形态”的参考，但其 AI Gateway 主要转发外部模型 API，并不等同于自己实现 LLM 权重加载、Transformer forward、CUDA kernel 和推理调度。因此，它的技术方向不能直接替代本路线的 inference engine / serving 主线。
-
-本路线中的“产品化”至少意味着：
-
-```text
-有清楚的用户入口和完整数据流
-能够独立构建、启动、配置和停止
-核心功能形成闭环，不只是若干孤立 demo
-错误处理、资源生命周期和边界条件明确
-有 correctness test、集成测试或场景测试
-有可复现 benchmark，并保留环境、命令和原始结果
-有日志、指标或最小可观测性
-README 包含架构、构建、使用、限制和性能说明
-能区分自己实现的核心、使用的第三方库和仍未完成的部分
-```
-
-以下内容不等于产品化：
-
-```text
-为了显得高级而堆入 RDMA、XDP、eBPF、io_uring、CUDA 等名词
-加入 Dashboard，却没有可靠的核心执行链路
-把课程代码或开源项目换名后包装成独立项目
-只有最好看的性能数字，没有基线、正确性和复现方法
-仓库很大，但无法解释关键模块的所有权、设计取舍和失败边界
-```
-
-按阶段形成两次产品闭环：
-
-```text
-2027 第一段实习前：
-    Mini Redis / Reactor 形成 C++ 系统项目闭环
-    重点证明 C++、Linux、OS、网络、并发、测试和 benchmark
-
-2028 AI Infra 求职前：
-    mini-infer-cpu、mini-llm-cuda 与 mini-serving 逐步形成推理服务闭环
-    目标数据流为：
-    request -> tokenizer -> scheduler -> model execution
-    -> CUDA kernels -> KV Cache -> streaming response -> metrics
-
-kernel-lab：
-    作为正确性、profiling 和性能优化证据
-    不必为了“项目数量”强行包装成庞大产品
-```
-
-最终简历仍控制在 `2~3` 个能深挖的项目：
-
-```text
-1. Mini Redis / Reactor：系统底座项目
-2. Mini LLM Inference & Serving：AI Infra 旗舰项目
-3. CUDA kernel-lab 或真实 vLLM 开源贡献：性能与协作证据
-```
-
-当前阶段不要提前搭建一个包含所有名词的大仓库。先按 readiness gate 完成底层能力和独立模块，再在模块已经正确、可测、可解释后进行整合。每条简历描述都必须能回答：
-
-```text
-哪部分是我写的？
-为什么这样设计？
-正确性怎样证明？
-性能数据怎样复现？
-系统在哪些条件下会失败或退化？
-```
-
----
-
-### 10.1.11 AI Infra 专项停止清单
-
-readiness gate 未满足时暂不做：
-
-```text
-逐行阅读完整 PyTorch / vLLM / TensorRT-LLM
-一上来写 FlashAttention
-一上来深挖 PTX / SASS / CUTLASS / Tensor Core
-同时做 CUDA、Triton、TVM、MLIR、XLA
-多机大规模训练
-完整 Kubernetes AI 平台
-追逐每个新模型和新推理框架
-把课程视频数量当进度
-只做模型调用，不做测试与性能验证
-```
-
-判断是否该学某项技术：
-
-```text
-它是否解决当前项目的真实瓶颈？
-我是否具备它的前置知识和硬件？
-它能否形成代码、数据或开源贡献？
-它是否服务于 2027/2028 的实习节点？
-```
-
-四个问题大多答不上来，就先放回 backlog。
-
----
-
-## 11. 简历项目目标
-
-### 2027 实习前理想项目组合
-
-```text
-主项目：Mini Redis（C++），形成协议、网络、存储语义、持久化、测试与性能完整闭环
-副项目：Reactor / HTTP Server，证明 event-driven networking 与 connection lifecycle
-内部组件证据：BlockingQueue / ThreadPool / AsyncLogger；它们服务项目，不强行各占一个简历项目位
-工具证据：CMake / GoogleTest / TSan / ASan / gdb / strace / perf / benchmark
-伴随能力：6.S081 支撑 OS 面试，CSAPP 负责系统横向补缺，15-445 在 Mini Redis 后支撑存储面试
-```
-
-2026 年 12 月先形成可投递版本，之后边投边改。不要等到代码“永远还能再加功能”的尽头才开始写简历。
-
----
-
-### Mini Redis 简历表述目标
-
-不要写：
-
-```text
-实现了一个 Redis。
-```
-
-而是写成：
-
-```text
-基于 C++ 实现轻量级内存 KV 服务，支持 RESP 协议解析、epoll 事件驱动、多客户端连接、TTL 过期机制、LRU 淘汰策略、简单持久化与 benchmark 压测。
-```
-
----
-
-### 面试主线
-
-```text
-C++：对象生命周期、RAII、拷贝/移动、智能指针、STL、异常安全、虚函数表
-Linux：fd、系统调用、进程、线程、IO、mmap
-OS：虚拟内存、调度、锁、COW、文件系统基础
-网络：TCP、HTTP、socket、epoll、Reactor
-并发：mutex、condition_variable、atomic、CAS、线程池、阻塞队列
-Redis：数据结构、过期、淘汰、持久化、事件循环
-MySQL / DB：索引、B+树、buffer pool、事务、MVCC、锁、WAL
-项目：架构设计、并发模型、生产级代码、性能数据、踩坑复盘、线上排查
-```
-
----
-
-## 12. 面试驱动长期任务
-
-### 12.1 每周少量手撕题
-
-你有 OI 背景，不需要现在大量刷题，但手感不能断。
-
-节奏：
-
-```text
-每周 2~3 题
-写成可运行代码
-补边界测试
-说明复杂度
-```
-
-优先题型：
-
-```text
-链表
-栈 / 队列
-哈希
-二分
-滑动窗口
-DFS / BFS
-TopK
-LRU
-字符串处理
-简单动态规划
-```
-
----
-
-### 12.2 每个项目必须有面试讲稿
-
-每个项目都要能按这个结构讲：
-
-```text
-背景：为什么做这个项目
-职责：我实现了哪些模块
-架构：整体模块怎么拆
-难点：最难的点是什么
-取舍：为什么这么设计
-验证：如何测试和压测
-问题：遇到什么 bug，如何定位
-优化：还能怎么优化
-```
-
-项目 README 至少包含：
-
-```text
-项目简介
-功能列表
-架构图
-构建方式
-使用示例
-测试方式
-压测结果
-踩坑总结
-后续优化
-```
-
----
-
-### 12.3 每个工具都要服务排查
-
-工具不是为了“学过”，而是为了回答：
-
-```text
-程序卡住了怎么查？
-内存泄漏怎么查？
-服务端口没起来怎么查？
-QPS 上不去怎么查？
-线程死锁怎么查？
-崩溃 core 怎么看？
-```
-
-对应工具：
-
-```text
-gdb：断点、变量、调用栈、core dump
-strace：系统调用
-valgrind：内存泄漏
-ss / lsof：端口和 fd
-top / htop：进程资源
-日志：定位执行路径
-benchmark：性能数据
-```
-
----
-
-## 13. 资料池
-
-### C++
-
-```text
-LearnCpp：适合系统补现代 C++ 和语法细节
-cppreference：适合查标准库和语言规则
-C++ Primer：可作为书本补充，不要求从头硬啃
-Effective Modern C++：现代 C++ 后期补充
-```
-
----
-
-### Linux / OS
-
-```text
-MIT 6.S081：理解 OS 和 xv6
-OSTEP：理解进程、虚拟内存、并发、持久化
-CSAPP：按主题补 memory hierarchy、linking、ECF、VM、system I/O、network、concurrency
-Linux man-pages：查系统调用和库函数
-The Linux Programming Interface：后期系统编程参考书
-```
-
-6.S081 使用原则：
-
-```text
-先看核心 lecture
-先做概念笔记
-配合 Linux demo 理解
-不急着全刷 lab
-```
-
----
-
-### 数据库 / 存储
-
-```text
-CMU 15-445：数据库系统和存储系统核心课
-MySQL 官方文档：查 SQL / 索引 / 事务
-Redis 文档：查命令和行为
-```
-
-15-445 使用原则：
-
-```text
-后置到 Mini Redis / MySQL 阶段
-先看 storage / buffer pool / B+ tree / transaction / recovery
-不急着全刷 BusTub project
-```
-
----
-
-### 网络 / 系统项目
-
-```text
-Beej's Guide：socket 入门可参考
-UNP：后期网络编程参考，不要求现在硬啃
-muduo：Reactor 设计可选读
-Stanford CS144：完整 TCP/IP protocol implementation 课程，Reactor/Mini Redis 闭环后再评估
-Redis 源码：Mini Redis 后期选读
-Nginx 文档：配置和反向代理
-```
-
-### 编译、体系与 AI Systems 课程池
-
-```text
-CSAPP linking + nm/readelf/objdump：当前 toolchain literacy 主入口
-Stanford CS143 / NJU 编译原理：未来 AI compiler / LLVM / MLIR 方向再完整开启
-MIT 6.824：Mini Redis + storage 第一轮之后，确实进入 distributed KV 时再开
-CMU 10-414/714：AI 理论 Gate 之后，与 mini-infer-cpu 统筹，不同时做两个半成品
-ML Systems 课程：CUDA / distributed / LLM inference readiness gate 满足后再用
-```
-
----
-
-### 测试 / 性能
-
-```text
-gtest
-google/benchmark
-valgrind
-strace
-perf
-```
-
----
-
-### 面试
-
-```text
-牛客 C++ / Infra / AI Infra 面经：只用于反推考点，不沉迷刷面经
-200 篇面经雷达：每周抽样，不逐篇背
-自己的项目 README 和讲稿：比背八股更重要
-手撕题：每周少量保持手感
-```
-
-资料使用原则：
-
-```text
-先以每日 .md 为主线
-资料只作为查漏补缺
-不要被资料海淹没
-每学一个模块都要有代码产出
-```
-
----
-
-## 14. 每周执行格式
-
-以后每周计划都按这个格式：
-
-```text
-本周目标：
-本周学什么：
-学到什么程度：
-代码产出：
-笔记产出：
-验收问题：
-和找工作关系：
-6.S081 / 15-445 是否穿插：
-下周衔接：
-```
-
-每周末你给我：
-
-```text
-1. 本周代码
-2. 本周笔记
-3. 本周总结
-4. 卡住的问题
-5. 自己回答验收问题
-6. 本周面经雷达：抽样 5~10 篇，列出下周要补的问题
-```
-
-我来做：
-
-```text
-代码 review
-笔记纠错
-概念追问
-面试追问
-下周计划调整
-```
-
----
-
-## 15. 每日 .md 生成规则
-
-当你让我生成某一天的 `.md` 时，我会默认结合：
-
-```text
-1. 当前 plan_strengthened.md
-2. 本周 week plan
-3. 你前一天的 note / 总结 / 验收题
-4. 你暴露出的薄弱点
-5. 你已经会的内容
-6. 项目路线和找工作价值
-7. 真实面试高频点
-8. 当前是否适合穿插 6.S081 / 15-445
-```
-
-每天 `.md` 默认包含：
-
-```text
-今日目标
-前置回顾
-核心概念和术语
-代码练习
-中途检查
-面试追问
-6.S081 / 15-445 关联点
-不要提前深挖的内容
-笔记要求
-验收问题
-git commit
-下一天衔接
-```
-
-不会机械使用 `What / Why / How` 标题，但会自然覆盖“这是啥、为什么、怎么用、什么时候用”。
-
----
-
-## 16. 长期停止清单
-
-看到这些内容，不是不学，而是暂时不优先：
-
-```text
-完整 C++ 模板元编程
-复杂 SFINAE / concepts 深挖
-操作系统内核源码全读
+Go 主线
 DPDK
 io_uring 深入
-完整 Nginx 源码
-完整 Redis 源码逐行读
-Ceph / TiDB 工业级源码
-readiness gate 未满足时深入 CUDA / Triton
-论文海量阅读
-项目主线未到 gate 时连续强刷 MIT 6.S081 labs（课程最终仍要完整通关）
-CMU 15-445 全 project 强刷
-当前完整开启 CS144 / CS143 / 6.824
+完整 Nginx / Redis 源码
+复杂模板元编程
+过早 CUDA
+多个重型课程并行
+完整 6.824
+完整 CS144 抢占 Mini Redis
+完整 BusTub 抢占 Mini Redis
+为了简历数量做多个同质 server
+为了显得高级堆 RDMA / eBPF / XDP 等名词
 ```
 
-判断标准：
+出现相关术语可以解释，但不因此改变当前 milestone。
+
+---
+
+## 11. 执行与验收原则
+
+### 11.1 编译基线
+
+```bash
+g++ -std=c++17 -Wall -Wextra -g
+```
+
+多线程项目补 `-pthread`；sanitizer、optimization 和 benchmark flags 按实验目的单独说明。
+
+### 11.2 Demo 与项目标准
+
+Demo：
 
 ```text
-如果它不能服务于当前 C++ 主线、系统项目、实习准备，就先放下。
+能编译
+能运行
+能观察
+能解释
+```
+
+简历候选项目：
+
+```text
+contract 清楚
+ownership 清楚
+错误与边界明确
+测试覆盖核心风险
+sanitizer 证据
+benchmark 可复现
+README 能让陌生人运行
+能讲设计取舍和已知限制
+```
+
+不要求机械完成重复验收题。代码、实验、笔记和口头解释能够证明理解时，可以替代体力性重复；但当天核心若是 testing、benchmark 或 failure semantics，不能把核心证据全部省略。
+
+### 11.3 每个新任务的推进方式
+
+```text
+Round 1：给用途、public contract、文件名、build/run 入口，让用户独立完成第一版
+Round 2：根据真实 R1 代码讲机制、竞态、生命周期和边界
+Round 3：只补高价值测试、性能证据和项目收口
+```
+
+教程不能在 Round 1 前用大量“防止你犯错”的实现提示把设计答案泄露完。
+
+### 11.4 路线调整规则
+
+只有同时满足以下条件才修改主线：
+
+```text
+多个目标岗位重复要求
+当前项目确实暴露了缺口
+新内容能形成代码或实验输出
+不会破坏最近的简历里程碑
+```
+
+否则进入 backlog。
+
+---
+
+## 12. 阶段成功标准
+
+### 2027 年第一轮投递前
+
+```text
+一个能运行、测试、压测和解释的 Mini Redis
+Reactor / HTTP 的清楚演进证据
+C++ / Linux / OS / TCP / concurrency 面试第一轮闭环
+竞赛优势在简历上准确呈现
+第一版简历、项目讲稿和目标岗位表
+开始真实投递，而不是继续等待“全部学完”
+```
+
+### 2027 年底
+
+```text
+至少一段真实工程、实验室或高质量开源协作经历
+完成 6.S081 主要课程与实验闭环
+完成 AI Gate A/B
+根据反馈决定 storage / network / AI inference 的第二项目
+```
+
+### 2028 年关键实习前
+
+```text
+C++ 系统项目与真实协作证据
+CUDA kernel correctness + profiler + benchmark
+理解 Transformer inference / KV Cache / batching
+至少一个 Triton/vLLM/SGLang 相关贡献或复现优化
+能够投递真正的 AI Infra / inference engine / GPU systems 岗位
 ```
 
 ---
 
-## 17. 最后总纲
-
-你现在真正要打穿的是：
+## 13. 当前下一步
 
 ```text
-C++ 对象和资源管理
-→ 拷贝/移动/智能指针/异常安全
-→ STL 行为和工程数据结构
-→ Linux 系统调用
-→ OS 进程线程和 IO
-→ MIT 6.S081 分阶段完整通关 + CSAPP 定向补强
-→ TCP / non-blocking I/O / epoll
-→ 阻塞队列 / 线程池 / 异步日志
-→ Reactor
-→ HTTP Server
-→ Mini Redis
-→ CMU 15-445 数据库/存储概念加固
-→ Redis / MySQL 原理
-→ RPC / Nginx / Kafka 按项目和岗位反馈选学
-→ 测试 / 调试 / 性能分析
-→ 项目讲稿和面试追问
-→ Python / NumPy / PyTorch inference 预热
-→ CPU Tensor / operator / computation graph
-→ CUDA kernel / profiling / optimization
-→ Transformer / KV Cache / 单卡 LLM inference
-→ Triton / continuous batching / vLLM serving
-→ NCCL / 多 GPU / 分布式推理（后置）
+1. 生成并完成 Week9 Day1
+2. 从 blocking server 的问题进入 O_NONBLOCK / EAGAIN
+3. 完成 Epoll Echo Server
+4. 用真实代码和实验验收 Week9
+5. 进入 Reactor V1
 ```
 
-这条线走通，你的简历会从“会写代码”变成：
+当前不要为了腾讯岗位临时插入 Go、Kafka、Kubernetes、完整 MySQL 课程或 CUDA。先把最接近岗位硬要求、也最接近简历项目闭环的 epoll -> Reactor -> Mini Redis 做穿。
 
-```text
-懂 C++ 底层
-懂 Linux 和 OS
-懂网络和高性能服务端
-懂数据库/存储系统基本原理
-能写有技术密度的系统项目
-能用数据和工具证明项目质量
-能把系统能力迁移到 GPU、推理引擎和 serving
-能以本科生身份拿出 AI Infra 岗位可验证的项目证据
-```
+---
 
-这就是接下来所有 week plan 和 daily .md 的总依据。
+## 14. 参考来源
+
+岗位会变化，以下只用于提取能力模式，不把任何单个 JD 当永久 syllabus：
+
+- [腾讯招聘](https://join.qq.com/)
+- [腾讯 Careers](https://careers.tencent.com/)
+- [腾讯：微信后台开发工程师 - AI 方向](https://careers.tencent.com/jobdesc.html?postId=2084242179768893440)
+- [腾讯：微信 AI Infra 工程师 - 大模型推理方向](https://careers.tencent.com/jobdesc.html?postId=2037411502792798208)
+- [腾讯：机器学习基础设施开发 - 存储 / 向量检索 / 参数服务器](https://careers.tencent.com/jobdesc.html?postId=2029746419665108992)
+- [腾讯：大模型推理引擎研发工程师](https://careers.tencent.com/jobdesc.html?postId=2074414767455518720)
+- [微信安全后台开发实习生（日常，公开招聘信息）](https://www.nowcoder.com/jobs/detail/383906)
+- [WeChat Backend Developer Intern](https://tencent.wd1.myworkdayjobs.com/en-US/Tencent_Careers/job/WeChat---Backend-Developer-Intern_R107005)
+- [MIT 6.S081 中文课程](https://mit-public-courses-cn-translatio.gitbook.io/mit6-s081/)
+- [CSAPP 官方站](https://csapp.cs.cmu.edu/)
+- [CS DIY](https://csdiy.wiki/)
+- [Stanford CS144](https://cs144.github.io/)
+- [CMU 15-445](https://15445.courses.cs.cmu.edu/)
+
+最终原则：
+
+> 规划服务于可验证的能力和真实投递，不服务于课程收藏、技术名词数量或形式上的“学完”。

@@ -4173,3 +4173,61 @@ day7_note 简短但覆盖核心 shutdown/validation 设计及 reverse-destructio
 非阻塞改进：validate 未显式区分 input open failure 的 diagnostic；logger.log bool 未单独保存在 task outcome 中，而由 final file exactness 间接覆盖；component_demo target include directory 使用 PUBLIC 而 PRIVATE 更贴合 executable 无 consumers 的语义。这些不影响当前 correctness。
 Day7 正式通过，最终评分 95/100；Week8 正式通过。
 ~~~
+
+---
+
+## 2026-08-26：Week9 / 腾讯 2027 实习目标校准
+
+`plan_strengthened.md` 已完成一次结构性重写，改版前 Git 基线为：
+
+```text
+commit: e7358fb
+tag: roadmap-before-tencent-2027-rewrite
+```
+
+本次不是改变 C++ 系统主线，而是删除旧 Week1~Week8 日计划、重复课程分析、重复 AI Infra 时间线和“每个组件都包装成项目”等过时内容。新的 `plan_strengthened.md` 是总路线的唯一权威版本；详细 daily 教学规范和逐日验收历史继续留在本文件。
+
+当前求职判断：
+
+```text
+2027 年 1 月主投：C++ 后台 / Linux 后台 / 系统基础设施日常实习
+2027 年冲刺：AI 业务后台 / 机器学习基础设施中的存储、检索、参数服务、模型服务外围系统
+长期主目标：LLM inference engine / serving / CUDA AI Infra
+```
+
+不能把三类岗位当成相同门槛：
+
+```text
+后台实习：用户已有算法、C++、Linux、TCP、并发与测试底座；完成 epoll/Reactor/Mini Redis 后会形成较完整匹配
+AI 业务基础设施：还需在系统项目之外补 Python、NumPy/PyTorch inference 和最小 ML systems context
+直接推理引擎：当前仍缺 CUDA、GPU profiling、算子底层和 vLLM/SGLang/TensorRT-LLM 经验，只作为冲刺，不作为 2027 年 1 月必须命中的成功标准
+```
+
+招聘批次约束：用户按当前学制为 2029 届。正式暑期实习/校招可能限制毕业年份；2027 年初优先寻找日常实习、导师直招、校友/竞赛圈内推和实验室/开源协作。到岗时间是独立硬条件：公开微信后台日常实习常要求每周约 4 天、持续至少 4 个月。若课程安排无法满足，不能把未录取简单解释为技术能力不足。
+
+Week9 之后的唯一项目主线：
+
+```text
+Week9：O_NONBLOCK / EAGAIN / partial I/O / epoll / Epoll Echo Server
+Week10：Reactor V1
+Week11：HTTP Server V1
+Week12：Mini Redis RESP + KV
+Week13：TTL / lifecycle
+Week14：AOF / restart recovery
+Week15：tests / sanitizer / fault / benchmark
+Week16：README / architecture / resume / project explanation
+```
+
+时间目标：
+
+```text
+2026.12：第一版简历与主项目证据
+2027.01：开始真实投递，不等所有课程学完
+2027.02 起：根据面试反馈定向补缺
+```
+
+项目表达更新：Reactor/HTTP 是 Mini Redis 的底层演进和副证据；BlockingQueue/ThreadPool/AsyncLogger 是组件证据，不强行拆成多个简历项目。只有 Mini Redis 等真实工作流项目才要求正式 README、架构图、benchmark、已知限制和项目讲稿。
+
+课程 gate 保持：6.S081 最终完整通关；CSAPP 现在按 linking/ECF/system I/O/network/concurrency/memory hierarchy 定向选学；CS144 在 Reactor/Mini Redis 闭环后评估；15-445 在 Mini Redis V1 后选 storage/buffer/index/concurrency/logging；完整编译原理仅在 AI compiler/LLVM/MLIR 方向开启；6.824 在 Mini Redis + storage 第一轮且明确进入 replication/Raft 后开启。
+
+当前下一步仍是 Week9，不因腾讯岗位分析插入 Go、Kafka、Kubernetes、完整 MySQL 课程、CUDA 或 vLLM。岗位雷达每两周抽 5~10 个 JD，只有“多个岗位重复要求 + 当前项目暴露缺口 + 能形成证据 + 不破坏最近里程碑”时才调整主线。
