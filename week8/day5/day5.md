@@ -89,7 +89,7 @@ void handle_request(const std::string& request) {
 处理 I/O error
 ```
 
-于是 caller latency 中混进了 logging latency：
+于是 caller latency 中混进了 logging latency（延迟）：
 
 ```text
 业务函数何时返回
@@ -122,7 +122,7 @@ week8/day5/day5_note.md
 ```text
 输入：多个 producers 提交的 std::string log records
 中转：bounded BlockingQueue<std::string>
-执行：一个 logger-owned background writer thread
+执行：一个 logger-owned（由 logger 所有） background writer thread
 输出：一个由 writer 串行写入的 text file
 关闭：停止接受新 records，drain 已接受 records，flush/close stream，join writer
 ```
@@ -304,6 +304,43 @@ accepted
 
 今天选择 `std::ios::trunc`，因为 unit test 需要 deterministic output；生产日志常用 append，但那会引入历史文件、rotation 和多次进程运行等额外问题。
 
+### 4.12 business thread
+
+对，`business thread` 通常翻成“业务线程”，就是执行应用本身工作的线程。
+
+在 AsyncLogger 这里，它不是专门写日志的线程，而是例如：
+
+```text
+处理一个用户请求
+-> 计算 / 查数据库 / 网络通信
+-> 遇到需要记录的信息，调用 logger.log(record)
+-> 继续处理自己的工作
+```
+
+它只负责“产生日志 record”，不应该亲自做慢速文件 I/O。
+
+对应关系是：
+
+```text
+business thread
+    = 处理业务，同时调用 log()
+
+writer thread
+    = AsyncLogger 内部专门从 queue 取 record，写入文件
+
+owner thread
+    = 创建和最终 shutdown/destroy logger 的管理者，常常是 main thread
+```
+
+所以你那条链里：
+
+```text
+business threads stop using logger
+-> owner calls shutdown
+```
+
+意思是：先保证处理业务的线程不再调用 `log()`，再由拥有 logger 的对象调用 `shutdown()`，让 writer 把队列中已接收的日志写完并退出。
+
 ---
 
 ## 5. 复用你已经验收的 BlockingQueue
@@ -348,6 +385,55 @@ closed flag
 那会制造两份 shutdown protocol，并让 AsyncLogger 同时承担“日志组件”和“重写队列”的责任。
 
 当前 queue 的 `pop()` 从 front 构造一个 `T value`。对今天的 `std::string` 能正确工作；是否进一步优化 move path 不属于 Day5 主线。
+
+---
+
+### 5.1 我的 blocking queue 关于 close 的一个案例
+
+对，完全是这样。更准确地说：C 还没有被 queue 接收，`close()` 让这个“正在等空位的 push”醒来后失败。
+
+```text
+capacity = 1
+worker_count = 1
+
+A 已被 worker pop 出来
+-> A 卡在 gate，worker 被占住
+
+B 已经成功进入 queue
+-> queue 满了
+
+C 调用 push
+-> 发现 queue 满
+-> 在 not_full 条件上等待
+-> C 此时还没有进入 queue，也没有被执行
+
+另一个线程调用 close()
+-> closed_ = true
+-> notify_all(not_full)
+-> 等待中的 C 被唤醒
+-> C 重新拿到 mutex
+-> 发现 closed_ == true
+-> push 返回 false
+-> C 不会入队，也不会执行
+```
+
+关键不是“C 原本已经进入 queue，后来被 close 删除”，而是：
+
+```text
+C 一直没有被 accepted；
+它只是卡在“等待 queue 出现空位”的阶段；
+close 让它知道：以后即使出现空位，也不再接收新任务。
+```
+
+而 B 不一样：
+
+```text
+B 在 close 前已经成功入队，属于 accepted task。
+close 后仍然保留在 queue 中；
+等 A 放开 gate，worker 会继续执行 B。
+```
+
+所以你的 `close()` 必须唤醒等待 `not_full` 的 C；否则 C 会永远等一个“已经不再有意义的空位”。
 
 ---
 
@@ -590,9 +676,9 @@ thread object 是否已经 join
 
 ---
 
-## 9. 先看 synchronous logging 的完整路径
+## 9. 先看 synchronous logging 的完整路径（同步的）
 
-假设两个 business threads 直接共享同一个 output stream。为了不发生 data race，至少需要一个 mutex：
+假设两个 business threads 直接**共享同一个 output stream**。为了不发生 data race，至少需要一个 mutex：
 
 ```text
 producer creates record
@@ -678,100 +764,109 @@ flowchart TD
 bool log(std::string record);
 ```
 
-为什么使用 by-value parameter：
+对，`by value` 就是按值传参。那段真正想讲的不是“by value 是什么”，而是：
+
+> `log` 为什么偏偏要写成 `log(std::string record)`，而不是 `log(const std::string& record)`？
+
+核心原因就一句：
 
 ```text
-logger 需要最终拥有 accepted record
-caller 传 lvalue：先 copy 到 parameter
-caller 传 rvalue：parameter 可以 move-construct
-parameter 再 move 进入 BlockingQueue::push(T value) 的 ownership path
+logger 必须把日志字符串拿走，留到将来让 writer thread 写文件。也就是 logger 要自己拥有一份，然后 push 到 queue 里面。如果传引用的话，生命周期跟内容都无法保证。
 ```
 
-今天真实 queue 的 `push` 本身也是 by value，因此完整路径可能包含不止一次 move/copy。先保证 ownership 正确，不在 Day5 为减少每一次 move 重写 queue API。
+所以它不能保存 caller 的引用；caller 的 `message` 可能马上改掉、离开作用域，或者被销毁。
 
-返回值：
+看这个实现骨架：
+
+```cpp
+bool AsyncLogger::log(std::string record) {
+    return queue_.push(std::move(record));
+}
+```
+
+`record` 是 `log` 自己得到的一份字符串。之后无论 caller 那边发生什么，queue 里的日志都有自己的数据。
+
+两种调用分别看：
+
+```cpp
+std::string message = "hello";
+logger.log(message);
+```
+
+这里 caller 还想保留 `message`，因此：
 
 ```text
-true：record 已被 queue 接受，ownership 已进入 logger
-false：queue 已 close，该 record 没有被发布给 writer
+message
+-> copy 一份给 log 的 record parameter
+-> record 被 move 给 queue
+-> message 仍是 "hello"
 ```
 
-`false` 不表示 caller 的原对象一定保持原值。若 caller 使用：
+而：
+
+```cpp
+std::string message = "hello";
+logger.log(std::move(message));
+```
+
+这里 caller 明确表示“这条字符串可以交出去”，因此：
+
+```text
+message
+-> move 给 log 的 record parameter
+-> record 再 move 给 queue
+-> message 变成 moved-from 状态
+```
+
+这样同一个接口同时支持：
+
+```text
+log(message)              ：我还要保留原字符串，copy
+log(std::move(message))   ：我不要原字符串了，move
+```
+
+这就是按值传参在这里的好处：**调用者自己决定 copy 还是 move，logger 永远最终拿到一份自己拥有的数据。**
+
+你困惑的 `false` 场景，关键在调用顺序：
 
 ```cpp
 logger.log(std::move(message));
 ```
 
-即使最终因 close 返回 `false`，`message` 也可能已经是 moved-from，因为 by-value parameter 在发现失败前已经构造。
-
-这与 Week7 `BlockingQueue::push(T value)` 的失败 ownership 边界相同。
-
----
-
-## 12. queue full 时到底是谁在等
-
-假设：
+会先发生：
 
 ```text
-capacity = 2
-queue already has A, B
-writer currently writing an earlier record
-producer P calls log(C)
+message -> move 构造出 parameter record
 ```
 
-状态轨迹：
+然后才进入 `log()` 函数体，才发现 queue 已经 close：
 
 ```text
-P enters BlockingQueue::push(C)
--> P obtains queue mutex
--> predicate closed || size < capacity is false
--> condition_variable wait releases queue mutex and blocks P
-
-writer later pops A
--> queue size becomes 1
--> writer notifies not_full
-
-P wakes and reacquires queue mutex
--> predicate is true
--> C enters queue
--> log(C) returns true
+record -> push 失败 -> log 返回 false
 ```
 
-所以 asynchronous logging 不是“producer 永远不阻塞”。它把主要 slow sink work 移到 writer，但保留 bounded-resource policy。
+所以即使失败，`message` 也已经被 move 过了。失败的只是“没有进入 queue”，不是“刚才的 move 自动撤销”。
 
-如果这时 owner `close()` queue：
+压缩成一句：
 
 ```text
-blocked producer wakes
--> sees closed
--> push returns false
--> log returns false
+by-value log = 先把 record 交给 logger 这次调用，再由 logger 尝试把它交给 queue。
+queue 拒绝时，record 不会进入 logger，但 caller 若传了 std::move，原对象仍可能已经交空。
 ```
-
-Day6 会用 gate/小 capacity 确定性观察；今天只需要能手推。
 
 ---
 
 ## 13. 为什么只允许一个 writer 访问 stream
 
-single writer 的核心收益不是“thread 越少越快”，而是 ownership 简单：
+只保留今天需要的结论：single writer 让 stream ownership 和输出顺序都只有一个解释。
 
 ```text
-ofstream write state 只属于 writer
-record order 只由 one queue + one consumer 决定
-flush/close 也由 writer 完成
-shutdown thread 不与 writer 同时访问 stream
+producers 只提交 record
+-> one writer 按 queue 顺序执行 write / flush / close
+-> owner 通过 join 等它结束
 ```
 
-如果 producers 自己写 stream，即使加 mutex，也需要所有 producers 共同遵守同一锁规则；一处忘锁就可能产生 data race 或交错 output。
-
-如果多个 logger writers 写同一个 stream，还需要新的 stream mutex，并重新定义 output order、flush ownership 和 shutdown coordination。
-
-今天的明确 invariant：
-
-> Constructor 在 writer 启动前完成 stream open；writer 启动后直到退出，只有 writer execution flow 调用 stream 的 write、flush 和 close operations。
-
-owner 的 `shutdown()` 只 close queue、join writer，再读取 writer 已经完成的 result；不在 writer 活着时调用 `output_.flush()`。
+它的目标是简化 ownership，不是宣称“writer 越少一定越快”。
 
 ---
 
@@ -942,15 +1037,75 @@ output << record << '\n';
 
 ## 16. `flush` 为什么不等于 durability
 
-C++ stream 视角：
+#### C++ stream 视角：
+
+这句话是标准库的正式说法，读起来确实很不像人话。你把它换成下面这句就行：
 
 ```text
-output.flush()
--> calls associated stream buffer synchronization operation
--> failure updates stream error state
+output.flush()：
+请 ofstream 把自己暂时攒着、还没交给文件系统的字符，立刻尝试交出去。
 ```
 
-Linux 文件路径可以先建立第一层模型：
+这里的三个词分别是：
+
+```text
+associated stream buffer
+= output 内部关联的缓冲对象
+= 对 ofstream 来说，通常就是管理文件读写缓冲的 filebuf
+
+synchronization operation
+= 让“C++ 这边 buffer 里记录的内容”和“下层文件”尽量同步
+= 不是线程同步，不是 mutex / condition_variable 那种 synchronization
+
+failure updates stream error state
+= 如果这次交出去失败，例如磁盘满、底层 write 出错
+= output 自己会记下“我出错了”
+```
+
+所以你写：
+
+```cpp
+output << "hello\n";
+output.flush();
+
+if (!output) {
+    // output 记着：之前 write 或 flush 出错了
+}
+```
+
+默认不会自动抛异常，而是把错误状态记在 `output` 里面；`if (!output)` 就是在检查这个状态。
+
+整个数据路径先这样理解：
+
+```text
+output << "hello\n"
+    |
+    v
+C++ 的 file stream buffer
+    |  此时字符可能还在用户态 buffer
+    v
+output.flush()
+    |
+    v
+尝试交给内核的文件系统 / page cache
+    |
+    v
+之后文件系统再决定何时真正写到存储设备
+```
+
+所以 `flush` 不等于 `durable`：
+
+```text
+flush 成功
+= C++ 自己的 buffer 已经尝试交给下层
+
+不等于
+= 断电后磁盘上一定还有这条日志
+```
+
+还有一个小边界：这里的 “sync” 是“缓冲区和文件状态同步”，不是“让两个 threads 互相等待/建立 happens-before”的同步。
+
+#### Linux 文件路径可以先建立第一层模型：
 
 ```mermaid
 flowchart LR
@@ -959,7 +1114,7 @@ flowchart LR
     C -->|filesystem writeback| D[storage device]
 ```
 
-今天只能承诺：
+#### 今天只能承诺：
 
 ```text
 writer 在退出前请求 stream synchronization
@@ -1186,85 +1341,105 @@ if caller forgot explicit shutdown
 
 ### 19.4 `write_failed_` 的 synchronization
 
-writer 是唯一写 `write_failed_` 的 execution flow；owner 只在 `join()` 返回后读取它。
+不是记录“失败数量”，今天只需要一个 `bool` 标记：
 
-```text
-writer stores write_failed_
--> writer returns
--> owner join returns
--> owner reads write_failed_
+```cpp
+bool write_failed_{false};
 ```
 
-`join` 提供必要的 completion synchronization，所以这个受限 contract 下不需要为了一个 post-join result 强行改成 atomic。
+它表达的是：
 
-若以后允许运行中查询 `healthy()`，就必须重新设计同步；今天不加这个 API。
+```text
+false：writer 到目前为止没有观察到 stream 写入/flush/close 失败
+true：writer 曾经观察到至少一次失败
+```
+
+例如 writer loop 里逻辑上是：
+
+```cpp
+output_ << record << '\n';
+
+if (!output_) {
+    write_failed_ = true;
+}
+```
+
+最后 `shutdown()`：
+
+```cpp
+queue_.close();
+writer_.join();
+
+return !write_failed_;
+```
+
+也就是：
+
+```text
+writer 没发现 I/O failure
+-> write_failed_ == false
+-> shutdown() 返回 true
+
+writer 发现过一次 failure
+-> write_failed_ == true
+-> shutdown() 返回 false
+```
+
+为什么标题里要说 synchronization？因为这是两个线程共同接触同一个变量：
+
+```text
+writer thread：写 write_failed_
+owner thread：读 write_failed_
+```
+
+如果 owner 在 writer 还运行时就读它：
+
+```cpp
+bool ok = !write_failed_;  // writer 可能同时正在写
+```
+
+那就是 data race，需要 mutex 或 `std::atomic<bool>`。
+
+但今天的顺序是：
+
+```text
+writer: write_failed_ = true
+-> writer thread 结束
+-> owner: writer_.join() 返回
+-> owner: 读取 write_failed_
+```
+
+`join()` 保证：writer 在线程结束前做的操作，对 `join()` 返回后的 owner 可见。因此此时读普通 `bool` 是安全的，不需要 atomic。
+
+所以这节真正想说的是：
+
+```text
+不是“要统计失败几次”；
+而是“writer 把最终是否失败这个结果留给 owner，
+owner 只能在 join 以后读取它”。
+```
+
+以后若加：
+
+```cpp
+bool healthy() const;
+```
+
+让业务线程在 logger 还运行时随时查询健康状态，那么读取会和 writer 的写入并发发生，这时才需要重新设计同步。
 
 ---
 
-## 20. writer loop 的职责，不给完整答案
+## 20. 对你的 writer loop 做一次短复检
 
-writer loop 只做一条主线：
+你的 R1 已经形成正确主线：持续 `pop()`，有 record 就写一行，`nullopt` 时结束；退出前由同一个 writer 执行 `flush()`、`close()` 并记录 stream failure。这里不再把实现步骤重新写成一份伪代码答案。
 
-```text
-repeat pop
-    record available -> write record and '\n'
-    stream failure -> remember failure, but continue draining queue
-    nullopt -> queue is closed and empty, leave loop
-
-flush stream
-check stream state
-close stream
-check stream state
-return
-```
-
-为什么 I/O failure 后仍继续 `pop()`：
-
-```text
-如果 writer 直接退出
--> queue may remain full
--> producers may block forever
--> shutdown cannot finish cleanly
-```
-
-V1 的保守 policy：
-
-```text
-remember failure
-continue consuming/draining accepted records
-final shutdown returns false
-```
-
-这不代表 failed records 成功保存，只是保证 component lifecycle 不因为 sink failure 自动卡死。
-
-不要在 writer loop 中：
-
-```text
-访问 ThreadPool
-启动更多 writers
-每条 record 调 std::endl
-拿着 queue internal mutex 执行 file I/O
-让 exception 逃出 thread entry 导致 std::terminate
-```
-
-`BlockingQueue::pop()` 返回 local object 后已经释放 queue mutex；file write 在 queue critical section 之外发生。
+R2 只确认一个设计取舍：即使 stream 已失败，writer 仍继续 drain queue，并把最终状态交给 `shutdown()` 报告，避免 lifecycle 卡在尚未消费的 accepted records 上。
 
 ---
 
 ## 21. shutdown 的完整因果链
 
-先区分两个层次：
-
-```text
-最容易证明的 normal path：先阻止新业务 work，join producers，再 shutdown logger
-V1 允许的 overlap：owner shutdown 时，某个已经进入 log() 的 producer 仍可能等待 queue
-```
-
-无论采用哪一种，必须先建立同一个 lifetime 前提：
-
-> 从 shutdown 开始到所有 producer calls 返回，`AsyncLogger` object 必须仍然活着；shutdown 返回不等于 owner 可以立刻无视仍持有 logger reference 的 producer。
-
-normal path 的完整链是：
+今天抓住这一条完整链即可：
 
 ```text
 owner has stopped/joins all producer threads that may call log
@@ -1302,29 +1477,6 @@ join returns to owner
 shutdown returns final I/O status
 ```
 
-如果 owner 需要用 shutdown 的 `queue.close()` 去释放一个 blocked producer，则顺序改成：
-
-```text
-owner prevents any brand-new log call
--> owner calls shutdown; queue.close wakes blocked producer
--> blocked log returns false
--> shutdown drains and joins writer
--> owner joins producer thread
--> only now may owner destroy logger
-```
-
-Day5 只要求你能解释这条 overlap，不要求把它做成确定性测试；Day6 再建立 gate 和 accepted/rejected file oracle。
-
-关键不是背函数名，而是回答：
-
-```text
-谁停止 acceptance：owner through queue.close
-谁 drain records：writer
-谁 flush/close stream：writer
-谁等待 writer：owner through join
-谁最终销毁 members：AsyncLogger destructor path after join
-```
-
 ---
 
 ## 22. `close`、`drain`、`flush`、`join` 各自等待什么
@@ -1337,64 +1489,11 @@ Day5 只要求你能解释这条 overlap，不要求把它做成确定性测试�
 | stream `close()` | file stream | flush/close file association | writer thread 已 join |
 | thread `join()` | writer thread | 等待 writer execution flow 结束 | 自动检查 file content 正确 |
 
-顺序错误示例：
-
-```text
-join before queue.close
--> writer may be blocked forever in pop
-
-owner flushes while writer is writing
--> two execution flows access stream without synchronization
-
-destroy stream before join
--> writer may access destroyed object
-
-close queue and immediately destroy logger
--> queued records may not finish
-```
-
 ---
 
 ## 23. `log()` 与 `shutdown()` 发生交错时
 
-今天允许一个 owner 调用 shutdown，同时某个 producer 正处于 `log()`；结果由 queue 的 close/push linearization 决定：
-
-### Case A：push 先完成
-
-```text
-producer moves record into open queue
--> log returns true
--> owner later closes queue
--> writer must drain that record
-```
-
-### Case B：close 先完成
-
-```text
-owner closes queue
--> producer sees closed
--> log returns false
--> record is not accepted
-```
-
-### Case C：producer blocked on full queue
-
-```text
-producer waits for not_full
--> owner closes queue and notify_all
--> producer wakes
--> detects closed
--> log returns false
-```
-
-不允许的 lifetime：
-
-```text
-owner destroys AsyncLogger object
-while another thread may still enter log()
-```
-
-queue 的 synchronization 只能保护 still-alive object 内部状态，不能让已销毁的 object 继续被调用。
+这里不重复 Week7 已经讲过的 push/close 竞态。直接复用 BlockingQueue contract：谁先在线性化点完成，决定本次 `log()` 是 accepted 并由 writer drain，还是返回 `false`。
 
 ---
 
@@ -1439,67 +1538,136 @@ writer_loop definition
 
 `BlockingQueue<T>` 自身是 class template，definition 仍应位于可被使用 translation unit 看见的 header；不要把 queue template implementation 搬进 `async_logger.cpp`。
 
-### 24.3 不要复制多个 final files
-
-继续修改同一个 canonical component：
-
-```text
-async_logger.hpp
-async_logger.cpp
-```
-
-不要创建：
-
-```text
-async_logger_v1_final.hpp
-async_logger_new.cpp
-async_logger_day6_final2.cpp
-```
-
-Git 已经负责保存演进历史。
-
 ---
 
-## 25. CMake 怎样延续 Day4，而不是重新开始
+## 25. CMake
 
-Day4 已建立 project-root CMake。Day5 只新增 targets/relationships：
+你理解的主线是对的，只差把 CMake 里的“源文件列表”和“链接关系”对应上。
 
-```text
-build src/async_logger.cpp as async_logger library
-make include/ visible to that target and its users
-link Threads::Threads
-build tests/async_logger_test.cpp as async_logger_test
-link async_logger_test to async_logger + GTest targets
-register async_logger_test with CTest and timeout
-```
-
-这里更适合把 implementation 做成 library target，而不是让每个 test 手写：
+先纠正一个小点：
 
 ```text
-g++ async_logger.cpp async_logger_test.cpp ...
+.hpp：通常不单独编译
+.cpp：分别编译成 .o
+.o：最后一起链接
 ```
 
-概念关系：
+所以你不需要把 `.hpp` 当成“也要参与编译的第二个文件”。它的作用是让别的 `.cpp` 在编译时看见声明。
 
-```mermaid
-flowchart LR
-    BQ[blocking_queue.hpp] --> AL[async_logger library]
-    AH[async_logger.hpp] --> AL
-    AC[async_logger.cpp] --> AL
-    AL --> AT[async_logger_test executable]
-    GT[GoogleTest] --> AT
-    TH[Threads::Threads] --> AL
+最朴素的 CMake 写法是把两个 `.cpp` 都放进同一个 target：
+
+```cmake
+add_executable(async_logger_test
+    tests/async_logger_test.cpp
+    src/async_logger.cpp
+)
+
+target_include_directories(async_logger_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
 ```
 
-今天仍使用：
+它对应你以前手写的命令：
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j
-cmake -E chdir build ctest --output-on-failure
+g++ -Iinclude \
+    tests/async_logger_test.cpp \
+    src/async_logger.cpp \
+    -o async_logger_test
 ```
 
-不要 `cd build` 后又混用 `./build/...` 的 project-root path。
+CMake 在底下会做：
+
+```text
+tests/async_logger_test.cpp
+-> 编译成 tests 的 object file
+
+src/async_logger.cpp
+-> 编译成 async_logger 的 object file
+
+两个 object file
+-> 链接成 async_logger_test executable
+```
+
+而：
+
+```cmake
+target_include_directories(async_logger_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+```
+
+对应：
+
+```bash
+-Iinclude
+```
+
+它让这两份 `.cpp` 都能写：
+
+```cpp
+#include "async_logger.hpp"
+```
+
+对于你现在的项目，更推荐把 logger 单独做成 library target：
+
+```cmake
+find_package(Threads REQUIRED)
+
+add_library(async_logger
+    src/async_logger.cpp
+)
+
+target_include_directories(async_logger PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(async_logger PUBLIC
+    Threads::Threads
+)
+
+add_executable(async_logger_test
+    tests/async_logger_test.cpp
+)
+
+target_link_libraries(async_logger_test PRIVATE
+    async_logger
+    GTest::GTest
+    GTest::Main
+)
+```
+
+这条关系是：
+
+```text
+src/async_logger.cpp
+-> 编译
+-> async_logger library
+
+tests/async_logger_test.cpp
+-> 编译
+-> async_logger_test executable
+
+async_logger_test
+-> 链接 async_logger library
+-> 因此获得 async_logger.cpp 里函数的 definitions
+```
+
+`PUBLIC` 的意思是：测试程序 link `async_logger` 后，自动继承它的 `include/` 路径和 `Threads::Threads` 依赖。于是测试文件可以直接：
+
+```cpp
+#include "async_logger.hpp"
+```
+
+你不必再给 `async_logger_test` 重复写一次 `include/` 和 pthread。
+
+压缩记忆：
+
+```text
+.hpp：提供 declaration，靠 include path 找到
+.cpp：写进 add_library / add_executable，参与编译
+target_link_libraries：把“函数 definition 在哪里”连接到使用它的 executable
+```
 
 ---
 
@@ -1824,87 +1992,9 @@ assert accepted records are present
 
 ---
 
-## 29. test file 读取与 cleanup
-
-你已经在 Week4 使用过 file input。最小读取 helper 可以：
-
-```text
-open std::ifstream
-while getline succeeds: push line into vector<string>
-return vector
-```
-
-每个 test 使用独立 path，并在开始前删除旧文件。
-
-cleanup 也要考虑 assertion failure。推荐写一个很小的 test-only RAII helper，让 destructor 调 `std::remove(path.c_str())`。这不是 AsyncLogger 的一部分，只是防止 failed test 把旧 output 留给下一次运行。
-
-`std::remove` 最小例子：
-
-```cpp
-#include <cstdio>
-
-int main() {
-    const int result = std::remove("temporary_test.log");
-    (void)result;  // 文件不存在也不影响这个清理示例
-    return 0;
-}
-```
-
-测试不要：
-
-```text
-读取 logger 仍在写的 file 来猜 completion
-多个 tests 共用一个 path
-把上一次残留内容当成本次 output
-只在最后一行手工 remove，导致 ASSERT 提前返回后不 cleanup
-```
-
----
-
-## 30. CMake target requirements
-
-在 Day4 已通过的 `CMakeLists.txt` 上只增加 target delta，不重学 CMake，也不重写整个工程。
-
-`async_logger` library target：
-
-```text
-source: src/async_logger.cpp
-PUBLIC include directory: include/
-PUBLIC C++17 compile feature（public headers 依赖 C++17 BlockingQueue）
-PRIVATE -Wall -Wextra -g compile options
-PUBLIC Threads::Threads（让 static-library consumers 获得真实 link dependency）
-```
-
-`async_logger_test` executable target：
-
-```text
-source: tests/async_logger_test.cpp
-link: async_logger, GTest::GTest, GTest::Main
-gtest_discover_tests
-TIMEOUT 10 or another explicit small bound
-```
-
-为什么 `include/` 对 library 通常是 `PUBLIC`：
-
-```text
-async_logger.cpp needs headers
-test/user including async_logger.hpp also needs the same include directory
-```
-
-Day4 中 thread_pool header-only target 怎样表达，以你的现有 CMake 为准；今天不要为了 logger 大规模重构 ThreadPool build。
-
-这里的 `PUBLIC/PRIVATE` 不是风格装饰：
-
-```text
-consumer 需要知道 include path、C++ standard 和 thread link requirement
-consumer 不需要继承 logger 自己的 warning/debug compile options
-```
-
----
-
 ## 31. 普通构建、定向运行与 TSan
 
-从 canonical project root：
+这里只保留实际执行命令；CMake 关系已经在第 25 节讲清楚。
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
@@ -1912,15 +2002,7 @@ cmake --build build -j
 cmake -E chdir build ctest --output-on-failure
 ```
 
-只运行 AsyncLogger tests：
-
-```bash
-cmake -E chdir build ctest -R AsyncLogger --output-on-failure
-```
-
-若你的 test names/suite names 不包含 `AsyncLogger`，按实际 `ctest -N` 输出调整 regex。
-
-TSan 继续使用 Day4 的 separate build tree：
+TSan 使用独立 build tree：
 
 ```bash
 cmake -S . -B build-tsan \
@@ -1929,143 +2011,6 @@ cmake -S . -B build-tsan \
 cmake --build build-tsan -j
 cmake -E chdir build-tsan ctest -R AsyncLogger --output-on-failure
 ```
-
-今天读 TSan 结果时问：
-
-```text
-是否有 producer 与 writer 对同一 stream/member 的 unsynchronized access？
-是否有 shutdown thread 与 writer 对 write_failed_/thread object 的 race？
-是否有 logger destruction 时 writer 仍访问 members？
-```
-
-TSan clean 仍只表示：
-
-```text
-本次实际执行路径上没有观察到它能报告的 data race
-```
-
-它不能证明 file content、drain policy、ordering contract 或 durability 正确。
-
----
-
-## 32. 常见错误与定位方向
-
-### 32.1 程序卡在 shutdown
-
-先检查：
-
-```text
-是否先 queue.close 再 join
-writer 是否把 nullopt 当作 exit signal
-是否意外复制了另一个 queue
-是否 producer 仍在永久等待一个永不释放的外部 gate
-```
-
-### 32.2 process terminate without normal test failure
-
-先检查：
-
-```text
-thread object destructor 前是否仍 joinable
-writer_loop 是否让 exception 逃出 thread entry
-constructor open failure 后是否已经启动 thread
-```
-
-### 32.3 log returns true but file missing record
-
-先检查：
-
-```text
-shutdown 是否真正 join
-writer 是否在 close 后错误地直接退出而没有 drain
-output 是否在 writer loop 里检查/flush/close
-test 是否在 shutdown 前读取 file
-```
-
-### 32.4 lines duplicated or missing
-
-先检查：
-
-```text
-writer 是否只有一个
-每次 pop 是否只 write 一次
-test IDs 是否真的 unique
-旧 file 是否被 trunc/cleanup
-assertion 是否逐 ID，而不只比较 count
-```
-
-### 32.5 constructor reorder warning
-
-若看到 `-Wreorder`：
-
-```text
-member initialization follows declaration order
-initializer list text order cannot change it
-```
-
-把 member 声明顺序写成真实 dependency order，并让 initializer list 与它一致。
-
-### 32.6 TSan 报 stream race
-
-检查是否：
-
-```text
-owner 在 writer alive 时调用 output_.flush/close
-producer 直接访问 output_
-test 通过 private hack 读取 stream
-writer failure flag 在 join 前被其他 thread 读取
-```
-
----
-
-## 33. 建议实现顺序
-
-```text
-1. 在纸上写 ownership map 与 public contract
-2. 建 async_logger.hpp，只写 interface/member responsibility
-3. 完成 constructor open-before-thread-start
-4. 完成 log delegation
-5. 完成 writer-loop normal drain path
-6. 补 stream failure flag，保证 failure 后仍 drain
-7. 完成 shutdown close-before-join 与 repeated call
-8. destructor 调 final shutdown
-9. 手工最小 main：A/B/C -> shutdown -> read file
-10. 接入 async_logger library target
-11. 写 GoogleTest basic matrix
-12. normal CTest
-13. targeted TSan CTest
-14. 记录真实证据和问题
-```
-
-若第 9 步都不通过，不要先写一大批 tests；先定位最小 lifecycle。
-
----
-
-## 34. `day5_note.md` 建议结构
-
-```markdown
-# Week8 Day5 Note
-
-## 1. AsyncLogger 最终是干什么的
-
-## 2. producer / queue / writer / stream ownership
-
-## 3. log true 的准确含义
-
-## 4. close -> drain -> flush -> close file -> join 流程
-
-## 5. accepted / written / flushed / durable 的区别
-
-## 6. 我定义的 public contract
-
-## 7. basic test / TSan 证据
-
-## 8. 我实际遇到的问题与修复
-
-## 9. Questions
-```
-
-只记录新增机制、真实错误和关键证据。不要把 daily 的术语整段复制过去。
 
 ---
 

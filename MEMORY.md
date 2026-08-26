@@ -3092,7 +3092,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6、Week7 均已正式完成；Week8 Day1、Day2 已正式通过，系统主线下一步进入 Week8 Day3。Day2 最终 ThreadPool 已通过完整 custom tests、100 次重复与 TSan；Day3~Day7 教程已提前生成但尚未验收，不能因为文件已存在而跳过顺序 review。Day1 已证明 callable -> std::function Task -> BlockingQueue -> worker -> result 的完整链路；Day2 已完成 fixed workers、task acceptance、exception isolation、close/drain/join、constructor rollback 与 destructor fallback。用户选择不机械抄写验收题，并允许把测试体力活委托给 Codex，由代码、daily 主动补充和实测证据替代。2026-08-21 用户指出练习教程即使不贴完整代码，也不能在首次 coding 前泄露状态机、竞态和实现职责；Week8 Day2~Day7 已重排为 Round 1 独立 V1、Round 2 对照复盘、Round 3 工程证据，并完成 Round1 文件命名、用途、必要 API 和编译入口的自包含审计。AI Infra 理论伴随线规划已生成，T1 可低强度开始，但不能替代或阻塞系统主线。所有已生成 daily 的后续问题默认在对话中回答；只有用户明确要求回写时才修改 daily。
+当前位置：Week5、Week6、Week7、Week8 均已正式完成，系统主线下一步进入 Week9 epoll/Reactor。Week8 最终产出按用户真实判断定位为“BlockingQueue + ThreadPool + AsyncLogger 组件实现、测试、benchmark 与 integration harness”，不是有真实业务输入的完整小项目；README/interview 包装被用户主动省略，不作为 Week8 通过阻塞项。Day7 fresh normal CTest 18/18、fresh TSan CTest 18/18 通过，component_demo_smoke 已进入 CMake/CTest/TSan target graph，Day7 最终评分 95。用户选择不机械抄写验收题，并允许把测试体力活委托给 Codex，由代码、daily 主动补充和实测证据替代；某一天的核心若正是测试设计，则不能把所有核心 scenarios 都降级为 dirty work。AI Infra 理论伴随线 T1 已生成但尚未开始，不能替代或阻塞系统主线。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 首次正式验收通过后，仍须在同一轮依据真实产出定向修改 R2/R3。
 
 AI Infra 理论伴随线规划（2026-08-21）：
 
@@ -3376,6 +3376,125 @@ Round 1 在 GoogleTest 基础语法后要求用户先从 contract 独立写第�
 教程中的 GoogleTest demo 与 CMake 3.16 FindGTest/gtest_discover_tests 已在 Ubuntu 临时解压 package 环境实测：2 tests 编译运行、CTest discovery 和 exit status 全部通过，临时文件已清理
 ```
 
+Week8 Day4 Round1 首次检阅（2026-08-23）：
+
+```text
+用户已独立完成 tests/thread_pool_test.cpp 第一版与 day4_note.md 的 contract/Arrange/Act/Assert/Cleanup 草稿；没有提前照抄 Round2 的 gate、exactly-once 或 lifecycle 设计
+Ubuntu 按 g++ -std=c++17 -Wall -Wextra -g -pthread 直接构建零 warning；当前 5/5 GoogleTest 通过，exit 0
+Codex 只在 /tmp 中把 int result 的 expected value 从 101 改为 102，目标 test 确实 FAILED 且 binary exit 1，证明 assertion -> process exit status 链真实成立，不是只打印 PASS
+已覆盖 worker_count=0、int result、future exception propagation、post-shutdown immediate rejection、multiple task results
+Round1 最低覆盖尚缺两项：返回 void 的 task；queue_capacity=0 constructor boundary。后者由 BlockingQueue constructor 抛 invalid_argument，但仍需从 ThreadPool public construction path 留一条证据
+day4_note 的 shutdown rejection 一项把 oracle 写成 future.get() 抛 runtime_error；实际 public behavior 和测试代码都是 pool.submit(...) 当场抛 runtime_error，代码正确、笔记需要纠正
+day4_note 还未明确标出第一版 tests 的 evidence gaps；当前 multiple tasks test 能证明最终结果正确，但没有 per-task hit oracle，且不能证明 tasks 是在 shutdown drain 期间才完成。这些属于 Round1 自我审查记录，不要求此时提前实现 Round2 方案
+当前状态：Round1 核心测试链成立，但尚未正式过闸门；补两个很小的最低覆盖并纠正笔记异常位置后复检
+当前评分：88/100
+```
+
+Week8 Day4 Round1 最终复检（2026-08-23）：
+
+```text
+tests/thread_pool_test.cpp 已补 ThreadPool(10, 0) public-construction boundary，确认 queue_capacity=0 抛 invalid_argument
+同一 result test 已补 void callable：任务在 worker 中更新受 shutdown/join 顺序保证的 value，future<void>::get() 正常返回，再断言 value=100
+day4_note 已把 shutdown rejection oracle 从错误的 future.get() 抛异常改为 submit 当场抛 runtime_error
+Ubuntu 规定 g++ 参数重新构建零 warning；5/5 GoogleTest PASS，exit 0
+Round1 最低覆盖完整，正式通过，可以进入 Round2 的 deterministic synchronization、exactly-once oracle 与 cleanup 审查
+非阻塞项：SubmitWithReturnIntValue 现在同时测试 int 与 void，后续整理 suite 时可拆成更精确的 test names；Round1 当前 multiple-task case 只证明最终 results，stronger exactly-once/drain evidence 本来就属于 Round2/3
+Round1 最终评分：94/100
+```
+
+Week8 Day4 CMake 前置补充（2026-08-23）：
+
+```text
+用户在进入 Round2 前指出原第 23、24 节直接从 configure/generate 和 CMake commands 开讲，缺少“CMake 为什么存在、它和 g++/make 是什么关系”的入门模型，且英文工程术语解释不足
+day4.md 第 23、24 节已按用户明确授权重写：从手写 g++ command 中已有的 build knowledge 出发，先串起 source -> object -> link -> executable，再解释 build system 与 cross-platform build-system generator
+新增 CMakeLists.txt、source tree/build tree、out-of-source build、configure/generate/build/test、generator/native build tool/CMakeCache 的责任边界，并逐参数解释 -S/-B/-D/--build/-j/cmake -E chdir/ctest
+读取最小 CMakeLists.txt 前先解释 command、variable、target、dependency、property、usage requirement 与 PRIVATE；随后逐行拆 cmake_minimum_required/project/C++ standard/enable_testing/find_package/add_executable/target_compile_options/target_link_libraries/include(GoogleTest)/gtest_discover_tests
+明确 CMake 不是 compiler、不是 linker、也不等于 make；CMake 生成规则，底层 build tool 调用 g++ 真正编译链接，CTest 运行 registered tests
+保留渐进披露边界：第 24 节仍使用独立 add_test.cpp demo，没有给出第 25 节要求用户独立完成的 ThreadPool 最终 CMakeLists.txt
+已按 CMake 3.16 官方文档核对：当前环境继续使用 GTest::GTest/GTest::Main；较新 GTest::gtest/GTest::gtest_main names 不与 3.16 混写
+```
+
+可复用的工程工具教学原则：
+
+```text
+首次引入 CMake、Make、Ninja、compiler/linker、package manager 等工具时，不能直接从配置语法或命令清单开始
+先从用户已经执行过的手工命令出发，指出其中隐含了哪些 build/dependency knowledge，再说明新工具具体接管了哪一层责任、没有接管哪一层责任
+至少给出“输入文件 -> 当前工具 -> 下游工具 -> 产物”的完整链；明确谁读取谁、谁生成谁、谁真正执行 compiler/linker/test
+工程英文术语第一次出现时仍遵循：英文原词/来源、中文含义、当前上下文作用、与相近概念的边界；特别区分 project/source tree/build tree/target/artifact/dependency/generator/configure/generate/build/test
+配置文件教学先解释最小语法对象和对象关系，再逐行拆完整例子；最后把配置项翻译回用户熟悉的 shell/compiler command，形成双向映射
+排错教学按 configure -> generate -> compile -> link -> test 分层，不把所有错误笼统称作“工具报错”
+```
+
+Week8 Day4 CMake 可运行闭环补充（2026-08-24）：
+
+```text
+用户复读第 23、24 节后仍然云里雾里，指出只有概念和 CMakeLists 片段，没有一个从创建文件、执行命令到观察 output 的完整小例子，也没有通过真实运行说明 CTest 与 GoogleTest 的差别
+教学纠偏：工具机制即使解释准确，只要缺少最小可运行 input -> command -> generated artifact -> output -> failure experiment，用户仍无法建立“它到底能干什么”的操作模型；以后新工程工具必须先跑再抽象，不能只靠术语表和逐行语法
+day4.md 已新增 /tmp/cmake_hello_demo：完整 hello.cpp、CMakeLists.txt、三步 configure/build/run，以及用户 Ubuntu 真实输出；主线明确 CMake 找 compiler、生成 build files，底层 build tool 编译 hello.cpp.o 并链接 hello executable
+day4.md 已新增 /tmp/cmake_gtest_demo：完整 add_test.cpp、CMakeLists.txt、configure/build、直接运行 binary 与 CTest 两种输出
+用户 Ubuntu 2026-08-24 实测环境：GNU C++ 10.5.0；CMake 找到 /usr/lib/x86_64-linux-gnu/libgtest.a；GoogleTest direct binary 2/2 PASS、exit 0；CTest 将两个 discovered GoogleTest cases 分别运行并汇总 2/2 PASS、exit 0
+错误实验已在独立 /tmp source 中实测：把 expected 42 改为 43 后，GoogleTest 输出 actual 42 / expected 43；CTest --output-on-failure 转发该 diagnosis、汇总 1/2 failed，并返回 non-zero（本次为 8，不要求记具体数值）
+责任边界已用真实链路串清：CTest 从进程外调度 registered commands、处理 timeout/汇总；test binary 是真实 executable；GoogleTest 在进程内执行 TEST/EXPECT 并决定 assertion diagnosis 与 process exit status；gtest_discover_tests 是把 GoogleTest test names 注册给 CTest 的桥梁
+用户主动补写的“g++ 命令是什么意思”内容已保留，只修正因新插入实验造成的 23.x 标题顺序；不得在后续生成或整理时覆盖用户有价值的 daily 增补
+```
+
+Week8 Day4 完整验收首次检阅（2026-08-24）：
+
+```text
+用户口头模型正确：CMake 描述/生成 build rules 并调用底层 build tool；CTest 从外部运行、汇总 registered tests；GoogleTest 在 test process 内执行 TEST/assertions 并决定 diagnostic/exit status
+用户实际新增 project-root CMakeLists.txt，已正确设置 CMake 3.16、C++17、Wall/Wextra/g、include path、GTest imported targets、GoogleTest discovery 与每项 TIMEOUT 10；不是只会复述概念
+当前 CMakeLists 尚未直接声明 find_package(Threads REQUIRED) / Threads::Threads，thread dependency 实际经 GTest::GTest 间接带来 -lpthread；compile flags 中没有 -pthread。应让 ThreadPool target 直接声明自己的 dependency，不依赖 test framework 偶然传递
+当前 CMakeLists 没有 ENABLE_TSAN option 或 target compile/link sanitizer flags；Codex 用 direct g++ 临时构建 TSan 通过，只能证明当前 6 tests 已执行路径无 race report，不能算 CMake build-tsan contract 已完成
+当前 tests/thread_pool_test.cpp 有 6 cases：construct boundaries、int result、void result、future exception、post-shutdown rejection、10 task results。CMake configure/build 零 warning，CTest 6/6 PASS、exit 0，fresh-process 50/50 PASS，direct TSan 6/6 PASS、exit 0
+Round1 test quality 正确：void side effect 在 shutdown/join 后读取，无 data race；post-shutdown submit 当场抛 runtime_error；constructor 两个 zero boundaries 均覆盖
+Day4 核心缺口：many-task test 只验证 future results，没有 unique-ID per-task hit oracle；trivial tasks 可能在 shutdown 前完成，不能证明 pending task 被 drain；exception test 没有 later normal task，不能证明同一 pool worker survival；empty std::function regression、deterministic gate、multiple concurrent submitters、destructor-without-explicit-shutdown 均未实现
+day4_note 的 R1 各段核心正确；R2 对 unique ID + N counters + each count==1 的理解正确，但尚未转成代码；note 没有 deterministic drain、normal/repeat/TSan evidence 或能力边界，因此代码/terminal 证据尚不能完全替代缺失笔记
+当前状态：CMake/CTest 集成这一子目标通过；完整 Week8 Day4 暂不通过，停在 Round2/3 补强
+当前评分：72/100
+```
+
+Week8 Day4 完整验收第二次复检（2026-08-24）：
+
+```text
+用户已把 R2/R3 多项设计落实为 tests：many-task unique-ID counters、pending shutdown scenario、empty std::function、multiple concurrent submitters、destructor without explicit shutdown；test count 从 6 增加到 10
+many-task counters 各 task 只写自己的 vector<size_t> element，test thread 在 shutdown/join 与 future.get 后读取；非 vector<bool> 不同 elements 是不同 memory locations，当前写法无 data race，each counter==1 是有效 exactly-once oracle
+multiple submitters 使用 mutex 保护 shared future vector，所有 submitter join 后再 shutdown/get；每个 task 返回 disjoint ID，map count==1，测试正确。destructor test 把 futures 放在 outer scope，pool inner scope 不显式 shutdown，离开 scope 后 get 全部结果，正确验证 destructor drain/join
+pending shutdown test 的状态建立基本正确：capacity=1，第二次 submit B 返回意味着 A 已被 worker 取走且因 gate 阻塞，B pending；helper shutdown 后 C submit 的 runtime_error 证明 close 已线性化；EXPECT_THROW 非 fatal，因此正常路径仍能 release gate/join helper
+pending shutdown test 当前没有 A/B/C hit assertions，只让 B 打印；若错误 implementation 在 close 时丢弃 B 并让 worker exit，helper 仍可 join、整个 test 仍会 PASS。因此 test name 声称 drain 但 oracle 尚未证明 B executed，必须补至少 B count==1，最好 A/B once、C zero
+ordinary exception 与 empty std::function tests 均只检查对应 future 抛出；没有在同一个 pool 再 submit later normal task，因此尚未证明 packaged_task-captured exception 后 worker/pool survival
+CMakeLists 已新增 find_package(Threads REQUIRED)，但 target_link_libraries 仍只有 GTest::GTest/GTest::Main，未链接 Threads::Threads；当前 -lpthread 仍由 GTest imported target 间接带入，ThreadPool target dependency 未闭环
+用 -DENABLE_TSAN=ON configure 时 CMake 明确警告 Manually-specified variables were not used by the project: ENABLE_TSAN，说明 CMake TSan option/compile/link flags 尚未实现；该 build 不是 sanitizer build
+实际验证：CMake configure/build 零 warning；CTest 10/10 PASS、exit 0；fresh-process repeat 50/50 PASS；Codex direct g++ TSan 10/10 PASS、exit 0、无已执行路径 race report
+day4_note R2 的 exactly-once、deterministic drain 因果链与 empty std::function 包装/异常传播解释整体正确；当前仍缺 normal/repeat/TSan command evidence 记录
+当前状态：较首次完整检阅有实质进展，但完整 Day4 暂不通过；只需修正上述四项，不要求重写现有 10-test suite
+当前评分：86/100
+```
+
+Week8 Day4 最终验收（2026-08-24）：
+
+```text
+用户已完成第二次复检剩余四项：deterministic drain test 新增 A/B/C hit flags 并在 helper join 后断言 true/true/false；ordinary exception 与 empty std::function tests 均在同一 pool 再提交正常 task 并验证 future result 2，证明 worker/pool survival
+CMakeLists target_link_libraries 已加入 Threads::Threads；ThreadPool test target 不再只依赖 GTest imported target 间接带入 pthread
+CMakeLists 已加入 ENABLE_TSAN option；ON 时 target compile options 包含 -O1 -fsanitize=thread -fno-omit-frame-pointer，link options 包含 -fsanitize=thread
+Codex 从全新 /tmp build tree 实测 normal configure/build：GNU 10.5.0，Found GTest/Threads，零 warning；CTest 10/10 PASS、exit 0
+fresh-process direct binary repeat 50/50 PASS
+从全新 /tmp build tree 使用 -DENABLE_TSAN=ON configure/build，flags.make 与 link.txt 均实际包含 -fsanitize=thread；TSan CTest 10/10 PASS、exit 0、无 data-race report
+drain hit_flag 的 writes 发生在 worker；test thread 在 helper.join 之后读取，helper 内部已 join workers，当前存在完整 happens-before 链，无 data race。A/B 同一 worker 顺序执行，C 未 accepted
+day4_note 的 R1/R2 各部分已逐项复核：basic contract 正确；unique-ID exactly-once 正确；pending drain 因果链正确；empty std::function 与 no-op lambda/outer wrapper/inner exception propagation 边界正确。normal/repeat/TSan 结果虽未机械复制进 note，但本次 terminal 证据已保存到 MEMORY，不作为重复笔记阻塞项
+最终状态：Week8 Day4 正式通过，可以进入 Week8 Day5 AsyncLogger V1
+最终评分：94/100
+```
+
+可复用的 daily 任务表达经验：
+
+```text
+每日教程在引入 CMake、CTest、TSan 等工程工具时，必须反复标明“今天的核心产出”和“工具只是怎样包装/运行该产出”；否则用户容易把完成 build wrapper 误判为完成 component/test design
+Round3 开头不能只写“补齐工程证据”，要用一句 concrete delta 说明：Round1 已有什么 source，Round2 必须把哪几个 conceptual findings 改成 code，Round3 工具最终运行的是哪份 strengthened suite
+任务清单应按 implementation output 与 execution evidence 分栏，例如 tests/thread_pool_test.cpp 新增 scenarios、CMakeLists 新增 targets/options、commands 产生 normal/repeat/TSan evidence；不能把它们混成一个长 checklist
+用户不机械回答验收题是允许的，但替代证据必须覆盖同一 behavior；运行较弱的 6-test suite 50 次或 TSan clean，不能替代从未编码的 deterministic drain/exactly-once/worker-survival scenarios
+review 时必须分开评价：概念理解、build integration、test scenario strength、dynamic evidence。不能因 CMake/CTest 成功就说整日通过，也不能因测试缺口否定用户已经正确完成的工具集成
+```
+
 Week8 Day5 教程：
 
 ```text
@@ -3396,11 +3515,90 @@ Round 1 只给 program purpose、最小 public contract 与 basic observable sce
 证据限制：向 Ubuntu /tmp 上传临时 reference files 被安全策略阻止，因此不能写成 Ubuntu/TSan 已验证；实际 Day5 学习时仍需在用户 Ubuntu canonical project 运行 normal CTest 与 TSan
 ```
 
+Week8 Day5 Round1 最终验收（2026-08-25）：
+
+```text
+用户已独立写出 include/async_logger.hpp、src/async_logger.cpp 与最小 async_logger_test.cpp；核心结构为 BlockingQueue<string> + one writer thread + ofstream，log 委托 queue.push，shutdown 先 close queue 再 join，destructor 调 shutdown fallback
+首次检阅发现 constructor 在 initializer list 中启动 writer，进入 body 后才检查 output.is_open；open failure 时 body 抛 runtime_error，stack unwinding 析构 joinable thread，实际 probe 得到 terminate called without an active exception / Aborted，因此 R1 当时未通过
+用户随后把 writer 改为先 default-construct，在 constructor body 验证 output open 成功后再作为最后一步启动；同一 open-failure probe 现在正常捕获 runtime_error、exit 0，不再 terminate
+Ubuntu 使用 g++ -std=c++17 -Wall -Wextra -g -pthread 编译零 warning；保存的 GoogleTest 验证 5 条单 producer records、逐次 log true、shutdown true、post-shutdown log false、文件完整顺序与准确行数，1/1 PASS、exit 0
+Codex 临时 public-API harness 额外验证 4 producers x 100 records、capacity=2：400 次全部 accepted，最终文件 400 lines / 400 unique IDs，10 秒 timeout 内 exit 0；无需用户为 R1 再抄一套多 producer tests
+用户 note 对 runtime relative path/current working directory 与 source-file location 的区别理解正确，并补上最终 line count oracle，避免文件少行时逐行 loop 仍假通过、文件多行时先越界
+当前非阻塞清理：async_logger.hpp 尚缺 #pragma once 和直接 <thread> include，当前依赖 BlockingQueue transitive include；constructor 注释“不会再抛异常”不准确，std::thread construction 仍可能抛 system_error，只是该 failure 发生在 writer 成功启动前，unwinding 是安全的；repeated shutdown、stream failure flag、writer-owned flush/close 与完整 CMake/TSan 属于 Round2/3
+最终状态：Week8 Day5 Round1 正式通过，可以阅读 Round2 ownership/lifecycle 复盘
+Round1 最终评分：93/100
+```
+
+Week8 Day5 完整验收首次检阅（2026-08-25）：
+
+```text
+用户已把 R1 版本继续升级：async_logger.hpp 补齐 #pragma once 和直接 <thread>；log 使用 std::move(record) 入队；writer 独占 output write/flush/close；write_failed 由 writer 写、owner 在 join 后读；shutdown 支持顺序重复调用；CMake 增加 async_logger library、GoogleTest discovery、Threads::Threads 与 TSan flags
+Ubuntu fresh Debug build 在 g++ 10.5、C++17、-Wall、-Wextra、-g 下零 warning；AsyncLogger 5/5 CTest 通过；fresh TSan build 的同一 5/5 tests 通过
+现有 tests 覆盖 zero capacity、open failure、single-producer exact order/count、10 producers x 10 unique records exactly once、post-shutdown rejection 和 repeated shutdown
+保存的 suite 尚缺独立 destructor-drain test；Codex 另用 public-API 临时 probe 验证不显式 shutdown 的 scope exit 能写出且只写出 first/second 两行，输出 destructor_drains=1、exit 0，因此 lifecycle behavior 已有动态证据，不要求用户补重复 test。tests 共用 logger_api_demo.txt 且没有 RAII cleanup，仍是非阻塞测试隔离问题
+真实 correctness blocker：writer 每条 output 后检查 stream state，但最终 output.flush() 与 output.close() 后没有再次检查并更新 write_failed；Codex 使用 /dev/full 的 public-API probe 实测 accepted=1、shutdown_ok=1、probe exit 1，证明 buffered write 在 final flush 才失败时 shutdown 会误报成功
+代码注释“write_failed 不是 shared_state”不准确：writer 写、owner 读，因此它确实是跨线程共享状态；当前不需要 mutex/atomic 的原因是 owner 只在 writer.join() 返回后读取，join 建立 completion synchronization
+day5_note 的 runtime relative path、line-count oracle、constructor failure/unwinding 与 joinable-thread terminate 主线正确；R1 设计开头仍保留“先构造 writer 再 queue/output”的旧顺序，应标成初稿或按最终 open-before-thread-start 顺序更新；实际 body assignment 场景中 writer member 已经 default-constructed，若临时 std::thread construction 抛出，member 仍是 non-joinable，并非成员根本不存在
+当前状态：Day5 主线机制和普通路径通过，但完整 Day5 暂不正式通过；只需修复 final flush/close failure accounting 后复检，不要求重写已有 tests
+本次暂定评分：89/100
+```
+
+Week8 Day5 用户增补与 daily/Round 编写经验：
+
+```text
+review daily 时必须先定位首次生成 baseline，再实际 diff 用户改过的 daily；不能只读 note 和 code。把改动按 terminology gap、mechanism gap、API/tool operational gap、task-brief gap 分类，提炼为后续教程规则
+本次用户主动补充 latency、logger-owned、synchronous、business thread、by-value ownership、associated stream buffer、synchronization operation、stream failure state、write_failed/join visibility 与 CMake source/library/link 关系，说明“小英文词”也可能中断机制主线
+以后英文术语是否需要解释，不能只凭作者觉得它简单；先核对 plan/MEMORY、此前 daily/note 和用户真实使用记录。未确认出现过，或虽出现但当前承担新的技术含义时，首次使用就给中文直译、当前作用和一句边界；避免连续堆出一长串未落地英文
+术语解释不必把正文变成字典：优先处理会改变 ownership、lifetime、synchronization、error contract、build/test 操作理解的词；已经稳定使用过的词可直接复用
+本次 by-value 增补总体正确，但措辞应保持精确：std::move 后原 string 是 valid but unspecified state，不保证一定为空；push 拒绝表示 record 未进入 queue/accepted set，不能写成“没有进入 logger”，因为 log parameter 已经构造并进入调用
+Round 教程继续使用 progressive disclosure，但不是只生成 R1：首次生成 daily 时必须把 R1、R2、R3 三部分都完整生成并完成同等质量审计。R1 要自包含且设置阅读闸门；R2/R3 也必须是可直接学习的完整初版，不能只留目标、标题或占位符
+R1 正式验收通过后，Codex 在同一轮必须先综合用户真实 code、note、daily 修改、对话问题、个人想法、设计取舍、走过的弯路和动态测试证据，再主动定向修改/润色该 daily 已有的 R2/R3。这个动作是 R1 验收流程的一部分，不需要用户额外下达“修改 R2”指令
+R2 的价值是对照用户 V1 暴露出的真实 ownership/state/race/error-path，而不是预制一份所有人相同的坑点清单。若 R1 已正确解决某项，R2 应压缩重复内容并明确确认；若 R1 暴露新问题或形成独特实现，R2 应围绕它展开因果链、最小反例、替代设计和修正目标；R3 的 tests/tooling/final evidence 也要同步贴合用户当前实现
+初次生成完整 R2/R3 与验收后针对性重写并不矛盾：前者保证 daily 从一开始就是完整教程，后者把通用初版校准为用户专属版本。修改时保留用户已经补写的有价值内容，不擅自改变 week.md/总规划主线
+R1 正式通过后定向更新后续 Round 是 daily 默认冻结规则的明确例外；普通侧边问答仍不自动回写。若 R1 尚未通过，先指出 blocker 并复检，不能提前把未通过实现当作后续教学基线
+```
+
+Week8 Day5 最终复检（2026-08-25）：
+
+```text
+用户在 writer loop 结束处补齐 output.flush() 后和 output.close() 后的 stream-state 检查；任一步失败都会令 write_failed=true，shutdown 在 join 后返回 false
+原错误注释“write_failed 不是 shared state”已修正为：只有 writer 写，owner 只在 writer join 后读，因此不需要 mutex；该解释准确表达了 shared state 与 join completion synchronization
+重新从 fresh Debug build 增量编译零 warning，AsyncLogger CTest 5/5 PASS
+重新构建 ENABLE_TSAN=ON build，AsyncLogger TSan CTest 5/5 PASS、无已执行路径 data-race report
+重新编译 /dev/full public-API probe：accepted=1、shutdown_ok=0、exit 0；与首次 probe 的 shutdown_ok=1 形成直接前后对照，证明 final buffered flush failure 现在会被报告
+此前临时 destructor probe 已证明 scope exit 不显式 shutdown 时仍 drain exact first/second records，保存 suite 中缺少同名 test 不再阻塞 Day5
+最终状态：Week8 Day5 正式通过，可以进入 Week8 Day6
+最终评分：94/100
+```
+
+Week8 Day5 教程密度复盘与精简（2026-08-25）：
+
+```text
+用户完整学习后指出，原 daily 虽然技术上较完整，但明显过度防御：作者反复担心用户犯错，把许多已在 BlockingQueue/ThreadPool 中讲过的等待、close/push 交错、lifetime 警告和错误排查再次展开，导致主线“又臭又长”
+用户实际跳过：原第 12 节 queue full 谁在等、原第 23 节 log/shutdown 交错、原第 29~32 节 cleanup/CMake requirements/TSan 解释/错误定位；原第 33 节建议实现顺序和第 34 节 note 模板没有价值。single writer 第 13 节只需一句带过；shutdown 第 21 节只需完整因果链，不需要链后再逐点告诫
+用户认为原第 20 节一边声称“不提供完整答案”，一边把 writer loop 的完整 algorithm 写完，属于形式上的独立练习、实质上的答案泄露。以后判断是否泄露不能只看有没有完整 C++ source；成员职责、顺序、分支和错误策略若已完整排列，同样等于把设计写出来
+用户亲自补强的 flush/durability 第 16 节和 CMake 第 25 节保留；V1 不做什么、Round3 final checklist、basic tests、通过标准等用户未点名内容也保留。精简不是把 daily 全面缩短，而是删除不产生新认知的重复防错说明
+day5.md 已按反馈定向修改：删除 queue-full 重复手推；single writer 压成 ownership 核心；writer loop 改为对用户真实 R1 的短复检；shutdown 只留完整主体链；log/shutdown 交错改为一句复用 BlockingQueue contract；保留 header/source 主体并删除 final2 劝阻；删除 test cleanup、重复 CMake target requirements、常见错误百科、建议实现顺序和 note 模板；normal/TSan 仅保留可执行命令
+```
+
+可复用的 daily 密度与防错原则：
+
+```text
+不要把 daily 写成“预防用户犯下所有可能错误”的手册。教程的首要职责是让核心机制形成连续主线；边界提醒只在它改变当前 contract、会造成隐蔽 UB/deadlock/data loss，或是用户真实实现已经踩到时展开
+每个章节必须回答“它相对前几天和本文前面新增了什么”。如果只是把已通过组件的同一 wait/notify、close/push linearization 或 lifetime 规则换一个名词再讲，应压成一句复用关系或直接删除
+完整因果链已经能表达执行主体、顺序和状态变化时，不要在链前后再用多组 warning、case 和“不要这样做”重复同一结论。只为链上真正新出现或易误读的节点补注
+“不给完整代码”不等于保留独立设计空间。若教程给齐 members、职责、algorithm order、branch behavior、failure policy 和 checklist，用户仍只剩翻译成语法。R1 前必须留下真实设计空间；R1 通过后的 R2 可以对照用户现有代码讨论差异，但不要假装仍在让用户独立发现
+错误列表、排错树、cleanup 强化、建议实现顺序、note 模板默认不进入每个 daily。真实错误出现时在侧边对话按输出定位；只有当天主题本身是 testing/debugging/tooling，或这些内容是完成任务所必需，才进入正文
+用户已掌握的 CMake/CTest/TSan 等工具，后续 daily 默认只给当天 target delta 和实际命令，不重复解释完整机制；新工具首次出现仍必须保留最小可运行闭环
+边界内容集中到一个短 contract/停止边界区域，不要散布在每节末尾反复提醒。语气上信任用户会独立设计和在出错后提问，不以“不要、不能、务必”堆叠制造阅读负担
+精简时遵守用户的精确范围：点名删除/压缩的才动，没提到的内容默认保留；尤其保留用户自己补写并验证有用的解释
+```
+
 Week8 Day6 教程：
 
 ```text
 路径：C:\Users\FxorG\Desktop\gpt_infra\week8\day6\day6.md
-生成状态：提前生成，Day1~Day5 尚未验收，不得据此跳过顺序学习和 review
+生成状态：已根据 Day5 最终实现、用户阅读反馈和最新 daily 密度原则完成第二版润色；Day5 已通过，下一步从 Day6 Round1 顺序学习
 主题：把 Day5 AsyncLogger 的 backpressure、shutdown overlap、drain/flush/join 与 runtime sink failure 变成可信 evidence，再进行 sync/async buffered file logging benchmark
 连续性：继续使用同一份 canonical AsyncLogger 和 Day5 tests；只在 tests 暴露真实 implementation bug 时改 logger source，不复制 v2/final/day6 implementation
 backpressure 边界：queue capacity 限制 backlog，不等于提高 single-writer throughput；small-capacity timing 只作 observation，不把固定毫秒 threshold 当 correctness assertion；Week7 已验证 queue full/close/wakeup，logger 层验证 accepted/rejected/file accounting
@@ -3413,8 +3611,12 @@ benchmark fairness：same pre-generated lvalue records、same newline/open/final
 C++17 start gate：producer arrive_and_wait，owner wait_until_all_ready 后才记录 begin/open gate，避免把不一致的 thread startup 混入 timed region
 benchmark evidence：1 warm-up + 5 measured repetitions、raw samples、median/min/max、每 case output validation、记录 VM/CPU/compiler/commit/record size/count/producers/capacity；TSan build 只做 race evidence，不参与性能比较
 停止边界：不新增 public runtime flush、fsync durability、drop policy、rotation、lock-free queue、Google Benchmark dependency、p95/p99、CPU affinity 或 perf/flame graph
-Round 1 要求先独立设计 lifecycle tests、sync/async benchmark 边界并取得首份结果；完整因果链、oracle、timer boundary、algorithm checklist 和 failure diagnosis 作为 Round 2/3 复盘材料
-技术核对：steady_clock/flush 依据 C++ working draft；/dev/full runtime no-space behavior 依据 Linux full(4)；Google Benchmark official guide 只参考 warm-up/repetition/context 方法，不新增依赖；未写入教程的 C++17 StartGate + steady_clock reference 已在本地 MinGW g++ 8.1.0 下用 -Wall -Wextra -g -pthread 零 warning 编译运行
+Round 1 要求先独立设计一版 shutdown-overlap evidence 与 sync/async benchmark V1，已有明确文件名、程序用途、observable success、steady_clock/ifstream 最小 API、optimized compile command 和阅读闸门；不提供 test synchronization 或 benchmark function 的完整组合实现
+Round 2 只保留两个核心模型：accepted/rejected/file oracle 与 submission/end-to-end timer boundary。复用 Week7 queue contract 和 Day5 lifecycle，不再重复 queue-full 逐分支推演、object-lifetime 警告、close-wakeup 教程或常见错误清单
+Round 3 保持完整但收敛为真实增量：只新增 AccountsForConcurrentShutdown 与 /dev/full regression 两项 tests；benchmark 补 fairness、capacity matrix、warm-up/5 samples、median/range、output validation、CMake target delta 与运行命令；删除 algorithm implementation checklist、排错树、建议实现顺序和 note 模板
+Day5 的真实实现已经进入教程：normal/TSan 5/5、destructor drain、/dev/full 从 shutdown_ok=1 到 0 的修复前后证据；Day6 把该 bug 变成 regression，而不是重新讲一遍 write_failed 机制
+篇幅从 2223 行压缩到约 1044 行；精简目标不是追求短，而是让每节只承载一个新增量。三个 Part 与 R1/R2/R3 均完整保留，不因压缩降级教程标准
+技术核对：steady_clock/flush 依据 C++ working draft；/dev/full runtime no-space behavior依据 Linux full(4)；TSan 只提供 race evidence，Release benchmark 才用于 timing；sync/async 使用同一批 lvalue records，AsyncLogger by-value handoff cost 保留在 submission timer 内
 ```
 
 Week8 Day7 教程：
@@ -3829,3 +4031,107 @@ Ubuntu 源码未改变；再次验证规定参数零 warning、100 次无延迟�
 用户确认 producer delay / blocked waiter 观察已经实际完成，最终源码只是把 sleep 注释掉；不要求为了留下最终代码形态重复实验
 Week5 总机制图由用户主动省略：Day1~Day7 已逐日建立并串通完整流程，重复绘图不再作为 Week5 出口阻塞项
 ```
+
+---
+
+Week8 Day6 Round1 正式验收（2026-08-26）：
+
+```text
+用户产出两条主线：submit/shutdown AccountingTest，以及 sync/async AsyncLogger benchmark；不能只验 benchmark 而遗漏 accounting evidence
+benchmark 已从 ThreadPool task 包装重写为直接 std::thread producers，按连续区间覆盖 records；sync 分支先 join producers 再 flush/close，修复了上一版 output 与 worker 并发 close/write 的错误
+AccountingTest 使用 unique producer/log ID、atomic accepted/rejected counts 与 per-ID vis；执行 logger.shutdown 后再 pool.shutdown，保证全部 log attempts 完成后才读取 counters/file
+Codex 动态验证：normal CTest 6/6；原测试曾在重复第 20 次暴露 94/100，修复后 AccountingTest repeated 500/500；TSan CTest 6/6 且无 report
+R1 benchmark validation 已从 line count 提升为每个 expected ID exactly once；R2 仍需补 distinct-ID count 排除 unexpected lines，并检查 normal log rejection 与 shutdown status
+day6_note 中“sync submission time=end-to-end time”不严格：producer calls 全部返回是 submission end，ofstream 最终 flush/close 才是 end-to-end end；二者可能接近但受用户态 buffering 影响不能语义等同，已在定向 R2 中纠偏
+当前 VM 为 8 vCPUs；100/1000 producers 属于 contention stress，不作为常规 baseline。3,000,000 records、1000 producers、capacity 1,000,000 下 async 约 10 s、sync 约 0.5 s，说明 queue mutex/backpressure/thread scheduling 可超过 buffered ofstream 成本，不代表 AsyncLogger 必然有吞吐优势
+当前 R1 timer 包含 output/logger construction 和 producer thread creation，准确属于 whole-case setup + submission measurement；R2 已定向要求 objects/threads ready 后通过 StartGate 建立共同起点，并以 1/4 producers 为主 matrix
+新增 async_logger_bench 后，全量 build-tsan 暴露链接配置缺口：async_logger static library 被 instrument，但 benchmark 未链接 -fsanitize=thread，产生 undefined reference to __tsan_*；R3 已定向补 benchmark target 的 compile/link sanitizer options
+Day6 R1 正式通过；day6.md R2/R3 已依照真实代码、笔记、动态失败/修复证据完成定向润色，下一步进入 R2
+```
+
+---
+
+Week8 Day6 最终验收（2026-08-26）：
+
+```text
+Day6 已正式完成，最终评分 92/100，下一步进入 Week8 Day7
+
+最终 benchmark 已具备：warmup、5 次采样、median/min/max、records/s、submission 与 end-to-end 两类计时、逐 ID exactly-once 校验
+同步与异步 benchmark 都使用 start gate；计时起点位于 gate release 之前，并使用 notify_all 唤醒 producers
+两处 producer 在 cv.wait 返回后都会释放 gate mutex，再进入实际 logging loop；多 producer 不再被 gate mutex 串行化
+normal log rejection 与 AsyncLogger::shutdown failure 都会使 benchmark 返回失败，不再静默产生无效样本
+AccountingTest 已覆盖 accepted/rejected/file 三方守恒，并用唯一 ID 检查写入记录
+/dev/full 回归测试验证 writer I/O failure 能被 shutdown 返回值暴露
+
+最终动态证据：
+normal build + CTest：17/17 passed
+TSan full build：成功
+TSan AsyncLogger tests：7/7 passed，无 data-race report
+此前 AccountingTest 重复运行 500 次全部通过
+
+本日最重要的工程收获：benchmark 必须先证明测量对象、并发起点和结果校验都有效；异步方案不保证单机吞吐一定更快，它主要把调用线程的等待从磁盘写入路径转移到排队和后台消费路径，实际收益取决于 workload、backpressure、锁竞争和 I/O 行为。
+```
+
+---
+
+Week8 Day7 教程重构经验（2026-08-26）：
+
+~~~text
+出口整合日也必须只有一条核心主线。本次 Day7 固定为：tasks depend on logger -> ownership/borrow -> lifetime -> pool-first/logger-second shutdown -> two-channel oracle -> README/interview/evidence；不能把同一关系拆成几十个重复小节。
+术语部分保留逐个解释，不退化成过短表格；但只保留理解主线所需的 component、integration、dependency、ownership/borrow、lifetime、composition root、self-validating、reproducible/evidence。
+Round1 必须自包含：给 component_demo.cpp 的名称、用途、输入、输出、最小 contract、summary、CMake target 和首条 build/run command；同时把声明顺序、shutdown order、future observation 和 cleanup design 留给用户独立决定。
+Round2 只串完整机制和真实边界：四类关系、reverse destruction、完整 shutdown 因果链、closed logger 与 destroyed logger 的不同后果、future exception cleanup、跨两个 bounded queues 的 backpressure、future/file 两条 oracle。不要围绕每个可能错误重复多遍“不要这样做”。
+Round3 只要求把真实 R1 打磨为 canonical demo、README、interview 和 final evidence；Day4~Day6 已保存的 tests、repeat、TSan、benchmark 可以复用，不为了形式重复 dirty work。
+README 负责让别人复现，interview.md 负责解释设计取舍；验收主要从代码和项目文档读取，不强制把相同答案再抄进 note。
+新 executable 接入 sanitizer 时必须审计整个 target graph：若 async_logger static library 被 -fsanitize=thread instrument，component_demo 也必须链接 TSan runtime。
+Day7 从约 52 KB、58 个编号标题压缩为约 23 KB、28 个主标题；压缩是删除重复提醒、排错百科和机械 checklist，不是删除主线、术语、完整因果链、R1 开工信息或工程验证入口。
+R1 首次正式验收后，仍须根据用户真实代码、note、设计和问题再次修改 R2/R3；当前通用版本不是最终针对性教程。
+~~~
+
+---
+
+Week8 Day7 Round1 首次检阅（2026-08-26）：
+
+~~~text
+用户已独立实现 Ubuntu canonical demos/component_demo.cpp：提交 100 个 tasks，每项返回自己的 ID 并向 AsyncLogger 写入唯一 record；随后 pool.shutdown、logger.shutdown，再通过 futures 与 final file map 验证结果。核心“先结束 log producers，再结束 logger consumer”由用户自己在 dya7_note.md 中正确梳理。
+fresh Debug CMake configure/build component_demo 成功，-Wall -Wextra 无 warning；运行输出 PASS、exit 0；component_demo.log 为 100 行，所有 unique records 计数均为 1；fresh binary 连续运行 100/100 通过。
+当前最重要的 blocker 是 declaration order：work 中先声明 ThreadPool pool，再声明 AsyncLogger logger。显式正常路径虽然先 shutdown pool，但异常离开 scope 时会先析构 logger、后析构 pool；若部分 tasks 已捕获 logger 引用，存在 dangling borrow 风险。应改为 logger first、pool second，让 reverse destruction 与 dependency 一致。
+component_demo.cpp 直接使用 vector、future、ifstream，却只通过 thread_pool.hpp/async_logger.hpp 的 transitive includes 获得 declarations；应直接 include vector、future、fstream。当前能编译不代表 include dependency 清楚。
+task 忽略 logger.log 的 bool 返回；当前 final file exactly-once oracle 会把 rejected/missing record 变成 failure，因此 R1 correctness 仍有间接覆盖。Round2 可根据用户偏好决定是否让 task outcome 同时携带 log_accepted，不强迫重复实现一套计数。
+Windows day7/README.md 已有三段最小草稿，dya7_note.md 已有正确 R1 主线；文件名 dya7_note.md 拼写颠倒。Ubuntu project-root README.md 与 interview.md 当前均不存在，R1 文档入口尚未完整迁入 canonical project。
+component_demo 尚未加入 CMake ENABLE_TSAN branch。fresh TSan configure 后，component target 链接 instrumented libasync_logger.a 时复现大量 undefined reference to __tsan_*，链接失败；这是 R1 通过后定向 R2/R3 必须补的 target-graph 问题，不把它误判成 source data race。
+当前不要求增加更多重复 tests。R1 暂不正式通过；最小收口为：修正 logger/pool 声明顺序、补 direct includes，并把 README/interview 最小草稿放到 Ubuntu project root。TSan target 接线可在进入 Round3 时完成。
+当前评分：84/100。
+~~~
+
+---
+
+Week8 Day7 Round1 最终复检（2026-08-26）：
+
+~~~text
+用户已把 AsyncLogger 声明移动到 ThreadPool 之前，并在代码中准确解释 reverse destruction：异常离开时先析构 pool、结束所有 tasks，再析构 logger。tasks 对 logger 的 borrow lifetime 现已闭环。
+component_demo.cpp 已直接 include vector、future、fstream，不再依赖 canonical component headers 的 transitive includes。
+fresh Debug CMake configure/build component_demo 再次成功，-Wall -Wextra 零 warning；normal run PASS、exit 0；fresh binary repeat 100/100 PASS。
+用户选择把 Ubuntu project-root README/interview 留到 Round3 完成，不再用文档位置反向阻塞 R1 component code；Windows README/dya7_note 先作为草稿素材。
+R1 正式通过，评分 94/100，当前进入 Day7 Round2。
+day7.md R2/R3 已依据真实 R1 定向修改：明确当前 logger-first/pool-second、pool.shutdown -> logger.shutdown -> validate 顺序，解释 validate-after-cleanup 的优点，逐条拆 futures[i].get 与 map<string,count> exactly-once oracle，并保留忽略 log bool 但由 final file/shutdown status 间接覆盖的真实边界。
+Round3 不要求重写 component algorithm；只剩 component_demo_smoke、component_demo 的 ENABLE_TSAN compile/link options、canonical README/interview 与 final fresh verification。当前 TSan link failure 已作为真实 CMake target-graph delta 写入教程。
+~~~
+
+---
+
+Week8 Day7 与 Week8 最终验收（2026-08-26）：
+
+~~~text
+用户最终把 Day7 准确定位为 component integration harness，而不是“真正的小项目”：tasks 只是 deterministic inputs，没有真实业务入口，因此不写完整 README/interview，不为简历强行包装。这一 scope 判断合理，README/interview 不再作为通过条件；未来出现 HTTP server、Mini Redis 等真实工作流后再做项目表达。
+最终 component_demo 使用 canonical ThreadPool/AsyncLogger：logger first、pool second；100 个 tasks 各返回 ID 并记录 "task: ID"；pool.shutdown -> logger.shutdown -> validate；future results exact，final file map 验证所有 expected IDs exactly once。
+validate 已补 future.get exception catch；发生 task exception 时返回 false，main 最终 non-zero。logger shutdown false 也直接使 integration failure；两个 background lifecycles 都在 validate 前结束。
+CMake 已注册 component_demo_smoke，并设置 TIMEOUT 20；component_demo 已加入 ENABLE_TSAN compile/link options，修复此前 instrumented async_logger static library 链接时的 __tsan_* undefined references。
+用户在 day7.md 中主动补充 GoogleTest、CTest、smoke test 的职责区分：GoogleTest 在 test process 内提供 TEST/assertions；CTest 从进程外运行和汇总 registered tests；smoke test 是覆盖主要组合路径的一类测试目的。解释正确。对 component_demo.log 并行路径冲突的说明也正确。
+Codex fresh /tmp Debug configure/build：所有 targets 构建成功，-Wall/-Wextra 无新增 warning；normal CTest 18/18 PASS，其中 component_demo_smoke PASS。
+Codex fresh /tmp ENABLE_TSAN configure/build：全量 target graph 构建成功；TSan CTest 18/18 PASS，无已执行路径 data-race report。
+此前 R1 fresh component binary repeat 100/100 PASS，final output 100 lines 且 unique counts 均为 1；不要求再次重复。
+day7_note 简短但覆盖核心 shutdown/validation 设计及 reverse-destruction 修正；用户不机械回答验收题，代码、CMake、动态证据和 daily 主动补充足以替代。
+非阻塞改进：validate 未显式区分 input open failure 的 diagnostic；logger.log bool 未单独保存在 task outcome 中，而由 final file exactness 间接覆盖；component_demo target include directory 使用 PUBLIC 而 PRIVATE 更贴合 executable 无 consumers 的语义。这些不影响当前 correctness。
+Day7 正式通过，最终评分 95/100；Week8 正式通过。
+~~~

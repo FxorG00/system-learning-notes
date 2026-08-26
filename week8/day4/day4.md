@@ -569,6 +569,163 @@ GoogleTest 不会自动扫描你磁盘上的所有 `.cpp`。只有被编译进�
 
 ---
 
+## 6.1 具体 complie 流程
+
+`TEST(...)` 不是编译器原生认识的语法。它本质是一个 C++ 宏；你看到“没有 `main`”，是因为 `main` 来自你链接的 `gtest_main` 库。
+
+假设你写：
+
+```cpp
+#include <gtest/gtest.h>
+
+TEST(ThreadPoolTest, ReturnsSubmittedValue) {
+    EXPECT_EQ(1 + 1, 2);
+}
+```
+
+构建过程可以这样看：
+
+```text
+thread_pool_test.cpp
+    |
+    | 1. 预处理
+    v
+展开 #include <gtest/gtest.h>
+展开 TEST(...) 宏
+    |
+    | 2. 编译
+    v
+thread_pool_test.o
+    |
+    | 3. 链接
+    +--> gtest 库：GoogleTest 框架实现
+    +--> gtest_main 库：普通的 main()
+    v
+thread_pool_tests 可执行文件
+```
+
+### 1. 预处理：把 `TEST` 变成普通 C++
+
+预处理器会先处理：
+
+```cpp
+#include <gtest/gtest.h>
+TEST(ThreadPoolTest, ReturnsSubmittedValue) { ... }
+```
+
+`TEST` 大致会展开成这些东西：
+
+```cpp
+class ThreadPoolTest_ReturnsSubmittedValue_Test : public ::testing::Test {
+public:
+    void TestBody();
+};
+
+// 创建一个静态注册对象：程序启动时把这个测试登记到 GoogleTest registry
+static /* 某个注册对象 */ registration(...);
+
+void ThreadPoolTest_ReturnsSubmittedValue_Test::TestBody() {
+    EXPECT_EQ(1 + 1, 2);
+}
+```
+
+不必记住真实生成的长名字。重点是：
+
+```text
+TEST 宏
+= 定义一个“测试类 + 测试函数”
++ 创建一个静态注册对象
+```
+
+所以不是 GoogleTest 在磁盘上搜索 `TEST`；而是这份 `.cpp` 被编译进程序后，里面的静态注册代码在程序启动时运行，把测试登记进去。
+
+### 2. 编译：每个 `.cpp` 各自变成 `.o`
+
+编译器此时看到的已经是宏展开后的普通 C++。
+
+```text
+thread_pool_test.cpp
+-> thread_pool_test.o
+```
+
+这个 `.o` 里有你的测试函数，也有“向 GoogleTest 注册测试”的代码；但它还缺少 GoogleTest 框架本身的实现，也没有 `main`。
+
+仅仅生成 `.o` 时，暂时没有 `main` 并不报错。因为“最终程序必须有 `main`”是链接阶段才检查的事。
+
+### 3. 链接：`gtest_main` 把 `main()` 提供出来
+
+如果 CMake 写的是：
+
+```cmake
+target_link_libraries(thread_pool_tests
+    PRIVATE
+    GTest::gtest_main
+)
+```
+
+可以粗略理解为链接器把这些拼成一个程序：
+
+```text
+你的 thread_pool_test.o
++ GoogleTest 框架实现
++ GoogleTest 提供的 main()
+= thread_pool_tests
+```
+
+`gtest_main` 内部大致就是：
+
+```cpp
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
+```
+
+因此运行你的测试二进制时，实际链路是：
+
+```text
+gtest_main 的 main()
+    ->
+InitGoogleTest()
+    ->
+RUN_ALL_TESTS()
+    ->
+从 registry 取出已注册的 TEST
+    ->
+依次执行测试函数中的断言
+    ->
+打印摘要并返回状态码
+```
+
+程序启动时的一个细节是：
+
+```text
+静态注册对象的构造
+    ->
+gtest_main::main()
+    ->
+RUN_ALL_TESTS()
+```
+
+也就是说，`main()` 开始前，你写的 `TEST` 已经登记好了。
+
+最后记住这个分工就够了：
+
+```text
+#include <gtest/gtest.h>
+    = 让当前 .cpp 看见 TEST / EXPECT_EQ 等声明和宏
+
+GTest::gtest
+    = GoogleTest 测试框架实现
+
+GTest::gtest_main
+    = GoogleTest 额外提供的 main()
+```
+
+如果某天你想自己写 `main()`，就链接 `GTest::gtest`，不要再链接 `GTest::gtest_main`，否则会出现两个 `main` 的链接错误。
+
+---
+
 ## 7. 你的 Ubuntu 当前环境
 
 本教程生成时已通过 SSH 实际检查：
@@ -813,33 +970,55 @@ EXPECT_EQ(values.front(), 42);
 
 如果 vector 为空还继续 `front()`，行为无效，所以前置条件失败后不应继续。
 
+---
+
 ### 11.2 concurrency test 的 cleanup 风险
 
-假设 tasks 正在等待 `release == true`，测试中途：
+这里的 `gate` 就是测试人为设置的“闸门”，不是 C++ 特殊语法。
+
+例如 worker 里的任务先报告“我已经启动”，然后故意卡在这里：
 
 ```cpp
-ASSERT_EQ(started, worker_count);
+gate.wait_until([] {
+    return release == true;
+});
 ```
 
-若 assertion 失败，当前 test function 立即返回。接下来 local objects 开始析构；若 ThreadPool destructor 等待仍被 gate 挡住的 tasks，而 test 已经跳过 release，就可能卡住。
+含义是：`release` 还是 `false` 时，任务不继续执行；测试线程把它改成 `true` 后，任务才会通过闸门、结束。
 
-所以并发 lifecycle test 要先设计：
+这段测试本来想验证：所有 worker 都确实启动并被卡住了。
 
 ```text
-无论 assertion 是否通过，谁负责 release gate
-谁 join helper thread
-谁让 pool 能正常 shutdown
+测试线程提交 N 个任务
+    ->
+每个任务 started++
+    ->
+每个任务等待 release == true
+    ->
+测试线程断言 started == worker_count
 ```
 
-当前建议：
+危险发生在断言失败时：
 
 ```text
-先建立和记录 actual state
-确保所有 gates released、threads joined、pool 可析构
-再做不会破坏 cleanup 的 assertions
+ASSERT_EQ(started, worker_count) 失败
+    ->
+ASSERT 是致命断言，当前测试函数立刻 return
+    ->
+后面的 release = true; 没有执行
+    ->
+局部 ThreadPool 开始析构
+    ->
+析构函数等待 worker 结束（join）
+    ->
+worker 仍在等待 release == true，但是让 release=true 的代码不会被执行！
+    ->
+没人再能打开闸门，测试卡死
 ```
 
-不要因为 `ASSERT_*` 看起来“更严格”就全部替换 `EXPECT_*`。
+所以这里的核心不是“断言错了”本身，而是：**任务能否结束，依赖于写在 `ASSERT` 后面的清理代码。** 一旦 `ASSERT` 提前返回，那段清理代码就消失了。
+
+并发生命周期测试要先保证：即使中途任何断言失败，所有被测试代码里的等待者也一定能被放行。否则失败用例会把测试进程挂住，反而看不到真正的失败信息。
 
 ---
 
@@ -1374,41 +1553,607 @@ both return normally
 
 ---
 
-## 23. 最小 CMake 主线
+## 23. 从零开始：CMake 是干什么的
 
-CMake 分成三个阶段：
+### 23.1 先亲手跑一个最小 CMake project
+
+先不背术语。这个实验只完成一件事：让 CMake 帮你把 `hello.cpp` 变成 executable。
+
+在 Ubuntu 中创建一个不污染 repository 的临时目录：
+
+```bash
+mkdir -p /tmp/cmake_hello_demo
+cd /tmp/cmake_hello_demo
+```
+
+目录中只放两个文件：
 
 ```text
-configure/generate
+/tmp/cmake_hello_demo/
+├── CMakeLists.txt
+└── hello.cpp
+```
+
+`hello.cpp`：
+
+```cpp
+#include <iostream>
+
+int main() {
+    std::cout << "hello from CMake\n";
+    return 0;
+}
+```
+
+`CMakeLists.txt`：
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+
+project(hello_cmake LANGUAGES CXX)
+
+add_executable(hello hello.cpp)
+
+target_compile_features(hello PRIVATE cxx_std_17)
+target_compile_options(hello PRIVATE -Wall -Wextra -g)
+```
+
+先不用理解每行语法。现在只按这个粗略映射读：
+
+```text
+project(...)
+    这是一个 C++ project
+
+add_executable(hello hello.cpp)
+    用 hello.cpp 生成一个叫 hello 的 executable target
+
+target_compile_features(... cxx_std_17)
+    hello 需要 C++17 language feature level
+
+target_compile_options(...)
+    编译 hello 时使用 -Wall -Wextra -g
+```
+
+运行三步：
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j
+./build/hello
+echo $?
+```
+
+下面是 2026-08-24 在你的 Ubuntu 上对这两个文件的真实运行结果：
+
+```text
+-- The CXX compiler identification is GNU 10.5.0
+-- Check for working CXX compiler: /usr/bin/c++ -- works
+-- Detecting CXX compile features - done
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /tmp/.../hello/build
+
+[ 50%] Building CXX object CMakeFiles/hello.dir/hello.cpp.o
+[100%] Linking CXX executable hello
+[100%] Built target hello
+
+hello from CMake
+program_exit=0
+```
+
+路径中间部分可能与你手动实验时不同，百分比也不值得背。只看发生了什么：
+
+```text
+CMake 找到 /usr/bin/c++
+-> 读取 CMakeLists.txt
+-> 在 build/ 生成底层 build files
+-> build 阶段把 hello.cpp 编译成 hello.cpp.o
+-> link 阶段生成 hello executable
+-> shell 运行 ./build/hello
+```
+
+因此，CMake 最直观的作用就是：
+
+> 你在 `CMakeLists.txt` 中描述 target 与构建要求；CMake 替底层 build tool 生成规则，不再要求你每次手写完整 `g++` command。
+
+先暂时忘掉 CMake，回到你刚才实际使用的命令：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -g -pthread \
+  -Iinclude tests/thread_pool_test.cpp \
+  -lgtest_main -lgtest \
+  -o build/thread_pool_test
+```
+
+这条命令把一整套 **build knowledge** 写在 shell 中：
+
+```text
+使用哪个 C++ standard
+哪些 .cpp 是 source files
+去哪里找 headers
+打开哪些 warnings
+链接哪些 libraries
+最后生成哪个 executable
+```
+
+`build` 在这里不是简单的“编译”二字，而是把 source code 变成最终 artifact 的完整过程：
+
+```text
+.cpp source file
+    |
+    | preprocess + compile
+    v
+.o object file
+    |
+    | link with other .o files and libraries
+    v
+executable binary
+```
+
+术语：
+
+```text
+source file：源文件，例如 thread_pool_test.cpp
+object file：目标文件，例如 thread_pool_test.o；已有 machine code，但通常还不是完整程序
+link：链接，把 object files 与 libraries 组合起来并解析符号引用
+executable：可执行文件，例如 build/thread_pool_test
+artifact：构建产物的泛称，可以是 executable、library 等
+```
+
+当前只有一个 `.cpp` 时，手写一条 `g++` command 很自然。但项目扩大后，命令会开始承担很多重复工作：
+
+```text
+哪个 .cpp 依赖哪个 header？
+只修改一个文件时，哪些 object files 需要重新编译？
+test target 和 benchmark target 分别链接什么？
+Linux 用 Makefiles，另一台机器用 Ninja 或 Visual Studio 时怎么办？
+GoogleTest 和 Threads 去哪里找？
+```
+
+这正是 build system 要管理的问题。
+
+### 23.2 这行 `g++` 命令是什么意思
+
+这条命令是“一次完成预处理、编译、链接”，最后生成一个可运行的 GoogleTest 测试程序：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -g -pthread \
+  -Iinclude tests/thread_pool_test.cpp \
+  -lgtest_main -lgtest \
+  -o build/thread_pool_test
+```
+
+```text
+g++
+```
+
+调用 GNU C++ 编译器驱动。因为这次没有加 `-c`，它不仅会编译 `.cpp`，还会在最后执行链接。
+
+```text
+-std=c++17
+```
+
+按 C++17 规则编译。比如 `std::optional`、`if constexpr` 等 C++17 特性才可用。
+
+```text
+-Wall -Wextra
+```
+
+开启常见警告和额外警告。它们不阻止编译，但会提醒可疑代码。
+
+```text
+-g
+```
+
+在二进制里保留调试信息，方便 `gdb` 看到源文件、行号、局部变量。不会改变程序逻辑。
+
+```text
+-pthread
+```
+
+启用 POSIX 线程支持。它不只是“链接 pthread 库”，还会让编译阶段使用正确的线程相关配置；用 `std::thread`、`mutex`、`condition_variable` 时应该加它。
+
+```text
+-Iinclude
+```
+
+添加头文件搜索目录。
+
+因此代码里：
+
+```cpp
+#include "thread_pool.hpp"
+```
+
+编译器会去当前目录以及 `include/` 下寻找，例如：
+
+```text
+include/thread_pool.hpp
+```
+
+```text
+tests/thread_pool_test.cpp
+```
+
+本次要编译的测试源文件。它经过预处理和编译后，会产生一个临时的目标文件，概念上像：
+
+```text
+tests/thread_pool_test.o
+```
+
+```text
+-lgtest_main
+```
+
+链接 `libgtest_main` 库。它提供 GoogleTest 的默认 `main()`：
+
+```cpp
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
+```
+
+所以你的测试源文件不需要自己写 `main`。
+
+```text
+-lgtest
+```
+
+链接 GoogleTest 框架本体：测试 registry、`EXPECT_EQ`、`ASSERT_EQ`、测试运行与报告等实现都在这里。
+
+`-l名字` 的意思是让链接器寻找类似下面的库文件：
+
+```text
+lib名字.so
+lib名字.a
+```
+
+所以：
+
+```text
+-lgtest_main -> libgtest_main.so / libgtest_main.a
+-lgtest      -> libgtest.so / libgtest.a
+```
+
+```text
+-o build/thread_pool_test
+```
+
+指定最终生成的可执行文件路径与名称：
+
+```text
+build/thread_pool_test
+```
+
+之后直接运行：
+
+```bash
+./build/thread_pool_test
+```
+
+最后，命令末尾每行的 `\` 是 Bash 的“续行符”，表示这条命令还没结束，下一行继续。它必须是该行最后一个字符，后面不能有空格。实际输入时用单个反斜杠：
+
+```bash
+-pthread \
+```
+
+不是两个 `\\`；你看到的双反斜杠多半只是 Markdown 转义后的显示效果。
+
+---
+
+### 23.2.1 新增：-l 负责 link 阶段
+
+对，完全是 linker 阶段的事。
+
+```text
+tests/thread_pool_test.cpp
+    |
+    | compile
+    v
+tests/thread_pool_test.o
+    |
+    | link
+    +--> -lgtest_main
+    +--> -lgtest
+    v
+thread_pool_test 可执行文件
+```
+
+`-lgtest_main` 的意思是链接名为 `gtest_main` 的库。Linux 上 linker 会去库搜索路径中找类似：
+
+```text
+libgtest_main.so
+或
+libgtest_main.a
+```
+
+它主要提供默认的 `main()`：
+
+```cpp
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
+```
+
+而 `-lgtest` 链接的是 GoogleTest 的核心实现库，例如：
+
+```text
+TEST 注册机制
+::testing::Test
+EXPECT_EQ / EXPECT_THROW 等 assertion 的实现
+InitGoogleTest()
+RUN_ALL_TESTS()
+测试执行、失败信息汇总
+```
+
+所以关系是：
+
+```text
+thread_pool_test.o
+    里面有你的 TEST(...) 展开后的测试代码
+    也引用了 GoogleTest 的功能
+    但没有 main()
+
+libgtest_main
+    提供 main()
+    main() 又会调用 GoogleTest 核心功能
+
+libgtest
+    提供真正的 GoogleTest framework 实现
+```
+
+`g++` 在这条命令里既是编译器 driver，也是 linker driver：它会在 link 阶段替你调用真正的 linker。通常你不直接手写 `ld`。
+
+顺序也有意义，尤其链接静态库时：
+
+```bash
+g++ tests/thread_pool_test.o -lgtest_main -lgtest -o thread_pool_test
+```
+
+前面的对象或库提出“我需要某个符号”，后面的库负责提供它。这里 `gtest_main` 的 `main()` 又需要 `gtest` 的核心实现，所以 `-lgtest_main -lgtest` 这个顺序是合理的。
+
+---
+
+### 23.3 build system 与 CMake 的关系
+
+`build system`：构建系统。
+
+它保存并执行这些规则：
+
+```text
+source files -> targets 的关系
+target 之间的 dependencies
+compiler/linker options
+哪些文件变化后需要重新 build
+```
+
+GNU Make + Makefile、Ninja、Visual Studio project 都可以充当真正执行 build rules 的系统。
+
+`CMake` 是 **cross-platform build-system generator**：跨平台构建系统生成器。
+
+`generator` 原意是“生成器”。它在这里表示 CMake 可以根据同一份 `CMakeLists.txt`，为不同底层工具生成 build files：
+
+```text
+                         +--> Unix Makefiles --> make
+CMakeLists.txt --> CMake +--> Ninja files -----> ninja
+                         +--> VS project -------> Visual Studio build
+```
+
+因此必须分清：
+
+```text
+CMake 不是 C++ compiler
+CMake 不代替 g++ 生成 machine code
+CMake 也不等于 make
+
+CMake 读取项目描述
+-> 生成底层 build system 所需的文件
+-> 底层 build tool 再调用 compiler 和 linker
+```
+
+在你的 Ubuntu 默认环境中，常见链路是：
+
+```text
+CMakeLists.txt
+-> cmake 生成 Unix Makefiles
+-> cmake --build 调用 make
+-> make 根据规则调用 g++
+-> g++ 编译、链接
+-> thread_pool_test
+```
+
+`cmake --build` 的价值在于：你不必关心当前 generator 背后究竟是 `make` 还是 `ninja`，CMake 会调用对应的 native build tool。
+
+---
+
+### 23.3.1 必看：把 CMake,Makefile,make 串起来
+
+对，你这条链基本理解对了。只需要补一个小边界：
+
+```text
+Makefile
+    = 保存构建规则的文件
+
+GNU Make / make
+    = 读取并执行 Makefile 规则的程序
+
+两者合起来
+    = 一个基于 Make 的 build system
+```
+
+在你当前 Ubuntu 的 CMake 流程里，大概是：
+
+```text
+CMakeLists.txt
+    |
+    | cmake configure/generate
+    v
+Makefile + CMakeFiles/ 中的辅助规则
+    |
+    | cmake --build build
+    v
+make
+    |
+    | 检查哪些 target 依赖哪些 source/header
+    | 判断哪些文件更新过、哪些需要重编译
+    v
+g++ 编译 .cpp -> .o
+    |
+    v
+g++ 作为 linker driver 链接 .o + gtest libraries
+    |
+    v
+thread_pool_test
+```
+
+所以你说的：
+
+> Makefile 保存 `source files -> target`、依赖、编译选项等规则；`make` 根据它调用 `g++`
+
+是正确的。
+
+再精确一点，`Makefile` 主要写的是“某个 target 依赖什么、该怎么生成”；`make` 会根据文件时间戳判断是否需要执行规则。例如只改了 `tests/thread_pool_test.cpp`，它通常只会重新编译这个 `.cpp`，然后重新链接，不会无缘无故重新编译所有文件。
+
+而 CMake 的位置是更上一层：它替你生成适合当前平台的 Makefile。换到 Ninja，仍是同一份 `CMakeLists.txt`，只是生成的底层规则文件变成 `build.ninja`，然后由 `ninja` 去调用 `g++`。
+
+---
+
+### 23.4 `CMakeLists.txt` 是什么
+
+`CMakeLists.txt` 是 CMake project 的描述文件。
+
+它不是 C++ source，也不是最终 Makefile。它表达的是较高层的关系：
+
+```text
+我要一个叫 add_test 的 executable target
+它由 add_test.cpp 构成
+它使用 C++17
+它要链接 GoogleTest
+它应该被 CTest 发现
+```
+
+CMake 再把这些关系翻译成当前机器能执行的 build rules。
+
+### 23.5 source tree 与 build tree
+
+`tree` 在这里指 directory tree，即“目录树”。
+
+今天的 project root 可以先想成：
+
+```text
+week8/
+├── CMakeLists.txt
+├── include/
+│   ├── blocking_queue.hpp
+│   └── thread_pool.hpp
+├── tests/
+│   └── thread_pool_test.cpp
+└── build/                    configure 后产生
+    ├── CMakeCache.txt
+    ├── Makefile
+    ├── CMakeFiles/
+    └── thread_pool_test      build 后产生
+```
+
+两个术语：
+
+```text
+source tree：源码目录树；包含 CMakeLists.txt、.cpp、.hpp
+build tree：构建目录树；包含 CMake cache、generated build files、object files、executables
+```
+
+把 `build/` 单独放在 source tree 下面但不与源码混杂，称为 **out-of-source build**：源码目录外构建。
+
+这里的 “out of source” 不是说 `build/` 必须跑到整个 repository 外面，而是说 generated files 不直接散落在源码文件之间。这样需要清理构建产物时，只处理 `build/`，源码仍然清楚。
+
+### 23.6 四个阶段各是谁在工作
+
+今天完整链路是：
+
+```text
+configure
+-> generate
 -> build
 -> test
 ```
 
-### 23.1 configure/generate
+#### 1. configure：配置
+
+CMake 读取 `CMakeLists.txt`，识别当前环境：
+
+```text
+找到哪个 C++ compiler
+compiler 支持什么能力
+GoogleTest / Threads 等 dependencies 能否找到
+用户传入了哪些 configuration values
+```
+
+`dependency`：依赖项。当前项目需要、但不是当前 `.cpp` 自己实现的组件，例如 GoogleTest 和 pthread support。
+
+CMake 还会在 build tree 中写入 `CMakeCache.txt`。`cache` 原意是缓存；这里保存本次 build tree 的 compiler path、package path、build type 等配置，后续重新运行 CMake 时可以复用。
+
+#### 2. generate：生成
+
+CMake 根据 configure 得到的信息，为当前 generator 生成 build files。例如 Unix Makefiles generator 会生成 `Makefile`。
+
+命令：
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 ```
 
-参数：
+这一次 `cmake` invocation 通常连续完成 configure 和 generate，所以 terminal 中会看到类似：
 
 ```text
--S .：source tree 在当前目录
--B build：generated build tree 放入 build/
--DCMAKE_BUILD_TYPE=Debug：当前单配置 generator 使用 Debug flags
+Configuring done
+Generating done
 ```
 
-这一步读取 `CMakeLists.txt`，检查 dependency，并生成 build files；它通常不等于已经编译完 executable。
+参数逐个读：
 
-### 23.2 build
+```text
+-S .
+    S = source；source tree 是当前目录 .
+
+-B build
+    B = build；build tree 使用当前目录下的 build/
+    build/ 不存在时，CMake 会创建它
+
+-DNAME=value
+    D = define；为 CMake cache variable 提供值
+
+-DCMAKE_BUILD_TYPE=Debug
+    把 CMAKE_BUILD_TYPE 设为 Debug
+    当前 Unix Makefiles 是 single-configuration generator，因此在 configure 时选择 build type
+```
+
+`configuration` 在这里表示一组构建配置，例如：
+
+```text
+Debug：便于调试，通常保留 debug information
+Release：偏向优化后的发布构建
+```
+
+这一步生成 build rules，通常还没有生成最终 executable。
+
+#### 3. build：构建
 
 ```bash
 cmake --build build -j
 ```
 
-作用：使用上一步生成的 build system 编译和链接 targets。
+逐个读：
 
-### 23.3 test
+```text
+--build build：构建已经生成在 build/ 中的 build system
+-j：parallel jobs；允许底层 build tool 并行执行多个可并行的编译任务
+```
+
+此时才会真正调用底层 build tool、compiler 和 linker，最终产生 `build/thread_pool_test`。
+
+#### 4. test：测试
 
 从 project root 使用：
 
@@ -1416,28 +2161,128 @@ cmake --build build -j
 cmake -E chdir build ctest --output-on-failure
 ```
 
-`cmake -E chdir build ...` 表示让 CMake 先把该 command 的 working directory 切到 `build/`，再执行后面的 `ctest`；command 结束后，不会改变你当前 interactive shell 的目录。这样后续 `./build/thread_pool_test` 仍明确以 project root 为起点。
+逐个读：
 
-`--output-on-failure`：通过时保持简洁，失败时显示 test output。
+```text
+cmake -E
+    E = command mode；使用 CMake 提供的跨平台小工具命令
 
-也可以直接运行 binary：
+chdir build
+    change directory；只让后面的 command 在 build/ 中运行
+
+ctest
+    CMake 配套的 test runner；运行注册到当前 build tree 的 tests
+
+--output-on-failure
+    test 通过时保持摘要简洁，失败时显示其 output
+```
+
+这个 command 结束后，你当前 interactive shell 的 working directory 没有永久改变。
+
+也可以直接运行 test binary：
 
 ```bash
 ./build/thread_pool_test
 ```
 
-二者作用不同：
+二者责任不同：
 
 ```text
-direct binary：查看 GoogleTest 原生运行与 flags
-CTest：统一调用 registered tests，并处理 timeout/汇总
+direct binary
+    直接运行 GoogleTest program
+    适合看 GoogleTest 原生 test list、filter 和详细 output
+
+CTest
+    统一运行 CMake project 中 registered tests
+    负责汇总、timeout 与 external test exit status
 ```
+
+把本节压缩成一句话：
+
+> `CMakeLists.txt` 描述要构建什么，CMake 生成怎样构建的规则，底层 build tool 调用 `g++` 真正编译链接，CTest 再运行已注册的测试。
 
 ---
 
-## 24. CMake directives 的最小例子
+## 24. 从零读一份最小 `CMakeLists.txt`
 
-下面是独立 `add_test.cpp` demo 的完整 CMake，不是 ThreadPool 最终答案。
+在看完整文件前，先认识 CMake 中最常见的五个对象。
+
+### 24.1 command：命令
+
+CMake 官方通常把下面这种写法称为 `command`：
+
+```cmake
+add_executable(add_test add_test.cpp)
+```
+
+也有资料口语上称为 directive，意思都是“给 CMake 的指令”。今天统一按官方术语叫 command。
+
+基本语法是：
+
+```text
+command_name(argument1 argument2 ...)
+```
+
+它不是 C++ function call，也不使用分号结尾。
+
+### 24.2 variable：变量
+
+```cmake
+set(CMAKE_CXX_STANDARD 17)
+```
+
+`variable` 就是变量。这里把 CMake variable `CMAKE_CXX_STANDARD` 设置为 `17`。
+
+`CMAKE_` 开头通常表示 CMake 自己定义或约定的变量；不要把它理解为 C++ global variable，它只在 CMake 配置项目时起作用。
+
+### 24.3 target：构建目标
+
+`target` 原意是目标。在 build system 中，它是一个带名字的构建节点，例如：
+
+```text
+executable target：最终生成可执行文件
+library target：最终生成库，或表达一个库组件
+```
+
+```cmake
+add_executable(add_test add_test.cpp)
+```
+
+这行创建名为 `add_test` 的 executable target。后续可以继续把 compile options、include directories 和 linked libraries 附着到这个 target 上。
+
+注意区分：
+
+```text
+add_test：CMake 中的 target name
+build/add_test：最终可能生成的 executable path
+add_test.cpp：构成 target 的 source file
+```
+
+### 24.4 dependency：依赖关系
+
+如果 `add_test` 使用 GoogleTest，就存在：
+
+```text
+add_test target -> depends on GoogleTest libraries
+```
+
+build system 根据 dependency 决定构建顺序，并把正确的 include/link information 交给 compiler 和 linker。
+
+### 24.5 property 与 usage requirement
+
+`property`：属性。例如一个 target 使用哪个 C++ standard、有哪些 compile options。
+
+`usage requirement`：使用要求。它描述“别的 target 使用我时，还必须继承什么”。这会影响后面的 `PRIVATE / PUBLIC / INTERFACE`。
+
+今天只需要先记住：
+
+```text
+PRIVATE
+    只用于当前 target 自己
+    不向依赖当前 target 的其他 target 传播
+```
+
+现在看完整最小例子。它构建独立的 `add_test.cpp` demo，不是 ThreadPool 最终答案：
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
@@ -1471,23 +2316,271 @@ gtest_discover_tests(add_test
 )
 ```
 
-### 24.1 `cmake_minimum_required`
+### 24.6 把 GoogleTest demo 真正交给 CMake 和 CTest
+
+前面的 `CMakeLists.txt` 单独看仍然很抽象。现在把它与第 8 节的 C++ test source 放进同一个临时 project，完整运行一次。
+
+目录：
+
+```text
+/tmp/cmake_gtest_demo/
+├── CMakeLists.txt
+└── add_test.cpp
+```
+
+`add_test.cpp`：
+
+```cpp
+#include <gtest/gtest.h>
+
+int add(int left, int right) {
+    return left + right;
+}
+
+TEST(AddTest, ReturnsSumOfTwoPositiveValues) {
+    EXPECT_EQ(add(20, 22), 42);
+}
+
+TEST(AddTest, ResultCanBeComparedAsBooleanCondition) {
+    EXPECT_TRUE(add(1, 1) == 2);
+    EXPECT_FALSE(add(1, 1) == 3);
+}
+```
+
+`CMakeLists.txt` 就使用上面的最小版本。然后运行：
+
+```bash
+cd /tmp/cmake_gtest_demo
+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j
+```
+
+2026-08-24 在你的 Ubuntu 上真实得到的 configure/build 关键输出是：
+
+```text
+-- The CXX compiler identification is GNU 10.5.0
+-- Found GTest: /usr/lib/x86_64-linux-gnu/libgtest.a
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /tmp/.../gtest/build
+
+[ 50%] Building CXX object CMakeFiles/add_test.dir/add_test.cpp.o
+[100%] Linking CXX executable add_test
+[100%] Built target add_test
+```
+
+这一步证明：
+
+```text
+find_package 找到了 Ubuntu 已安装的 GoogleTest
+add_test.cpp 被编译成 object file
+object file 与 GoogleTest libraries 被链接成 build/add_test
+```
+
+#### 运行方式 A：直接运行 GoogleTest binary
+
+```bash
+./build/add_test
+echo $?
+```
+
+真实输出：
+
+```text
+Running main() from .../gtest_main.cc
+[==========] Running 2 tests from 1 test suite.
+[----------] 2 tests from AddTest
+[ RUN      ] AddTest.ReturnsSumOfTwoPositiveValues
+[       OK ] AddTest.ReturnsSumOfTwoPositiveValues (0 ms)
+[ RUN      ] AddTest.ResultCanBeComparedAsBooleanCondition
+[       OK ] AddTest.ResultCanBeComparedAsBooleanCondition (0 ms)
+[----------] 2 tests from AddTest (0 ms total)
+[==========] 2 tests from 1 test suite ran. (0 ms total)
+[  PASSED  ] 2 tests.
+direct_exit=0
+```
+
+这里真正认识 `TEST`、执行 `EXPECT_EQ`、打印 actual/expected 的是 **GoogleTest framework**。
+
+执行主体是一个普通 process：
+
+```text
+shell
+-> 启动 build/add_test executable
+-> gtest_main::main()
+-> RUN_ALL_TESTS()
+-> 运行两个 TEST bodies
+-> GoogleTest 根据 assertions 决定 binary exit status
+```
+
+#### 运行方式 B：让 CTest 调用 tests
+
+```bash
+cmake -E chdir build ctest --output-on-failure
+echo $?
+```
+
+真实输出：
+
+```text
+Test project /tmp/.../gtest/build
+    Start 1: AddTest.ReturnsSumOfTwoPositiveValues
+1/2 Test #1: AddTest.ReturnsSumOfTwoPositiveValues ...........   Passed
+    Start 2: AddTest.ResultCanBeComparedAsBooleanCondition
+2/2 Test #2: AddTest.ResultCanBeComparedAsBooleanCondition ...   Passed
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) = 0.00 sec
+ctest_exit=0
+```
+
+注意这次默认没有重复显示所有 GoogleTest `[ RUN ] / [ OK ]` 细节。CTest 只显示它从外面观察到的执行与汇总结果。
+
+### 24.7 GoogleTest、test binary、CTest 到底差在哪
+
+先看结论表：
+
+| 对象 | 它是什么 | 当前负责什么 | 它不知道什么 |
+|---|---|---|---|
+| GoogleTest | 链接进 C++ test binary 的 testing framework | 提供 `TEST`、`EXPECT_*`，执行 assertions，产生诊断和 exit status | 不负责配置整个 project，也不替你构建所有 targets |
+| `build/add_test` | 真正可执行的 test program/process | 包含你的 test code、GoogleTest framework 和 `gtest_main` | 不负责统一寻找其他 test executables |
+| CTest | CMake 配套的 external test runner | 启动 registered test commands，观察 exit/timeout，汇总多个 tests | 不理解 `EXPECT_EQ` 的 C++ 语义，不判断 `42` 为什么正确 |
+
+完整调用链：
+
+```text
+CTest
+    |
+    | 根据 CMake 注册的信息启动 command
+    v
+build/add_test --gtest_filter=某个测试名
+    |
+    | 进程内部由 GoogleTest 工作
+    v
+TEST body -> EXPECT_EQ / EXPECT_TRUE
+    |
+    v
+GoogleTest 打印 assertion diagnosis 并设置 process exit status
+    |
+    v
+CTest 从进程外看到 Passed / Failed / Timeout，再做总汇
+```
+
+为什么 CTest 能看到两个 GoogleTest cases，而不只是一个 `add_test` executable？桥梁就是：
+
+```cmake
+include(GoogleTest)
+gtest_discover_tests(add_test PROPERTIES TIMEOUT 10)
+```
+
+`gtest_discover_tests` 使用 GoogleTest binary 的 test-listing 能力取得 test names，再把每个名字注册成 CTest 能分别调用的 test。
+
+所以准确分工是：
+
+```text
+GoogleTest 决定一个 C++ behavior 是否符合 assertion
+CTest 负责从外面调度、限时并汇总这些 test executions
+```
+
+### 24.8 故意失败一次，观察两层怎样配合
+
+把第一个 test 临时改成错误答案：
+
+```cpp
+EXPECT_EQ(add(20, 22), 43);
+```
+
+重新 build 并运行 CTest：
+
+```bash
+cmake --build build -j
+cmake -E chdir build ctest --output-on-failure
+echo $?
+```
+
+在你的 Ubuntu 上实测，关键输出是：
+
+```text
+Start 1: AddTest.ReturnsSumOfTwoPositiveValues
+1/2 Test #1: AddTest.ReturnsSumOfTwoPositiveValues ... ***Failed
+
+add_test.cpp:8: Failure
+Expected equality of these values:
+  add(20, 22)
+    Which is: 42
+  43
+[  FAILED  ] AddTest.ReturnsSumOfTwoPositiveValues
+
+Start 2: AddTest.ResultCanBeComparedAsBooleanCondition
+2/2 Test #2: AddTest.ResultCanBeComparedAsBooleanCondition ... Passed
+
+50% tests passed, 1 tests failed out of 2
+The following tests FAILED:
+    1 - AddTest.ReturnsSumOfTwoPositiveValues (Failed)
+failure_ctest_exit=8
+```
+
+这里可以清楚分层：
+
+```text
+GoogleTest
+    知道 add(20, 22) actual 是 42、expected 是 43
+    打印具体 assertion failure
+    让 test process 返回 non-zero
+
+CTest
+    不会自己计算 20 + 22
+    只发现这个 registered test command 失败
+    因为使用 --output-on-failure，所以把 GoogleTest 的 failure output 展示出来
+    汇总为 1/2 failed，并且自己也返回 non-zero
+```
+
+`failure_ctest_exit=8` 是这次 CTest 实测的 non-zero value。今天不要背数字 `8`；contract 只是：
+
+```text
+全部 tests 通过 -> CTest exit 0
+至少一个 failure/timeout -> CTest exit non-zero
+```
+
+完成错误实验后，把 expected 恢复成 `42`，重新 build/test，确保回到全绿状态。
+
+下面按照 CMake 实际读取顺序拆开。
+
+### 24.9 `cmake_minimum_required`
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 ```
 
-声明本项目至少需要哪个 CMake version，并选择相应 policy behavior。这里与 Ubuntu 实测 `3.16.3` 对齐。
+逐词理解：
 
-### 24.2 `project`
+```text
+minimum：最低
+required：要求
+VERSION 3.16：最低支持 CMake 3.16
+```
+
+它声明最低 CMake version，并选择对应的 policy behavior。`policy` 是 CMake 对历史行为兼容规则的称呼。
+
+这里的 `3.16` 是 **CMake version**，不是 C++17，也不是 GCC version；它与你 Ubuntu 上的 CMake 3.16.3 对齐。
+
+### 24.10 `project`
 
 ```cmake
 project(gtest_minimal LANGUAGES CXX)
 ```
 
-声明 project name 与使用 C++ language。
+```text
+gtest_minimal：project name
+LANGUAGES：本 project 启用哪些 programming languages
+CXX：C++；CMake 用 CXX 表示 C++ compiler/toolchain
+```
 
-### 24.3 C++ standard
+执行到这里时，CMake 会为 C++ language 检测 compiler 等环境信息。
+
+### 24.11 C++ standard variables
 
 ```cmake
 set(CMAKE_CXX_STANDARD 17)
@@ -1495,33 +2588,93 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 ```
 
-当前含义：要求 C++17，不允许静默降级，不依赖 GNU-only language extensions。
+当前含义：
 
-### 24.4 `find_package`
+```text
+CMAKE_CXX_STANDARD 17
+    要求 target 使用 C++17 language level
+
+CMAKE_CXX_STANDARD_REQUIRED ON
+    REQUIRED = 必须满足；不能找不到 C++17 后静默降级
+
+CMAKE_CXX_EXTENSIONS OFF
+    EXTENSIONS = 编译器扩展
+    OFF 表示不要依赖 GNU-only language extensions，倾向使用 -std=c++17 而不是 -std=gnu++17
+```
+
+`ON / OFF` 是 CMake 常用 boolean values，即布尔开关。
+
+### 24.12 `enable_testing`
+
+```cmake
+enable_testing()
+```
+
+作用：为当前 project/build tree 启用 CTest support，使后续注册的 tests 能被 `ctest` 发现。
+
+它不会自动扫描你的 C++ `TEST(...)`，也不会自动运行 test binary。它只是打开 CMake/CTest 这条能力链。
+
+### 24.13 `find_package`
 
 ```cmake
 find_package(GTest REQUIRED)
 ```
 
-让 CMake 查找已安装 GoogleTest。`REQUIRED` 表示找不到就让 configure 明确失败，而不是后面在 include/link 阶段给更难读的错误。
+逐词理解：
 
-### 24.5 `add_executable`
+```text
+find：查找
+package：一个可被项目复用的外部软件包或依赖
+GTest：要查找 GoogleTest
+REQUIRED：找不到就让 configure 失败
+```
+
+为什么要在 configure 阶段失败？
+
+```text
+找不到 GoogleTest
+-> 现在就给出 dependency error
+-> 不要等到 compilation/linking 才出现更绕的 header 或 undefined-reference error
+```
+
+成功后，CMake 3.16 的 `FindGTest` module 会提供后面使用的 imported targets。
+
+### 24.14 `add_executable`
 
 ```cmake
 add_executable(add_test add_test.cpp)
 ```
 
-创建 executable target，并列出 source files。
+含义：创建 executable target `add_test`，其 source list 目前只有 `add_test.cpp`。
 
-### 24.6 `target_compile_options`
+这行在 configure 阶段只是建立 build graph 中的 target/source relationship，不是立刻执行：
 
-```cmake
-target_compile_options(add_test PRIVATE -Wall -Wextra -g)
+```bash
+g++ add_test.cpp -o add_test
 ```
 
-只把 warning/debug options 附着到 `add_test` target。`PRIVATE` 表示这些 options 不作为使用要求传播给依赖当前 target 的其他 targets。
+真正的 compilation 发生在后面的 `cmake --build build`。
 
-### 24.7 `target_link_libraries`
+### 24.15 `target_compile_options`
+
+```cmake
+target_compile_options(add_test PRIVATE
+    -Wall
+    -Wextra
+    -g
+)
+```
+
+```text
+target：把设置附着到某个 target
+compile options：传给 compiler 的编译选项
+add_test：被设置的 target
+PRIVATE：这些 options 只属于 add_test 自己
+```
+
+CMake 生成 build rules 时，会把这些 options 放进编译 `add_test.cpp` 的 compiler command。
+
+### 24.16 `target_link_libraries` 与 imported target
 
 ```cmake
 target_link_libraries(add_test PRIVATE
@@ -1530,25 +2683,121 @@ target_link_libraries(add_test PRIVATE
 )
 ```
 
-当前 CMake 3.16 `FindGTest` 提供的 imported target names 是：
+`target_link_libraries`：声明当前 target 链接或依赖哪些 library targets。
+
+当前 CMake 3.16 `FindGTest` 提供：
 
 ```text
-GTest::GTest：GoogleTest framework library
-GTest::Main：GoogleTest 提供的 main
+GTest::GTest
+    GoogleTest framework library
+
+GTest::Main
+    GoogleTest 提供的 main() library
 ```
 
-较新资料常出现 `GTest::gtest` / `GTest::gtest_main`；那是较新 CMake/package configuration 中的 names。今天按你的实际 CMake 3.16 环境使用旧 names，不把两个版本混写。
+`GTest::GTest` 这种名字称为 **imported target**：导入目标。
 
-### 24.8 `gtest_discover_tests`
+```text
+imported
+    表示它不是当前 project 用 source files 现场构建的 target
+    而是 CMake 找到的外部 dependency 所对应的 target
+```
+
+名字中的 `::` 常用来表示 namespace-like ownership：它提醒你这是 GTest package 提供的 target，而不是当前项目随手创建的普通 target。
+
+imported target 的价值是：它不只是一个 library filename，还可以携带 include directories、library location 和其他 usage requirements。你因此不必在 `CMakeLists.txt` 中手写 `/usr/lib/.../libgtest.a` 之类的机器相关路径。
+
+较新 CMake 资料常出现 `GTest::gtest` / `GTest::gtest_main`。这些新 names 在 CMake 3.20 才加入；你的 CMake 3.16 环境使用 `GTest::GTest` / `GTest::Main`，不要混写版本。
+
+### 24.17 `include(GoogleTest)` 不是 C++ `#include`
 
 ```cmake
 include(GoogleTest)
-gtest_discover_tests(add_test PROPERTIES TIMEOUT 10)
 ```
 
-作用：build 后运行 test binary 的 test-listing mode，发现其中注册的 GoogleTest tests，并分别注册给 CTest。
+作用：让当前 `CMakeLists.txt` 加载 CMake 自带的 `GoogleTest` module，于是后面可以调用该 module 定义的 `gtest_discover_tests` command。
 
-`TIMEOUT 10` 是每个 discovered CTest test 的 timeout property。它让 hang 最终成为 failure，而不是让终端永久等待。
+它和：
+
+```cpp
+#include <gtest/gtest.h>
+```
+
+不是同一阶段：
+
+```text
+CMake include(GoogleTest)
+    configure 阶段加载 CMake module
+
+C++ #include <gtest/gtest.h>
+    preprocess 阶段把 C++ declarations/macros 引入 translation unit
+```
+
+### 24.18 `gtest_discover_tests`
+
+```cmake
+gtest_discover_tests(add_test
+    PROPERTIES TIMEOUT 10
+)
+```
+
+`discover`：发现。这个 command 会利用 build 后的 GoogleTest binary 列出其中注册的 tests，并分别注册给 CTest。
+
+```text
+add_test：要检查的 GoogleTest executable target
+PROPERTIES：为 discovered CTest tests 设置属性
+TIMEOUT 10：每项 test 最多运行 10 seconds
+```
+
+如果某个并发 test hang：
+
+```text
+test 没有自行结束
+-> 10 seconds 到达
+-> CTest 把它判为 timeout failure
+-> 整次 test run 不会永久卡住
+```
+
+### 24.19 把 CMake commands 翻译回你熟悉的 `g++`
+
+这些 CMake commands 最终共同提供原先手写给 `g++` 的信息：
+
+```text
+add_executable
+    -> 哪些 source files 要编译，生成哪个 executable target
+
+target_compile_options
+    -> -Wall -Wextra -g
+
+set(CMAKE_CXX_STANDARD 17)
+    -> C++17 standard requirement
+
+target_link_libraries
+    -> 需要链接 GoogleTest framework 与 gtest_main
+```
+
+CMake 不保证最终 command text 与你手写的命令逐字符相同，但它表达的是同一类 build requirements。
+
+### 24.20 出错时先判断在哪个阶段
+
+```text
+configure error
+    常见原因：CMakeLists command/argument 错误、compiler/package 找不到
+
+generate error
+    常见原因：target relationship 无法生成，例如引用不存在的 target
+
+build compile error
+    某个 .cpp 无法编译，例如 syntax/type/header 问题
+
+build link error
+    object files 无法组成程序，例如 undefined reference 或 duplicate symbol
+
+test failure
+    executable 已经构建成功，但 assertion failure、uncaught exception、non-zero exit 或 timeout
+```
+
+先定位阶段，再读对应 error message，比把所有问题都叫“CMake 报错”更有用。
 
 ---
 
@@ -1729,6 +2978,166 @@ g++ -std=c++17 -Wall -Wextra -g -O1 -pthread \
 ```
 
 不要拿 TSan runtime 结果与之后 `-O2` benchmark 数字比较。
+
+---
+
+### 28.1 上述 command 什么意思？
+
+这段的完整意思是：给项目增加一个“是否构建 TSan 版本”的开关；开关为 `ON` 时，才把 TSan 所需参数附着到 `thread_pool_test` 这个 target。
+
+```cmake
+option(ENABLE_TSAN "Build with ThreadSanitizer" OFF)
+```
+
+`option` 的语法是：
+
+```cmake
+option(变量名 "给人看的说明文字" 默认值)
+```
+
+所以这一行逐项是：
+
+```text
+ENABLE_TSAN
+    CMake boolean variable，只有 ON / OFF 这类值
+
+"Build with ThreadSanitizer"
+    help string，说明这个开关是干什么的
+
+OFF
+    默认关闭 TSan
+```
+
+因此：
+
+```bash
+cmake -S . -B build
+```
+
+等价于这次构建默认：
+
+```text
+ENABLE_TSAN = OFF
+```
+
+而：
+
+```bash
+cmake -S . -B build-tsan -DENABLE_TSAN=ON
+```
+
+则是用户显式覆盖默认值：
+
+```text
+ENABLE_TSAN = ON
+```
+
+接着：
+
+```cmake
+if(ENABLE_TSAN)
+    ...
+endif()
+```
+
+就是普通条件判断：
+
+```text
+如果 ENABLE_TSAN 是 ON
+-> 执行中间内容
+否则
+-> 跳过，构建普通版本
+```
+
+这也就是为什么你之前会收到 “`ENABLE_TSAN` was not used”：你当时把变量交给了 CMake，但 `CMakeLists.txt` 没有 `if(ENABLE_TSAN)` 之类的地方读取它。现在有了这个 `if`，变量就真正影响构建了。
+
+下面这段：
+
+```cmake
+target_compile_options(thread_pool_test PRIVATE
+    -O1
+    -fsanitize=thread
+    -fno-omit-frame-pointer
+)
+```
+
+意思是：只在**编译** `thread_pool_test` 的每个 `.cpp` 成 `.o` 时，加上这些 `g++` 参数。
+
+```text
+target_compile_options
+    把 compiler options 附着到某个 target
+
+thread_pool_test
+    被设置的 target
+
+PRIVATE
+    这些参数只给 thread_pool_test 自己用
+    不传播给依赖它的其他 target
+```
+
+因此概念上会生成：
+
+```bash
+g++ -O1 -fsanitize=thread -fno-omit-frame-pointer \
+    ... -c tests/thread_pool_test.cpp -o ...
+```
+
+三个参数的作用：
+
+```text
+-O1
+    optimization level 1，适度优化
+    TSan 测试常用，避免极端优化，也不会完全不优化
+
+-fsanitize=thread
+    让 g++ 在编译时插入 ThreadSanitizer 的检测代码
+    程序运行时才能报告已经执行路径上的 data race
+
+-fno-omit-frame-pointer
+    不省略 frame pointer
+    有助于工具给出更可读的调用栈
+```
+
+但只在编译 `.cpp -> .o` 时插入检测还不够。最终可执行文件还需要 TSan runtime，所以还要：
+
+```cmake
+target_link_options(thread_pool_test PRIVATE
+    -fsanitize=thread
+)
+```
+
+它只影响**链接阶段**，概念上是：
+
+```bash
+g++ ...object files... -fsanitize=thread -o thread_pool_test
+```
+
+这里仍由 `g++` 充当 linker driver；它看到 `-fsanitize=thread` 后，会把 TSan runtime 一起纳入最终程序。不是让你手写 `-ltsan`。
+
+完整因果链：
+
+```text
+cmake -DENABLE_TSAN=ON
+    ->
+option / cache 中 ENABLE_TSAN 为 ON
+    ->
+if(ENABLE_TSAN) 为真
+    ->
+compile command 增加 -fsanitize=thread
+    ->
+link command 也增加 -fsanitize=thread
+    ->
+生成真正带 TSan runtime 的 test binary
+```
+
+建议始终分两个 build tree：
+
+```bash
+cmake -S . -B build -DENABLE_TSAN=OFF
+cmake -S . -B build-tsan -DENABLE_TSAN=ON
+```
+
+因为 `ENABLE_TSAN` 是构建配置的一部分，`build-tsan/` 不只是一个名字，它现在终于对应了真实不同的编译和链接参数。`option` 和 target options 的语义可对照 [CMake 3.16 `option`](https://cmake.org/cmake/help/v3.16/command/option.html) 与 [target compile options](https://cmake.org/cmake/help/v3.16/command/target_compile_options.html) 文档。
 
 ---
 

@@ -558,6 +558,113 @@ std::function<void()> 在 C++17 要求内部 callable 可复制
 
 ---
 
+### 3.15 普通函数与 function object
+
+不能这样看。C++ 是面向对象语言，但**普通函数不是 object，也不是 function object**。
+
+```cpp
+int add(int x, int y) {
+    return x + y;
+}
+```
+
+这里：
+
+```text
+add：函数名
+add 的类型：int(int, int)
+add 本身：一个普通函数
+```
+
+它当然是 callable，但不是 object。你不能把它复制成另一个函数对象，也不能像普通对象那样有每一份实例自己的 member state。
+
+你能得到的是指向它的指针：
+
+```cpp
+auto pointer = &add;
+```
+
+这里：
+
+```text
+pointer：object
+pointer 的类型：int (*)(int, int)
+pointer 保存 add 的地址
+```
+
+真正的 function object 是这种：
+
+```cpp
+struct Add {
+    int operator()(int x, int y) const {
+        return x + y;
+    }
+};
+
+Add add;  // add 是一个 object
+```
+
+此时：
+
+```text
+Add：function object type
+add：Add 类型的 object
+add(1, 2)：调用 add.operator()(1, 2)
+```
+
+所以：
+
+```text
+普通函数 add：
+函数名，不是 object
+
+函数指针 pointer：
+object，指向普通函数
+
+Add add：
+object，而且是 function object
+```
+
+lambda 也是最后这一类：它创建一个 closure object，只是那个 closure type 由编译器自动生成。
+
+---
+
+### 3.16 function object
+
+对，这个判断可以这样记：
+
+```text
+一个 class/struct 定义了可用的 operator()
+-> 它是 function object type（也叫 functor type）
+-> 它实例化出来的对象就是 function object
+```
+
+例如：
+
+```cpp
+struct Add {
+    int operator()(int x, int y) const {
+        return x + y;
+    }
+};
+
+Add add;          // function object
+int sum = add(1, 2); // 等价于 add.operator()(1, 2)
+```
+
+这里：
+
+```text
+Add：function object type
+add：function object
+```
+
+补一个小边界：`operator()` 必须对当前调用方式可访问、可调用。比如它是 `private`、被 `delete`，或参数根本对不上，那么该对象不能作为这次调用的 callable。
+
+lambda closure type 也是 compiler 自动生成的这种 function object type。
+
+---
+
 # Part 2：教程主体
 
 # 教程开始：worker 算出的结果怎样回到 submitter
@@ -1364,6 +1471,75 @@ enqueue 失败时，已经创建的 result channel 会怎样？
 
 ---
 
+### submission 观察到 pool 已关闭 -> 当前 submit 调用报告 rejection
+
+这里的 “当前 `submit` 调用报告 rejection” 意思是：
+
+```cpp
+auto result = pool.submit(add, 20, 22);
+```
+
+这行代码正在执行时，发现线程池已经关闭、任务不能再进入 queue，那么就由这次 `submit(...)` 本身直接告诉 caller：
+
+```cpp
+pool.submit(add, 20, 22); // 这里直接抛 std::runtime_error
+```
+
+所以 caller 拿不到 `future`：
+
+```text
+submit 开始
+-> 尝试把 task 放进 queue
+-> 发现 queue 已关闭，无法接受 task
+-> submit 直接报告“拒绝接受”
+-> 不返回 future
+```
+
+在 Day3 选择的具体“报告方式”是：
+
+```text
+throw std::runtime_error
+```
+
+而不是：
+
+```text
+返回一个 future
+-> 但它永远不会 ready
+```
+
+也不是你当前版本里的：
+
+```text
+submit 返回 future
+-> task 实际没进入 queue
+-> packaged_task 被销毁
+-> 将来 future.get() 才得到 broken_promise
+```
+
+后两种都会让调用者误以为“任务已经成功提交，只是在等结果”，这不符合 contract。
+
+要把它和 callable 自己抛异常区分开：
+
+```text
+submission rejection：
+任务根本没被 pool 接受
+-> submit() 当场抛异常
+
+callable throws：
+任务已经被 pool 接受，也被 worker 执行了
+-> future.get() 将来重新抛出该异常
+```
+
+一句压缩记忆：
+
+```text
+submit 失败：没有 future。
+task 执行失败：有 future，但 get() 抛异常。
+```
+
+---
+
 ### 做完后 gpt 老师的评价
 
 对，你这个自我评价更准确：
@@ -1511,7 +1687,7 @@ std::packaged_task<void()>
 
 从下面开始会揭示一种 C++17 实现路线。阅读时先对照自己的版本，不要把后文直接当成第一遍抄写步骤。
 
-## 8. 接入 ThreadPool 后的完整对象关系
+## 8. 今日最重点：时间线，接入 ThreadPool 后的完整对象关系
 
 今天需要同时看五个对象：
 
@@ -1606,6 +1782,79 @@ Task wrapper = [task = std::move(packaged)]() mutable {
 
 ---
 
+### 9.1 为啥这个 lambda 是 move-only 的？
+
+前半段的方向对，但“第二次 copy 是从原先那个已经被 move 的 `packaged` 复制”这一点不对。
+
+这行：
+
+```cpp
+Task wrapper = [task = std::move(packaged)]() mutable {
+    task();
+};
+```
+
+先发生的是：
+
+```text
+原 packaged 的执行责任
+-> move 到 lambda closure 内部的成员 task
+```
+
+概念上 lambda 像这样：
+
+```cpp
+struct Closure {
+    std::packaged_task<int()> task;  // move-only member
+
+    void operator()() {
+        task();
+    }
+};
+```
+
+此时原来的 `packaged` 已经是 moved-from 状态；它不再拥有那份原本的执行责任。但真正卡住 `std::function` 的，不是它还要去复制原 `packaged`，而是它要复制这个 `Closure`：
+
+```text
+std::function<void()> 想保存 wrapper
+-> 需要能复制 wrapper
+-> 复制 wrapper 等于复制 Closure
+-> 复制 Closure 等于复制它的成员 task
+-> packaged_task 的 copy constructor 被 delete；也就是说 Closure 内部的 packaged_task 是 move-only，导致整个 Closure 是没办法复制的
+-> 编译失败
+```
+
+也就是说，失败的复制来源是：
+
+```text
+wrapper 内部拥有的 task
+```
+
+```text
+lambda capture：
+task = std::move(packaged)
+    |
+    v
+closure object 内有一个 packaged_task member
+    |
+    v
+packaged_task 不可复制、可移动
+    |
+    v
+closure object 自动也不可复制、可移动
+    |
+    v
+这个 lambda object 是 move-only callable
+    |
+    v
+C++17 std::function 要求其内部 target callable 可复制
+    |
+    v
+std::function<void()> 不能保存这个 lambda
+```
+
+---
+
 ## 10. `shared_ptr` 怎样连接 move-only 与 copyable
 
 当前最小桥接方式：
@@ -1684,6 +1933,338 @@ worker 执行 wrapper 后，queue element 和 captured shared pointer 最终销�
 ```
 
 正确性来自 queue ownership transfer 和 worker loop，不来自 `shared_ptr` 自动防止重复调用。
+
+---
+
+### 10.3 函数类型，callable type
+
+它们不是两种并列的写法，而是两个不同层次的概念：
+
+```text
+R(Args...)
+```
+
+描述的是“**怎样调用、得到什么结果**”这个接口形状。
+
+```text
+function pointer / lambda closure / function object
+```
+
+描述的是“**这个 callable 实际上是什么类型、怎样保存和调用**”。
+
+例如三者都能满足同一个调用接口：
+
+```text
+int(int, int)
+```
+
+即“传两个 `int`，得到一个 `int`”。
+
+```cpp
+int add(int a, int b) {
+    return a + b;
+}
+
+auto lambda = [](int a, int b) {
+    return a + b;
+};
+
+struct Adder {
+    int operator()(int a, int b) const {
+        return a + b;
+    }
+};
+```
+
+但它们传给 `submit` 时，`F` 可以完全不同：
+
+| 传入表达式 | `F` 相关的实际类型 | 怎么实现调用 |
+|---|---|---|
+| `&add` | `int (*)(int, int)` | 指针指向普通函数 |
+| `lambda` | 编译器生成的 closure type | 对象的 `operator()` |
+| `Adder{}` | `Adder` | 对象的 `operator()` |
+
+所以：
+
+```text
+int(int, int)
+```
+
+像是在说：
+
+```text
+“我要一个：两个 int 进去，一个 int 出来的东西”
+```
+
+而 `F` 像是在说：
+
+```text
+“你实际给我的这个东西，到底是函数地址、lambda 对象，还是某个 struct 对象？”
+```
+
+`packaged_task<int()>`、`std::function<int()>` 也是同样的关系：
+
+```text
+int()
+    调用接口：无参数，返回 int
+
+packaged_task<int()>
+    一个具体对象类型，负责执行符合 int() 的 callable
+
+std::function<int()>
+    另一个具体对象类型，能保存各种符合 int() 的 callable
+```
+
+压缩成一句：
+
+```text
+R(Args...) 是 callable 的“接口签名”；
+F 是当前传进来那个 callable 的“具体实现类型”。
+```
+
+---
+
+是，`int(int, int)` 就是一个函数类型。注释 1
+
+它的意思是：
+
+```text
+返回 int
+接收两个 int 参数
+```
+
+例如普通函数：
+
+```cpp
+int add(int, int);
+```
+
+这个 `add` 的函数类型就是：
+
+```cpp
+int(int, int)
+```
+
+但函数类型本身不是“某个函数对象”；它只是描述函数签名。`&add` 才是一个具体的函数指针值，类型为：
+
+```cpp
+int (*)(int, int)
+```
+
+对，后面那句话是在说“这次传进来的 callable 的具体类型”，也就是 `F` 所代表的类型。注释 2
+
+不过更精确地说：
+
+```text
+int(int, int)
+    函数类型，描述调用接口
+
+int (*)(int, int)
+    callable type：函数指针类型
+
+某个 lambda 的 closure type
+    callable type：因为有 operator()
+
+Adder
+    callable type：因为 Adder object 有 operator()
+```
+
+所以 `F` 不是固定等于函数类型。它是由你实际传入的东西决定的：
+
+```cpp
+pool.submit(&add, 1, 2);  // F 对应函数指针类型
+pool.submit(lambda, 1, 2); // F 对应 closure type
+pool.submit(Adder{}, 1, 2); // F 对应 Adder
+```
+
+它们都“能被调用”，因此都可以被称为 callable；但它们的具体类型不同。
+
+---
+
+### 10.4 make_shared 的本质是创建一个新的堆上对象！
+
+报错的根本原因是：`make_shared` 不只是“拿一个指针指向已有对象”，它要**构造一个新的堆上对象**，让 `shared_ptr` 去共同拥有它。
+
+你的代码：
+
+```cpp
+std::packaged_task<return_type()> task(...);
+
+auto shared_ptr =
+    std::make_shared<std::packaged_task<return_type()>>(task);
+```
+
+概念上相当于：
+
+```cpp
+new std::packaged_task<return_type()>(task);
+```
+
+这里 `task` 是 lvalue，因此编译器会尝试：
+
+```text
+用已有 task 拷贝构造一个新的 packaged_task
+```
+
+但：
+
+```text
+packaged_task 不可 copy
+```
+
+所以报错。
+
+改成：
+
+```cpp
+auto shared_ptr =
+    std::make_shared<std::packaged_task<return_type()>>(std::move(task));
+```
+
+概念上就是：
+
+```cpp
+new std::packaged_task<return_type()>(std::move(task));
+```
+
+这次调用的是 move constructor：
+
+```text
+local task 的执行责任
+-> move 到堆上的 packaged_task object
+-> shared_ptr 负责拥有这个堆对象
+```
+
+原来的局部 `task` 随后变成 moved-from 状态。
+
+你说“`shared_ptr` 不就是指向它吗？”这里要区分两件事：
+
+```text
+shared_ptr 本身：
+一个可复制的智能指针 object
+
+它指向的 packaged_task：
+一个独占、不可复制的 packaged_task object
+```
+
+`shared_ptr` 的复制不会复制 `packaged_task`：
+
+```cpp
+auto another = shared_ptr;
+```
+
+只是多一个 `shared_ptr` 一起指向**同一个**堆上的 task。
+
+```text
+shared_ptr A ----\
+                  -> 同一个 packaged_task object
+shared_ptr B ----/
+```
+
+这就是为什么它能解决 `std::function` 的问题：
+
+```text
+lambda capture shared_ptr
+-> lambda 可复制
+-> 复制 lambda 时只复制 shared_ptr
+-> 不复制 move-only packaged_task
+```
+
+压缩一下：
+
+```text
+make_shared<T>(task)：要 copy-construct 新 T，packaged_task 做不到
+make_shared<T>(std::move(task))：move-construct 新 T，packaged_task 做得到
+shared_ptr 可复制，不代表它管理的对象也必须可复制
+```
+
+---
+
+对，整体模型对，但“原有对象完全不要理它”要看你是 copy 还是 move。
+
+```cpp
+auto ptr = std::make_shared<T>(args...);
+```
+
+本质上是：
+
+```text
+分配一块能放下 control block + T object 的内存
+-> 在里面构造一个新的 T object
+-> 返回第一个 shared_ptr，让它拥有该新对象
+```
+
+以后：
+
+```cpp
+auto another = ptr;
+```
+
+才是多个 `shared_ptr` 指向并共同拥有这**同一个新对象**。
+
+关键在构造新对象时传的参数。
+
+```cpp
+T original;
+auto ptr = std::make_shared<T>(original);
+```
+
+概念上：
+
+```cpp
+new T(original); // copy construction
+```
+
+所以：
+
+```text
+original：仍然完整存在
+*ptr：一个新的、独立的 copy
+```
+
+原对象当然仍可以继续使用，不是“不理它”。
+
+而：
+
+```cpp
+auto ptr = std::make_shared<T>(std::move(original));
+```
+
+概念上：
+
+```cpp
+new T(std::move(original)); // move construction
+```
+
+所以：
+
+```text
+original 的资源/责任
+-> 转移给 *ptr
+original 变成 moved-from state
+```
+
+对于你的 `packaged_task`：
+
+```text
+它不能 copy
+```
+
+因此：
+
+```cpp
+make_shared<packaged_task<R()>>(task)
+```
+
+失败；只有：
+
+```cpp
+make_shared<packaged_task<R()>>(std::move(task))
+```
+
+能把那份唯一的执行责任转移到 `shared_ptr` 管理的新堆对象里。
+
+如果参数都是普通 lvalue，并且目标类型支持 copy construction，那么这次构造就是 copy，不会 move 原对象。
 
 ---
 
@@ -1913,6 +2494,76 @@ pool.submit(set_value, std::ref(value)); // 显式请求引用同一个 object
 
 第二种要求原 object 在 task 执行期间仍然 alive，并且并发访问有正确同步。
 
+---
+
+### 13.2.1 std::bind 的本质模型
+
+对，你这个模型非常接近本质。
+
+```cpp
+auto bound = std::bind(add, 20, 22);
+```
+
+概念上可以把它想成 `std::bind` 创建了一个新的、匿名的 function object，大致像：
+
+```cpp
+class Binder {
+public:
+    int operator()() {
+        return function_(left_, right_);
+    }
+
+private:
+    int (*function_)(int, int); // 保存 add
+    int left_ = 20;             // 保存 argument
+    int right_ = 22;
+};
+```
+
+然后：
+
+```cpp
+Binder bound;
+bound(); // 内部调用 add(20, 22)
+```
+
+所以它和 lambda closure 的思路确实很像：
+
+```text
+lambda：
+编译器生成 closure class
+-> captures 变成 members
+-> lambda body 变成 operator()
+
+std::bind：
+标准库生成一个未指定的 binder class
+-> callable 和 arguments 变成 members
+-> bind 规则变成 operator()
+```
+
+区别在于：lambda 的 closure type 由编译器生成；`std::bind` 返回的具体 type 由标准库实现，标准不要求你知道它叫什么，因此通常用 `auto` 接：
+
+```cpp
+auto bound = std::bind(add, 20, 22);
+```
+
+`std::ref(value)` 也正是这个模型的一部分：
+
+```text
+普通 value：
+Binder member 保存 value 的副本/移动结果
+
+std::ref(value)：
+Binder member 保存 reference_wrapper
+-> 将来 operator() 调用时把它解开为原 value 的 reference
+```
+
+所以你可以把 `bind` 记成：
+
+```text
+把“以后该调用谁、调用时该传什么”封装进一个 function object。
+```
+
 ### 13.3 `std::ref`
 
 header：
@@ -1952,7 +2603,7 @@ int main() {
 
 ### 13.4 当前 `std::bind` 方案的能力边界
 
-`std::forward` 可以让 rvalue 在进入 `std::bind` 时被 move 到 bind object 中，但这不等于 bind object 将来调用时一定把该对象再次作为 rvalue 传出。
+**`std::forward` 可以让 rvalue 在进入 `std::bind` 时被 move 到 bind object 中，但这不等于 bind object 将来调用时一定把该对象再次作为 rvalue 传出。**
 
 对普通 bound argument，`std::bind` 将来调用 original callable 时，通常把自己保存的 argument 作为 lvalue 交给 callable。因此当前 V1 明确支持：
 
