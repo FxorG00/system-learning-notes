@@ -1,6 +1,6 @@
 # AI Infra 理论伴随线规划
 
-> 版本：2026-08-26，数学基础、课程分工与逐周视频对齐版
+> 版本：2026-08-27，数学基础、逐周视频与系统主线时间轴对齐版
 > 适用对象：FxorG，中山大学计算机科学与技术专业，系统主线已进入 Week9
 > 职业目标：本科就业，主攻 LLM inference systems / serving 与 CUDA/Triton kernel optimization
 > 本文件定位：`plan_strengthened.md` 的 AI Infra 理论伴随线，不替代 C++ / Linux / OS / 网络 / Reactor / Mini Redis 主线
@@ -123,7 +123,7 @@ GAN / 强化学习 / 图神经网络全线
 
 ```text
 学校课程 / 概率网课：负责系统定义、公式、习题和考试深度
-AI Theory T Week：负责把已学数学映射到 NumPy/PyTorch、Tensor shape、loss、sampling 和性能
+AI Theory T module：负责把已学数学映射到 NumPy/PyTorch、Tensor shape、loss、sampling 和性能
 代码 gate：负责验证“会做数学题”已经转化为“会解释模型计算”
 ```
 
@@ -139,7 +139,7 @@ AI Theory T Week：负责把已学数学映射到 NumPy/PyTorch、Tensor shape�
 -> 不同时再开 Harvard Statistics 110 全课
 
 学校已经学完且掌握
--> T Week 只做 AI application mapping，不抄第二份数学笔记
+-> T module 只做 AI application mapping，不抄第二份数学笔记
 ```
 
 这里的“掌握”不按成绩猜测，而用很短的 diagnostic gate 判断；若能手算、解释并完成对应代码，就直接通过数学部分。
@@ -148,7 +148,7 @@ AI Theory T Week：负责把已学数学映射到 NumPy/PyTorch、Tensor shape�
 
 ## 3. 和系统主线怎样并行
 
-### 3.1 当前起点
+### 3.1 当前起点与术语修正
 
 当前系统主线位置：
 
@@ -158,62 +158,129 @@ Week1 ~ Week8 已完成
 后续：Reactor -> HTTP Server -> Mini Redis
 ```
 
-理论线从 `T1` 开始。`T` 表示 Theory companion week，与主线的 `WeekN` 不要求一一对应。
-
-例如：
+理论线从 `T1` 开始。文件继续使用 `T1~T24` 编号，但从现在起：
 
 ```text
-主线 Week9 很重
--> T2 可以用两个自然周完成
-
-学校考试周
--> 理论线暂停一周
-
-主线进展很顺
--> 一周完成一个 T Week
+T = Theory module
+T 不等于一个自然周
 ```
 
-不为了追表格破坏主线节奏。
+简单模块可能 3~5 天通过；T17、T18、T21、T24 可能分别需要 2~4 个自然周。不能再用“24 周、每周 3 小时”掩盖真实工作量。
 
-### 3.2 每周时间
+### 3.2 每日投入与可持续周预算
 
-默认每周约 `3` 小时：
+用户给出的真实投入：
 
 ```text
-Session A：60~90 分钟，概念 + 视频
-Session B：60~90 分钟，独立代码
-Session C：30~60 分钟，复盘 + 验证
+AI 理论线：每天 30~60 分钟
+系统主线：每天至少 3 小时
 ```
 
-推荐安排：
+折算为：
 
 ```text
-周二或主线较轻的一天：Session A
-周四或周五：Session B
-周末：Session C
+AI 名义上限：每周 3.5~7 小时
+AI 可持续计划值：每周 4~6 小时
+考试、主线故障或休息会使个别周低于计划值
 ```
 
-不建议每天再开一份重型 AI daily。理论线以每周一个小闭环推进。
-
-### 3.3 主线优先规则
-
-出现以下情况时，本周理论线缩减为一次 60 分钟复习：
+推荐把一个自然周拆成短块，而不是等某一天硬学 3 小时：
 
 ```text
-主线项目出现未解决 correctness bug
-主线 daily 尚未通过
-考试周或课程大作业
-睡眠明显不足
-理论线开始挤占 C++ 项目实现时间
+2 天：教程主线、术语、精确视频
+2~3 天：独立 coding
+1 天：错误路径、shape/value/tolerance 验证
+1 天：note、口述和缓冲；疲劳时可以只复盘或休息
 ```
 
-理论线可以慢，不能把两条线都做成半成品。
+每天只有一个 30~60 分钟块，不另开七份 AI daily。每个 T module 仍只有一份 `Tn.md`。
+
+### 3.3 真实总工时
+
+按当前产出和通过标准，合理估算不是 72 小时：
+
+| 阶段 | 范围 | 估算有效工时 | 说明 |
+|---|---|---:|---|
+| Phase 1 | T1~T8 | 30~45h | 数学基础扎实，可用 diagnostic 跳过重复理论 |
+| Phase 2 求职核心 | T9~T13、T15~T16 | 45~60h | PyTorch、autograd、MLP、token/mask、attention |
+| Phase 2 可延期 | T14 | 6~10h | CNN/ResNet 对 LLM inference 不是硬前置 |
+| Phase 3 | T17~T24 | 65~90h | decoder、KV Cache、batching、benchmark、最终整合 |
+
+总量约：
+
+```text
+150~210 个有效小时
+```
+
+按每周平均 4~6 小时，需要约 25~53 个自然周，也就是大约 6~12 个月。`2027-03-31` 是进取目标：它要求多数周接近 5.5~7 小时、数学模块通过 diagnostic 加速，并且不发生长期停摆；若实际长期接近每天 30 分钟，T24 应顺延到 2027 年第二季度，不能靠删 correctness gate 伪造按时完成。这个数字是容量估算，不是要求每天打卡满额。
+
+### 3.4 系统 milestone 与 T module 的硬锚点
+
+| 系统主线出口 | AI 理论至少到达 | 目标日期 | 当时应有的 AI 证据 |
+|---|---|---|---|
+| Week9 | T1 | 2026.08 末~09 初 | `numpy_basics.py`，能解释 shape/dtype/nbytes |
+| Week10 | T3 | 2026.09 | matmul/broadcast reference 与 shape 推导 |
+| Week11 | T6 | 2026.09 末 | finite difference、概率映射、stable softmax |
+| Week12 | T8 / Theory Gate 1 | 2026.10 上半 | NumPy linear/softmax model 与 ML workflow |
+| Week13 | T10 | 2026.10 下半 | Tensor layout 与 Module inference |
+| Week14 | T12 | 2026.11 | autograd + MLP training/inference flow |
+| Week15 | T13 + T15~T16 | 2026.12 上半 | token/mask 与 single-head attention reference |
+| Week16 | T16 必达；T17~T18 stretch | 2026.12 下半 | 简历不等待 T24；有余力完成 decoder forward |
+
+这里的“至少到达”是进度控制锚点，不是主线代码的编译依赖。若 Week10 已结束而 T3 未完成，必须在进度记录中写明欠账和补齐日期，不能把 T 线静默冻结。
+
+### 3.5 求职日期锚点
+
+```text
+2026.10.15 前：T1~T8，Theory Gate 1
+2026.12.15 前：T1~T13 + T15~T16，T14 允许延期
+2027.01 第一轮投递：T17~T18 作为 AI Infra 冲刺项，不等待 T24
+2027.02：T19~T21
+2027.03：进取目标，T22~T24，形成 tiny_transformer_reference
+2027.Q2：若周均只有约 4h，这是 T24 的正常后备窗口，不影响 2027.01 首轮投递
+```
+
+第一次投递时：
+
+```text
+后台/C++ Infra：Mini Redis 是主项目，AI 线是差异化证据
+AI 业务基础设施：T1~T16 证明 workload literacy
+推理引擎/CUDA：仍是冲刺，T18 也不等于具备 kernel 经验
+```
+
+### 3.6 延期与删减规则
+
+如果某个锚点落后超过两个自然周，按这个顺序处理：
+
+```text
+1. 先删重复视频、QA 和已经由学校掌握的理论讲解
+2. 保留独立代码、关键 mechanism 和 correctness gate
+3. 延期 T14 CNN/ResNet，不删除 T15~T18
+4. T13 只保留一次清楚的 overfit/regularization observation，不扩展调参
+5. T24 允许拆成 2~4 周，不压缩成一次赶工
+6. 仍然落后时，移动 T19~T24 日期；不牺牲 Mini Redis 和第一次投递
+```
+
+不可删的桥梁：
+
+```text
+T3 matmul/shape
+T6 stable softmax
+T9 Tensor/layout
+T11 autograd
+T16 single-head attention
+T18 decoder-only forward
+T21 KV Cache
+T23 correctness/benchmark
+```
+
+考试周、睡眠不足或主线出现 correctness blocker 时可以临时降载，但下一周必须重新排期。理论线可以延期，不能没有账本地消失。
 
 ---
 
 ## 4. 学习方法与固定产出
 
-每个 T Week 固定产出：
+每个 T module 固定产出：
 
 ```text
 1. 一份短 note：只记录真正不熟的概念
@@ -222,12 +289,12 @@ Session C：30~60 分钟，复盘 + 验证
 4. 一段“这和 AI Infra 有什么关系”的解释
 ```
 
-每个 T Week 开始前，再单独生成一份 `Tn.md` 教程。它和系统主线的 `daily.md` 一样，必须自己完成概念铺垫、术语解释、完整因果链、Round1 独立实现、Round2 定向打磨和最终验证；视频只承担第二讲解源或课程校准，不能用“去看第几 P”代替教程正文。
+每个 T module 开始前，再单独生成一份 `Tn.md` 教程。它和系统主线的 `daily.md` 一样，必须自己完成概念铺垫、术语解释、完整因果链、Round1 独立实现、Round2 定向打磨和最终验证；视频只承担第二讲解源或课程校准，不能用“去看第几 P”代替教程正文。
 
 固定顺序：
 
 ```text
-读取总规划、MEMORY、上一 T Week 结果
+读取总规划、MEMORY、上一 T module 结果
 -> 生成完整 Tn.md
 -> 列出本周精确对应的视频编号与标题
 -> 用户先完成独立产出
@@ -297,7 +364,7 @@ C:\Users\FxorG\Desktop\gpt_infra\ai_theory_notes\
 # 第一阶段：Python / NumPy 与数学到模型计算的映射
 
 > 周次：T1~T8
-> 建议强度：每周约 3 小时
+> 预算：合计约 30~45 个有效小时；目标 2026-10-15 前通过 Theory Gate 1
 > 与主线关系：可从现在低强度开始，不进入 CUDA，不开大型模型项目
 
 ---
@@ -857,6 +924,8 @@ softmax_classifier_numpy.py
 
 > 周次：T9~T16
 > 建议前置：Theory Gate 1 通过
+> 预算：T9~T13、T15~T16 合计约 45~60h；T14 另约 6~10h，可延期
+> 求职锚点：2026-12-15 前至少完成 T1~T13 + T15~T16
 > 与主线关系：应在 ThreadPool/AsyncLogger 稳定后逐渐进入；Reactor 很重时允许放慢
 
 ---
@@ -1078,7 +1147,7 @@ overfit_observation.py
 
 ---
 
-## T14：CNN 与 ResNet forward 第一层
+## T14：CNN 与 ResNet forward 第一层（可延期）
 
 ### 为什么 AI Infra 仍要学一点 CNN
 
@@ -1093,6 +1162,8 @@ checkpoint execution
 ```
 
 的一个紧凑例子。目标不是转向 CV 算法岗。
+
+时间边界：T14 对 LLM inference 不是硬前置。若 2026 年 12 月求职锚点受压，先进入 T15~T18，T14 在 T24 后或出现 CV inference 岗位需要时补回。
 
 ### 学习内容
 
@@ -1232,7 +1303,7 @@ single_head_attention.py
 [ ] 能解释 forward graph 与 backward 保存中间值的关系
 [ ] 能写一个最小 PyTorch Module 并保存/加载
 [ ] 能区分 train / eval / inference_mode
-[ ] 能画出 ResNet 或 MLP 完整 forward
+[ ] 能画出 MLP 完整 forward；T14 已完成时再补 ResNet forward
 [ ] 能推导 single-head attention shapes
 [ ] 当前至少一个 C++ 系统项目已形成测试/README/benchmark 证据
 ```
@@ -1243,6 +1314,8 @@ single_head_attention.py
 
 > 周次：T17~T24
 > 建议前置：Theory Gate 2 通过
+> 预算：合计约 65~90 个有效小时；T24 单独预留 15~25h，可拆成 2~4 个自然周
+> 时间锚点：T17~T18 对齐 2027-01 冲刺投递；T19~T24 以 2027-02~03 为进取窗口，周均约 4h 时顺延到 2027.Q2
 > 定位：为 `mini-infer-cpu` 和后续 CUDA reference 做准备，不直接开始 vLLM 源码
 
 ---
@@ -1653,7 +1726,7 @@ model execution
 ### 吴恩达：机器学习概念骨架
 
 - 固定入口：[吴恩达机器学习课程 `BV1owrpYKEtP`](https://www.bilibili.com/video/BV1owrpYKEtP)
-- 定位方式：使用本规划每个 T Week 写明的 `P号 + 分集标题`，不从 P1 自动播放到 P146。
+- 定位方式：使用本规划每个 T module 写明的 `P号 + 分集标题`，不从 P1 自动播放到 P146。
 - 主要承担：linear/logistic regression、gradient descent、softmax、neural-network forward、model evaluation、bias/variance 与 ML workflow。
 - 当前后置：P87~P145 中的 decision tree、clustering、anomaly detection、recommender 与 reinforcement learning；只有后续真实缺口出现才重新开启。
 
@@ -1661,13 +1734,13 @@ model execution
 
 - 固定入口：[“跟李沐学AI”账号搜索《动手学深度学习》](https://space.bilibili.com/1567748478/search?keyword=%E5%8A%A8%E6%89%8B)
 - 教材校准：[Dive into Deep Learning 中文官方在线教材](https://zh.d2l.ai/)
-- 定位方式：使用本规划每个 T Week 写明的 `章节号 + 标题 + 官方单课链接`。
+- 定位方式：使用本规划每个 T module 写明的 `章节号 + 标题 + 官方单课链接`。
 - 主要承担：Tensor 操作、autograd、PyTorch Module、MLP、regularization、CNN/ResNet、sequence、attention 与 Transformer implementation。
 
 这两条线不完整双刷：
 
 ```text
-同一 T Week 先由 Tn.md 串主线
+同一 T module 先由 Tn.md 串主线
 -> 吴恩达负责概念骨架
 -> 李沐负责 PyTorch / implementation 映射
 -> 已经掌握或没有直接对应时，明确跳过视频
@@ -1688,7 +1761,7 @@ T2/T4/T5/T6：只负责 AI computation mapping 与代码 gate
 
 它们是 reference，不是当前并行播放清单。
 
-## 3. T Week 怎样调用视频
+## 3. T module 怎样调用视频
 
 ```text
 规划文件：列出每周精确对应关系
@@ -1845,7 +1918,9 @@ Gate C 后：KuiperLlama / CUDA
 
 ---
 
-# 每周执行模板
+# 每个 T module 执行模板
+
+下面的 A/B/C 是任务阶段，不要求各自一次完成；每个阶段可以拆成多个每日 30~60 分钟 block。
 
 ## Session A：概念
 
@@ -1889,6 +1964,8 @@ Gate C 后：KuiperLlama / CUDA
 # Theory Txx Note
 
 ## 1. 本周主线
+
+开始日期 / 当前系统 milestone / 预计有效工时 / 目标完成日期：
 
 ## 2. 我真正新理解的机制
 
@@ -1953,7 +2030,7 @@ attention 只会背图
 
 ---
 
-# 24 周后的下一步
+# Theory Gate 3 后的下一步
 
 Theory Gate 3 通过后：
 
@@ -1992,11 +2069,17 @@ NCCL multi-GPU
 
 ```text
 当前继续推进 C++ 系统主线。
-AI 理论每周约 3 小时，不每日开第二份重课表。
+AI 理论每天 30~60 分钟，每周可持续目标 4~6 小时。
+T 是 module，不保证一个自然周完成。
 
 T1~T8：Python / NumPy / 线代 / 微积分 / 概率 / ML workflow
-T9~T16：PyTorch / Module / autograd / MLP / ResNet / Attention
+T9~T13、T15~T16：2026 年底求职核心；T14 CNN 可延期
 T17~T24：Transformer / sampling / memory / KV Cache / batching / benchmark
+
+2026.12：至少完成 T1~T13 + T15~T16
+2027.01：T17~T18 作为 AI Infra 冲刺项，不等待 T24
+2027.03：进取目标，T22~T24 收口 tiny Transformer reference
+2027.Q2：周均约 4h 时的正常后备窗口
 
 视频负责建立直觉。
 代码负责证明理解。

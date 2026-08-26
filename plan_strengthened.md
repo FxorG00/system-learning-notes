@@ -1,6 +1,6 @@
 # C++ 系统工程 / AI Infra 求职总规划
 
-> 版本：2026-08-26，Week9 / 腾讯实习目标校准版
+> 版本：2026-08-27，Week9 / 腾讯实习目标与 AI 理论时间轴校准版
 > 学习者：FxorG，中山大学计算机科学与技术专业，按当前学制为 2029 届
 > 当前进度：Week1 ~ Week8 已完成，下一站是 non-blocking I/O、epoll 与 Reactor
 > 近期目标：2026 年 12 月形成第一版简历，2027 年 1 月开始投递后台开发、C++ Infra 与 AI 业务基础设施相关实习
@@ -344,16 +344,27 @@ shutdown 如何避免丢任务、死锁和 use-after-free？
 
 ### 4.4 AI 伴随证据
 
-2026 年底不要求 CUDA 大项目。若系统主线按时闭环，增加一个小证据：
+2026 年底不要求 CUDA 大项目，也不要求为了第一次投递提前完成 T24。T24 的进取目标是 2027 年 3 月，周均投入不足时可顺延到 2027 年第二季度。系统主线按时闭环时，AI 伴随线至少形成：
 
 ```text
-Python 基础 + NumPy
-PyTorch tensor / module / inference / no_grad
-能解释 batch、shape、dtype、device、operator、latency、throughput
-用一个小模型完成 CPU/GPU inference benchmark，记录环境和结果
+T1~T8：NumPy、shape/matmul、stable softmax、最小 ML workflow
+T9~T13：PyTorch Tensor/Module/autograd/MLP/generalization
+T15~T16：token/embedding/mask 与 single-head attention reference
+Stretch：T17~T18，能够从 token IDs 串到 decoder-only logits
 ```
 
-这项证据的作用是证明你知道 AI workload 长什么样，不是冒充已经做过推理引擎。
+可展示的代码证据优先是：
+
+```text
+stable_softmax.py
+tensor_layout.py
+module_inference.py
+autograd_inspect.py
+single_head_attention.py
+若按时完成：decoder_only_forward.py
+```
+
+这项证据的作用是证明你理解 AI workload 和 inference data flow，不是冒充已经做过推理引擎。`tiny_transformer_reference` 的目标时间是 2027 年 3 月，属于第一次投递后的增强证据。
 
 ---
 
@@ -566,25 +577,46 @@ atomic/CAS、acquire/release、happens-before 第一层
 
 ---
 
-## 6. 2026-08 到 2027-02 时间表
+## 6. 2026-08 到 2027-03 双线时间表
 
-| 时间 | 主任务 | 必须形成的结果 |
+| 时间 | 系统主线 | AI 理论伴随线 | 必须形成的结果 |
+|---|---|---|---|
+| 2026.08 下旬 | Week9 | 启动 T1 | Epoll Echo Server；能解释 ndarray/shape/dtype |
+| 2026.09 | Week10~11 | T2~T6 | Reactor、HTTP；matmul/gradient/stable softmax reference |
+| 2026.10 上半 | Week12 | T7~T8，Theory Gate 1 | Mini Redis RESP/KV；NumPy ML 小闭环 |
+| 2026.10 下半~11 月 | Week13~14 | T9~T12 | TTL/AOF；PyTorch Tensor/Module/autograd/MLP |
+| 2026.11 下半~12 月上半 | Week15 | T13、T15~T16；T14 可延期 | 测试/性能；single-head attention reference |
+| 2026.12 下半 | Week16 | 复检 T1~T16；Stretch T17~T18 | 项目 README/简历；能解释 Transformer block 与 decoder forward |
+| 2027.01 | 第一轮投递 | 完成未收口的 T17~T18 | 后台/C++ Infra 主投；AI infra 相关岗位有可解释伴随证据 |
+| 2027.02 | 投递反馈驱动补缺 | T19~T21 | sampling、training/inference memory、KV Cache reference |
+| 2027.03 | 项目迭代/继续投递 | T22~T24 进取目标 | batching simulation、benchmark 方法、tiny Transformer reference |
+
+若 AI 线长期只能保持约 4 小时/周，T24 的正常后备窗口是 2027 年第二季度。这个顺延不阻塞 2027 年 1 月第一轮投递，也不能成为推迟 Mini Redis 或简历的理由。
+
+### 6.1 主线 milestone 与 T 模块出口锚点
+
+这里的“前”是协调目标，不是说 T 线没完成就禁止写主线代码；它用于防止 AI 线无限拖延：
+
+| 系统 milestone 出口前 | AI 理论至少到达 | 连接点 |
 |---|---|---|
-| 2026.08 下旬 | Week9 | Epoll Echo Server，多 client 与 partial I/O 证据 |
-| 2026.09 | Week10~11 | Reactor V1、HTTP Server V1 |
-| 2026.10~11 | Week12~15 | Mini Redis RESP/KV/TTL/AOF、测试和 benchmark |
-| 2026.12 | Week16 + 求职准备 | README、项目讲稿、第一版简历、岗位清单 |
-| 2027.01 | 第一轮投递 | 日常实习、导师直招、后台/C++ Infra 主投，AI infra 相关岗位冲刺 |
-| 2027.02 起 | 投递反馈驱动补缺 | 面试复盘、项目修订、短板专题，不重新开一堆课程 |
+| Week9 | T1 | array metadata、bytes estimate、reference 思维 |
+| Week10 | T3 | shape、matmul、batch 维度，为后续 operator 做准备 |
+| Week11 | T6 | gradient/概率映射、stable softmax 与数值稳定性 |
+| Week12 | T8 / Theory Gate 1 | 完成 NumPy 与最小 ML workflow |
+| Week13 | T10 | PyTorch Tensor、Module、parameter、inference mode |
+| Week14 | T12 | autograd、MLP、training/inference flow |
+| Week15 | T13 + T15~T16 | generalization 第一层、token/mask、single-head attention |
+| Week16 | T16 必达；T17~T18 为 stretch | 第一版简历不等待 T24；有余力再完成 decoder-only forward |
 
-从 Week10 主项目稳定后，AI 理论伴随线最多每周两次、每次约 60 分钟：
+AI 理论线按用户真实投入调整为：
 
 ```text
-2026.09~10：Python / NumPy / PyTorch tensor 与 inference
-2026.11~12：Transformer forward、attention、KV Cache、batch/latency/throughput 第一层
+每天 30~60 分钟
+每周名义 3.5~7 小时，实际可持续目标 4~6 小时
+系统主线每天仍保持 3 小时以上
 ```
 
-目标是到投递时能理解 AI workload，并完成一个小 inference benchmark；不在 Mini Redis 前启动 CUDA 或 vLLM 源码主线。若伴随线开始拖慢最近 milestone，立即暂停。
+不在 Mini Redis 前启动 CUDA 或 vLLM 源码主线。若两条线冲突，先保系统 milestone；但不再用“主线重”作为无限期暂停 T 线的默认理由，而是记录延期并执行 AI 规划中的删减顺序。
 
 如果实际学习继续明显快于日历，不靠增加教程字数拖慢：
 
@@ -831,7 +863,20 @@ PyTorch tensor / autograd / module / inference
 Transformer forward、attention、KV Cache 第一层
 ```
 
-出口：能运行并解释一个小模型 inference，记录 latency、throughput、memory。
+Gate A 分成两个求职时间点：
+
+```text
+Gate A1 / 2026.12 第一版简历前：T1~T13 + T15~T16
+-> 能解释 NumPy/PyTorch object、forward/autograd、token/mask 和 single-head attention
+
+Gate A2 / 2027.01 AI Infra 冲刺投递：补齐 T17~T18
+-> 能从 token IDs 串到 decoder-only logits
+
+Gate A3 / 2027.03 进取目标，2027.Q2 后备窗口：T19~T24
+-> sampling、KV Cache、batching、benchmark 与 tiny Transformer reference
+```
+
+T14 CNN/ResNet 对 LLM inference 不是时间线硬前置，首次求职冲刺时可以延期。完整 Gate A 的出口仍是：能运行并解释一个小模型 inference，记录 correctness、latency、throughput 和主要 memory objects。
 
 ### Gate B：CPU inference 小闭环
 
@@ -977,6 +1022,8 @@ Round 3：只补高价值测试、性能证据和项目收口
 一个能运行、测试、压测和解释的 Mini Redis
 Reactor / HTTP 的清楚演进证据
 C++ / Linux / OS / TCP / concurrency 面试第一轮闭环
+AI Theory 至少完成 T1~T13 + T15~T16；T17~T18 作为 AI Infra 冲刺项
+有 stable softmax、PyTorch inference 和 single-head attention 的可运行证据
 竞赛优势在简历上准确呈现
 第一版简历、项目讲稿和目标岗位表
 开始真实投递，而不是继续等待“全部学完”
@@ -1007,10 +1054,11 @@ CUDA kernel correctness + profiler + benchmark
 
 ```text
 1. 生成并完成 Week9 Day1
-2. 从 blocking server 的问题进入 O_NONBLOCK / EAGAIN
-3. 完成 Epoll Echo Server
-4. 用真实代码和实验验收 Week9
-5. 进入 Reactor V1
+2. 同期启动 AI Theory T1，每天 30~60 分钟
+3. 从 blocking server 的问题进入 O_NONBLOCK / EAGAIN
+4. 完成 Epoll Echo Server
+5. 用真实代码和实验验收 Week9，并确认 T1 出口
+6. 进入 Reactor V1；其出口前把 AI Theory 推进到 T3
 ```
 
 当前不要为了腾讯岗位临时插入 Go、Kafka、Kubernetes、完整 MySQL 课程或 CUDA。先把最接近岗位硬要求、也最接近简历项目闭环的 epoll -> Reactor -> Mini Redis 做穿。
