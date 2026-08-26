@@ -3137,7 +3137,7 @@ AI Infra 理论伴随线规划（2026-08-21）：
 ```text
 路径：C:\Users\FxorG\Desktop\gpt_infra\AI_Infra理论伴随线规划.md
 定位：plan_strengthened.md 的理论伴随线，不改变 C++ -> Linux/OS -> 网络 -> Reactor -> Mini Redis 系统主线
-时间：默认每周 2~3 sessions、合计约 3 小时；主线 80%~90%，理论线 10%~20%；主线有 correctness bug、考试或睡眠不足时主动降速
+时间：AI 理论每天 30~60 分钟、可持续计划值每周 4~6 小时；系统主线每天仍优先保证 3 小时以上；主线有 correctness bug、考试或睡眠不足时主动降速并记录理论线欠账
 T1~T8：Python/NumPy、shape/dtype、向量矩阵、matmul/broadcasting、gradient/chain rule、概率最低入口、stable softmax、linear/softmax regression 与 ML workflow
 T9~T16：PyTorch Tensor/layout、Module/inference_mode、autograd、MLP、generalization、ResNet forward、embedding/mask、single-head attention
 T17~T24：multi-head/Transformer block、decoder-only forward、sampling、training-vs-inference memory、prefill/decode/KV Cache、continuous batching、correctness/benchmark、tiny Transformer reference
@@ -3168,13 +3168,13 @@ AI Infra Theory T1 教程已生成（2026-08-23）：
 Ubuntu code 目录已建立：~/code/system-learning/ai-theory/t01_numpy_basics
 固定产出：numpy_basics.py；完成后由用户创建 Windows T1_note.md
 主题：Python/NumPy 最低入口与 ndarray object model，核心是 shape/ndim/size/dtype/itemsize/nbytes、axis 第一层、创建/indexing/same-shape elementwise/reshape 与 incompatible-shape ValueError
-实际环境检查：Ubuntu 20.04 当前 Python 3.8.10，pip 与 NumPy 尚未安装，venv module 可 import。教程在正文前提供 environment gate；不未经用户操作安装 system packages
-环境方案：安装 python3-pip/python3-venv，在 t01 目录创建 .venv，并 pin NumPy 1.24.4；NumPy 官方 release note 确认该版本支持 Python 3.8~3.11
-资料主线：Python official Lists 仅作 10 分钟补缺；NumPy 1.24 Absolute Beginner 指定 8 个小节并明确跳过 sorting/stacking/newaxis/broadcasting/Pandas；Quickstart 只作 3D printing/shape 查缺
+历史环境检查：Ubuntu 20.04 的 system Python 曾为 3.8.10，pip 与 NumPy 尚未安装；该信息只属于宿主机快照，不再作为 T1 技术基线
+环境方案：system Python 3.8 保持不动；AI Theory 使用 uv 管理的 Python 3.12.x，每个项目建立独立 .venv，当前 NumPy baseline 为 2.5.2；统一 setup 与宿主机快照写入 ai_theory/ENVIRONMENT.md
+资料主线：Python official Lists 仅作 10 分钟补缺；NumPy stable Absolute Beginner 定向阅读 import/array fundamentals/attributes/create/shape/reshape/indexing/basic operations，并明确跳过 sorting/stacking/newaxis/broadcasting/Pandas；Quickstart 只作 3D printing/shape 查缺
 教程结构：Session A environment+concept+resources，Session B Round1 independent numpy_basics.py，Round2 对照五个误区，Session C verification+AI Infra memory estimate；一个 Session 可以独立停止，T1 可跨两个自然周
 Round1 截断审计通过：已有精确文件名/用途、必要 Python syntax、API 小例子、固定 arrays、metadata/assert/error contract、py_compile/run commands 与阅读闸门；未提供完整 numpy_basics.py
 范围边界：不深入 broadcasting、stride、view/copy 全规则、matrix multiplication、PyTorch 或 CUDA；NumPy 作为以后 C++/CUDA operator 的小规模 correctness reference
-文档审计：约 21KB，Markdown fences 成对；核心 shape/index/reshape/error 示例已用 bundled NumPy 2.3.5 实跑通过，使用的基础 API 与目标 NumPy 1.24.4 兼容
+文档审计：核心 shape/index/reshape/error 示例使用稳定 NumPy 基础 API；环境升级后仍须重新运行本课 assertions，不能只靠旧版本兼容推断
 当前状态：T1.md 已就绪但用户尚未执行 environment gate、Session A 或代码验收；Week8 已完成，理论线仍不抢 Week9 epoll/Reactor 主线
 ```
 
@@ -4381,7 +4381,7 @@ CMU 10-414/714：Theory Gate 2 后的 framework/runtime systems bridge，当前�
 
 视频是第二讲解源，不能代替 `Tn.md` 的中文教程、因果链和独立代码。验收看实际代码与可解释证据，不把播放进度当完成度。
 
-T1 已复核并只做必要调整：保留 NumPy 1.24 官方 guide 为主资料；吴恩达 P5 只对应 Jupyter 环境，李沐 04 使用 PyTorch Tensor，正式留到 T9。因此 T1 明确“无强制视频”，避免提前把 `ndarray` 与 `Tensor` 混线。T1 当前状态仍是教程已生成、尚待用户正式学习与验收。
+T1 已复核并只做必要调整：NumPy stable 官方 guide 为主资料；吴恩达 P5 只对应 Jupyter 环境，李沐 04 使用 PyTorch Tensor，正式留到 T9。因此 T1 明确“无强制视频”，避免提前把 `ndarray` 与 `Tensor` 混线。T1 当前状态仍是教程已生成、尚待用户正式学习与验收。
 
 ---
 
@@ -4439,3 +4439,35 @@ Week16 出口前：T16 必达；T17~T18 是 stretch
 延期超过两个自然周时按顺序删减：重复视频/QA -> 已由学校掌握的理论重复 -> T14 CNN/ResNet -> T13 扩展调参。不可删除的桥梁是 T3、T6、T9、T11、T16、T18、T21、T23；T24 宁可拆周，不赶工。仍然冲突时移动 T19~T24，不牺牲 Mini Redis 和真实投递。
 
 T1.md 已同步改为 4~6 个每日 30~60 分钟 block，系统锚点是 Week9 出口；其 NumPy 教学内容和“无强制视频”结论不变。T1 当前仍未验收。
+
+---
+
+## 2026-08-27：T1 环境基线与技术反馈筛选
+
+T1 原先根据 Ubuntu 20.04 的 Python 3.8.10，把 NumPy pin 到 1.24.4。兼容关系本身正确，但工程方向错误：Python 3.8 已 EOL，2026 年新 AI 项目不应为了旧 system Python 主动锁死旧 scientific Python stack。
+
+修正规则：
+
+```text
+宿主机快照 != 新项目技术基线
+system Python 保持不动，不替换、不向其中堆 AI packages
+AI Theory 使用 uv 管理的 Python 3.12.x
+每个项目建立独立 .venv
+当前 NumPy reproducible baseline 为 2.5.2
+统一环境记录位于 ai_theory/ENVIRONMENT.md
+Tn.md 只保留本课环境门和验证，不永久嵌入某次机器检查结果
+```
+
+环境 baseline 必须带日期。精确 pin 用于 reproducibility，不是为了迁就 EOL interpreter；升级后重新运行已有 assertions，再更新 baseline。
+
+本次其他反馈的处理边界：
+
+```text
+采纳：python -O 会移除普通 assert，本课不得用 -O 运行 executable oracle
+采纳：basic ndarray slice 通常是 view，Round1 前必须显眼提示 mutation 可能回写原 array
+采纳：教程正文使用 repo-relative path，不嵌入 C:\Users\FxorG 等私人绝对路径
+不采纳：为了增加“闸门戏剧性”把 broadcasting 从 T3 提前到 T1
+不采纳：仅因用户 C++ 已较强就删除 Python/NumPy object model 基础；允许通过 diagnostic 快速通过，但不制造人为难题
+```
+
+以后处理外部教程评分时，先区分 technical correctness、portability/maintainability、pedagogy preference。优先修技术错误和会误导后续工程的规则；不能为了分数擅自扩大当日范围或打乱总规划。

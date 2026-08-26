@@ -337,10 +337,10 @@ Ubuntu 后续逐步创建，不要求现在一次建完：
 └── t24_transformer_reference/
 ```
 
-Windows 笔记可放：
+理论笔记与对应教程放在一起：
 
 ```text
-C:\Users\FxorG\Desktop\gpt_infra\ai_theory_notes\
+ai_theory/Tn/Tn_note.md
 ```
 
 本次只创建规划文件，不提前创建 24 个空目录。
@@ -422,7 +422,7 @@ NumPy C API
 
 - 吴恩达 [P5 `jupyter笔记本`](https://www.bilibili.com/video/BV1owrpYKEtP?p=5) 只对应 notebook 使用环境，不负责 `ndarray` 语义。
 - 李沐 [04 `数据操作 + 数据预处理`](https://www.bilibili.com/video/BV1CV411Y7i4/) 使用的是 PyTorch Tensor，统一留到 T9，不提前混入 T1。
-- T1 继续以 NumPy 1.24 官方 beginner guide 为主资料。
+- T1 继续以 NumPy stable 官方 beginner guide 为主资料；环境 baseline 统一记录在 `ai_theory/ENVIRONMENT.md`，不由宿主机的旧 system Python 决定。
 
 ### 代码产出
 
