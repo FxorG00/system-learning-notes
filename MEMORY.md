@@ -4231,3 +4231,51 @@ Week16：README / architecture / resume / project explanation
 课程 gate 保持：6.S081 最终完整通关；CSAPP 现在按 linking/ECF/system I/O/network/concurrency/memory hierarchy 定向选学；CS144 在 Reactor/Mini Redis 闭环后评估；15-445 在 Mini Redis V1 后选 storage/buffer/index/concurrency/logging；完整编译原理仅在 AI compiler/LLVM/MLIR 方向开启；6.824 在 Mini Redis + storage 第一轮且明确进入 replication/Raft 后开启。
 
 当前下一步仍是 Week9，不因腾讯岗位分析插入 Go、Kafka、Kubernetes、完整 MySQL 课程、CUDA 或 vLLM。岗位雷达每两周抽 5~10 个 JD，只有“多个岗位重复要求 + 当前项目暴露缺口 + 能形成证据 + 不破坏最近里程碑”时才调整主线。
+
+---
+
+## 2026-08-26：牛客 200/500 篇面经驱动的规划增强
+
+本地面经来源：
+
+```text
+nowcoder_cpp_infra_aiinfra_200_recent.md
+nowcoder_cpp_infra_aiinfra_500_recent3y_with_questions.md
+```
+
+数据边界必须保留：200 篇版本适合看主题频次；500 篇版本共 500 个样本，其中 352 篇提取到可识别原问题，累计 7216 条。样本混合日常实习、暑期、校招、社招以及少量汇总/分析帖；关键词统计会重复命中组合问题。因此只用于决定学习优先级和追问形态，不用于计算录取概率，也不把社招级分布式系统设计直接变成 2027 实习硬前置。
+
+面经对当前路线的核心结论：
+
+```text
+主线方向正确：C++ -> Linux/OS -> network -> concurrency -> epoll/Reactor -> Mini Redis
+项目深挖、性能与排查的密度最高，不能只证明 happy path
+Redis/MySQL/storage 必须随 Mini Redis 分阶段补第一层，不能全部拖到 Week16 集中背
+C++ object model 与 atomic/CAS/memory order 是当前明确缺口
+网络与 OS 需要能和项目、数据库锁、并发及故障场景串起来回答
+AI Infra 仍以系统底座为前提；年内只低强度补 Python/NumPy/PyTorch inference 与 Transformer/KV Cache 第一层，不抢跑 CUDA/vLLM
+```
+
+从 Week9 起采用 milestone exit 口述复盘，不另开 500 题刷题线：
+
+```text
+每个 milestone 结束只选 4~6 个代表问题，30~60 分钟
+回答结构：30 秒定义 -> 2 分钟机制 -> 自己的项目/实验证据 -> 当前边界和代价
+已经会且有证据的直接通过；答不顺才回查 daily/note
+不要求机械抄写标准答案，不让面试准备变成重复 dirty work
+```
+
+复盘映射：Week9 网络/epoll；Week10 ownership/object model/atomic/memory order；Week11 HTTP/TLS；Week12 Redis data model + MySQL index；Week13 expiration/eviction + transaction/MVCC/locks；Week14 persistence/recovery + replication/consistency/RPC 最低词汇；Week15 bottleneck diagnosis；Week16 project deep dive/behavior/availability。
+
+项目里程碑新增的证据要求：
+
+```text
+Week9：pending output 才监听 EPOLLOUT，解释无效唤醒/CPU 空转
+Week10：stale event、callback close/remove、fd 与 object lifetime；出口前用 Week7~8 代码补 virtual/object layout、lambda capture lifetime、alignment/false sharing、atomic/CAS/acquire-release/happens-before 第一层
+Week11：概念上串 DNS -> TCP -> TLS -> HTTP，不要求自写 TLS
+Week12~14：Redis/MySQL/storage 伴随补缺，不新增数据库项目；Week12 的最小数据库证据是同一小表 full scan / ordinary index / covering index 的三组 EXPLAIN 对照
+Week15：至少一条 现象 -> 假设 -> 工具 -> 证据 -> 修改 -> 复测 完整排查链
+Week16：90 秒自我介绍、项目个人贡献、岗位动机和真实可实习时间；只做 1~2 个与 Mini Redis 直接相关的限流/backpressure/cache failure/分片边界场景，不展开微服务百科
+```
+
+Daily 生成约束：只有当天项目确实触及对应主题时，才在 R2/R3 加入该 milestone 的面试追问；R1 仍只给用途、contract、文件名和运行入口，不能因为面经高频就提前泄露实现或堆大量“不要犯错”的提醒。

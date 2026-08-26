@@ -87,12 +87,14 @@ NOIP / CSP-S / CSP-J 奖项
 还没有一个真实协议驱动、可对外演示的主项目
 数据库与 Redis 使用、持久化语义还未形成工程证据
 项目还缺稳定的性能数据、故障案例和简历表达
+已学 C++ / OS / 并发内容尚未形成稳定的面试口述闭环
+C++ object model、atomic/CAS、memory order 仍需定向补强
 Python / NumPy / PyTorch 尚未形成可投递证据
 CUDA、推理框架、算子优化尚未开始正式 gate
 缺少真实团队协作、代码评审和线上环境经验
 ```
 
-前三项由 Week9 ~ Week16 正面解决；最后一项只能由实习、实验室、开源协作或多人项目补齐。
+epoll、主项目、数据库第一层、性能证据、口述闭环和 memory model 由 Week9 ~ Week16 的项目与 milestone exit review 解决；Python/PyTorch 走低强度 AI 伴随线；CUDA 继续等待正式 gate；真实协作只能由实习、实验室、开源协作或多人项目补齐。
 
 ---
 
@@ -208,6 +210,60 @@ vLLM / SGLang / TensorRT-LLM 等推理框架
 
 如果 2027 年春季无法连续每周 3~4 天，技术匹配也可能被时间条件挡住。此时应把窗口转为暑期、实验室或远程开源协作，不把它误判为技术路线失败。
 
+### 3.5 本地牛客面经对规划的校准
+
+本地两份资料：
+
+```text
+nowcoder_cpp_infra_aiinfra_200_recent.md
+nowcoder_cpp_infra_aiinfra_500_recent3y_with_questions.md
+```
+
+其中 200 篇汇总适合看主题频次；500 篇汇总包含 352 篇可识别原帖问题、累计 7216 条，适合看真实追问方式。
+
+200 篇汇总的头部主题同样集中在：项目深挖 146、MySQL/数据库 94、内存管理 79、TCP/UDP/HTTP 72、生产级代码 72、对象模型/虚函数 64、线程/线程池 61、Redis/缓存与存储系统各 53、fd/系统调用/IO 50、性能压测 48、LLM Serving 42。它和 500 篇原问题的方向一致。
+
+500 篇的主题覆盖为：
+
+```text
+C++ 对象 / 资源：414 篇
+项目 / 行为：397 篇
+算法 / 手撕：342 篇
+Linux / OS：310 篇
+分布式 / 工程：265 篇
+数据库 / 缓存：250 篇
+网络 / Socket：189 篇
+高性能网络：156 篇
+AI Infra：152 篇
+```
+
+对 7216 条原问题做关键词归类，只用于比较相对密度，不当作严格统计概率：
+
+```text
+项目 / 性能 / 排查：1058
+C++ 对象 / 内存：764
+Redis / MySQL / 存储：739
+并发 / 内存模型：662
+算法 / 手撕：520
+AI Infra：400
+网络：399
+Linux / OS：383
+分布式 / RPC：317
+```
+
+腾讯相关原问题也呈现同一模式：项目设计与性能证据最密集，Redis/MySQL/存储、并发、C++ 对象模型紧随其后；网络与 OS 往往不是孤立背诵，而会继续追问 epoll、协议状态、系统调用、数据库锁和高并发取舍。
+
+因此规划只增加四类门槛：
+
+```text
+1. 已学基础进入 milestone exit 口述复盘，不重学一遍 daily
+2. 补 C++ object model + atomic/CAS/memory order 第一层
+3. Redis/MySQL/存储随 Mini Redis 分阶段进入，不拖到最后集中背
+4. 项目必须保留故障、排查、指标和优化证据，不只展示 happy path
+```
+
+数据边界：两份资料混有日常实习、暑期、校招和社招，也有汇总/分析帖；关键词可能重复命中同一道组合问题。因此它们用于决定优先级和追问形态，不用于估算录取概率，也不把某个社招系统设计题直接升级为实习前硬前置。
+
 ---
 
 ## 4. 2026 年底简历应该有什么
@@ -321,6 +377,7 @@ epoll_create1 / epoll_ctl / epoll_wait
 LT / ET 第一层
 accept/read/write 的 drain loop
 连接状态与输出缓冲区
+只在存在 pending output 时关注 EPOLLOUT，发送完后取消
 Epoll Echo Server
 ```
 
@@ -330,6 +387,8 @@ Epoll Echo Server
 多 client 可同时通信
 一个慢 client 不阻塞其他 client
 能处理半包、partial write、peer close
+能解释 LT / ET、readiness 与 fd lifetime，不把“可读”误解成“一次读完”
+能解释持续监听 EPOLLOUT 为什么可能造成无效唤醒和 CPU 空转
 无明显 fd leak
 能用 strace / ss 解释关键行为
 能画出 event -> handler -> state change 流程
@@ -349,6 +408,7 @@ Channel：fd 关注的事件与 callback
 Connection：socket lifetime、input/output buffer、协议状态
 Acceptor：监听 fd 与新连接建立
 Buffer：增量读写，不假设一次完成
+TimerQueue：只做支撑 timeout / TTL 的最小定时器模型，核心 Reactor 稳定后再接入
 ```
 
 出口证据：
@@ -358,9 +418,20 @@ Buffer：增量读写，不假设一次完成
 remove / close / callback 生命周期可解释
 支持 write buffering 和 writable interest 切换
 有 deterministic tests 或可复现实验覆盖关键边界
+能说明 stale event、callback 中 close/remove 和 object lifetime 的关系
 ```
 
 不提前做多 EventLoop、多线程 Reactor、io_uring 或 lock-free。
+
+出口前做一次 C++ 定向补缺，挂回 Week7~8 并发组件和 Reactor lifetime，不进入复杂模板或 lock-free 实现：
+
+```text
+virtual dispatch、object layout、virtual destructor 第一层
+lambda capture 与 captured object lifetime
+template instantiation 的编译期含义
+alignment、cache line、false sharing 第一层
+atomic 与 mutex/volatile 的边界、CAS、acquire/release、happens-before 第一层
+```
 
 ### Milestone C / Week11：HTTP Server V1
 
@@ -378,6 +449,7 @@ Content-Length
 malformed request 的明确响应
 keep-alive 是否支持要写清 contract
 curl + 自写 tests
+概念上串清 DNS -> TCP -> TLS -> HTTP；V1 不要求自己实现 TLS
 ```
 
 出口证据：
@@ -387,6 +459,7 @@ curl + 自写 tests
 半包 / 多次 read 能正确推进 parser state
 curl 可复现实验
 错误输入不会让 server 崩溃
+能解释 HTTP/1.0、HTTP/1.1、HTTPS 的边界，以及 TLS 保护了什么
 ```
 
 ### Milestone D / Week12：Mini Redis V1 - RESP 与 KV
@@ -399,7 +472,15 @@ SET / GET / DEL / EXISTS
 协议测试
 ```
 
-出口：网络层、协议层、命令层和存储层边界清楚。
+出口：网络层、协议层、命令层和存储层边界清楚；同时能对照经典 Redis 的主要命令执行路径解释常见数据类型和事件循环为什么高效，知道现代 Redis 还包含 I/O threads 与后台任务，并准确说明本项目只实现了哪些语义。
+
+伴随补缺，不新增数据库项目：
+
+```text
+MySQL B+ tree index、clustered/secondary index、covering index、回表第一层
+EXPLAIN 的目的与“是否走索引不能只靠猜”
+最小实验：同一个小表对比一次 full scan、普通 index query 和 covering index query 的 EXPLAIN
+```
 
 ### Milestone E / Week13：Mini Redis V2 - 生命周期与 TTL
 
@@ -413,6 +494,14 @@ lazy expiration
 
 出口：过期语义有 deterministic evidence，不靠长时间 sleep 测试。
 
+伴随补缺：
+
+```text
+Redis expiration 与 eviction 的区别
+cache penetration / breakdown / avalanche 的问题模型与基本处理
+MySQL ACID、transaction、isolation、MVCC、lock/deadlock 第一层
+```
+
 ### Milestone F / Week14：Mini Redis V3 - AOF 与恢复
 
 ```text
@@ -425,6 +514,15 @@ crash consistency 只做到能证明的层次
 
 出口：重启后数据可恢复，有故障实验，不声称完整 Redis durability。
 
+伴随补缺：
+
+```text
+真实 Redis RDB / AOF 的目标、取舍和恢复边界
+MySQL redo / undo / binlog 各自解决什么问题，只到第一层
+replication、sharding、consistency、RPC 的最低系统词汇
+不实现 Redis Cluster、Raft 或分布式事务
+```
+
 ### Milestone G / Week15：测试、故障与性能
 
 ```text
@@ -434,10 +532,11 @@ ASan / TSan
 fd / memory leak 检查
 throughput 与 latency baseline
 固定环境、workload、样本与统计方式
+用现象先区分 CPU / memory / I/O / lock contention，再选择 gdb / strace / perf / sanitizer
 perf / flame graph 只在真实瓶颈出现后使用
 ```
 
-出口：每条性能结论能从命令、环境和结果复现。
+出口：每条性能结论能从命令、环境和结果复现；至少保留一条“现象 -> 假设 -> 工具 -> 证据 -> 修改 -> 复测”的完整排查链。
 
 ### Milestone H / Week16：简历项目收口
 
@@ -450,15 +549,18 @@ build / run / test / benchmark instructions
 已知限制
 与真实 Redis 的差距
 2 分钟与 10 分钟项目讲稿
+90 秒自我介绍、为什么投后台/AI Infra、个人贡献与实习时间说明
+1~2 个和本项目直接相关的场景设计：限流/backpressure、cache failure 或单机到分片的边界
 ```
 
 出口：一个不了解仓库的人能按 README 跑起来；简历上的每句话都能指向代码或实验。
 
-Week16 同时留一个短的岗位补缺窗口，不开完整数据库课程：
+Week16 只做前面伴随补缺的收口，不再临时开完整数据库课程：
 
 ```text
 Redis 常见数据结构、过期、淘汰、RDB/AOF 第一层
 MySQL B+ tree index、transaction、ACID、isolation level 第一层
+atomic/CAS、acquire/release、happens-before 第一层
 把概念挂回 Mini Redis 的设计，不机械背题库
 ```
 
@@ -474,6 +576,15 @@ MySQL B+ tree index、transaction、ACID、isolation level 第一层
 | 2026.12 | Week16 + 求职准备 | README、项目讲稿、第一版简历、岗位清单 |
 | 2027.01 | 第一轮投递 | 日常实习、导师直招、后台/C++ Infra 主投，AI infra 相关岗位冲刺 |
 | 2027.02 起 | 投递反馈驱动补缺 | 面试复盘、项目修订、短板专题，不重新开一堆课程 |
+
+从 Week10 主项目稳定后，AI 理论伴随线最多每周两次、每次约 60 分钟：
+
+```text
+2026.09~10：Python / NumPy / PyTorch tensor 与 inference
+2026.11~12：Transformer forward、attention、KV Cache、batch/latency/throughput 第一层
+```
+
+目标是到投递时能理解 AI workload，并完成一个小 inference benchmark；不在 Mini Redis 前启动 CUDA 或 vLLM 源码主线。若伴随线开始拖慢最近 milestone，立即暂停。
 
 如果实际学习继续明显快于日历，不靠增加教程字数拖慢：
 
@@ -527,15 +638,44 @@ C++ object lifetime、RAII、copy/move、smart pointer
 virtual function / object layout 第一层
 STL complexity 与 iterator invalidation
 thread、mutex、condition variable、data race、deadlock
+atomic/CAS、acquire/release、happens-before 第一层
 process/thread、virtual memory、page fault、system call
 fd / open file description / mmap
 TCP handshake/close、flow control、socket API
 non-blocking I/O、epoll、LT/ET、partial I/O
 Reactor ownership、connection lifecycle、backpressure
+DNS -> TCP -> TLS -> HTTP 完整链路第一层
 Redis 基础数据与常见语义
 MySQL index / transaction / isolation 第一层
+replication / sharding / consistency / RPC 的最低系统词汇
 项目测试、debug、benchmark 和 trade-off
 ```
+
+### 7.4 Milestone exit 口述复盘
+
+不另开“500 题刷题线”。每个 milestone 结束时，用 30~60 分钟闭卷回答 4~6 个代表问题：
+
+| 出口 | 复盘主题 | 必须挂到的证据 |
+|---|---|---|
+| Week9 | TCP、non-blocking、epoll、LT/ET、系统调用 | Epoll Echo Server、`ss/strace` |
+| Week10 | ownership、virtual/object layout、thread/atomic/memory order | Reactor lifetime、Week7~8 并发代码 |
+| Week11 | HTTP versions、HTTPS/TLS、协议 parser | HTTP Server、curl/抓包 |
+| Week12 | Redis data model、B+ tree/index | KV implementation、三组 EXPLAIN 对照 |
+| Week13 | expiration/eviction、transaction/MVCC/locks | TTL tests、可控时钟 |
+| Week14 | AOF/RDB、WAL/recovery、replication/consistency | restart/fault experiment |
+| Week15 | CPU/memory/I/O/lock bottleneck、工具选择 | benchmark 与排查链 |
+| Week16 | project deep dive、system trade-off、行为问题 | README、代码、指标和时间说明 |
+
+每题按同一结构回答：
+
+```text
+30 秒：定义与结论
+2 分钟：完整机制和因果链
+项目证据：自己的代码、命令、失败实验或 benchmark
+边界：当前实现没做什么，代价是什么
+```
+
+已能顺畅回答且有证据的题直接通过；答不顺才回查 daily/note。不得为了形式抄写大量标准答案。
 
 算法训练：
 
@@ -545,7 +685,7 @@ MySQL index / transaction / isolation 第一层
 不再把大量简单题当主线进度
 ```
 
-### 7.4 简历投递版本
+### 7.5 简历投递版本
 
 第一版简历建议结构：
 
@@ -894,6 +1034,8 @@ CUDA kernel correctness + profiler + benchmark
 - [CS DIY](https://csdiy.wiki/)
 - [Stanford CS144](https://cs144.github.io/)
 - [CMU 15-445](https://15445.courses.cs.cmu.edu/)
+- 本地 `nowcoder_cpp_infra_aiinfra_200_recent.md`：主题频次雷达
+- 本地 `nowcoder_cpp_infra_aiinfra_500_recent3y_with_questions.md`：原问题与追问形态样本
 
 最终原则：
 
