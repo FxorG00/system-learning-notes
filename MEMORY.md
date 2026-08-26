@@ -4279,3 +4279,34 @@ Week16：90 秒自我介绍、项目个人贡献、岗位动机和真实可实�
 ```
 
 Daily 生成约束：只有当天项目确实触及对应主题时，才在 R2/R3 加入该 milestone 的面试追问；R1 仍只给用途、contract、文件名和运行入口，不能因为面经高频就提前泄露实现或堆大量“不要犯错”的提醒。
+
+---
+
+## 2026-08-26：Week9 正式启动
+
+新一周的生成顺序必须固定为：
+
+```text
+先读取总规划、MEMORY、上一周收尾
+-> 先生成并校验 weekN/weekN.md
+-> 让周规划明确七天依赖、最终产出、停止边界和出口证据
+-> 再生成 weekN/day1/day1.md
+```
+
+不能在 `weekN.md` 尚未建立时直接生成 Day1。周规划不是把七个 daily 提前写一遍，而是先确定本周唯一 milestone、每天承担的增量、canonical code 怎样演进，以及哪些内容明确后置。
+
+Week9 周规划已生成，主线固定为：
+
+```text
+Day1：O_NONBLOCK / EAGAIN / EOF / partial I/O，nonblocking stream probe
+Day2：epoll create/register/wait 与 readiness，local stream probe
+Day3：non-blocking TCP accept/read event loop，多 client read server
+Day4：per-connection input/output state 与 newline framing
+Day5：partial write、pending output、dynamic EPOLLOUT，Epoll Echo Server V1
+Day6：LT/ET 对照、peer close/error、fd lifecycle 与 server hardening
+Day7：multi-client/slow-client/fragmentation/fd evidence 与 milestone exit review
+```
+
+Week9 不提前抽象正式 Reactor，不完整展开 select/poll/io_uring，不把 ThreadPool 塞进 event loop。过程式 `epoll_echo_server.cpp` 先形成正确、可观察的 canonical implementation，Week10 再根据真实复杂度拆 EventLoop/Channel/Connection/Acceptor/Buffer。
+
+Week9 Day1 已生成但尚未学习验收。Day1 使用 `socketpair(AF_UNIX, SOCK_STREAM)` 隔离 stream semantics，让用户在 Round1 独立建立 `WOULD_BLOCK -> BYTES -> WOULD_BLOCK -> EOF` 的 deterministic trace；今天不使用 epoll/TCP/thread，不做 GoogleTest、TSan、benchmark 等与核心问题无关的体力活。Day1 R1 只给 observable contract 和单 API 最小例子，drain state machine 与 open-file-description 机制放在阅读闸门后的 Round2。
