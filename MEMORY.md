@@ -1657,7 +1657,32 @@ Lec03：3.1、3.2、3.3、3.4、3.5
 
 ### CMU 15-445
 
-15-445 是数据库与 Mini Redis 后续的伴随线。当前只保留在总规划中，不抢占 Week4 Linux 主线。
+15-445 是数据库与 Mini Redis 后续的伴随线。当前不抢占 Week9 Reactor 与 Mini Redis V1；Mini Redis 形成第一版网络、命令和持久化闭环后，再按 `overview -> storage -> buffer pool/memory management -> hash/B+ tree -> concurrency -> logging/recovery` 选学。BusTub projects 是否完整做，由项目进度和岗位反馈决定，不默认全刷。
+
+### CS DIY 课程选择结论（2026-08-26）
+
+CS DIY 只作为高质量课程目录，不作为必须逐门通关的并行课表。总路线采取“一条系统主线、两条伴随线、一个课程池”：
+
+```text
+系统主线：C++ -> Linux/OS -> network -> epoll/Reactor -> HTTP -> Mini Redis
+OS 伴随线：MIT 6.S081，长期必须最终完整通关，按主线问题分阶段推进
+AI 理论伴随线：T1 ~ T24，低强度推进，不阻塞系统项目
+课程池：CSAPP / CS144 / 15-445 / compiler / 6.824 / DL systems，满足 gate 才开启
+```
+
+课程取舍：
+
+```text
+CSAPP：从现在开始按主题选学，不从头完整重刷。Reactor 前后查 system I/O/network/concurrency；遇到 build/link 补 linking/ELF；VM/性能阶段补 memory hierarchy/ECF/VM。实验按项目需要从 Proxy/Cache/Malloc 中选择，不为经典而插队
+Stanford CS144：完整 TCP/IP protocol implementation，与使用 Linux epoll 写 Reactor 不是同一任务。Reactor/HTTP/Mini Redis 至少一个闭环后再评估；可先选 ByteStream/reassembler，也可之后安排完整 checkpoints
+Stanford CS143/NJU 编译原理：当前只补 preprocess/compile/assemble/link、translation unit、symbol/relocation、ELF、static/dynamic linking、ABI 第一层；完整 compiler 仅在明确走 AI compiler/LLVM/MLIR 时开启
+CMU 15-445：Mini Redis V1 后做 storage-oriented selected lectures；不默认完整 BusTub
+MIT 6.824：使用 Go、约一整门高强度 distributed systems 路线；Mini Redis + storage 第一轮完成且明确进入 replication/Raft 时才开启
+CMU 10-414/714 或 ML systems：由 AI 理论 Gate 接管；Theory Gate 前不因方向名字更像 AI Infra 而提前开重课
+计算机组成/体系结构：用户硬件基础相对薄弱，但当前不再并行开完整 CS61C/Nand2Tetris；先用学校课程 + CSAPP programmer view 补 data representation、machine instruction/register/stack、cache/locality/cache line、VM/physical memory。进入 CUDA Gate 前再次做 prerequisite audit
+```
+
+通用判断：课程必须补当前项目依赖、能形成可验证产出，并且比继续打磨主项目更接近实习目标；三项不成立就留在 backlog。
 
 ---
 
@@ -3092,7 +3117,20 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6、Week7、Week8 均已正式完成，系统主线下一步进入 Week9 epoll/Reactor。Week8 最终产出按用户真实判断定位为“BlockingQueue + ThreadPool + AsyncLogger 组件实现、测试、benchmark 与 integration harness”，不是有真实业务输入的完整小项目；README/interview 包装被用户主动省略，不作为 Week8 通过阻塞项。Day7 fresh normal CTest 18/18、fresh TSan CTest 18/18 通过，component_demo_smoke 已进入 CMake/CTest/TSan target graph，Day7 最终评分 95。用户选择不机械抄写验收题，并允许把测试体力活委托给 Codex，由代码、daily 主动补充和实测证据替代；某一天的核心若正是测试设计，则不能把所有核心 scenarios 都降级为 dirty work。AI Infra 理论伴随线 T1 已生成但尚未开始，不能替代或阻塞系统主线。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 首次正式验收通过后，仍须在同一轮依据真实产出定向修改 R2/R3。
+当前位置：Week5、Week6、Week7、Week8 均已正式完成，系统主线下一步进入 Week9 non-blocking I/O / epoll，随后按 gate 推进 Reactor -> HTTP Server -> Mini Redis。Week8 最终产出按用户真实判断定位为“BlockingQueue + ThreadPool + AsyncLogger 组件实现、测试、benchmark 与 integration harness”，不是有真实业务输入的完整小项目；README/interview 包装被用户主动省略，不作为 Week8 通过阻塞项。Day7 fresh normal CTest 18/18、fresh TSan CTest 18/18 通过，component_demo_smoke 已进入 CMake/CTest/TSan target graph，Day7 最终评分 95。用户选择不机械抄写验收题，并允许把测试体力活委托给 Codex，由代码、daily 主动补充和实测证据替代；某一天的核心若正是测试设计，则不能把所有核心 scenarios 都降级为 dirty work。AI Infra 理论伴随线 T1 已生成但尚未开始，不能替代或阻塞系统主线。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 首次正式验收通过后，仍须在同一轮依据真实产出定向修改 R2/R3。
+
+总规划已在 2026-08-26 完成 Week9 校准：
+
+```text
+Milestone A / Week9：non-blocking I/O、epoll、EAGAIN、partial I/O、Epoll Echo Server
+Milestone B / Week10：Reactor V1，明确 EventLoop/Channel/Acceptor/Connection ownership
+Milestone C / Week11：HTTP Server V1，验证 incremental parse、keep-alive 和 Reactor
+Milestone D / Week12~Week16：Mini Redis 主简历项目，依次完成 RESP/KV、network、多 client、TTL、AOF/restart、tests/benchmark/docs
+Milestone E：Mini Redis V1 后再做 15-445/CSAPP/MySQL 定向补强；RPC 非固定 Week，不抢主项目
+Milestone F：2026-12 形成第一版简历，2027-01 开始投递，2027-02 持续进入春招/日常实习窗口
+```
+
+执行不按自然周机械计时，而按 milestone exit evidence 推进。Reactor/HTTP 是 Mini Redis 的技术底座和副项目；BlockingQueue/ThreadPool/AsyncLogger 是内部组件证据，不强行各包装成一个简历项目。第一段实习岗位可以是 AI deployment/inference，也可以是高质量 C++ Infra、中间件、存储、网络或性能工程；目标是获得可迁移到 AI Infra 的真实系统经验。
 
 AI Infra 理论伴随线规划（2026-08-21）：
 
@@ -3107,7 +3145,7 @@ T17~T24：multi-head/Transformer block、decoder-only forward、sampling、train
 三个 Theory Gates：NumPy/math -> PyTorch/DL -> Transformer/inference；Gate 3 后再进入 mini-infer-cpu，CUDA 仍必须单独满足总规划 Gate C
 B 站资源：3Blue1Brown 官方账号负责线代/微积分直觉；李沐 D2L 为主课；小土堆只补 PyTorch API；李宏毅只选 ML/attention/Transformer 关键章节；我是傅傅猪后置到 CPU inference
 资源纪律：优先原作者/官方账号、大学官方课程和框架官方文档；不追“最新版几百集/三天精通/资料包”，视频时间必须落到代码和验证
-当前状态：规划已生成，T1 尚未开始；系统主线下一步仍是 Week8 Day2
+当前状态：规划已生成，T1 尚未开始；系统主线下一步是 Week9，不因理论线停住
 ```
 
 AI Infra 理论伴随线的实际教学方式（2026-08-23）：
@@ -3137,7 +3175,7 @@ Ubuntu code 目录已建立：~/code/system-learning/ai-theory/t01_numpy_basics
 Round1 截断审计通过：已有精确文件名/用途、必要 Python syntax、API 小例子、固定 arrays、metadata/assert/error contract、py_compile/run commands 与阅读闸门；未提供完整 numpy_basics.py
 范围边界：不深入 broadcasting、stride、view/copy 全规则、matrix multiplication、PyTorch 或 CUDA；NumPy 作为以后 C++/CUDA operator 的小规模 correctness reference
 文档审计：约 21KB，Markdown fences 成对；核心 shape/index/reshape/error 示例已用 bundled NumPy 2.3.5 实跑通过，使用的基础 API 与目标 NumPy 1.24.4 兼容
-当前状态：T1.md 已就绪但用户尚未执行 environment gate、Session A 或代码验收；系统主线 Week8 Day3 已通过，下一步仍可按精力进入 Week8 Day4，理论线不抢主线
+当前状态：T1.md 已就绪但用户尚未执行 environment gate、Session A 或代码验收；Week8 已完成，理论线仍不抢 Week9 epoll/Reactor 主线
 ```
 
 Week8 周规划的固定主线：
