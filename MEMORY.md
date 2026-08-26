@@ -4310,3 +4310,75 @@ Day7：multi-client/slow-client/fragmentation/fd evidence 与 milestone exit rev
 Week9 不提前抽象正式 Reactor，不完整展开 select/poll/io_uring，不把 ThreadPool 塞进 event loop。过程式 `epoll_echo_server.cpp` 先形成正确、可观察的 canonical implementation，Week10 再根据真实复杂度拆 EventLoop/Channel/Connection/Acceptor/Buffer。
 
 Week9 Day1 已生成但尚未学习验收。Day1 使用 `socketpair(AF_UNIX, SOCK_STREAM)` 隔离 stream semantics，让用户在 Round1 独立建立 `WOULD_BLOCK -> BYTES -> WOULD_BLOCK -> EOF` 的 deterministic trace；今天不使用 epoll/TCP/thread，不做 GoogleTest、TSan、benchmark 等与核心问题无关的体力活。Day1 R1 只给 observable contract 和单 API 最小例子，drain state machine 与 open-file-description 机制放在阅读闸门后的 Round2。
+
+---
+
+## 2026-08-26：AI 理论线数学基础与课程分工校准
+
+用户补充的真实基础：中山大学计算机专业学校课程中的微积分、线性代数基础扎实，不需要 AI 伴随线从头重复教学；概率论将跟学校正式课程与用户选择的一门 B 站大学数学网课完整学习。以后不得仍按“数学从零”生成 T2/T4/T5。
+
+新的分工：
+
+```text
+学校数学 / 概率网课：定义、公式、习题、考试深度
+AI Theory：把数学映射到 NumPy/PyTorch、Tensor shape、matmul、gradient、loss、sampling
+代码 gate：证明数学知识已经能用于 model computation 与 correctness oracle
+```
+
+T2/T4 先做 diagnostic gate；能手算并解释就跳过重复视频，直接做 NumPy、finite difference 或 shape code。T5/T6 跟随学校概率进度，只补 softmax、cross-entropy、categorical sampling 等 AI application，不并行完整刷 Harvard Stat 110。
+
+课程角色固定：
+
+```text
+吴恩达 Machine Learning Specialization：概念骨架；Course 1 核心 + Course 2 Week1~3 选学，decision tree、Course 3 暂后置
+李沐 D2L：PyTorch 与可运行 deep-learning implementation 主线
+吴恩达 Deep Learning Specialization：不与 D2L 完整双刷，只作第二讲解源
+Stanford CS229：更数学化 notes reference，不完整通关
+MIT 6.S191：T12 后的高密度 overview，按 lecture 选看
+CMU 10-414/714：Theory Gate 2 后的 framework/runtime systems bridge，当前不开启
+```
+
+原则仍是一个阶段只有一个主讲来源和一个代码产出；公开课用于填真实缺口，不能把收藏或播放时长当进度。系统工程主线当前仍是 Week9 epoll，不因 AI 课程选择暂停。
+
+---
+
+## 2026-08-26：AI Theory 逐周视频对齐与教程生成规则
+
+用户指定两条固定 B 站课程线：
+
+```text
+吴恩达：BV1owrpYKEtP，按 P 号和分集标题定位
+李沐：跟李沐学AI账号中的《动手学深度学习 v2》，按章节号、标题和官方单课链接定位
+```
+
+`AI_Infra理论伴随线规划.md` 的 T1~T24 已逐周补充精确对应关系。以后不能只写“看线性回归/注意力相关视频”，必须写成：
+
+```text
+吴恩达 P6《线性回归模型》~P15《运行梯度下降》
+李沐 08《线性回归 + 基础优化算法》
+```
+
+或者在没有直接覆盖时明确写：
+
+```text
+本周无强制视频
+两条基准课程没有 KV Cache / continuous batching 的直接对应章节
+```
+
+不得为了让每周看起来都有视频，拿相邻主题冒充直接教学，也不再随意插入来源不明的“全集打包版”或第三条 B 站课程。官方 docs、D2L 教材、大学课程页面仍可作准确性 reference，但不自动变成并行播放清单。
+
+每个 T Week 仍由用户逐周请求生成一份完整 `Tn.md`，形式参考 T1 和成熟 daily：
+
+```text
+前情与当前问题
+-> 自写教程主线与必要术语
+-> 精确视频编号/标题（确有需要时）
+-> Round1 独立用途、文件名、contract、运行入口
+-> 用户实现后根据 code/note/questions 定向修改 Round2/Round3
+-> shape/value/tolerance/错误路径验证
+-> AI Infra connection 与通过边界
+```
+
+视频是第二讲解源，不能代替 `Tn.md` 的中文教程、因果链和独立代码。验收看实际代码与可解释证据，不把播放进度当完成度。
+
+T1 已复核并只做必要调整：保留 NumPy 1.24 官方 guide 为主资料；吴恩达 P5 只对应 Jupyter 环境，李沐 04 使用 PyTorch Tensor，正式留到 T9。因此 T1 明确“无强制视频”，避免提前把 `ndarray` 与 `Tensor` 混线。T1 当前状态仍是教程已生成、尚待用户正式学习与验收。

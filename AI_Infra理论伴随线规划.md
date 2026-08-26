@@ -1,7 +1,7 @@
 # AI Infra 理论伴随线规划
 
-> 版本：2026-08-21
-> 适用对象：FxorG，中山大学计算机科学与技术专业，当前 Week8 Day1 已通过
+> 版本：2026-08-26，数学基础、课程分工与逐周视频对齐版
+> 适用对象：FxorG，中山大学计算机科学与技术专业，系统主线已进入 Week9
 > 职业目标：本科就业，主攻 LLM inference systems / serving 与 CUDA/Triton kernel optimization
 > 本文件定位：`plan_strengthened.md` 的 AI Infra 理论伴随线，不替代 C++ / Linux / OS / 网络 / Reactor / Mini Redis 主线
 
@@ -58,13 +58,13 @@ AI 理论伴随线：10%~20%
 
 ## 2. 当前结论
 
-### 2.1 必须学习
+### 2.1 必须具备并映射到 AI 的知识
 
 ```text
 Python / NumPy
-线性代数
-微积分与梯度最低入口
-概率统计最低入口
+线性代数在 Tensor shape / matmul / transformation 中的映射
+微积分在 gradient / backpropagation 中的映射
+概率统计在 softmax / loss / sampling 中的映射
 机器学习基本 workflow
 深度学习 forward / backward 第一层
 PyTorch Tensor / Module / inference
@@ -109,6 +109,41 @@ GAN / 强化学习 / 图神经网络全线
 
 本规划不会把这些完整课程全部并行通关，而是根据 AI Infra 当前需要选择章节，再用代码 gate 验收。
 
+### 2.5 用户当前数学基础与课程分工
+
+用户已明确：
+
+```text
+学校微积分：基础扎实，不需要伴随线从头重学
+学校线性代数：基础扎实，不需要再完整刷 MIT 18.06 或 3Blue1Brown
+学校概率论：属于正式课程，用户计划配合一门 B 站大学数学网课完整学完
+```
+
+因此从现在起，不再把 T2、T4、T5 理解成三门数学补习课。三类来源的职责是：
+
+```text
+学校课程 / 概率网课：负责系统定义、公式、习题和考试深度
+AI Theory T Week：负责把已学数学映射到 NumPy/PyTorch、Tensor shape、loss、sampling 和性能
+代码 gate：负责验证“会做数学题”已经转化为“会解释模型计算”
+```
+
+具体调速：
+
+```text
+线代或微积分 checkpoint 能口述并手算
+-> 不看重复视频
+-> 直接完成 NumPy / finite-difference / shape 验证
+
+概率论学校尚未讲到某个概念
+-> T5/T6 可以等待学校进度，或只补当前代码必需的最小概念
+-> 不同时再开 Harvard Statistics 110 全课
+
+学校已经学完且掌握
+-> T Week 只做 AI application mapping，不抄第二份数学笔记
+```
+
+这里的“掌握”不按成绩猜测，而用很短的 diagnostic gate 判断；若能手算、解释并完成对应代码，就直接通过数学部分。
+
 ---
 
 ## 3. 和系统主线怎样并行
@@ -118,9 +153,9 @@ GAN / 强化学习 / 图神经网络全线
 当前系统主线位置：
 
 ```text
-Week8 Day1 已通过
-下一步：Week8 Day2 ThreadPool V1
-后续：AsyncLogger -> Reactor -> HTTP Server -> Mini Redis
+Week1 ~ Week8 已完成
+当前：Week9 non-blocking I/O / epoll
+后续：Reactor -> HTTP Server -> Mini Redis
 ```
 
 理论线从 `T1` 开始。`T` 表示 Theory companion week，与主线的 `WeekN` 不要求一一对应。
@@ -187,6 +222,33 @@ Session C：30~60 分钟，复盘 + 验证
 4. 一段“这和 AI Infra 有什么关系”的解释
 ```
 
+每个 T Week 开始前，再单独生成一份 `Tn.md` 教程。它和系统主线的 `daily.md` 一样，必须自己完成概念铺垫、术语解释、完整因果链、Round1 独立实现、Round2 定向打磨和最终验证；视频只承担第二讲解源或课程校准，不能用“去看第几 P”代替教程正文。
+
+固定顺序：
+
+```text
+读取总规划、MEMORY、上一 T Week 结果
+-> 生成完整 Tn.md
+-> 列出本周精确对应的视频编号与标题
+-> 用户先完成独立产出
+-> 根据真实代码、note 和问题定向修改后半部分
+-> 验收并同步 MEMORY 进度
+```
+
+视频基准只使用用户指定的两条课程线：
+
+- 吴恩达：[机器学习课程合集 `BV1owrpYKEtP`](https://www.bilibili.com/video/BV1owrpYKEtP)
+- 李沐：[“跟李沐学AI”账号内搜索《动手学深度学习》](https://space.bilibili.com/1567748478/search?keyword=%E5%8A%A8%E6%89%8B)
+
+映射规则：
+
+```text
+吴恩达课程：使用 P 号 + 分集标题定位
+李沐课程：使用官方章节号 + 标题 + 单课链接定位
+没有直接对应视频：明确写“本周无强制视频”，由 Tn.md 和官方文档承担
+一个概念已经由学校课程掌握：视频可作为定位资料，不要求重复播放
+```
+
 不要只留下：
 
 ```text
@@ -232,7 +294,7 @@ C:\Users\FxorG\Desktop\gpt_infra\ai_theory_notes\
 
 ---
 
-# 第一阶段：数学、Python 与 NumPy 最低闭环
+# 第一阶段：Python / NumPy 与数学到模型计算的映射
 
 > 周次：T1~T8
 > 建议强度：每周约 3 小时
@@ -285,6 +347,16 @@ NumPy C API
 复杂 fancy indexing
 ```
 
+### 对应视频
+
+```text
+本周无强制视频。
+```
+
+- 吴恩达 [P5 `jupyter笔记本`](https://www.bilibili.com/video/BV1owrpYKEtP?p=5) 只对应 notebook 使用环境，不负责 `ndarray` 语义。
+- 李沐 [04 `数据操作 + 数据预处理`](https://www.bilibili.com/video/BV1CV411Y7i4/) 使用的是 PyTorch Tensor，统一留到 T9，不提前混入 T1。
+- T1 继续以 NumPy 1.24 官方 beginner guide 为主资料。
+
 ### 代码产出
 
 ```text
@@ -306,7 +378,7 @@ reshape 前后元素总数不变
 
 ---
 
-## T2：向量、矩阵与线性变换直觉
+## T2：向量、矩阵与线性变换的 AI 映射
 
 ### 本周问题
 
@@ -324,6 +396,8 @@ span / basis 直觉
 matrix 作为 linear transformation
 row vector / column vector 的 shape 区别
 ```
+
+本节默认用户已经完成学校线代训练。先做手算 diagnostic；能够解释 linear combination、basis 和 matrix-vector multiplication 时，直接进入 NumPy 代码，不重复看完整线代视频。
 
 ### 学到什么程度
 
@@ -343,6 +417,13 @@ row vector / column vector 的 shape 区别
 Jordan normal form
 ```
 
+### 对应视频
+
+- 李沐：[05 `线性代数`](https://www.bilibili.com/video/BV1eK4y1U7Qy/) 中的“线性代数”“线性代数实现”“按特定轴求和”。
+- 吴恩达：[P17 `向量化（第一部分）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=17)、[P18 `向量化（第二部分）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=18)。
+
+学校线代 diagnostic 已通过时，这些是对应关系，不是重复刷课要求。
+
 ### 代码产出
 
 ```text
@@ -350,11 +431,6 @@ vector_matrix.py
 ```
 
 用 NumPy 验证手算结果，并检查 input/output shapes。
-
-### 推荐视频
-
-- 主看：[3Blue1Brown 官方账号《线性代数的本质》第 1 讲](https://www.bilibili.com/video/BV1Ys411k7yQ)
-- 配套实现：[李沐《动手学深度学习》线性代数](https://www.bilibili.com/video/BV1eK4y1U7Qy/)
 
 ### 通过标准
 
@@ -408,6 +484,12 @@ matrix multiply
 batch matrix multiply
 ```
 
+### 对应视频
+
+- 李沐：[06 `矩阵计算`](https://www.bilibili.com/video/BV1eZ4y1w7PY/)；05 的“按特定轴求和”作为 broadcasting/reduction 前置。
+- 吴恩达：[P17 `向量化（第一部分）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=17)、[P18 `向量化（第二部分）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=18)、[P19 `多重线性回归的梯度下降`](https://www.bilibili.com/video/BV1owrpYKEtP?p=19)。
+- 需要再次从神经网络语境看 matmul 时，对应 [P52 `矩阵乘法`](https://www.bilibili.com/video/BV1owrpYKEtP?p=52)、[P53 `矩阵乘法规则`](https://www.bilibili.com/video/BV1owrpYKEtP?p=53)、[P54 `矩阵乘法代码`](https://www.bilibili.com/video/BV1owrpYKEtP?p=54)。
+
 ### 代码产出
 
 ```text
@@ -429,7 +511,7 @@ matmul_broadcast.py
 
 ---
 
-## T4：导数、偏导、梯度与 chain rule
+## T4：gradient 与 chain rule 的计算图映射
 
 ### 本周问题
 
@@ -447,6 +529,18 @@ chain rule：复合计算的导数传播
 Jacobian 只建立 shape 直觉
 gradient descent 基本更新式
 ```
+
+本节默认用户已经掌握学校微积分。重点不是重学求导规则，而是把：
+
+```text
+复合函数
+-> computation graph
+-> local derivative
+-> reverse accumulation
+-> parameter gradient
+```
+
+串成后续 autograd/backpropagation 可使用的模型。手推通过后可跳过微积分视频，直接做 finite difference 验证。
 
 ### 学到什么程度
 
@@ -474,6 +568,13 @@ epsilon-delta 严格证明
 凸优化完整理论
 ```
 
+### 对应视频
+
+- 李沐：[07 `自动求导`](https://www.bilibili.com/video/BV1KA411N7Px/) 中的“自动求导”“自动求导实现”。
+- 吴恩达：[P67 `什么是导数（可选）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=67)、[P68 `计算图（可选）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=68)、[P69 `更大神经网络示例（可选）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=69)。
+
+T4 仍以手推和 finite difference 为 gate；视频不替代计算。
+
 ### 代码产出
 
 ```text
@@ -482,19 +583,13 @@ finite_difference_gradient.py
 
 用 finite difference 检查手推 gradient。
 
-### 推荐视频
-
-- 直觉主看：[3Blue1Brown 官方账号《微积分的本质》第 1 讲](https://www.bilibili.com/video/BV1cx411m78R/)
-
-只选看导数、chain rule、gradient 相关章节，不要求本周刷完整套微积分。
-
 ### 通过标准
 
 能解释 gradient 是什么、shape 是什么、为什么 chain rule 支撑 backpropagation。
 
 ---
 
-## T5：概率最低入口
+## T5：学校概率论到模型概率的接口
 
 ### 本周问题
 
@@ -513,6 +608,8 @@ PMF / PDF 的区别
 expectation / variance
 independence
 ```
+
+完整概率论由学校课程和用户选择的 B 站大学数学网课承担。T5 不另起一门平行概率课，只检查这些概念能否用于描述 model output、categorical sampling 和 expected value。
 
 ### 学到什么程度
 
@@ -533,6 +630,14 @@ independence
 Markov chain 全章
 ```
 
+### 对应视频
+
+```text
+两条基准课程中没有一组能够替代学校概率论的直接对应章节，T5 不强制追加视频。
+```
+
+吴恩达 [P109 `高斯（正态）分布`](https://www.bilibili.com/video/BV1owrpYKEtP?p=109) 只对应 Gaussian 的应用片段，不承担 T5 的条件概率、随机变量、期望和方差主线。
+
 ### 代码产出
 
 ```text
@@ -540,11 +645,6 @@ discrete_probability.py
 ```
 
 模拟 coin / categorical distribution，比较理论 expectation 与 sample mean。
-
-### 推荐资源
-
-- B 站辅助：[数据科学的概率基础](https://www.bilibili.com/video/BV1st411R7yU/)只选事件、条件概率、随机变量、期望方差
-- 更严谨的长期参考：[Harvard Statistics 110](https://stat110.hsites.harvard.edu/)
 
 ### 通过标准
 
@@ -584,6 +684,11 @@ softmax(x) == softmax(x - constant)
 减 max 可以改善数值稳定性
 ```
 
+### 对应视频
+
+- 李沐：[09 `Softmax 回归 + 损失函数 + 图片分类数据集`](https://www.bilibili.com/video/BV1K64y1Q7wu/) 中的“Softmax 回归”“损失函数”“从零开始实现”；[14 `数值稳定性 + 模型初始化和激活函数`](https://www.bilibili.com/video/BV1u64y1i75a/) 中的“数值稳定性”。
+- 吴恩达：[P60 `多类别`](https://www.bilibili.com/video/BV1owrpYKEtP?p=60)、[P61 `Softmax`](https://www.bilibili.com/video/BV1owrpYKEtP?p=61)、[P62 `带 Softmax 输出的神经网络`](https://www.bilibili.com/video/BV1owrpYKEtP?p=62)、[P63 `Softmax 的改进实现`](https://www.bilibili.com/video/BV1owrpYKEtP?p=63)。
+
 ### 代码产出
 
 ```text
@@ -598,10 +703,6 @@ stable softmax
 输入 [1000, 1001, 1002]
 与 NumPy/PyTorch reference 对比
 ```
-
-### 推荐视频
-
-- [李沐：Softmax 回归、损失函数与实现](https://www.bilibili.com/video/BV1K64y1Q7wu/)
 
 ### 通过标准
 
@@ -641,6 +742,15 @@ input
 -> parameter update
 -> next iteration
 ```
+
+### 对应视频
+
+- 李沐：[08 `线性回归 + 基础优化算法`](https://www.bilibili.com/video/BV1PX4y1g7KC/) 中的“线性回归”“基础优化算法”“从零开始实现”“简洁实现”。
+- 吴恩达线性回归模型：[P6 `线性回归模型`](https://www.bilibili.com/video/BV1owrpYKEtP?p=6)、[P7 `成本函数及其直觉`](https://www.bilibili.com/video/BV1owrpYKEtP?p=7)、[P8 `可视化成本函数`](https://www.bilibili.com/video/BV1owrpYKEtP?p=8)、[P9 `可视化示例`](https://www.bilibili.com/video/BV1owrpYKEtP?p=9)。
+- 吴恩达梯度下降：[P10 `梯度下降`](https://www.bilibili.com/video/BV1owrpYKEtP?p=10)、[P11 `实现梯度下降`](https://www.bilibili.com/video/BV1owrpYKEtP?p=11)、[P12 `梯度下降直觉`](https://www.bilibili.com/video/BV1owrpYKEtP?p=12)、[P13 `学习率`](https://www.bilibili.com/video/BV1owrpYKEtP?p=13)、[P14 `线性回归的梯度下降`](https://www.bilibili.com/video/BV1owrpYKEtP?p=14)、[P15 `运行梯度下降`](https://www.bilibili.com/video/BV1owrpYKEtP?p=15)。
+- 吴恩达多特征与收敛：[P16 `多特征`](https://www.bilibili.com/video/BV1owrpYKEtP?p=16)、[P17 `向量化（第一部分）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=17)、[P18 `向量化（第二部分）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=18)、[P19 `多重线性回归的梯度下降`](https://www.bilibili.com/video/BV1owrpYKEtP?p=19)、[P20 `特征缩放（第一部分）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=20)、[P21 `特征缩放（第二部分）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=21)、[P22 `检查梯度下降是否收敛`](https://www.bilibili.com/video/BV1owrpYKEtP?p=22)、[P23 `选择学习率`](https://www.bilibili.com/video/BV1owrpYKEtP?p=23)。
+
+T7 的 NumPy 手写实现仍是主产出，不复制课程 framework lab。
 
 ### 代码产出
 
@@ -703,6 +813,13 @@ SVM 完整对偶推导
 decision tree / boosting 全线
 EM / HMM / CRF
 ```
+
+### 对应视频
+
+- 吴恩达逻辑回归：[P26 `动机`](https://www.bilibili.com/video/BV1owrpYKEtP?p=26)、[P27 `逻辑回归`](https://www.bilibili.com/video/BV1owrpYKEtP?p=27)、[P28 `决策边界`](https://www.bilibili.com/video/BV1owrpYKEtP?p=28)、[P29 `逻辑回归的成本函数`](https://www.bilibili.com/video/BV1owrpYKEtP?p=29)、[P30 `简化后的逻辑回归成本函数`](https://www.bilibili.com/video/BV1owrpYKEtP?p=30)、[P31 `梯度下降实现`](https://www.bilibili.com/video/BV1owrpYKEtP?p=31)。
+- 吴恩达 regularization：[P32 `过拟合问题`](https://www.bilibili.com/video/BV1owrpYKEtP?p=32)、[P33 `解决过拟合`](https://www.bilibili.com/video/BV1owrpYKEtP?p=33)、[P34 `带正则化的成本函数`](https://www.bilibili.com/video/BV1owrpYKEtP?p=34)、[P35 `正则化线性回归`](https://www.bilibili.com/video/BV1owrpYKEtP?p=35)、[P36 `正则化逻辑回归`](https://www.bilibili.com/video/BV1owrpYKEtP?p=36)。
+- 吴恩达 evaluation：[P70 `决定下一步尝试什么`](https://www.bilibili.com/video/BV1owrpYKEtP?p=70)、[P71 `模型评估`](https://www.bilibili.com/video/BV1owrpYKEtP?p=71)、[P72 `模型选择与训练/交叉验证/测试集`](https://www.bilibili.com/video/BV1owrpYKEtP?p=72)、[P73 `诊断偏差与方差`](https://www.bilibili.com/video/BV1owrpYKEtP?p=73)、[P74 `正则化与偏差方差`](https://www.bilibili.com/video/BV1owrpYKEtP?p=74)、[P75 `建立基准性能水平`](https://www.bilibili.com/video/BV1owrpYKEtP?p=75)、[P76 `学习曲线`](https://www.bilibili.com/video/BV1owrpYKEtP?p=76)、[P77 `决定下一步尝试什么（再谈）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=77)、[P78 `偏差、方差与神经网络`](https://www.bilibili.com/video/BV1owrpYKEtP?p=78)、[P79 `ML 开发迭代循环`](https://www.bilibili.com/video/BV1owrpYKEtP?p=79)、[P80 `错误分析`](https://www.bilibili.com/video/BV1owrpYKEtP?p=80)、[P83 `ML 项目完整周期`](https://www.bilibili.com/video/BV1owrpYKEtP?p=83)。
+- 李沐：[09 `Softmax 回归 + 损失函数 + 图片分类数据集`](https://www.bilibili.com/video/BV1K64y1Q7wu/)；[11 `模型选择 + 过拟合和欠拟合`](https://www.bilibili.com/video/BV1kX4y1g7jp/) 中的“模型选择”“过拟合和欠拟合”。
 
 ### 代码产出
 
@@ -777,12 +894,11 @@ tensor_layout.py
 
 打印并验证 transpose 前后的 shape、stride、contiguous state 和 data relation。
 
-### 资源
+### 对应视频
 
-- [PyTorch 官方 Learn the Basics](https://docs.pytorch.org/tutorials/beginner/basics/)
-- B 站可用小土堆补 API：[PyTorch 快速入门](https://www.bilibili.com/video/BV1hE411t7RN/)
-
-小土堆定位是 API 入门，不替代 Tensor/storage/inference 的机制理解。
+- 李沐：[04 `数据操作 + 数据预处理`](https://www.bilibili.com/video/BV1CV411Y7i4/) 中的“数据操作”“数据操作实现”。这是该视频第一次作为正式主线使用。
+- 吴恩达本合集没有讲 Tensor layout/stride 的直接对应分集，本周不强行配吴恩达视频。
+- API 和 stride 的准确语义继续用 [PyTorch 官方 Learn the Basics](https://docs.pytorch.org/tutorials/beginner/basics/) 与 API docs 校准。
 
 ---
 
@@ -827,6 +943,11 @@ module_inference.py
 
 构造最小两层 Module，保存/加载 state_dict，并比较 output。
 
+### 对应视频
+
+- 李沐：[16 `PyTorch 神经网络基础`](https://www.bilibili.com/video/BV1AK4y1P7vs/) 中的“模型构造”“参数管理”“自定义层”“读写文件”。
+- 吴恩达 forward/inference 对应：[P45 `代码中的推理`](https://www.bilibili.com/video/BV1owrpYKEtP?p=45)、[P46 `TensorFlow 中的数据`](https://www.bilibili.com/video/BV1owrpYKEtP?p=46)、[P47 `构建神经网络`](https://www.bilibili.com/video/BV1owrpYKEtP?p=47)、[P48 `单层前向传播`](https://www.bilibili.com/video/BV1owrpYKEtP?p=48)、[P49 `前向传播通用实现`](https://www.bilibili.com/video/BV1owrpYKEtP?p=49)。这些不负责 PyTorch `Module` API。
+
 ---
 
 ## T11：computation graph、autograd 与 backpropagation
@@ -869,6 +990,11 @@ autograd_inspect.py
 
 用手推 gradient、finite difference 和 PyTorch autograd 三者交叉验证。
 
+### 对应视频
+
+- 李沐：[07 `自动求导`](https://www.bilibili.com/video/BV1KA411N7Px/) 全部三节，重点对应 PyTorch autograd 代码。
+- 吴恩达：[P67 `什么是导数（可选）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=67)、[P68 `计算图（可选）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=68)、[P69 `更大神经网络示例（可选）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=69)。
+
 ### 通过标准
 
 不要求读 PyTorch autograd engine 源码，但必须理解 graph 与保存 activation 会影响 memory。
@@ -906,6 +1032,12 @@ inference_mode 下执行
 验证 output shape 和 basic accuracy
 ```
 
+### 对应视频
+
+- 李沐：[10 `多层感知机 + 代码实现`](https://www.bilibili.com/video/BV1hh411U7gn/)；[14 `数值稳定性 + 模型初始化和激活函数`](https://www.bilibili.com/video/BV1u64y1i75a/) 中的“模型初始化和激活函数”。
+- 吴恩达 neural-network object/forward：[P38 `欢迎来到深度学习部分`](https://www.bilibili.com/video/BV1owrpYKEtP?p=38)、[P39 `神经元与大脑`](https://www.bilibili.com/video/BV1owrpYKEtP?p=39)、[P40 `需求预测`](https://www.bilibili.com/video/BV1owrpYKEtP?p=40)、[P41 `图像识别示例`](https://www.bilibili.com/video/BV1owrpYKEtP?p=41)、[P42 `神经网络层`](https://www.bilibili.com/video/BV1owrpYKEtP?p=42)、[P43 `更复杂的神经网络`](https://www.bilibili.com/video/BV1owrpYKEtP?p=43)、[P44 `推理：预测与前向传播`](https://www.bilibili.com/video/BV1owrpYKEtP?p=44)。
+- 吴恩达 code/activation：[P45 `代码中的推理`](https://www.bilibili.com/video/BV1owrpYKEtP?p=45)、[P46 `TensorFlow 中的数据`](https://www.bilibili.com/video/BV1owrpYKEtP?p=46)、[P47 `构建神经网络`](https://www.bilibili.com/video/BV1owrpYKEtP?p=47)、[P48 `单层前向传播`](https://www.bilibili.com/video/BV1owrpYKEtP?p=48)、[P49 `前向传播通用实现`](https://www.bilibili.com/video/BV1owrpYKEtP?p=49)、[P57 `Sigmoid 激活替代`](https://www.bilibili.com/video/BV1owrpYKEtP?p=57)、[P58 `选择激活函数`](https://www.bilibili.com/video/BV1owrpYKEtP?p=58)、[P59 `为什么需要激活函数`](https://www.bilibili.com/video/BV1owrpYKEtP?p=59)。
+
 ### 通过标准
 
 能完整串出 training flow 与 inference flow，并指出 inference 少了哪些对象和步骤。
@@ -933,6 +1065,12 @@ overfit_observation.py
 ```
 
 在小数据集上故意制造 overfitting，再加入一种 regularization，记录 train/validation curves。
+
+### 对应视频
+
+- 李沐：[11 `模型选择 + 过拟合和欠拟合`](https://www.bilibili.com/video/BV1kX4y1g7jp/)、[12 `权重衰退`](https://www.bilibili.com/video/BV1UK4y1o7dy/)、[13 `丢弃法`](https://www.bilibili.com/video/BV1Y5411c7aY/)。
+- 吴恩达 regularization：[P32 `过拟合问题`](https://www.bilibili.com/video/BV1owrpYKEtP?p=32)、[P33 `解决过拟合`](https://www.bilibili.com/video/BV1owrpYKEtP?p=33)、[P34 `带正则化的成本函数`](https://www.bilibili.com/video/BV1owrpYKEtP?p=34)、[P35 `正则化线性回归`](https://www.bilibili.com/video/BV1owrpYKEtP?p=35)、[P36 `正则化逻辑回归`](https://www.bilibili.com/video/BV1owrpYKEtP?p=36)。
+- 吴恩达 diagnosis：[P71 `模型评估`](https://www.bilibili.com/video/BV1owrpYKEtP?p=71)、[P72 `模型选择与训练/交叉验证/测试集`](https://www.bilibili.com/video/BV1owrpYKEtP?p=72)、[P73 `诊断偏差与方差`](https://www.bilibili.com/video/BV1owrpYKEtP?p=73)、[P74 `正则化与偏差方差`](https://www.bilibili.com/video/BV1owrpYKEtP?p=74)、[P75 `建立基准性能水平`](https://www.bilibili.com/video/BV1owrpYKEtP?p=75)、[P76 `学习曲线`](https://www.bilibili.com/video/BV1owrpYKEtP?p=76)、[P77 `决定下一步尝试什么（再谈）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=77)、[P78 `偏差、方差与神经网络`](https://www.bilibili.com/video/BV1owrpYKEtP?p=78)、[P79 `ML 开发迭代循环`](https://www.bilibili.com/video/BV1owrpYKEtP?p=79)、[P80 `错误分析`](https://www.bilibili.com/video/BV1owrpYKEtP?p=80)。
 
 ### 通过标准
 
@@ -978,6 +1116,12 @@ residual_block_forward.py
 
 只做 forward、shape assertions 和 parameter/activation memory 粗略统计。
 
+### 对应视频
+
+- 李沐卷积 shape 主线：[19 `卷积层`](https://www.bilibili.com/video/BV1L64y1m7Nh/)、[20 `卷积层里的填充和步幅`](https://www.bilibili.com/video/BV1Th411U7UN/)、[21 `卷积层里的多输入多输出通道`](https://www.bilibili.com/video/BV1MB4y1F7of/)、[22 `池化层`](https://www.bilibili.com/video/BV1EV411j7nX/)。
+- 李沐残差主线：[29 `残差网络 ResNet`](https://www.bilibili.com/video/BV1bV41177ap/) 中的“ResNet”“代码”。
+- 吴恩达本合集没有 CNN/ResNet 对应分集，本周不强配。
+
 ---
 
 ## T15：sequence、token、embedding 与 mask
@@ -1011,6 +1155,12 @@ embedding_and_mask.py
 ```
 
 构造小 vocabulary 和两个不同长度 sequences，完成 padding、embedding 和 masks。
+
+### 对应视频
+
+- 李沐：[52 `文本预处理`](https://www.bilibili.com/video/BV1Fo4y1Q79L)、[53 `语言模型`](https://www.bilibili.com/video/BV1ZX4y1F7K3/) 中的“语言模型”。
+- 这两节覆盖 token/vocabulary/sequence 前置，但不完整覆盖 decoder-only causal mask；embedding 与两类 mask 仍由 `T15.md` 教程和代码补齐。
+- 吴恩达本合集没有 tokenization/embedding/mask 的直接对应分集。
 
 ---
 
@@ -1060,10 +1210,11 @@ single_head_attention.py
 
 先用小矩阵手算，再写 NumPy/PyTorch reference；验证 mask 后不允许关注的位置概率为 0 或数值上接近 0。
 
-### 推荐视频
+### 对应视频
 
-- [李沐：注意力分数](https://www.bilibili.com/video/BV1Tb4y167rb/)
-- 李宏毅 2021 课程只选 Self-attention 上/下，不刷完整 40 讲：[B 站镜像入口](https://www.bilibili.com/video/BV1z5411A7b9/)
+- 李沐：[64 `注意力机制`](https://www.bilibili.com/video/BV1264y1i7R1/)、[65 `注意力分数`](https://www.bilibili.com/video/BV1Tb4y167rb/)、[67 `自注意力`](https://www.bilibili.com/video/BV19o4y1m7mo/)。
+- T16 只建立 single-head Q/K/V、score、mask、softmax、weighted sum；68 Transformer 留到 T17。
+- 吴恩达本合集没有 self-attention 的直接对应分集。
 
 ### 通过标准
 
@@ -1119,12 +1270,11 @@ transformer_block_reference.py
 
 要求逐步 assert shape，不能只调用一个现成 Transformer layer 后打印结果。
 
-### 推荐视频
+### 对应视频
 
-- [李沐：Transformer](https://www.bilibili.com/video/BV1Kq4y1H7FL/)
-- 通过后再看：[李沐 Transformer 论文逐段精读](https://www.bilibili.com/video/BV1pu411o7BE/)
-
-论文精读不是入门第一步，先把 reference code 写通。
+- 李沐：[67 `自注意力`](https://www.bilibili.com/video/BV19o4y1m7mo/)、[68 `Transformer`](https://www.bilibili.com/video/BV1Kq4y1H7FL/) 中的“Transformer”“多头注意力代码”“Transformer 代码”。
+- 吴恩达本合集没有 Transformer 对应分集。
+- 论文精读不列入本周基准视频；先把 reference code 写通。
 
 ---
 
@@ -1151,6 +1301,11 @@ decoder_only_forward.py
 ```
 
 只做 1~2 layers 的 tiny model，固定随机种子和极小 dimensions，逐层打印 shape。
+
+### 对应视频
+
+- 李沐：[68 `Transformer`](https://www.bilibili.com/video/BV1Kq4y1H7FL/) 作为 encoder-decoder Transformer 结构前置。
+- 两条基准课程都没有完整讲 decoder-only Transformer forward；`T18.md` 必须自行补齐 causal self-attention、residual stream、norm、MLP、LM head 与 logits 的完整主线，不能假装 68 与本周完全等价。
 
 ### 通过标准
 
@@ -1179,6 +1334,12 @@ sampling_methods.py
 ```
 
 在同一 logits 上比较 greedy、temperature、top-k，并用大量采样近似验证 categorical probabilities。
+
+### 对应视频
+
+- 吴恩达：[P60 `多类别`](https://www.bilibili.com/video/BV1owrpYKEtP?p=60) 至 [P63 `Softmax 的改进实现`](https://www.bilibili.com/video/BV1owrpYKEtP?p=63)，只对应 logits 到 categorical probabilities 的前置。
+- 李沐：[63 `束搜索`](https://www.bilibili.com/video/BV1B44y1C7m1/) 用作“另一种 decoding policy”的对照，不替代 temperature/top-k/top-p 教程。
+- 两条基准课程没有覆盖本周全部 sampling methods，主体由 `T19.md` 和实验承担。
 
 ### 通过标准
 
@@ -1220,6 +1381,11 @@ allocator fragmentation
 framework workspace
 CUDA context
 ```
+
+### 对应视频
+
+- 李沐：[31 `深度学习硬件：CPU 和 GPU`](https://www.bilibili.com/video/BV1TU4y1j7Wd/) 只对应硬件与计算背景。
+- 两条基准课程没有系统对比 LLM training/inference memory composition；本周无强制视频，估算和对象分类由 `T20.md` 完成。
 
 ### 代码产出
 
@@ -1266,6 +1432,14 @@ kv_cache_reference.py
 每一步重新计算 full prefix
 缓存 previous K/V 后只计算 new token
 ```
+
+### 对应视频
+
+```text
+两条基准课程没有 KV Cache / prefill / decode 的直接对应章节，本周无强制视频。
+```
+
+T21 必须由教程、shape 推导和 `kv_cache_reference.py` 建立机制，不能用普通 Transformer forward 视频冒充 KV Cache 教学。
 
 只比较 correctness 和 operation shape；性能 benchmark 后续再严谨设计。
 
@@ -1315,6 +1489,14 @@ batch_scheduler_sim.py
 
 只做 CPU 上的离散 simulation：不同 arrival time、prompt length、generation length，比较 static batching 与简单 continuous batching 的 idle/padding 情况。
 
+### 对应视频
+
+```text
+两条基准课程没有 continuous batching / serving scheduler 的直接对应章节，本周无强制视频。
+```
+
+本周直接连接 BlockingQueue、backpressure 与后续 serving，不额外扩展另一套课程。
+
 ### 通过标准
 
 能解释 continuous batching 解决什么问题，以及 scheduler 为什么不只是普通 FIFO queue。
@@ -1361,6 +1543,12 @@ repetitions
 median/min/max
 ```
 
+### 对应视频
+
+- 李沐：[14 `数值稳定性 + 模型初始化和激活函数`](https://www.bilibili.com/video/BV1u64y1i75a/) 中的“数值稳定性”。
+- 吴恩达 evaluation/diagnosis 对应：[P70 `决定下一步尝试什么`](https://www.bilibili.com/video/BV1owrpYKEtP?p=70)、[P71 `模型评估`](https://www.bilibili.com/video/BV1owrpYKEtP?p=71)、[P72 `模型选择与训练/交叉验证/测试集`](https://www.bilibili.com/video/BV1owrpYKEtP?p=72)、[P73 `诊断偏差与方差`](https://www.bilibili.com/video/BV1owrpYKEtP?p=73)、[P74 `正则化与偏差方差`](https://www.bilibili.com/video/BV1owrpYKEtP?p=74)、[P75 `建立基准性能水平`](https://www.bilibili.com/video/BV1owrpYKEtP?p=75)、[P76 `学习曲线`](https://www.bilibili.com/video/BV1owrpYKEtP?p=76)、[P77 `决定下一步尝试什么（再谈）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=77)、[P78 `偏差、方差与神经网络`](https://www.bilibili.com/video/BV1owrpYKEtP?p=78)、[P79 `ML 开发迭代循环`](https://www.bilibili.com/video/BV1owrpYKEtP?p=79)、[P80 `错误分析`](https://www.bilibili.com/video/BV1owrpYKEtP?p=80)。这些只对应 evaluation/diagnosis 思维。
+- 两条课程都不负责严谨 benchmark 方法；warmup、repetition、synchronization、tolerance 和统计口径由 `T23.md` 完整讲解。
+
 ### 通过标准
 
 不能只写“快了 30%”；必须说明基线、输入、正确性和测量边界。
@@ -1380,6 +1568,12 @@ tiny_transformer_reference/
 ├── benchmark.py
 └── README.md
 ```
+
+### 对应视频
+
+- 复用李沐 [67 `自注意力`](https://www.bilibili.com/video/BV19o4y1m7mo/) 与 [68 `Transformer`](https://www.bilibili.com/video/BV1Kq4y1H7FL/) 作为结构复检，不新增视频范围。
+- 吴恩达本合集没有 tiny decoder-only implementation 对应分集。
+- T24 是 T15~T23 的代码整合周，重点是 reference、tests、README 与 prefill/decode 第一层，不靠多看课代替收口。
 
 ### 最小范围
 
@@ -1449,133 +1643,124 @@ model execution
 
 ---
 
-# B 站视频资源选择
+# 视频与公开课资源选择
 
-> 核对日期：2026-08-21
-> 原则：视频只负责讲解，教材/官方文档负责校准，代码和验证才算学习产出。
+> 核对日期：2026-08-26
+> 原则：视频只负责第二讲解与课程定位，`Tn.md` 负责主教程，代码和验证才算学习产出。
 
-## 1. 线性代数与微积分直觉
+## 1. 两条固定视频基准
 
-### 主推荐：3Blue1Brown 中国官方账号
+### 吴恩达：机器学习概念骨架
 
-- [线性代数的本质，第 1 讲](https://www.bilibili.com/video/BV1Ys411k7yQ)
-- [微积分的本质，第 1 讲](https://www.bilibili.com/video/BV1cx411m78R/)
+- 固定入口：[吴恩达机器学习课程 `BV1owrpYKEtP`](https://www.bilibili.com/video/BV1owrpYKEtP)
+- 定位方式：使用本规划每个 T Week 写明的 `P号 + 分集标题`，不从 P1 自动播放到 P146。
+- 主要承担：linear/logistic regression、gradient descent、softmax、neural-network forward、model evaluation、bias/variance 与 ML workflow。
+- 当前后置：P87~P145 中的 decision tree、clustering、anomaly detection、recommender 与 reinforcement learning；只有后续真实缺口出现才重新开启。
 
-使用方式：
+### 李沐：PyTorch 与深度学习实现主线
+
+- 固定入口：[“跟李沐学AI”账号搜索《动手学深度学习》](https://space.bilibili.com/1567748478/search?keyword=%E5%8A%A8%E6%89%8B)
+- 教材校准：[Dive into Deep Learning 中文官方在线教材](https://zh.d2l.ai/)
+- 定位方式：使用本规划每个 T Week 写明的 `章节号 + 标题 + 官方单课链接`。
+- 主要承担：Tensor 操作、autograd、PyTorch Module、MLP、regularization、CNN/ResNet、sequence、attention 与 Transformer implementation。
+
+这两条线不完整双刷：
 
 ```text
-线代系列：T2~T3 选择性看
-微积分系列：T4 选择 derivative / chain rule 相关章节
+同一 T Week 先由 Tn.md 串主线
+-> 吴恩达负责概念骨架
+-> 李沐负责 PyTorch / implementation 映射
+-> 已经掌握或没有直接对应时，明确跳过视频
 ```
 
-优点：几何直觉强。
-
-限制：
+## 2. 数学与概率的分工
 
 ```text
-不能替代手算
-不能替代 NumPy implementation
-不能替代学校线代/高数课程中的基本训练
+学校微积分/线代：已经具备，不重新刷视频课
+学校概率论 + 用户自己的大学概率网课：负责完整概率课程
+T2/T4/T5/T6：只负责 AI computation mapping 与代码 gate
 ```
 
-### 可选深入：MIT Gilbert Strang
+两条基准视频没有直接覆盖的数学内容，不再随意添加第三条 B 站课程凑数。正式资料仍可用于查证：
 
-- [B 站 MIT 18.06 课程入口](https://www.bilibili.com/video/BV1qC4y1H7zK/)
-- [MIT OpenCourseWare 18.06 官方课程](https://ocw.mit.edu/courses/18-06sc-linear-algebra-fall-2011/)
+- [MIT OpenCourseWare 18.06](https://ocw.mit.edu/courses/18-06sc-linear-algebra-fall-2011/)
+- [Harvard Statistics 110](https://stat110.hsites.harvard.edu/)
 
-当前不要完整刷 35 讲。只有 basis、projection、eigenvalue、SVD 明显不懂时定向补。
+它们是 reference，不是当前并行播放清单。
+
+## 3. T Week 怎样调用视频
+
+```text
+规划文件：列出每周精确对应关系
+Tn.md：根据本周真实任务决定哪些是必看、选看、复检或无强制视频
+用户学习：不需要手工寻找课程章节
+验收：看代码、shape/value/tolerance evidence 与解释，不检查播放进度
+```
+
+若视频标题、分 P 或链接将来发生变化，优先按标题在上述两个基准入口重新定位；不要改用来源不明的“200 集打包版”。
 
 ---
 
-## 2. 概率论
+## 5. 国外大学公开课怎样使用
 
-### 当前推荐
+这些课程不是三条并行主线，而是在相应 gate 后按主题调用：
 
-- [B 站《数据科学的概率基础》](https://www.bilibili.com/video/BV1st411R7yU/)
-- [Harvard Statistics 110 官方](https://stat110.hsites.harvard.edu/)
+### Stanford CS229
 
-当前只学：
+- [CS229 官方课程主页与 notes](https://cs229.stanford.edu/)
+
+定位：比吴恩达入门课更数学化的长期 reference。当前只在 T8/T13 需要更严谨理解 regularization、bias/variance、model selection 时查 notes，不完整刷 lecture/problem sets。
+
+### MIT 6.S191
+
+- [MIT 6.S191 官方课程](https://introtodeeplearning.com/)
+
+定位：高密度 deep-learning overview。通过 T12 后可看 Lecture 1 检查全景；进入 sequence/Transformer 后再选对应 lecture。它的 labs/讲解使用的 framework 不负责替代我们的 PyTorch/D2L 代码线。
+
+### CMU 10-414/714 Deep Learning Systems
+
+- [CMU Deep Learning Systems 官方 lectures](https://dlsyscourse.org/lectures/)
+
+该课覆盖 autograd implementation、NN library abstraction、hardware acceleration、Transformer implementation 和 deployment，和长期 AI Infra 很贴近，但现在开启会同时引入一套完整 deep-learning framework implementation。
+
+开启条件：
 
 ```text
-event
-conditional probability
-Bayes
-random variable
-expectation
-variance
-Bernoulli / categorical / Gaussian
+Theory Gate 2 已通过
+已经能使用 PyTorch 解释 Module、autograd 和 basic forward
+系统主线的 Reactor / Mini Redis 没有被拖停
+准备从 PyTorch user 视角进入 framework/runtime implementation
 ```
 
-暂不要求：
+满足后分阶段选：
 
 ```text
-完整组合计数训练
-moment generating function
-limit theorem proof
-Markov chain
+Theory Gate 2 后：automatic differentiation implementation、NN library abstraction、hardware acceleration
+T18 decoder-only forward 后：Transformers implementation
+Theory Gate 3 后：model deployment
 ```
 
-学校开设概率论时，以学校课程为主；本规划负责把知识映射到 softmax、sampling、cross entropy 和 model output。
+### 当前不采用的方式
+
+```text
+吴恩达 ML 全套 + 吴恩达 DLS 全套 + D2L 全套 + CS229 全套同时进行
+为了国外名校标签完成所有作业
+在不会 Tensor/forward 前直接看 distributed training 和 deployment
+```
 
 ---
 
-## 3. 机器学习 / 深度学习主课
+## 6. PyTorch API 入门
 
-### 第一主课：李沐《动手学深度学习 v2》
-
-优先使用“跟李沐学AI”账号的单课视频，不追“2026 全集打包”。
-
-关键入口：
-
-- [线性代数与实现](https://www.bilibili.com/video/BV1eK4y1U7Qy/)
-- [Softmax、损失函数与实现](https://www.bilibili.com/video/BV1K64y1Q7wu/)
-- [注意力分数](https://www.bilibili.com/video/BV1Tb4y167rb/)
-- [Transformer](https://www.bilibili.com/video/BV1Kq4y1H7FL/)
-- [Dive into Deep Learning 官方在线教材](https://www.d2l.ai/)
-
-选学顺序按 T Week，不按视频列表从 P1 一路自动播放。
-
-### 第二讲解源：李宏毅机器学习 2021
-
-- [B 站课程镜像入口](https://www.bilibili.com/video/BV1z5411A7b9/)
-
-只选：
-
-```text
-机器学习基本概念
-训练任务攻略
-backpropagation
-batch / momentum / learning rate
-self-attention 上下
-Transformer 上下
-network compression 第一层（量化阶段再看）
-```
-
-不看：
-
-```text
-GAN 全线
-reinforcement learning 全线
-meta learning
-life-long learning
-为了“完整”刷完 40 讲
-```
-
-说明：B 站条目是镜像，若失效，回到李宏毅课程官方页面/YouTube playlist；不要依赖单个搬运地址保存学习进度。
-
----
-
-## 4. PyTorch API 入门
-
-### 辅助推荐：小土堆
-
-- [作者账号 PyTorch 快速入门](https://www.bilibili.com/video/BV1hE411t7RN/)
+- [李沐 04 `数据操作 + 数据预处理`](https://www.bilibili.com/video/BV1CV411Y7i4/)
+- [李沐 16 `PyTorch 神经网络基础`](https://www.bilibili.com/video/BV1AK4y1P7vs/)
 - [PyTorch 官方 Learn the Basics](https://docs.pytorch.org/tutorials/beginner/basics/)
 
 定位：
 
 ```text
-小土堆：帮助熟悉 Dataset / DataLoader / Module / save/load 等 API
+李沐 04：Tensor 数据操作入口
+李沐 16：Module / parameter / custom layer / save-load 入口
 官方教程：核对当前 API 和准确语义
 本规划代码：负责 Tensor layout、inference 和 correctness 深度
 ```
@@ -1584,7 +1769,7 @@ life-long learning
 
 ---
 
-## 5. Transformer 论文与直觉
+## 7. Transformer 论文与直觉
 
 顺序：
 
@@ -1598,14 +1783,16 @@ T15：embedding / mask
 
 推荐：
 
-- [李沐：Transformer 视频与代码](https://www.bilibili.com/video/BV1Kq4y1H7FL/)
-- [李沐：Transformer 论文逐段精读](https://www.bilibili.com/video/BV1pu411o7BE/)
+- [李沐 64 `注意力机制`](https://www.bilibili.com/video/BV1264y1i7R1/)
+- [李沐 65 `注意力分数`](https://www.bilibili.com/video/BV1Tb4y167rb/)
+- [李沐 67 `自注意力`](https://www.bilibili.com/video/BV19o4y1m7mo/)
+- [李沐 68 `Transformer`](https://www.bilibili.com/video/BV1Kq4y1H7FL/)
 
-不要在还推不出 `[B,S,H] -> [B,heads,S,head_dim]` 时，用论文精读制造“听懂了”的错觉。
+论文精读不进入当前基准播放线。先做到能推导 `[B,S,H] -> [B,heads,S,head_dim]` 并写出 reference，再决定是否追加。
 
 ---
 
-## 6. “我是傅傅猪”课程放在哪里
+## 8. “我是傅傅猪”课程放在哪里
 
 本地已有完整盘点：
 
@@ -1627,7 +1814,7 @@ Gate C 后：KuiperLlama / CUDA
 
 ---
 
-## 7. 不推荐的选课方式
+## 9. 不推荐的选课方式
 
 谨慎对待标题形如：
 
