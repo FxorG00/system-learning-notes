@@ -4471,3 +4471,48 @@ Tn.md 只保留本课环境门和验证，不永久嵌入某次机器检查结�
 ```
 
 以后处理外部教程评分时，先区分 technical correctness、portability/maintainability、pedagogy preference。优先修技术错误和会误导后续工程的规则；不能为了分数擅自扩大当日范围或打乱总规划。
+
+---
+
+## 2026-08-31：AI Theory T2 提前生成
+
+用户再次强调：每次生成 Tn.md 都必须先读 `AI_Infra理论伴随线规划.md` 中的“用户当前数学基础与课程分工”，不能只读单个 T 的主题表。
+
+用户数学前置固定为：
+
+```text
+学校微积分：基础扎实，不从头重学
+学校线性代数：基础扎实，不完整重刷 MIT 18.06 / 3Blue1Brown
+学校概率论：由学校课程和用户选定的大学概率网课承担完整体系
+AI Theory：只负责把已有数学映射到 NumPy/PyTorch、model computation 和 executable evidence
+```
+
+T2 已提前生成到 `ai_theory/T2/T2.md`，但 T1 尚未验收，正式顺序仍是 T1 -> review -> T2。T2 的系统锚点是 Week10 出口前完成 T3，不改变当前 Week9 epoll 主线。
+
+T2 固定边界：
+
+```text
+主问题：matrix 为什么不只是 2-D table
+唯一新增量：basis images / matrix columns / linearity / NumPy row-column shape / linear-vs-affine
+代码产出：vector_matrix.py
+Round1：合法 2-D matrix + 1-D vector，只给 contract、固定数据和 evidence，不给完整实现
+Round2：用户 R1 通过后再读 columns-as-basis-images 与 linearity 主线
+Round3：1-D transpose observation + nonzero bias affine counterexample
+T3 保留：完整 matmul shape、transpose、dot、norm、batch matmul、broadcasting
+```
+
+资源策略：数学 diagnostic 通过时默认跳过完整线代视频；只查 NumPy `matmul` / `assert_allclose`。需要直觉补缺时才看 3Blue1Brown Chapter 3、D2L 2.3 指定小节或李沐 05；吴恩达 P17/P18 只作为 vectorization 对应关系，不是 T2 强制播放任务。
+
+用户随后进一步明确数学教学边界：用户拥有微积分、线性代数、概率论的成套学校笔记，数学基础不是当前短板。以后生成 T2/T4/T5/T6 及其他涉及学校数学的 Tn.md 时：
+
+```text
+先读取规划中的“用户当前数学基础与课程分工”
+只点名需要从个人笔记复习的章节/知识点
+给出少量 checkpoint 判断是否恢复
+会了就直接进入 AI mapping 和 code gate
+不会时先让用户回自己的成套笔记定向复习
+不把 Tn.md 写成粗略、重复、低配的线代/微积分/概率论教程
+不要求抄第二份数学笔记
+```
+
+例如 T2 只列出向量组与线性组合、线性表示、线性相关/无关、span、basis、坐标、线性变换、矩阵表示、矩阵-向量乘法、行列向量与仿射变换作为复习索引；正文只新增这些概念到 NumPy indexing/shape、model computation 和 executable evidence 的映射。
