@@ -4516,3 +4516,33 @@ T3 保留：完整 matmul shape、transpose、dot、norm、batch matmul、broadc
 ```
 
 例如 T2 只列出向量组与线性组合、线性表示、线性相关/无关、span、basis、坐标、线性变换、矩阵表示、矩阵-向量乘法、行列向量与仿射变换作为复习索引；正文只新增这些概念到 NumPy indexing/shape、model computation 和 executable evidence 的映射。
+
+---
+
+## 2026-09-01：AI Theory T3 提前生成
+
+T3 已生成到 `ai_theory/T3/T3.md`。当前仍处于教程提前准备状态；正式学习顺序保持 `T1 -> review -> T2 -> review -> T3`，不能因为 T3 文件已经存在就跳过前两个 module 的真实验收。系统主线仍是 Week9，T3 是 Week10 出口前的 AI Theory 锚点，不阻塞当前 epoll 学习。
+
+T3 固定边界：
+
+```text
+主问题：怎样从 2-D matmul 推导到 batch matmul 与 broadcasting，并解释 Transformer 为什么大量使用 matmul
+数学处理：只点名从个人线代笔记复习矩阵乘、复合、转置、内积、L1/L2 norm；不重新讲大学线代
+软件新增量：NumPy 1-D/2-D/N-D matmul 语义、core dimensions、batch dimensions、broadcast alignment、batched transpose
+代码产出：matmul_broadcast.py
+Round1：三层循环 2-D reference、固定 value oracle、运行前 shape predictions、batched/legal/illegal broadcasting experiments
+Round2：用户 R1 通过后再读 core-vs-batch、broadcasting 因果链、dot/matmul 边界、.T 与 swapaxes(-1,-2)
+Round3：composition、dot/norm、batched transpose、两层 batch broadcasting 与 AI projection shape evidence
+```
+
+T3 生成时确认的技术规则：
+
+```text
+普通 broadcasting 从 trailing/rightmost dimensions 向左比较：相等、其中一个为 1、或缺失 dimension 才 compatible
+N-D matmul 先把最后两轴解释为 matrix core：[...,M,K] @ [...,K,N]；只对前导 batch dimensions 做 broadcasting
+1-D @ 1-D 返回 scalar；2-D/1-D cases 按 NumPy 的临时升维和结果去维语义解释
+N-D array 的 .T / transpose(axes=None) 会反转全部 axes；对 batch matrices 只交换最后两轴应使用 swapaxes(x,-1,-2)
+本路线只用 np.dot 表达两个 1-D real vectors 的 dot product；2-D/N-D matrix computation 优先使用 @ / np.matmul，避免混入 np.dot 的高维规则
+```
+
+可复用的数学型 T module 编写经验：先把“个人数学笔记需要恢复的标题”和“NumPy/PyTorch 新软件语义”明确分开；前者只给 diagnostic checkpoints，后者才写完整教程与 code evidence。涉及 shape 的 module 必须要求 prediction before execution，防止学习退化为运行后抄 `.shape`。reference implementation 只覆盖足以建立 correctness oracle 的最小维度；本次只手写 2-D matmul，不扩成通用 N-D library。
