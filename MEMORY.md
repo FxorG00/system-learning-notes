@@ -4740,3 +4740,67 @@ sender/serving 类推理路径只保留 learned parameters + forward；loss/grad
 资料闸门：Round1 前只定位吴恩达 P6/P7/P10/P13 与 D2L 3.1 model/loss；P11/P12/P14~P19、李沐 08 的从零实现和 D2L 3.2 后置到 R1 review；feature scaling/convergence 的 P20~P23 放到 Round3。视频不作为通过证据，不复制 framework lab。
 
 公式审计经验：通过 JavaScript patch 生成 Markdown 时，LaTeX backslash 必须防止被字符串转义成 tab、carriage return 或 form-feed；生成后除检查 `$`/`$$` 配对，还要扫描 U+0000~U+001F 控制字符。T7 首轮发现 `\top`、`\rVert`、`\frac` 被错误转义，已修复；最终文件无异常控制字符，display-math delimiters 与 Markdown code fences 均成对。
+
+---
+
+## 2026-09-01：AI Theory T8 提前生成
+
+T8 已生成到 `ai_theory/T8/T8.md`，约 32 KB。正式学习顺序仍为 T1 -> review -> T2 -> review 逐个推进；文件提前存在不表示 T8 已开始或通过。系统主线当前仍在 Week9，T8 是 Week12 出口与 Theory Gate 1 的收口，不能抢占 epoll -> Reactor -> HTTP -> Mini Redis 主线。Theory Gate 1 通过后才正式进入 T9 PyTorch Tensor。
+
+T8 固定主线与边界：
+
+```text
+代码产出：softmax_classifier_numpy.py
+唯一主线：fixed-seed three-class data -> stratified train/validation/test -> logits -> stable softmax/cross entropy -> full-batch training -> validation selection -> one final test -> confusion matrix
+Round1：固定三分类 dataset、五个 public function contracts、zero initialization、只用 train 更新 parameters、validation forward evidence、test sealed
+Round2：R1 通过后再讲 binary logistic 到 multiclass softmax、cross-entropy gradients、accuracy-vs-loss、train/validation/test responsibility
+Round3：three-configuration validation selection、optional train+validation retrain、one final test、confusion matrix、controlled underfit/overfit observations
+不做：sklearn/PyTorch、MLP、mini-batch/Adam、完整传统 ML 算法目录、完整 classification metric system 或真实 dataset
+```
+
+T8 dataset 与验证 contract：
+
+```text
+rng = np.random.default_rng(11)
+class centers = [-2,-1], [2,-1], [0,2]
+150 two-dimensional samples per class, Gaussian noise sigma=1
+stratified split per class = 90 train + 30 validation + 30 test
+final shapes = train (270,2), validation (90,2), test (90,2)
+Round1 fixed setup = learning_rate 0.1, steps 1000, l2_strength 0, zero W/b
+Round1 broad oracles = final train loss < initial; train/validation accuracy >= 0.85; all values finite
+```
+
+独立 NumPy reference 已实际验证：
+
+```text
+initial train loss = 1.0986122886681096
+final train loss after 1000 updates = about 0.19507
+train accuracy = about 0.9259
+validation accuracy = about 0.9111
+sealed test accuracy when finally opened = about 0.9556
+reference test confusion matrix = [[29,1,0],[0,30,0],[1,2,27]]
+```
+
+这些 numerical values 是 sanity range，不是要求用户硬编码的 golden output。
+
+T8 生成时确认的技术规则：
+
+```text
+logits 是未归一化 scores；softmax 才产生每个 sample 的 categorical probability vector
+cross entropy 使用 correct-class log probability；extreme logits 应从 log-sum-exp 直接计算 stable loss
+mean softmax-cross-entropy 对 logits 的 gradient 为 (P-one_hot(Y))/n；修改 gradient buffer 前先 copy probabilities
+dW=X^T dZ，db=sum_rows(dZ)，所有 forward/loss/gradient 必须来自同一组 current parameters
+accuracy 只看 argmax class 是否正确，loss 还保留 confidence 信息；二者不能互相替代
+train 用于更新 parameters，validation 用于选择 hyperparameters/configuration，test 只在 selection 完成后做 final evaluation
+依据 test result 继续调参会让 test 承担 validation role，此时不能继续把该结果称为 untouched final evaluation
+L2 objective 为 data loss + lambda/2 * squared Frobenius norm of W，gradient 增加 lambda*W；本课不 regularize bias
+L2 不保证某一次 validation accuracy 必然提高，必须以 actual evidence 判断
+confusion matrix 固定 rows=true labels、columns=predictions，并验证 count conservation
+statistical bias 与 model bias parameter b 不是同一概念
+```
+
+资料继续按 Round 闸门解锁：Round1 前只看吴恩达 P26~P30、李沐 09/D2L 3.4 的概念部分；P31 与从零 gradient implementation 后置到 R1 review；P32~P34/P36、P70~P74、P79/P80/P83 与李沐 11 后置到 Round3。视频是第二解释，不作为通过证据。
+
+T8 继续遵守数学分工：线代/微积分/概率论只列用户已有笔记需要恢复的 exact topics，不重新粗讲数学课；正文负责把它们映射到 NumPy shapes、classifier training、dataset responsibility 和 executable evidence。Round1 只给文件用途、固定 dataset、接口与 observable contracts，不提前给 gradient implementation；R1 正式通过后必须按用户真实 code/note 定向润色 R2/R3。
+
+T8 完成后执行 Theory Gate 1：Python/NumPy、matmul shape、simple gradient、expectation/variance/conditional probability、stable softmax、NumPy linear regression 或 softmax classifier、system mainline 未停摆必须同时成立。教程已经检查：无异常控制字符，Markdown code fences 与 display-math delimiters 均成对，公式使用 Typora-compatible delimiters。
