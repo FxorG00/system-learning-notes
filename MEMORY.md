@@ -4577,3 +4577,34 @@ vector parameter 做 plus/minus perturbation 时必须使用独立 copies，并�
 ```
 
 T4 不调用 PyTorch autograd，不写完整 optimizer/training loop，不展开大型 Jacobian/Hessian。PyTorch graph/gradient accumulation 留给 T11；model/loss/update/convergence 闭环留给 T7。数学型 module 的代码 gate 应优先构造两条实现方式不同但指向同一结果的 evidence path，而不是增加重复公式题。
+
+---
+
+## 2026-09-01：AI Theory T5 提前生成
+
+T5 已生成到 `ai_theory/T5/T5.md`。正式顺序保持前序 T module 逐个学习、review 后再进入 T5；教程提前存在不表示已经开始或通过。系统主线仍是 Week9，Week11 出口前 AI Theory 需要到 T6，因此 T5 负责在 gradient 与 stable softmax 之间建立概率对象接口。
+
+T5 固定分工与边界：
+
+```text
+学校概率论 + 用户既定大学概率网课：完整定义、公式、证明、习题与考试深度
+T5：distribution/random variable/expectation/variance/conditional probability 到 model output 与 sampling 的映射
+代码产出：discrete_probability.py
+Round1：Bernoulli theoretical moments、固定 seed sampling、empirical mean/variance 与 reproducibility evidence
+Round2：用户 R1 通过后再读 distribution-vs-sample、random-variable mapping、conditional direction、independence、PMF/PDF
+Round3：categorical indices/values/probabilities、choice/bincount、theoretical-vs-empirical moments 与 AI model mapping
+```
+
+T5 生成时确认的技术规则：
+
+```text
+distribution parameter 描述 probability rule；one sample 是一次 concrete outcome；finite sample statistics 不是 distribution definition
+fixed seed 只提供同一环境/算法/调用顺序下的 reproducibility，不保证 empirical frequencies 精确等于 probabilities
+样本量增大时统计量通常更稳定，但不能断言某一次大样本实验的每项 error 必然小于某一次小样本实验
+np.var(...,ddof=0) 在本课作为 empirical second central moment；ddof=1 的统计推断含义由学校概率论负责
+categorical sampling 先产生 category indices，再映射到 numeric values；只有 values 有数值语义时 expectation 才有相应业务含义
+PMF 的单点值可直接是 discrete probability；PDF 单点是 density，区间积分才是 continuous probability
+logits、softmax、log likelihood、cross entropy 留给 T6；temperature/top-k/top-p 留给 T19
+```
+
+随机实验的测试不能照搬 deterministic unit test 思维：使用 pinned environment + fixed seed 建立可复现输入序列，同时用 shape/domain、count conservation 和合理 statistical tolerance 验证性质；不硬编码整段随机输出，也不把随机收敛误写成逐次单调保证。T5 不新增第三条强制概率视频线，两条 AI 基准课程没有直接覆盖时明确以学校课程为主，而不是为了“有视频”随意扩课。
