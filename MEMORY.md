@@ -4546,3 +4546,34 @@ N-D array 的 .T / transpose(axes=None) 会反转全部 axes；对 batch matrice
 ```
 
 可复用的数学型 T module 编写经验：先把“个人数学笔记需要恢复的标题”和“NumPy/PyTorch 新软件语义”明确分开；前者只给 diagnostic checkpoints，后者才写完整教程与 code evidence。涉及 shape 的 module 必须要求 prediction before execution，防止学习退化为运行后抄 `.shape`。reference implementation 只覆盖足以建立 correctness oracle 的最小维度；本次只手写 2-D matmul，不扩成通用 N-D library。
+
+---
+
+## 2026-09-01：AI Theory T4 提前生成
+
+T4 已生成到 `ai_theory/T4/T4.md`。正式顺序保持 `T1 -> review -> T2 -> review -> T3 -> review -> T4`；文件提前存在不表示 T4 已开始或通过。系统主线仍是 Week9，AI Theory 在 Week11 出口前需要推进到 T6，因此 T4 是 gradient/softmax 链条中的中间桥梁。
+
+T4 固定边界：
+
+```text
+主问题：训练时 parameter 为什么能从 scalar loss 得到更新方向
+数学处理：只点名从个人微积分笔记复习 derivative、partial derivative、gradient、chain rule、directional derivative、Jacobian 和 gradient descent update；不重新教授大学微积分
+唯一新增量：复合函数 -> computation graph -> local derivative -> reverse accumulation -> parameter gradient -> finite difference oracle
+代码产出：finite_difference_gradient.py
+Round1：y=(wx+b)^2 的 scalar forward、手推 gradient、w/b central difference 与独立 numerical evidence
+Round2：用户 R1 通过后再读完整 forward/backward 因果链、upstream gradient、gradient accumulation、gradient/Jacobian shape
+Round3：vector parameter finite-difference checker、copy/perturbation correctness、gradient-check cost 与 AI Infra connection
+```
+
+T4 生成时确认的技术规则：
+
+```text
+central difference 使用 [f(theta+epsilon)-f(theta-epsilon)]/(2*epsilon)，每个 scalar parameter 需要两次 forward evaluation
+finite difference path 不得调用 analytical gradient function，否则不能形成独立 oracle
+epsilon 过大有 approximation error，过小有 floating-point cancellation/rounding error；当前 1e-6 只服务小规模 float64 smooth function
+scalar loss 对 parameter array 的 gradient 与 parameter shape 相同；vector output 对 vector input 的完整 Jacobian 第一层 shape 为 [output_dim,input_dim]
+backward contribution = upstream gradient * local derivative；同一 value 通过多条路径影响 loss 时 contributions 必须相加
+vector parameter 做 plus/minus perturbation 时必须使用独立 copies，并保证 caller 输入最终不被修改
+```
+
+T4 不调用 PyTorch autograd，不写完整 optimizer/training loop，不展开大型 Jacobian/Hessian。PyTorch graph/gradient accumulation 留给 T11；model/loss/update/convergence 闭环留给 T7。数学型 module 的代码 gate 应优先构造两条实现方式不同但指向同一结果的 evidence path，而不是增加重复公式题。
