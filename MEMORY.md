@@ -4608,3 +4608,35 @@ logits、softmax、log likelihood、cross entropy 留给 T6；temperature/top-k/
 ```
 
 随机实验的测试不能照搬 deterministic unit test 思维：使用 pinned environment + fixed seed 建立可复现输入序列，同时用 shape/domain、count conservation 和合理 statistical tolerance 验证性质；不硬编码整段随机输出，也不把随机收敛误写成逐次单调保证。T5 不新增第三条强制概率视频线，两条 AI 基准课程没有直接覆盖时明确以学校课程为主，而不是为了“有视频”随意扩课。
+
+---
+
+## 2026-09-01：AI Theory T6 提前生成
+
+T6 已生成到 `ai_theory/T6/T6.md`。正式顺序保持 T1 -> review -> T2 -> review 逐个推进；教程提前存在不表示 T6 已开始或通过。系统主线当前仍在 Week9，T6 是 Week11 理论出口前的不可删桥梁，承接 T5 的 probability objects，并为 T7/T8 model loss、T16 attention 和 T19 token sampling 提供 stable numerical reference。
+
+T6 固定主线与边界：
+
+```text
+代码产出：stable_softmax.py
+Round1：naive_softmax 与 stable_softmax 两条 1-D 路径，使用 base/large/small shifted logits 暴露 floating-point failure
+Round2：R1 通过后再讲 logits -> exp -> normalize 主线、translation invariance、subtract-max、axis/keepdims、log probability 与 cross entropy
+Round3：batch axis evidence、stable log-sum-exp、cross_entropy_from_logits 与 extreme target evidence
+不做：classifier training、softmax Jacobian、optimizer、PyTorch autograd、temperature/top-k/top-p、CUDA/fused kernel
+```
+
+T6 生成时确认的技术规则：
+
+```text
+logit 是未归一化 score，不要求属于 [0,1] 或总和为 1；softmax output 才是 categorical probability vector
+softmax 对给所有 elements 加/减同一 scalar 具有 translation invariance；stable implementation 选择减 maximum
+减 maximum 后所有 shifted logits <= 0，最大 exponential 为 1，因此避免 positive overflow，同时 denominator 不会因全体 underflow 变成 0
+很小的非最大 probability 仍可能 underflow 为 0；stable softmax 不承诺保存任意小的非零值，也不修复 input 自带的 nan/inf
+先形成 probability 再取 negative log 仍可能因 target probability underflow 为 0 得到 inf；stable loss 应使用 log-sum-exp，one-hot case 为 LSE(logits)-target_logit
+batch softmax 的 reduction axis 是 semantic contract；keepdims 保留 reduced dimension，使 per-row maximum/sum 能按预期 broadcast
+np.errstate 只控制 floating-point warning policy，不修复 inf/nan；预期失败测试验证 non-finite property，不依赖具体 warning text
+```
+
+T6 延续数学分工：高数/概率论只列用户个人笔记中需要恢复的 exact topics 和 diagnostic questions，不重复讲完整数学课；AI Theory 负责把 exp/log、categorical distribution 与 likelihood 映射到 NumPy code、numerical failure 和 executable evidence。资料按闸门分层：Round1 前只给 softmax definition，吴恩达 P63 与李沐 14 的稳定实现内容后置到 R1 review，避免资源顺序提前泄露组合答案。
+
+数值计算 module 的高价值测试应围绕 properties，而不是堆相似 cases：normalization、finiteness、translation invariance、ordinary-reference agreement、extreme-path separation，以及 input non-mutation。对于 extreme failure，明确区分“预期观察 unstable path”与“stable path 必须通过”的 oracle；不把随机 warning 文本或某个固定 nan element 当成 contract。
