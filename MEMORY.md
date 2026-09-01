@@ -4804,3 +4804,67 @@ statistical bias 与 model bias parameter b 不是同一概念
 T8 继续遵守数学分工：线代/微积分/概率论只列用户已有笔记需要恢复的 exact topics，不重新粗讲数学课；正文负责把它们映射到 NumPy shapes、classifier training、dataset responsibility 和 executable evidence。Round1 只给文件用途、固定 dataset、接口与 observable contracts，不提前给 gradient implementation；R1 正式通过后必须按用户真实 code/note 定向润色 R2/R3。
 
 T8 完成后执行 Theory Gate 1：Python/NumPy、matmul shape、simple gradient、expectation/variance/conditional probability、stable softmax、NumPy linear regression 或 softmax classifier、system mainline 未停摆必须同时成立。教程已经检查：无异常控制字符，Markdown code fences 与 display-math delimiters 均成对，公式使用 Typora-compatible delimiters。
+
+---
+
+## 2026-09-01：AI Theory T9 提前生成
+
+T9 已生成到 `ai_theory/T9/T9.md`，约 32 KB。正式顺序仍为 T1 -> review -> T2 -> review 逐个推进；文件提前存在不表示 T9 已开始或通过。T9 必须以前置 T1~T8 与 Theory Gate 1 通过为条件。系统主线当前仍在 Week9 epoll，理论线每天 30~60 分钟，不能抢占系统主线每天 3 小时以上的优先级。
+
+T9 是 AI Theory 第二阶段入口，但 Week13 的阶段出口需要继续完成 T10。固定分工：
+
+```text
+T8：NumPy classifier 与 ML workflow
+T9：Tensor dtype/device/layout/storage object model
+T10：nn.Module、parameter/buffer 与 inference
+T11：autograd graph、backward 与 gradient accumulation
+```
+
+T9 固定主线与边界：
+
+```text
+代码产出：tensor_layout.py
+唯一主线：logical indices -> shape/stride/storage_offset -> storage -> dtype/device -> view sharing/materialized copy
+Round1：固定 (2,3,4) CPU float32 base，观察 base/transpose/select 的 shape、stride、offset、contiguity、storage identity，并用 independent alias case 证明 view mutation
+Round2：R1 通过后再讲 index-to-storage formula、transpose metadata-only 因果链、view/reshape/contiguous/clone responsibility
+Round3：expected view failure、reshape/contiguous materialization、NumPy copy/share、dtype/device conversion 与 in-place alias risk
+不做：Module、autograd、optimizer/training、DataLoader、CUDA kernel、distributed/sparse/quantized/channels_last 深入
+```
+
+T9 Round1 exact metadata contract：
+
+```text
+base = arange(24,float32,cpu).reshape(2,3,4)
+base shape/stride/offset/contiguous = (2,3,4)/(12,4,1)/0/true
+transposed exchanges dimensions 1 and 2
+transposed shape/stride/offset/contiguous = (2,4,3)/(12,1,4)/0/false
+selected chooses dimension-0 index 1
+selected shape/stride/offset/contiguous = (3,4)/(4,1)/12/true
+base/transposed/selected share the same untyped storage identity
+base[1,2,3] and transposed[1,3,2] both map to storage element offset 23
+```
+
+T9 生成时确认的技术规则：
+
+```text
+ordinary strided Tensor 可理解为 storage + storage_offset + shape + stride + dtype/device；stride 单位是 elements，不是 bytes
+logical index 的 storage element offset = storage_offset + sum(index_k*stride_k)
+transpose 返回 view，只交换相应 shape/stride metadata，不移动 elements；non-contiguous 不等于 data corruption
+view 在 shape/stride compatible 时共享 data，不合法时抛错；reshape 可能 view 或 copy，user code 不应依赖具体选择
+contiguous 负责 requested memory format：input 已满足时可返回 self，否则 materialize contiguous copy
+clone 负责 data independence，默认可能保留 dense non-overlapping input 的 memory format，因此 clone 不等于 contiguous
+Tensor.data_ptr 指向当前 Tensor 第一个 logical element；观察 shared storage identity 使用 untyped_storage().data_ptr 并结合 storage_offset/stride
+torch.tensor(numpy_array) copies data；torch.from_numpy 对 supported writable CPU ndarray shares memory，且 returned Tensor 不可 resize
+CPU requires_grad=false 且 dtype/layout supported 时 Tensor.numpy() 与 ndarray 共享 storage；GPU/autograd conversion boundary 留到 T11
+Tensor.to 在 dtype/device 已匹配时可返回 self，否则返回 converted copy；调用者必须接住返回值
+logical bytes = numel*element_size，不等于整个 process memory，也不代表 view 独占同等大小 allocation
+in-place operation 的 T9 风险只讲 alias mutation；autograd version counter 等机制留到 T11
+```
+
+T9 环境继续遵守 `ai_theory/ENVIRONMENT.md`：system Python 不动，项目使用 managed Python 3.12 与独立 `.venv`；CPU 是必做 baseline，CUDA 不可用不阻塞 T9。安装时通过 PyTorch official Start Locally 选择当前 stable build，并在 T9 note 记录实际 Python/PyTorch version，不把某次宿主机 patch version永久写进教程。
+
+资料固定为李沐 04 “数据操作 + 数据预处理”与 PyTorch official Learn the Basics/API docs；吴恩达合集没有 Tensor layout/stride 直接对应分集，本周不强行配课。Round1 前只读 initialization/attributes/basic operations；Tensor Views、Storage 与 view/reshape/contiguous 细节后置到 R1 review；NumPy bridge 后置 Round3。
+
+Round1 截断审计通过：在 Reading Gate 前已经给出环境入口、文件名/用途、固定 base、全部必要 API 的独立小例子、metadata output、exact assertions 与首条 compile/run command；没有提前给完整 `tensor_layout.py` 或组合 control flow。R1 正式通过后，必须根据用户真实 code、metadata predictions、note 和问题定向润色 R2/R3。
+
+T9 文档已检查：20 个 Python snippets 均通过 syntax compile；code fences 与 display-math delimiters 成对，无异常控制字符，公式使用 Typora-compatible delimiters。当前 Codex Windows Python 环境没有安装 PyTorch，因此没有伪称完成动态 PyTorch runtime verification；exact metadata/alias contracts 已按 PyTorch official Tensor Views、Storage、Tensor Attributes 与 API docs 校准，正式动态 evidence 留到用户建立 T9 project environment 时执行。
