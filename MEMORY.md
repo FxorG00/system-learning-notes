@@ -4868,3 +4868,75 @@ T9 环境继续遵守 `ai_theory/ENVIRONMENT.md`：system Python 不动，项目
 Round1 截断审计通过：在 Reading Gate 前已经给出环境入口、文件名/用途、固定 base、全部必要 API 的独立小例子、metadata output、exact assertions 与首条 compile/run command；没有提前给完整 `tensor_layout.py` 或组合 control flow。R1 正式通过后，必须根据用户真实 code、metadata predictions、note 和问题定向润色 R2/R3。
 
 T9 文档已检查：20 个 Python snippets 均通过 syntax compile；code fences 与 display-math delimiters 成对，无异常控制字符，公式使用 Typora-compatible delimiters。当前 Codex Windows Python 环境没有安装 PyTorch，因此没有伪称完成动态 PyTorch runtime verification；exact metadata/alias contracts 已按 PyTorch official Tensor Views、Storage、Tensor Attributes 与 API docs 校准，正式动态 evidence 留到用户建立 T9 project environment 时执行。
+
+---
+
+## 2026-09-01：Week9 Day1 正式通过
+
+Week9 Day1 已完成并正式通过，当前可进入 Day2 epoll API 与 readiness 主线。Ubuntu canonical source：
+
+```text
+~/code/system-learning/cpp/week9/nonblocking_stream_probe.cpp
+```
+
+最终 design：
+
+```text
+socketpair creates two connected stream endpoints
+-> only receiver fd is set O_NONBLOCK
+-> empty + peer open: recv returns EAGAIN/EWOULDBLOCK
+-> sender sends 15-byte payload
+-> receiver drains with 2-byte buffer through repeated partial reads
+-> queue empty + peer still open: recv returns EAGAIN/EWOULDBLOCK again
+-> sender closes
+-> receiver observes recv == 0 EOF
+-> reconstructed bytes exactly match payload
+-> remaining fd closes and process exits 0
+```
+
+动态验收证据：
+
+```text
+g++ -std=c++17 -Wall -Wextra -g：build exit 0，零 warning
+normal run：WOULD_BLOCK -> repeated BYTES -> WOULD_BLOCK -> EOF -> PASS
+payload chunks：2+2+2+2+2+2+2+1 = 15 bytes，顺序与内容完全一致
+run exit status：0
+strace exit status：0
+strace：socketpair -> F_GETFL/F_SETFL(O_NONBLOCK) -> recv EAGAIN -> sendto 15 -> repeated recvfrom -> recv EAGAIN -> close sender -> recv 0 -> close receiver
+```
+
+Day1 note 逐项验收：
+
+```text
+R1：用同一个 main 确定性制造 empty/open、bytes/drain、empty/open、peer-close 四个状态，设计正确
+R3：helper failure 传回 main，各 error exit 统一 close 已创建 fds，cleanup 方向正确
+总结：准确抓住 blocking recv A 会占住唯一 server execution flow、使 B 得不到处理的核心问题
+```
+
+六个验收问题均可由 code、daily 补充和动态 evidence 正确回答：
+
+```text
+blocking recv 阻塞调用它的 thread/execution flow
+O_NONBLOCK 让当前不能推进的 recv 返回 EAGAIN，不等于 asynchronous I/O
+EAGAIN 表示暂时无 bytes 且 peer 仍 open；recv 0 表示 drained stream EOF
+stream recv 只以实际 return n 划定有效 bytes，不保留 sender send boundaries
+F_GETFL 后 OR O_NONBLOCK 能保留原有 file status flags
+peer send then close 时，queued bytes 先被读取，drain 后才观察 EOF
+```
+
+用户对 day1.md 的两处补充已核对：
+
+```text
+sender backpressure：准确改为 send 直接观察本端 available sending capacity，peer 不 recv 是空间耗尽的常见原因
+strace 教程：调用、filter、sendto/recvfrom wrapper 显示、EAGAIN/EOF 与工具能力边界均正确；实际 trace 与文档主链一致
+```
+
+不阻塞通过的工程整理：
+
+```text
+删除已经不用的 chrono/thread includes、旧 sleep comments
+直接 include errno/perror 对应 headers，避免依赖 transitive includes
+若以后把 probe 升级成 reusable state machine，可让 receiver_work 返回明确 state enum；当前固定实验通过 printed trace + strace 已足够
+```
+
+Day1 最终评分：94/100。扣分只来自 headers/旧注释整理和 PASS oracle 没把 EAGAIN/EOF occurrence counts 编码成结构化 result；这些不影响当前 deterministic mechanism evidence，不要求为 Day1 再写重复 tests。

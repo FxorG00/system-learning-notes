@@ -1019,24 +1019,32 @@ other error -> 失败
 
 ### 23.2 sender 是否也要设置 non-blocking
 
-今天要观察的是 receiver 的 non-blocking contract，因此只需要：
+`send()` 在“当前不能再把更多 bytes 放进这条 stream 的内核发送路径”时才会需要等待。最常见的原因就是 peer 一直不 `recv()`，数据越积越多，最终接收侧及其背后的发送缓冲空间没有容量了。
 
-```text
-set_nonblocking(receiver_fd)
+完整链是：
+
+```
+sender 调用 send(data)
+    |
+    v
+kernel 检查这条 socket 当前还有没有可用发送容量
+    |
+    +-- 有空间
+    |     -> 复制一部分或全部 data 到 kernel
+    |     -> send 返回 n > 0
+    |
+    +-- 没空间
+          |
+          +-- sender_fd 是 blocking
+          |     -> 调用 send 的 thread 睡眠等待
+          |     -> peer recv 后释放容量，才可能继续
+          |
+          +-- sender_fd 是 non-blocking
+                -> send 立刻返回 -1
+                -> errno = EAGAIN / EWOULDBLOCK
 ```
 
-你当前也把 `sender_fd` 设成了 non-blocking，但 `send_all` 只处理了 `EINTR`，没有处理 `EAGAIN/EWOULDBLOCK`。小 payload 通常一次就能写入，所以本次运行没有暴露问题；从接口契约看，两者仍不完全匹配：
-
-```text
-blocking sender + 当前 send_all
-    今天足够，主线清楚
-
-non-blocking sender + send_all
-    还需要 pending output / writable readiness
-    这是 Week9 Day5 的内容
-```
-
-所以今天推荐只把 receiver 改成 non-blocking，不提前实现发送侧状态机。
+所以“peer 的 receive queue 满了”是很好的第一层模型。不过更准确地说，`send` 看到的是“**本端目前没有可用的发送容量**”；peer 不读是造成这个状态最常见的原因。
 
 ---
 
@@ -1284,6 +1292,105 @@ peer close 后 recv 返回 0
 若命令输出形式与你预想不同，先根据实际 syscall name 分析，不把工具显示差异误判成程序错误。
 
 这是可选观察，不阻塞 Day1。
+
+### 31.1 strace 观察例子
+
+你可以把 `strace` 理解成：**Linux 内核交互的流水账记录器**。
+
+你的 C++ 程序平时在 user space 跑；一旦调用 `socketpair`、`fcntl`、`send`、`recv`、`close`，就要通过 system call 进入 kernel。`strace` 会让程序作为被观察对象运行，并在每次 system call 的：
+
+```text
+调用前：记录传了什么参数
+调用后：记录内核返回什么值、errno 是什么
+```
+
+所以它不是看你的 C++ 变量、`std::vector` 或函数逻辑；它专门看“程序实际向内核请求了什么，内核实际答复了什么”。
+
+Day1 的命令：
+
+```bash
+strace -e trace=socketpair,fcntl,sendto,recvfrom,close ./nonblocking_stream_probe
+```
+
+`-e trace=...` 是过滤器。否则它还会打印 `execve`、`mmap`、加载动态库等一大堆启动噪声。现在只保留今天最关心的五类内核交互。
+
+你的程序大致会看到这条证据链：
+
+```text
+socketpair(AF_UNIX, SOCK_STREAM, 0, [3, 4]) = 0
+```
+
+创建两个已连接的 Unix stream socket。`3`、`4` 是当前进程里的 fd。
+
+```text
+fcntl(4, F_GETFL) = ...
+fcntl(4, F_SETFL, ... | O_NONBLOCK) = 0
+```
+
+先读取 receiver 的 file status flags，再加上 `O_NONBLOCK` 写回。这样你能确认：不是“代码写了 `set_nonblocking` 就算”，而是 kernel 真接受了这个设置。
+
+```text
+recvfrom(4, ..., 2, 0, NULL, NULL) = -1 EAGAIN
+```
+
+这是空 receive queue、peer 仍 open 时的关键证据。`recv` 没有睡住，而是从 kernel 回来了，并报告 `EAGAIN`。
+
+```text
+sendto(3, "this is a test!", 15, 0, NULL, 0) = 15
+recvfrom(4, "th", 2, 0, NULL, NULL) = 2
+recvfrom(4, "is", 2, 0, NULL, NULL) = 2
+...
+```
+
+说明 sender 确实把 bytes 交给 kernel；receiver 每次真正取得多少，完全由返回值决定。你这次 buffer 是 `2` bytes，所以恰好观测到一段段读出。
+
+```text
+recvfrom(4, ..., 2, 0, NULL, NULL) = -1 EAGAIN
+```
+
+payload 已 drain，但 sender 还没有 close，因此这是第二次 would-block，不是 EOF。
+
+```text
+close(3) = 0
+recvfrom(4, ..., 2, 0, NULL, NULL) = 0
+close(4) = 0
+```
+
+关闭 sender endpoint 后，receiver 才观察到 `recv == 0`，即 EOF。
+
+你源码写的是 `send` / `recv`，为什么 `strace` 常显示 `sendto` / `recvfrom`？因为 `strace` 看的是更底层的实际 system call；socket API 的 libc wrapper 可能用 `sendto` / `recvfrom` 这一层实现普通 stream 的 `send` / `recv`，地址参数则是空。它不表示你突然用了 UDP，也不表示真的经过网络。
+
+它和 `printf`、`gdb` 的区别是：
+
+```text
+printf：
+你自己说“我认为走到了这里”。
+
+gdb：
+看源码、变量、调用栈，控制程序执行。
+
+strace：
+看程序实际是否调用了 kernel interface，
+以及 kernel 实际返回了什么。
+```
+
+所以它特别适合排查这类问题：
+
+```text
+我明明设置了 O_NONBLOCK，为什么还卡住？
+-> 看 fcntl 是否真的成功。
+
+我以为是 EOF，为什么程序还在等？
+-> 看 recv 是 0，还是 -1 + EAGAIN。
+
+我以为写出去了，为什么 peer 没收到？
+-> 看 send 实际返回多少 bytes，是否 EAGAIN / EPIPE。
+
+我以为 fd 关了，为什么连接状态还奇怪？
+-> 看 close 调用顺序和返回值。
+```
+
+但也要守住边界：`strace` 看不到 kernel 内部完整的 socket queue 状态，也看不到你的 C++ 对象生命周期；而且它会明显拖慢程序、改变时序，所以不能用它证明多线程 race 是否存在。对 Day1 这种单线程确定性 state trace，它正好非常合适。
 
 ---
 
