@@ -4704,3 +4704,39 @@ Markdown table 中只使用简短 inline math；复杂推导移到 table 外的 
 ```
 
 2026-09-01 已按该规则审计并修改 `ai_theory/T1/T1.md` 到 `ai_theory/T6/T6.md`：T1 memory estimation，T2 linear/affine transformation，T3 matmul/composition/shape，T4 derivative/backward/finite difference，T5 probability/expectation/variance，T6 softmax/cross entropy/log-sum-exp 均改为 Typora-compatible LaTeX。可执行 Python/C++ code 与 assertion expressions 保持 code formatting。
+
+---
+
+## 2026-09-01：AI Theory T7 提前生成
+
+T7 已生成到 `ai_theory/T7/T7.md`，约 30 KB。正式学习顺序仍是 T1 -> review -> T2 -> review 逐个推进；文件提前存在不表示 T7 已经开始或通过。系统主线当前仍在 Week9，T7/T8 是 Week12 出口前的 Theory Gate 1，T7 不能抢占 epoll -> Reactor -> HTTP -> Mini Redis 主线。
+
+T7 固定主线与边界：
+
+```text
+代码产出：linear_regression_numpy.py
+唯一主线：synthetic data -> forward -> MSE -> analytic gradient -> full-batch update -> next iteration
+Round1：固定无噪声二特征 dataset、四个 function contracts、zero initialization、loss history、parameter/prediction/loss oracles
+Round2：R1 通过后再讲 X/w/b/y_hat/error/dw/db shapes、MSE gradients、model/loss/update responsibility、learning rate 与 convergence evidence
+Round3：central finite-difference gradient check、small/reference/large learning-rate experiment、fixed-seed noisy dataset
+不做：sklearn、PyTorch/autograd、mini-batch/SGD/Adam、train-validation-test split、classification、regularization 或真实 dataset
+```
+
+T7 数学分工继续遵守用户基础：线代/微积分只列个人笔记需要恢复的 matrix-vector multiplication、transpose、affine transformation、gradient、chain rule、quadratic derivative、negative-gradient direction 等标题与 diagnostic questions；正文负责把这些映射到 NumPy shapes、training control flow 和 executable evidence，不重讲完整数学课。
+
+T7 生成时确认的技术规则：
+
+```text
+本课固定 MSE 为 mean((prediction-label)^2)，因此 dw=(2/n)X^T error，db=(2/n)sum(error)；若 loss 改为 1/(2n)，gradient coefficient 也必须一致改变
+一次 iteration 的 predictions、loss、errors、dw/db 必须来自同一组 current parameters，再统一 update
+full-batch 中一次 iteration 使用全部 samples，因此也完成一次 epoch；出现 mini-batch 后 iteration != epoch
+loss 下降只属于 optimization evidence，不能替代 shape、finite、finite-difference gradient、parameter recovery 与 prediction reconstruction
+true-parameter match 只有在无噪声且 parameter identifiable 的 synthetic dataset 上才是合法 oracle；noisy/collinear data 不能机械要求 exact match
+sender/serving 类推理路径只保留 learned parameters + forward；loss/gradient/update 属于 training path
+```
+
+固定数值 contract 已用独立 NumPy 2.3.3 reference 实际验证：exact case 从 initial loss `39.916666...` 降到约 `2.93e-30`，恢复 weights `[2,-3]`、bias `1.5`；central-difference gradient maximum error 约 `1.72e-9`；100 steps 下 learning rates `0.001/0.05/0.5` 分别呈现 slow/reference/divergent；fixed-seed noisy case learned weights 约 `[1.9941,-2.9996]`、bias `1.4971`，满足 `atol=0.03`。
+
+资料闸门：Round1 前只定位吴恩达 P6/P7/P10/P13 与 D2L 3.1 model/loss；P11/P12/P14~P19、李沐 08 的从零实现和 D2L 3.2 后置到 R1 review；feature scaling/convergence 的 P20~P23 放到 Round3。视频不作为通过证据，不复制 framework lab。
+
+公式审计经验：通过 JavaScript patch 生成 Markdown 时，LaTeX backslash 必须防止被字符串转义成 tab、carriage return 或 form-feed；生成后除检查 `$`/`$$` 配对，还要扫描 U+0000~U+001F 控制字符。T7 首轮发现 `\top`、`\rVert`、`\frac` 被错误转义，已修复；最终文件无异常控制字符，display-math delimiters 与 Markdown code fences 均成对。
