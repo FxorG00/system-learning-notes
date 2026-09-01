@@ -4940,3 +4940,86 @@ strace 教程：调用、filter、sendto/recvfrom wrapper 显示、EAGAIN/EOF �
 ```
 
 Day1 最终评分：94/100。扣分只来自 headers/旧注释整理和 PASS oracle 没把 EAGAIN/EOF occurrence counts 编码成结构化 result；这些不影响当前 deterministic mechanism evidence，不要求为 Day1 再写重复 tests。
+
+## 2026-09-01：AI Theory T10 提前生成
+
+- 已生成：`ai_theory/T10/T10.md`。
+- T10 主题：`nn.Module`、registered state、`forward`、`state_dict`、`train/eval` 与 `torch.inference_mode()`。
+- 当前状态只是“教程提前生成”，不等于已经学习或通过；正式进度仍由后续 T9、T10 的 R1/R2/R3 验收决定。
+- 系统主线当前已通过 Week9 Day1，下一步仍是 Week9 Day2 的 `epoll`；AI 理论线继续保持每天 30–60 分钟的伴随定位。
+
+### T10 与前后模块的边界
+
+```text
+T9：Tensor、device、dtype、shape、storage 与基础算子
+-> T10：Module 树、模型状态、推理模式与 checkpoint round trip
+-> T11：autograd、computation graph 与 gradient
+-> T12：loss、optimizer 与最小 training loop
+```
+
+T10 不提前讲反向传播、optimizer 或完整训练流程，也不重复教授线性代数；数学只列出需要从已有笔记中复习的 affine transform、matrix multiplication、ReLU 和 broadcasting。
+
+### T10 的 Round 结构
+
+- R1：独立实现 `TinyClassifier`，只建立 Module/submodule/parameter/buffer/state 的第一版可运行模型。
+- R2：在 R1 通过后，再解释 registration、`__call__ -> forward`、四类对象边界、`eval()` 与 `inference_mode()` 的正交关系，以及 checkpoint 的因果链。
+- R3：用 mode matrix、deterministic Dropout probe、registration probe、checkpoint round trip 和 strict mismatch 建立证据。
+- 正式验收 R1 时，必须根据学生实际代码、笔记和问题针对性润色后续 R2/R3，不能机械照搬预生成内容。
+
+### R1 固定契约
+
+```text
+input features: 3
+hidden features: 4
+output features: 2
+registered persistent buffer: input_scale = [1.0, 0.5, 2.0]
+model: Linear(3, 4) -> ReLU -> Linear(4, 2)
+seed: 17
+input shape: (2, 3)
+output shape: (2, 2)
+```
+
+R1 应观察到：
+
+```text
+parameters:
+fc1.weight  (4, 3)
+fc1.bias    (4,)
+fc2.weight  (2, 4)
+fc2.bias    (2,)
+
+total parameter count: 26
+buffer: input_scale (3,)
+state_dict keys:
+input_scale
+fc1.weight
+fc1.bias
+fc2.weight
+fc2.bias
+```
+
+R1 不包含 save/load、Dropout、`eval()`、loss、`backward()` 或 optimizer，保证第一次实现仍然需要学生自己完成设计和 coding。
+
+### T10 技术口径
+
+- `nn.Module` 是可组合的计算与状态容器；先执行 `super().__init__()`，随后赋给成员的 submodule、`Parameter` 和 registered buffer 才会进入 Module tree。
+- 正常调用写 `model(inputs)`，由 `Module.__call__` 进入 `forward()`；不要把直接调用 `forward()` 当作正常接口。
+- `nn.Linear(in_features, out_features)` 的 weight shape 是 `(out_features, in_features)`，计算为 $y=xA^T+b$。
+- 必须区分 Module object、Parameter Tensor、buffer、activation Tensor 和 checkpoint/state_dict；activation 不是模型持久状态。
+- persistent buffer 会进入 `state_dict`；non-persistent buffer 不进入；普通 Tensor 成员既不自动迁移，也不自动进入 `state_dict`。
+- `state_dict()` 返回的是浅映射，其中 values 引用当前 state；若要保存“冻结快照”，必须 clone/deepcopy 或序列化。
+- `model.eval()` 递归切换影响 Dropout/BatchNorm 等模块的 training behavior，但不会关闭 autograd。
+- `torch.inference_mode()` 控制 execution/autograd 开销，但不会把模型自动切到 eval mode；二者是正交边界，推理通常同时使用。
+- `Module.to(...)` 会递归迁移已注册 parameters/buffers，并修改该 Module；这与单独 Tensor 的 `tensor.to(...)` 返回转换后 Tensor 的常见用法不同。
+- 推荐保存/加载 `state_dict`，而不是 pickle 整个模型对象；加载方必须先构造兼容 architecture。
+- 加载示例统一显式使用 `torch.load(..., weights_only=True, map_location="cpu")`，再用 `load_state_dict(..., strict=True)` 检查 key schema。
+- 不加载不可信 checkpoint；教程不使用 `weights_only=False`。
+
+### 资料与编写核对
+
+- 视频对齐：李沐《动手学深度学习》课程 16 中的模型构造、参数管理、自定义层和读写；吴恩达机器学习课程 P45–P49 仅用于复习 inference/forward 概念，不拿它替代 PyTorch API 教学。
+- 术语保持“英文来源/中文含义/当前作用/不是什么”的展开，不退化成只有一张术语表。
+- T10 生成后做了截断审计：只保留 Part 1 与 R1 时，学生仍能独立开始实现，但看不到 mode matrix 和 checkpoint round-trip 的组合答案。
+- 全文约 35 KB、1,438 行；29 个 Python fenced blocks 均通过 Python syntax compilation。
+- 已检查 Markdown fence、Typora 数学定界符和控制字符：围栏成对、display math 成对、无控制字符。
+- 当前 Windows 主机没有 PyTorch runtime，因此本次验证是“官方 PyTorch 文档语义校准 + Python syntax check”，没有冒充动态运行证据；正式 T10 环境中再运行 CPU PyTorch tests。
