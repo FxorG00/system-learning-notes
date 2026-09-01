@@ -4640,3 +4640,30 @@ np.errstate 只控制 floating-point warning policy，不修复 inf/nan；预期
 T6 延续数学分工：高数/概率论只列用户个人笔记中需要恢复的 exact topics 和 diagnostic questions，不重复讲完整数学课；AI Theory 负责把 exp/log、categorical distribution 与 likelihood 映射到 NumPy code、numerical failure 和 executable evidence。资料按闸门分层：Round1 前只给 softmax definition，吴恩达 P63 与李沐 14 的稳定实现内容后置到 R1 review，避免资源顺序提前泄露组合答案。
 
 数值计算 module 的高价值测试应围绕 properties，而不是堆相似 cases：normalization、finiteness、translation invariance、ordinary-reference agreement、extreme-path separation，以及 input non-mutation。对于 extreme failure，明确区分“预期观察 unstable path”与“stable path 必须通过”的 oracle；不把随机 warning 文本或某个固定 nan element 当成 contract。
+
+---
+
+## 2026-09-01：教程数学公式的 Typora 渲染规则
+
+用户明确要求：AI Theory 与系统主线的 week/daily/tutorial 文档，只要出现真正的数学公式，就必须使用 Typora 可渲染的 LaTeX Markdown delimiters，不能继续用 ASCII 伪公式或把公式塞进 `text` code fence。
+
+固定格式：
+
+```text
+行内数学：使用单美元符号 delimiters
+独立公式：使用双美元符号 delimiters，公式各自单独占行
+多行推导：在双美元符号内部使用 aligned environment
+代码/API/assertion/shape tuple/shell command：继续使用 inline code 或 fenced code，不误当数学公式
+```
+
+具体原则：
+
+```text
+数学对象使用标准 LaTeX：frac、sum、prod、partial、nabla、mathbb、operatorname、times 等
+不要在 fenced code block 内写 LaTeX delimiters；Typora 会把它们当 literal text
+Mermaid labels 保持简短纯文本；涉及的数学等式必须在图外另写可渲染公式
+Markdown table 中只使用简短 inline math；复杂推导移到 table 外的 display math
+生成或修改教程后检查：code fences 成对、display-math delimiters 成对、inline delimiters 不落入 code fence、公式 braces 基本平衡
+```
+
+2026-09-01 已按该规则审计并修改 `ai_theory/T1/T1.md` 到 `ai_theory/T6/T6.md`：T1 memory estimation，T2 linear/affine transformation，T3 matmul/composition/shape，T4 derivative/backward/finite difference，T5 probability/expectation/variance，T6 softmax/cross entropy/log-sum-exp 均改为 Typora-compatible LaTeX。可执行 Python/C++ code 与 assertion expressions 保持 code formatting。
