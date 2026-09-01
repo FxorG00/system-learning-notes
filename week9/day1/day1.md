@@ -77,7 +77,7 @@ peer 还没有关闭
 
 不是说整个 process 中的所有 threads 必然一起停止。若 process 还有其他 threads，它们仍可能运行。
 
-今天的 server 问题之所以严重，是因为我们计划只用一个 event-loop thread 管理许多 connections。这个唯一 execution flow 一旦睡在某个 connection 上，其他 connections 也得不到处理。
+**今天的 server 问题之所以严重，是因为我们计划只用一个 event-loop thread 管理许多 connections。这个唯一 execution flow 一旦睡在某个 connection 上，其他 connections 也得不到处理。**
 
 一句话记忆：
 
@@ -155,7 +155,7 @@ O_NONBLOCK
 process fd table entry
         |
         v
-open file description
+open file description(这里有 file status flag)
         |
         v
 socket object
@@ -616,6 +616,7 @@ flowchart TD
 
 ```text
 当前 execution flow 把“等待 A 将来变化”放进了这次 recv 调用中。
+就是 server execution flow 会一直在等待 A 能 recv 到信息；导致 B 得不到处理，因为空不出来时间去调用 recv(B)；时间一直花在等待 A 了。
 ```
 
 ---
@@ -849,6 +850,33 @@ V1 不要求漂亮 abstraction，也不要求你预判 Day2 的 epoll。只要 o
 
 # Round 2：完成 V1 后再读，复检机制与状态
 
+你当前的 R1 已经使用单个 `main` 建立完整轨迹。下面不再假设一份抽象实现，而是直接对照你的控制流：
+
+```text
+receiver_work(receiver_fd)
+-> peer open + queue empty
+-> EAGAIN
+
+sender_work(sender_fd)
+-> payload 进入 peer 的 receive queue
+
+receiver_work(receiver_fd)
+-> 以 2-byte buffer 多次取得 n > 0
+-> append 到 recv_data
+-> queue drain 完且 peer 仍 open
+-> EAGAIN
+
+close(sender_fd)
+-> receiver_work(receiver_fd)
+-> EOF
+
+check()
+-> reconstructed payload exact match
+-> PASS
+```
+
+这条轨迹不依赖 thread scheduling，也不需要 `sleep`。因为 receiver 已经是 non-blocking，当前没有结果时 `recv` 会立刻把控制权还给同一个 `main`，随后由 `main` 主动制造下一个 socket state。
+
 ## 21. 三种状态为什么必须分开
 
 把 receiver endpoint 记为 R，peer endpoint 记为 P。
@@ -968,6 +996,47 @@ EINTR 后继续：刚才的 call 被 signal 打断，还没有得到 I/O 结果
 ```
 
 而 `EAGAIN` 后不应在没有新条件的情况下立刻无限重试。Day2 会让 `epoll_wait` 负责等待 readiness。
+
+### 23.1 对照你的 `receiver_work`
+
+你的 `receiver_work` 不是“只读一次”的 helper，而是一个 drain helper：
+
+```text
+n > 0       -> 保存这 n bytes，继续 recv
+EAGAIN      -> 当前 drain 完成，return
+EOF         -> 当前输入方向结束，return
+other error -> 失败
+```
+
+因此，发送 payload 后的那一次 `receiver_work(receiver_fd)` 已经完成了两件事：
+
+```text
+先观察一个或多个 BYTES
+再观察 queue drain 后的第二次 WOULD_BLOCK
+```
+
+当前 `main` 在它返回后、peer close 前又调用一次 `receiver_work`，只会重复证明同一个 empty-open 状态。它不影响正确性，但 canonical 版本可以删掉这次重复调用，让四段证据与四个状态转换一一对应。
+
+### 23.2 sender 是否也要设置 non-blocking
+
+今天要观察的是 receiver 的 non-blocking contract，因此只需要：
+
+```text
+set_nonblocking(receiver_fd)
+```
+
+你当前也把 `sender_fd` 设成了 non-blocking，但 `send_all` 只处理了 `EINTR`，没有处理 `EAGAIN/EWOULDBLOCK`。小 payload 通常一次就能写入，所以本次运行没有暴露问题；从接口契约看，两者仍不完全匹配：
+
+```text
+blocking sender + 当前 send_all
+    今天足够，主线清楚
+
+non-blocking sender + send_all
+    还需要 pending output / writable readiness
+    这是 Week9 Day5 的内容
+```
+
+所以今天推荐只把 receiver 改成 non-blocking，不提前实现发送侧状态机。
 
 ---
 
@@ -1157,6 +1226,36 @@ exit status 0
 ```
 
 这个程序没有 scheduler race，也没有随机 workload。若逻辑正确，一次确定性运行已经是主要证据；不要求机械运行 100 次。
+
+### 30.1 你的 R1 已建立的证据
+
+本次实际检阅结果：
+
+```text
+g++ -std=c++17 -Wall -Wextra -g：零 warning
+空且 peer open：WOULD_BLOCK
+2-byte receive buffer：观察到多次 partial reads
+payload drain 后 peer 仍 open：WOULD_BLOCK
+peer close 后：EOF
+reconstructed payload == sent payload
+PASS，exit status 0
+```
+
+具体 chunk 拆分只是本次 observation，不是长期 contract；真正的 oracle 是最终 bytes 完整、顺序一致。
+
+### 30.2 从 R1 到 canonical 版本只收口这些
+
+这些属于 R2/R3 工程整理，不推翻 R1 的机制通过：
+
+```text
+只把 receiver_fd 设置为 non-blocking
+删掉已经不再使用的 thread/chrono includes 和旧 thread 注释
+直接 include errno/perror/exit 所属 headers，不依赖传递包含
+让 helper 把 failure 传回 main，再由 main 统一 close 已创建的 fds
+删掉 drain 完成后、close 前那次重复 WOULD_BLOCK 调用
+```
+
+这里不要求引入 RAII fd class、GoogleTest 或通用 send framework。
 
 ---
 

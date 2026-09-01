@@ -4639,6 +4639,43 @@ np.errstate 只控制 floating-point warning policy，不修复 inf/nan；预期
 
 T6 延续数学分工：高数/概率论只列用户个人笔记中需要恢复的 exact topics 和 diagnostic questions，不重复讲完整数学课；AI Theory 负责把 exp/log、categorical distribution 与 likelihood 映射到 NumPy code、numerical failure 和 executable evidence。资料按闸门分层：Round1 前只给 softmax definition，吴恩达 P63 与李沐 14 的稳定实现内容后置到 R1 review，避免资源顺序提前泄露组合答案。
 
+---
+
+## 2026-09-01：Week9 Day1 Round1 正式通过
+
+Week9 Day1 R1 已完成并通过。Ubuntu canonical source 为：
+
+```text
+~/code/system-learning/cpp/week9/nonblocking_stream_probe.cpp
+```
+
+用户第一版曾使用 sender/receiver threads 与 `sleep`，能观察 EAGAIN、partial reads 和 EOF，但依赖 scheduling，且没有确定建立 payload drain 后、peer 仍 open 的第二次 WOULD_BLOCK，因此未正式通过。修改版改为单个 `main` 按顺序主动推进 socket state：
+
+```text
+empty + peer open
+-> recv: EAGAIN/EWOULDBLOCK
+-> peer send payload
+-> receiver drain: repeated n > 0
+-> queue empty + peer open: EAGAIN/EWOULDBLOCK
+-> close peer
+-> recv: EOF
+-> exact payload validation
+-> PASS
+```
+
+动态检阅证据：`g++ -std=c++17 -Wall -Wextra -g` 零 warning；2-byte buffer 实际产生多次 partial reads；最终 `PASS`、exit 0。R1 正式通过，当前进入 Day1 R2。
+
+本次定向修改 Day1 R2/R3 的真实依据：
+
+```text
+receiver_work 本身是 drain helper；发送后的一次调用已经在 n > 0 循环末尾观察第二次 EAGAIN，main 再调用一次只会重复同一状态
+sender_fd 也被设置为 non-blocking，但 send_all 未处理 EAGAIN；今天只需 receiver non-blocking，发送侧 pending-output state machine 后置到 Day5
+payload exact reconstruction 已由 vector<char> + check 证明，不要求再写重复 tests
+最终整理只需 direct headers、删除旧 thread 痕迹、统一错误传播/cleanup；不引入 RAII wrapper、GoogleTest、TSan 或 benchmark
+```
+
+可复用 daily 编写经验：non-blocking I/O 的第一份实验应优先让单个执行流按确定顺序制造 kernel state，而不是引入 thread + sleep 猜测时序。R1 review 通过后，R2 必须识别用户 helper 的真实语义边界，例如“single recv helper”还是“drain-until-EAGAIN helper”，再解释状态机；否则教程会要求重复调用或重复证明已经由代码建立的状态。R2/R3 应指出真实 contract mismatch，但把不影响核心机制的 cleanup 和 include 整理留作收口项，不反向否定已经成立的 R1 证据。
+
 数值计算 module 的高价值测试应围绕 properties，而不是堆相似 cases：normalization、finiteness、translation invariance、ordinary-reference agreement、extreme-path separation，以及 input non-mutation。对于 extreme failure，明确区分“预期观察 unstable path”与“stable path 必须通过”的 oracle；不把随机 warning 文本或某个固定 nan element 当成 contract。
 
 ---
