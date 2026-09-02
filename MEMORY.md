@@ -3169,7 +3169,7 @@ Ubuntu code 目录已建立：~/code/system-learning/ai-theory/t01_numpy_basics
 固定产出：numpy_basics.py；完成后由用户创建 Windows T1_note.md
 主题：Python/NumPy 最低入口与 ndarray object model，核心是 shape/ndim/size/dtype/itemsize/nbytes、axis 第一层、创建/indexing/same-shape elementwise/reshape 与 incompatible-shape ValueError
 历史环境检查：Ubuntu 20.04 的 system Python 曾为 3.8.10，pip 与 NumPy 尚未安装；该信息只属于宿主机快照，不再作为 T1 技术基线
-环境方案：system Python 3.8 保持不动；AI Theory 使用 uv 管理的 Python 3.12.x，每个项目建立独立 .venv，当前 NumPy baseline 为 2.5.2；统一 setup 与宿主机快照写入 ai_theory/ENVIRONMENT.md
+环境方案（已于 2026-09-02 更新）：Ubuntu 日常 `python/python3` 使用直接安装在 `/usr/local` 的 Python 3.12.14；`/usr/bin/python3` 的 3.8.10 只留给系统脚本；AI Theory 不使用 uv，每个项目用标准库 `venv` 建立独立 `.venv`，当前 NumPy baseline 为 2.5.2；统一 setup 与宿主机快照写入 ai_theory/ENVIRONMENT.md
 资料主线：Python official Lists 仅作 10 分钟补缺；NumPy stable Absolute Beginner 定向阅读 import/array fundamentals/attributes/create/shape/reshape/indexing/basic operations，并明确跳过 sorting/stacking/newaxis/broadcasting/Pandas；Quickstart 只作 3D printing/shape 查缺
 教程结构：Session A environment+concept+resources，Session B Round1 independent numpy_basics.py，Round2 对照五个误区，Session C verification+AI Infra memory estimate；一个 Session 可以独立停止，T1 可跨两个自然周
 Round1 截断审计通过：已有精确文件名/用途、必要 Python syntax、API 小例子、固定 arrays、metadata/assert/error contract、py_compile/run commands 与阅读闸门；未提供完整 numpy_basics.py
@@ -4450,8 +4450,9 @@ T1 原先根据 Ubuntu 20.04 的 Python 3.8.10，把 NumPy pin 到 1.24.4。兼�
 
 ```text
 宿主机快照 != 新项目技术基线
-system Python 保持不动，不替换、不向其中堆 AI packages
-AI Theory 使用 uv 管理的 Python 3.12.x
+日常 python/python3 使用直接安装到 /usr/local 的 Python 3.12.x
+/usr/bin/python3 保留 Ubuntu 20.04 自带的 3.8.10，不替换
+AI Theory 不使用 uv，package installation 统一走 python -m pip
 每个项目建立独立 .venv
 当前 NumPy reproducible baseline 为 2.5.2
 统一环境记录位于 ai_theory/ENVIRONMENT.md
@@ -4861,7 +4862,7 @@ logical bytes = numel*element_size，不等于整个 process memory，也不代�
 in-place operation 的 T9 风险只讲 alias mutation；autograd version counter 等机制留到 T11
 ```
 
-T9 环境继续遵守 `ai_theory/ENVIRONMENT.md`：system Python 不动，项目使用 managed Python 3.12 与独立 `.venv`；CPU 是必做 baseline，CUDA 不可用不阻塞 T9。安装时通过 PyTorch official Start Locally 选择当前 stable build，并在 T9 note 记录实际 Python/PyTorch version，不把某次宿主机 patch version永久写进教程。
+T9 环境继续遵守 `ai_theory/ENVIRONMENT.md`：Ubuntu 日常 `python/python3` 使用 `/usr/local` 的 Python 3.12，`/usr/bin/python3` 保留给系统脚本，项目使用标准库 `venv` 创建独立 `.venv`，不使用 uv；CPU 是必做 baseline，CUDA 不可用不阻塞 T9。安装时通过 PyTorch official Start Locally 选择当前 stable build，并在 T9 note 记录实际 Python/PyTorch version，不把某次宿主机 patch version永久写进教程。
 
 资料固定为李沐 04 “数据操作 + 数据预处理”与 PyTorch official Learn the Basics/API docs；吴恩达合集没有 Tensor layout/stride 直接对应分集，本周不强行配课。Round1 前只读 initialization/attributes/basic operations；Tensor Views、Storage 与 view/reshape/contiguous 细节后置到 R1 review；NumPy bridge 后置 Round3。
 
@@ -5023,3 +5024,51 @@ R1 不包含 save/load、Dropout、`eval()`、loss、`backward()` 或 optimizer�
 - 全文约 35 KB、1,438 行；29 个 Python fenced blocks 均通过 Python syntax compilation。
 - 已检查 Markdown fence、Typora 数学定界符和控制字符：围栏成对、display math 成对、无控制字符。
 - 当前 Windows 主机没有 PyTorch runtime，因此本次验证是“官方 PyTorch 文档语义校准 + Python syntax check”，没有冒充动态运行证据；正式 T10 环境中再运行 CPU PyTorch tests。
+
+## 2026-09-02：Ubuntu Python 3.12 直接安装，AI Theory 取消 uv
+
+用户明确决定：AI Theory 不使用 `uv`，Ubuntu 日常 Python 直接升级到 3.12.x。
+
+实际执行结果：
+
+```text
+OS：Ubuntu 20.04.6 LTS
+installed CPython：3.12.14（Python official source release）
+/usr/local/bin/python -> python3.12
+/usr/local/bin/python3 -> python3.12
+/usr/local/bin/python3.12 -> Python 3.12.14
+/usr/bin/python3 -> Python 3.8.10
+pip for Python 3.12：25.0.1
+```
+
+安装采用 `make altinstall`，没有覆盖 `/usr/bin/python3`。原因不是拒绝用户的“默认 Python 改成 3.12”，而是区分两条调用路径：普通 terminal 中的 `python/python3` 已经是 3.12.14；Ubuntu 20.04 使用绝对路径的系统脚本仍获得发行版 Python 3.8.10，避免破坏 `apt` 等工具。
+
+验证证据：
+
+```text
+Python build extension check：0 missing，0 failed on import
+ssl/sqlite3/bz2/lzma/ctypes/venv imports：PASS
+python -m pip：对应 Python 3.12
+python -m venv temporary environment：PASS
+```
+
+今后的 AI Theory 环境统一写法：
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install <packages>
+```
+
+固定原则：
+
+```text
+不用 uv != 不隔离 dependencies
+venv 是 Python 标准库能力，继续保留
+统一使用 python -m pip，避免 pip 与 interpreter 错配
+全局解释器负责提供 Python 3.12；每个项目的 .venv 负责隔离 packages
+不要把 .venv 提交进 Git
+```
+
+已同步修改：`ai_theory/ENVIRONMENT.md`、`T1/T1.md`、`T9/T9.md`、`T10/T10.md` 以及 MEMORY 中旧的 uv 环境口径。T2~T8 只引用已激活的 `.venv`，没有 uv 安装命令，因此无需机械改写。

@@ -1,21 +1,47 @@
 # AI Theory 开发环境
 
-> 环境基线日期：2026-08-27
+> 环境基线日期：2026-09-02
 > 作用：集中记录 AI Theory 的 Python 版本、package 版本和安装方式
-> 原则：宿主机现状是 observation，不是新项目必须继承的技术基线
+> 原则：Ubuntu 的日常 Python 使用 3.12；发行版自带解释器仍留给系统脚本
 
 ## 1. 当前环境策略
 
-Ubuntu 20.04 自带的 Python 3.8.10 可以继续留给 operating system 和历史脚本，不卸载、不替换，也不向里面安装 AI Theory packages。
-
-AI Theory 使用独立环境：
+Ubuntu 20.04 已直接安装 CPython 3.12.14：
 
 ```text
-managed CPython 3.12.x
+/usr/local/bin/python      -> Python 3.12.14
+/usr/local/bin/python3     -> Python 3.12.14
+/usr/local/bin/python3.12  -> Python 3.12.14
+
+/usr/bin/python3           -> Python 3.8.10
+```
+
+正常打开 terminal 后，`/usr/local/bin` 位于 `/usr/bin` 前面，因此：
+
+```bash
+python --version
+python3 --version
+```
+
+都会得到 Python 3.12.14。
+
+这里没有改写 `/usr/bin/python3`。Ubuntu 20.04 的 `apt` 和部分系统脚本使用绝对路径调用它，强行替换可能破坏系统工具。换句话说：
+
+```text
+日常开发默认 Python：3.12.14
+Ubuntu 系统内部 Python：3.8.10
+```
+
+这已经满足理论线直接使用 Python 3.12，同时保留系统边界。
+
+AI Theory 不使用 `uv`。每个学习项目使用 Python 标准库自带的 `venv` 隔离 packages：
+
+```text
+Python 3.12.14
     |
-    +--> 每个学习项目自己的 .venv
+    +--> python -m venv .venv
             |
-            +--> 当前 NumPy baseline：2.5.2
+            +--> 当前项目自己的 pip 和 packages
 ```
 
 选择 Python 3.12 的原因：
@@ -23,62 +49,62 @@ managed CPython 3.12.x
 ```text
 Python 3.8 已于 2024-10-07 EOL，不再获得安全更新
 NumPy 2.5 支持 Python 3.12~3.14
-Python 3.12 既处于支持期，也有成熟的 scientific Python package compatibility
+Python 3.12 与当前 scientific Python package 兼容成熟
 ```
 
-这里 pin NumPy 2.5.2 是为了复现实验，不是为了迁就旧 system Python。以后升级 baseline 时，应修改本文件的日期和版本，并重新运行已有 assertions。
+当前 NumPy reproducible baseline 是 2.5.2。精确 pin 是为了复现实验，不是为了迁就旧 Python。
 
 ## 2. 宿主机快照
 
-2026-08-23 曾观察到：
+2026-09-02 实际配置与验证结果：
 
 ```text
-OS：Ubuntu 20.04
-system Python：3.8.10
-system pip：未安装
-system NumPy：未安装
+OS：Ubuntu 20.04.6 LTS
+default python/python3：3.12.14
+system /usr/bin/python3：3.8.10
+pip：25.0.1 for Python 3.12
+stdlib extension build：0 missing，0 failed on import
+verified modules：ssl、sqlite3、bz2、lzma、ctypes、venv
 ```
 
-这段只说明当时机器上有什么。它不决定 T1、T2 或后续项目应该使用什么版本。
+Python 3.12.14 使用 Python 官方 source tarball 构建，并通过 `make altinstall` 安装到 `/usr/local`。`altinstall` 的目的正是并存安装，避免覆盖发行版的 `python3` 文件。
 
-## 3. 安装 Python 管理工具
-
-本路线默认使用 `uv` 管理独立 Python，不向 Ubuntu 的 system Python 动手。
-
-先检查：
+## 3. 验证默认解释器
 
 ```bash
-uv --version
+command -v python
+python --version
+command -v python3
+python3 --version
+/usr/bin/python3 --version
+python -m pip --version
 ```
 
-若尚未安装，使用 uv 官方 installer：
+预期关系：
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-export PATH="$HOME/.local/bin:$PATH"
-uv --version
+```text
+python/python3 -> /usr/local/bin -> Python 3.12.14
+/usr/bin/python3 -> Python 3.8.10
+python -m pip -> Python 3.12 的 pip
 ```
 
-安装或确认 Python 3.12：
-
-```bash
-uv python install 3.12
-```
-
-`uv python install 3.12` 安装 uv 管理的 Python，不会把 `/usr/bin/python3` 替换成另一个版本。
+教程统一写 `python -m pip`，不单独写 `pip`。这样能明确表示“由当前这个 Python 解释器运行它对应的 pip”，避免 Python 和 pip 指向不同版本。
 
 ## 4. 每个项目建立独立 venv
+
+不使用 `uv` 不等于把所有第三方 packages 装进全局 Python。`venv` 是 Python 自带功能，不是额外的 Python version manager。
 
 以 T1 为例：
 
 ```bash
 cd ~/code/system-learning/ai-theory/t01_numpy_basics
-uv venv --python 3.12 .venv
+python -m venv .venv
 source .venv/bin/activate
-uv pip install "numpy==2.5.2"
+python -m pip install --upgrade pip
+python -m pip install "numpy==2.5.2"
 ```
 
-验证当前 shell 使用的确实是项目环境：
+验证当前 shell 使用项目环境：
 
 ```bash
 which python
@@ -90,36 +116,53 @@ python -c "import numpy as np; print(np.__version__)"
 
 ```text
 which python -> 当前项目的 .venv/bin/python
-python --version -> Python 3.12.x
+python --version -> Python 3.12.14
 NumPy -> 2.5.2
 ```
 
-重新打开 terminal 后需要再次执行：
+重新打开 terminal 后需要再次激活：
 
 ```bash
 cd ~/code/system-learning/ai-theory/t01_numpy_basics
 source .venv/bin/activate
 ```
 
-`.venv/` 不提交到 Git。项目若需要长期复现，应提交 dependency declaration 或 lock file，而不是提交整个 virtual environment。
+`.venv/` 不提交到 Git。需要长期复现时提交 dependency declaration 或 lock file，而不是提交整个 virtual environment。
 
-## 5. 环境与教程的边界
+## 5. 安装 packages 的统一写法
+
+NumPy：
+
+```bash
+python -m pip install "numpy==2.5.2"
+```
+
+CPU-only PyTorch：
+
+```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+```
+
+若以后使用 CUDA，必须根据 PyTorch Start Locally 与实际 driver/CUDA compatibility 重新选择命令，不能照抄 CPU 或旧 CUDA 安装命令。
+
+## 6. 环境与教程的边界
 
 ```text
 ENVIRONMENT.md
--> 记录当前推荐 Python/package baseline、宿主机快照和 setup
+-> 记录当前 Python/package baseline、宿主机快照和 setup
 
 Tn.md
 -> 只说明本课需要什么环境、怎样验证环境门
--> 不把某次机器检查结果永久写成课程知识
+-> 不重复 Python 的系统安装过程
 ```
 
-环境升级后，优先修改本文件和 dependency declaration。除非 API 或行为真的变化，否则不因为 patch version 改动重写教学主线。
+Python 3.12 当前处于 security-fixes-only 阶段，官方计划支持到 2028 年 10 月。以后升级 patch version 时，更新本文件并重新运行已有 assertions；除非 API 或行为真的变化，不因 patch version 改动重写教学主线。
 
-## 6. 官方依据
+## 7. 官方依据
 
+- [Python 3.12.14 release](https://www.python.org/downloads/release/python-31214/)
 - [Python versions status](https://devguide.python.org/versions/)
-- [uv：Installing and managing Python](https://docs.astral.sh/uv/guides/install-python/)
-- [uv：Using environments](https://docs.astral.sh/uv/pip/environments/)
+- [Python `venv`](https://docs.python.org/3.12/library/venv.html)
+- [Installing packages using pip and virtual environments](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/)
 - [NumPy stable beginner guide](https://numpy.org/doc/stable/user/absolute_beginners.html)
 - [NumPy 2.5.0 release notes](https://numpy.org/doc/stable/release/2.5.0-notes.html)
