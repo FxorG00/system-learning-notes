@@ -5159,3 +5159,48 @@ AI_Infra理论伴随线规划.md 中的理论线执行模板
 ```
 
 以后若理论线反馈提到“删除 Round/Reading Gate/checklist”或“理论七、动手三”，必须先检查目标路径；这些意见不能传播到系统主线 daily。
+
+---
+
+## 2026-09-02：Week9 Day2 正式生成并进入学习
+
+Week9 Day1 已正式通过，系统主线现在进入 Day2。教程已生成：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\week9\day2\day2.md
+```
+
+Day2 继续完全使用此前系统主线 `daily.md` 规则；2026-09-02 对 AI Theory `Tn.md` 的连续讲义/按需闸门调整不适用于本文件，也没有改变主线的三 Part、progressive disclosure、R1 截断测试或 R1 通过后定向润色 R2/R3 的规则。
+
+今日唯一知识增量：
+
+```text
+Day1：non-blocking recv 在不能推进时返回 EAGAIN
+-> Day2：epoll_wait 让一个 execution flow 等待任意 registration 的 readiness
+-> returned event 只是 notification，不消费 socket bytes
+-> application 仍调用 recv，并按 bytes / EOF / EAGAIN / error 推进 state
+```
+
+固定产出为 `epoll_stream_probe.cpp`。Round1 使用 `socketpair`、单 process、单 thread、单 watched receiver，确定性建立：
+
+```text
+before data：epoll_wait(timeout=0) == 0
+after send：returned data identifies receiver，events contains EPOLLIN
+before consume：default LT 再次报告仍 readable 的 receiver
+drain：payload exact match，最终 recv 为 EAGAIN/EWOULDBLOCK
+after drain：epoll_wait(timeout=0) == 0
+```
+
+R1 只规定用途、observable contract、资源边界和三个新 API 的独立最小用法；没有提供完整 probe control flow。TCP/listen/accept/multiple clients 后置 Day3，EPOLLOUT/partial write 后置 Day5，ET/HUP/ERR/fd lifecycle 后置 Day6，正式 Reactor abstraction 后置 Week10。
+
+教程技术校验：
+
+```text
+Linux man-pages 6.18 复核 epoll(7)、epoll_create1(2)、epoll_ctl(2)、epoll_wait(2) 与 epoll_event(3type)
+Ubuntu 20.04 / Linux 5.15 临时 reference 使用 g++ -std=c++17 -Wall -Wextra -g：零 warning
+reference run：PASS，exit 0
+strace：epoll_create1 -> EPOLL_CTL_ADD -> wait 0 -> send -> EPOLLIN -> LT repeated EPOLLIN -> recv ... EAGAIN -> wait 0 -> close
+临时 reference source/binary 已删除，不写入教程或用户 canonical code
+```
+
+当前状态：`day2.md` 已生成并通过发布前纵向/横向审计；用户尚未开始或验收 Day2 R1，不能将上述 Codex reference evidence 冒充用户完成证据。
