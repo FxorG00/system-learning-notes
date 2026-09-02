@@ -289,14 +289,9 @@ T23 correctness/benchmark
 4. 一段“这和 AI Infra 有什么关系”的解释
 ```
 
-每个 T module 开始前，再单独生成一份 `Tn.md` 教程。理论线与系统主线使用不同的教学模板：
+每个 T module 开始前，再单独生成一份 `Tn.md` 教程。下面只定义 AI Theory 教程的写法，不定义或修改系统主线 `daily.md` 的编写规则：
 
 ```text
-系统主线 daily.md
--> 工程与独立设计优先
--> 默认约 30% 讲解、70% coding
--> 复杂组件可以使用 Round1/Round2/Round3 渐进披露
-
 AI Theory Tn.md
 -> 概念理解、数学映射和数据流优先
 -> 前期默认约 70% 讲解、30% 手推/实验/coding

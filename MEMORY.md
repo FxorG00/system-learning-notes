@@ -3153,8 +3153,8 @@ AI Infra 理论伴随线的实际教学方式（2026-09-02 独立模板修订）
 ```text
 AI_Infra理论伴随线规划.md 只负责 T1~T24 的路线、范围与 gate；它不是可直接开学的完整教程。真正进入某个 T 时，Codex 再结合当时系统主线进度、前一个 T note 和真实资源，单独生成 Txx.md
 不一次性提前生成 24 份 T 教程。按 T1 -> review -> T2 顺序逐个生成，让后续内容吸收用户真实问题和掌握速度；一个 T 可以跨两个自然周，不和系统 WeekN 强行对齐
-主线 daily.md 与理论线 Txx.md 使用独立编写规则，不能把 C++ 并发/组件课的 Round、Reading Gate、contract 和多层 test checklist 机械移植到数值理论入门
-AI Theory 前期默认约 70% 概念讲解与推导、30% 手推/实验/coding；系统主线约 30% 学、70% 动手。T9 以后框架与 inference engineering 增多时，理论线 coding 比例可以提高，但仍先讲完整概念主线
+主线 daily.md 与理论线 Txx.md 使用独立编写规则；这里只约束理论线，不能据此新增、删减或重新解释任何 daily.md 规则。不能把 C++ 并发/组件课的 Round、Reading Gate、contract 和多层 test checklist 机械移植到数值理论入门
+AI Theory 前期默认约 70% 概念讲解与推导、30% 手推/实验/coding。T9 以后框架与 inference engineering 增多时，理论线 coding 比例可以提高，但仍先讲完整概念主线
 Txx.md 默认是一份从头可以连续阅读的自包含讲义：当前问题 -> 新对象/术语 -> 最小数值或 shape 例子 -> 完整推导 -> 紧邻小实验 -> 下一概念，不把知识拆成术语表、资料清单和孤立问答
 外部视频与官方文档是校准、查证或第二解释源。先由 Txx.md 把必学内容讲清，再把精确链接放到概念出现的位置并标明选看/延伸；不能让用户先跳出教程读一份冗长资料，再猜它应该插在何处
 通常只保留一个综合 coding 产出和 3~5 个高价值理解问题，不用“完成 checklist”冒充理解；简单 numerical exercise 不包装成大型工程 contract
@@ -5095,7 +5095,6 @@ venv 是 Python 标准库能力，继续保留
 从现在起：
 
 ```text
-系统主线：工程设计与 coding 优先，约学三动手七；复杂组件可继续 Round 渐进披露
 AI Theory：前期理论与推导优先，约学七动手三；默认连续讲义，不机械使用 Round/Reading Gate/contract
 T9 以后 coding 比例可随 Module/autograd/inference/KV Cache/benchmark 增加，但概念链必须先完整建立
 ```
@@ -5147,20 +5146,9 @@ ai_theory/T*/T*.md
 AI_Infra理论伴随线规划.md 中的理论线执行模板
 ```
 
-它不得覆盖、弱化或重新解释系统主线 `week*/day*/day*.md` 的既有规则。主线继续保留：
+它不得定义、总结、覆盖、弱化或重新解释系统主线 `week*/day*/day*.md` 的任何规则。本次理论线修改不为 `daily.md` 新增学习/动手比例、结构、流程或验收要求；`daily.md` 完全沿用本次理论线改版之前已经存在的 MEMORY 与用户要求。
 
-```text
-前情提要 -> 教程 -> 收尾的三部分顺序
-工程学习默认约学三、动手七
-练习型/组件型任务使用 R1/R2/R3 progressive disclosure
-R1 提供自包含开工信息，但保留真实设计空间
-R1 正式通过后，根据实际 code/note/对话定向润色 R2/R3
-新 API 首次出现时解释英文来源、参数、返回值、作用，并给最小独立例子
-教学代码说明程序用途，并对不直观函数和关键因果链添加注释
-MIT 6.S081 / OS / network 内容讲清谁调用谁、状态变化和完整流程
-验收时逐部分检查 note、验收题、代码、动态证据和用户对 daily 的修改
-避免重复 dirty work，但不因此删除必要 correctness evidence
-```
+用户明确否定用“学三动手七”或“30% 讲解、70% coding”概括系统主线；这不是 `daily.md` 的规则，今后不得再写入或据此调整主线教程。
 
 路径判定规则：
 
