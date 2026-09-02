@@ -3153,14 +3153,14 @@ AI Infra 理论伴随线的实际教学方式（2026-09-02 独立模板修订）
 ```text
 AI_Infra理论伴随线规划.md 只负责 T1~T24 的路线、范围与 gate；它不是可直接开学的完整教程。真正进入某个 T 时，Codex 再结合当时系统主线进度、前一个 T note 和真实资源，单独生成 Txx.md
 不一次性提前生成 24 份 T 教程。按 T1 -> review -> T2 顺序逐个生成，让后续内容吸收用户真实问题和掌握速度；一个 T 可以跨两个自然周，不和系统 WeekN 强行对齐
-主线 daily.md 与理论线 Txx.md 使用独立编写规则；这里只约束理论线，不能据此新增、删减或重新解释任何 daily.md 规则。不能把 C++ 并发/组件课的 Round、Reading Gate、contract 和多层 test checklist 机械移植到数值理论入门
+主线 daily.md 与理论线 Txx.md 使用独立编写规则；这里只约束理论线，不能据此新增、删减或重新解释任何 daily.md 规则。理论线不机械照搬 Round、Reading Gate、contract 和多层 test checklist，但也不统一删除闸门；每个 T 根据是否存在真实认知墙单独判断
 AI Theory 前期默认约 70% 概念讲解与推导、30% 手推/实验/coding。T9 以后框架与 inference engineering 增多时，理论线 coding 比例可以提高，但仍先讲完整概念主线
 Txx.md 默认是一份从头可以连续阅读的自包含讲义：当前问题 -> 新对象/术语 -> 最小数值或 shape 例子 -> 完整推导 -> 紧邻小实验 -> 下一概念，不把知识拆成术语表、资料清单和孤立问答
 外部视频与官方文档是校准、查证或第二解释源。先由 Txx.md 把必学内容讲清，再把精确链接放到概念出现的位置并标明选看/延伸；不能让用户先跳出教程读一份冗长资料，再猜它应该插在何处
 通常只保留一个综合 coding 产出和 3~5 个高价值理解问题，不用“完成 checklist”冒充理解；简单 numerical exercise 不包装成大型工程 contract
-同一个 invariant 正文完整解释一次，结尾最多压缩一次；删除重复 pass criteria、训诫式错误全集、过长固定 note 模板和只为仪式感存在的环境/阅读闸门
+同一个 invariant 正文完整解释一次，结尾最多压缩一次；删除重复 pass criteria、训诫式错误全集、过长固定 note 模板和只为仪式感存在的环境/阅读闸门；保留能够保护真实独立思考空间的单一闸门
 每份 Txx.md 仍必须包含：真实问题、必要术语、公式/shape 推导、可运行小例子、综合实验、correctness evidence、AI Infra 连接和明确停止边界
-用户完成某个 T 后，根据真实 note、代码、口述和问题补强薄弱概念；不再默认要求先验收 R1 再针对性重写预制 R2/R3
+用户完成某个 T 后，根据真实 note、代码、口述和问题补强薄弱概念；没有真实认知墙时不默认设置 R1，有闸门时必须先验收 R1，再根据真实实现定向核对和润色 R2/R3
 资料和教程控制认知负荷：已掌握内容允许快扫，纯扩展内容明确标 optional；数学目标以能解释和实现 inference reference 为准，不把整门证明型课程塞进一个 T
 数学公式统一使用 Typora-compatible `$...$` / `$$...$$`；用户已有大学数学基础时只列复习知识点，不重写整门数学课
 建议 Windows 路径为 gpt_infra/ai_theory/Txx/Txx.md 与 Txx_note.md；Ubuntu code 继续使用 ~/code/system-learning/ai-theory/tXX_topic/。目录按实际进入的 T 逐个建立
@@ -5095,7 +5095,7 @@ venv 是 Python 标准库能力，继续保留
 从现在起：
 
 ```text
-AI Theory：前期理论与推导优先，约学七动手三；默认连续讲义，不机械使用 Round/Reading Gate/contract
+AI Theory：前期理论与推导优先，约学七动手三；默认连续讲义，但遇到适合独立预测、设计或实现的真实认知墙时保留 Round / Reading Gate
 T9 以后 coding 比例可随 Module/autograd/inference/KV Cache/benchmark 增加，但概念链必须先完整建立
 ```
 
