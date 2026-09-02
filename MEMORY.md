@@ -4746,7 +4746,7 @@ sender/serving 类推理路径只保留 learned parameters + forward；loss/grad
 
 资料闸门：Round1 前只定位吴恩达 P6/P7/P10/P13 与 D2L 3.1 model/loss；P11/P12/P14~P19、李沐 08 的从零实现和 D2L 3.2 后置到 R1 review；feature scaling/convergence 的 P20~P23 放到 Round3。视频不作为通过证据，不复制 framework lab。
 
-公式审计经验：通过 JavaScript patch 生成 Markdown 时，LaTeX backslash 必须防止被字符串转义成 tab、carriage return 或 form-feed；生成后除检查 `$`/`$$` 配对，还要扫描 U+0000~U+001F 控制字符。T7 首轮发现 `\top`、`\rVert`、`\frac` 被错误转义，已修复；最终文件无异常控制字符，display-math delimiters 与 Markdown code fences 均成对。
+公式审计经验：通过 JavaScript patch 生成 Markdown 时，LaTeX backslash 必须防止被字符串转义成 tab、carriage return、form-feed，或被静默吞掉。生成后除检查 `$`/`$$` 配对与 U+0000~U+001F 控制字符，还必须扫描裸 LaTeX command names，例如 `qquad`、`frac{`、`partial`、`mathbf{` 前是否真的存在反斜杠；必要时用 Typora 渲染结果抽查。2026-09-02 用户截图发现 T4 的裸 `qquad` 被当成连续变量字母渲染，同类问题已在 T4/T5/T7 全量修复。
 
 ---
 
