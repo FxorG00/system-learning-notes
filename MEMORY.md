@@ -5135,7 +5135,7 @@ C++ vector 动机
 
 T1 动态证据：Ubuntu `t01_numpy_basics/.venv` 使用 Python 3.12.14 与 NumPy 2.5.2；normal shape/dtype、reduction、slice view/copy、expected `ValueError` probes 全部 PASS。27 个 Python snippets 通过 syntax parse，Markdown fences、Typora math delimiters 和 control-character scan 通过。
 
-T2~T10 是在旧模板下提前生成的草稿，不因本次反馈立即机械全文替换；正式进入每个 T 前必须按新的理论线模板复检和重排，尤其检查是否存在“长资料前置、Round 仪式压过理论、重复 invariant/checklist”的问题。
+T4~T10 仍是在旧模板下提前生成的草稿，不因本次反馈立即机械全文替换；正式进入每个 T 前必须按新的理论线模板复检和重排，尤其检查是否存在“长资料前置、Round 仪式压过理论、重复 invariant/checklist”的问题。T2、T3 已于 2026-09-02 按新标准完成重排，具体记录见本文件后续章节。
 
 ### 作用域隔离：不得影响系统主线 `daily.md`
 
@@ -5204,3 +5204,84 @@ strace：epoll_create1 -> EPOLL_CTL_ADD -> wait 0 -> send -> EPOLLIN -> LT repea
 ```
 
 当前状态：`day2.md` 已生成并通过发布前纵向/横向审计；用户尚未开始或验收 Day2 R1，不能将上述 Codex reference evidence 冒充用户完成证据。
+
+---
+
+## 2026-09-02：AI Theory T2、T3 按新标准重排
+
+用户要求根据最新理论线标准、数学基础、总规划与当前进度修改 `ai_theory/T2/T2.md` 和 `ai_theory/T3/T3.md`。本轮只修改 AI Theory 文档与本记录，没有触碰任何 `week*/day*/day*.md`；系统主线 daily 规则保持不变。
+
+本轮先分别判断是否存在真实认知墙，而不是给两个 module 套同一种 Round 模板：
+
+```text
+T2：已有扎实线代基础，新增量是 linear transformation -> NumPy/model computation 的映射
+    -> 没有值得先遮住答案的核心墙
+    -> 使用连续、自包含讲义，不设 Round/Reading Gate
+
+T3：1-D matmul、N-D core/batch 拆分和 broadcasting 会让二维直觉真实失效
+    -> 存在适合“先预测、再观察、最后统一解释”的认知墙
+    -> 保留一个 Round1 与单一阅读闸门
+```
+
+T2 新主线：
+
+```text
+个人线代笔记 exact topics
+-> matrix columns 是 basis images
+-> A @ x 是 columns 的 coordinate-weighted linear combination
+-> NumPy indexing
+-> @ 与 * 的 operation 边界
+-> (n,) 与 (n,1)
+-> rows/columns 两种视角
+-> linearity executable property
+-> linear 与 affine
+-> vector_matrix.py 综合产出
+-> model shape 连接
+```
+
+T2 外部资料已从“开课前先读链接”降为对应概念后的查证/选看。删除形式化 Round、重复 checklist 和固定长 note 模板；保留清楚的 code output 与五个高价值口头问题。T2 不重讲完整线代，只列用户应从个人笔记恢复的 exact topics。
+
+T3 的闸门前同时满足：
+
+```text
+足够开工：给出二维 matmul 公式、程序用途、函数 contract、固定 inputs、API 最小例子、error evidence 写法与运行命令
+不泄露认知墙：不提前给出 1-D prepend/append、core/batch 拆分、右对齐 broadcasting 规则或六组答案
+```
+
+Round1 允许把未知 case 记录为 `uncertain`，但要求 prediction/uncertain 先于运行 evidence。闸门后统一讲：
+
+```text
+1-D operand 临时补 axis 与 result 去 axis
+-> 最后两轴承担 matrix core
+-> 前导 axes 承担 batch
+-> batch shapes 从右向左 broadcasting
+-> 拼成 final output shape
+```
+
+可复用结论：
+
+```text
+理论线的闸门价值不在“必须独立写一版 code”，而在保护一个值得先暴露原有 mental model 的问题
+无真实认知墙时，连续讲义比 Round 仪式更适合理论入门
+有认知墙时，闸门前教会工具与任务，闸门后才揭示统一机制
+不能靠含糊任务制造困难，也不能以防错 checklist 偷偷给完答案
+先预测、再运行本身可以成为 evidence；不知道时记录 uncertain 比事后抄 shape 更诚实
+外部文档默认放在相应概念之后查证，正文不打开链接也能独立读通
+```
+
+技术复核：
+
+```text
+NumPy 2.3.3 本机实测：
+(2,3)@(3,4)->(2,4)
+(3,)@(3,)->()
+(2,3)@(3,)->(2,)
+(5,2,3)@(5,3,4)->(5,2,4)
+(1,2,3)@(7,3,4)->(7,2,4)
+vector_norm([[3,-4],[5,12]], axis=-1)->[5,13]
+
+两份文档 Markdown code fences 与 display-math delimiters 数量均为偶数
+公式继续使用 Typora-compatible $...$ / $$...$$
+正式学习顺序仍是 T1 -> review -> T2 -> review -> T3
+提前修改文件不表示 T2/T3 已开始或通过
+```
