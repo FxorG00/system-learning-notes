@@ -5295,8 +5295,8 @@ vector_norm([[3,-4],[5,12]], axis=-1)->[5,13]
 逐份认知墙判断：
 
 ```text
-T4 gradient/chain rule mapping：无硬闸门
-    用户微积分基础扎实，新增量是 computation graph、upstream/local derivative、accumulation 与 finite difference
+T4 gradient/chain rule mapping：保留一次 numerical-gradient 闸门
+    chain rule、computation graph、upstream/local derivative 与 accumulation 先完整讲清；用户随后独立实现 finite difference，并先预测 epsilon 变化与 parameter mutation。epsilon 双误差、coordinate perturbation isolation 和固定答案放到闸门后
 
 T5 probability -> sampling：无硬闸门
     学校概率论负责数学体系，T5 连续映射 distribution/sample/empirical statistics/categorical/seed
@@ -5320,7 +5320,7 @@ T10 Module/state/inference：无硬闸门
 实际调整：
 
 ```text
-T4、T5、T7 重写为更短的主线版，删除前置资料负担、固定长 note 模板和重复 checklist
+T4 重排为连续教学 + 单一 numerical-gradient 闸门；T5、T7 保持更短的主线版，删除前置资料负担、固定长 note 模板和重复 checklist
 T6 保留已正确的数值机制详解，外部资料降为 Round1 后查证，明确正文自包含
 T8、T9 保留完整机制与真正的 Reading Gate，但外部视频/文档不再作为开工前播放清单
 T10 明确取消硬 Reading Gate，把原 Round 名称改为基础观察、对象模型与综合实验
@@ -5337,6 +5337,21 @@ T9 Tensor Views 链接从 main 文档改为 stable 文档
 理论 module 可以保留一个综合产出，但不围绕 note 模板和多层 pass checklist组织全文
 framework object model 课若主要任务是建立正确名词和 ownership chain，可以连续讲解，不必为了独立感遮住 API semantics
 ```
+
+T4 的二次校准说明：数学基础扎实只意味着不重教微积分，不意味着 finite-difference engineering 没有认知墙。闸门保护的是 numerical checker 的独立设计、对 epsilon 的原始 prediction，以及 parameter perturbation 是否污染 caller state；不能把 chain rule 的必要教学也藏到闸门后。
+
+理论线可执行产出的验收纪律：
+
+```text
+必须有明确 success/failure oracle
+success exit 0；unexpected failure non-zero exit
+数值比较给出当前 dtype/case 对应的 concrete epsilon、rtol、atol
+同时检查高价值 invariants，例如 finite、shape、input non-mutation
+明确证据边界，不能把有限 cases 的 PASS 写成普遍正确性证明
+不机械复制系统主线的 GoogleTest/CTest/sanitizer/压力测试清单
+```
+
+这条补充只属于 `ai_theory/T*/T*.md` 和 `AI_Infra理论伴随线规划.md`；系统主线 `week*/day*/day*.md` 的编写与验收规则完全不受影响。
 
 技术校准：
 

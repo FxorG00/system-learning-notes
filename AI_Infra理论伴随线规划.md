@@ -421,6 +421,17 @@ ai_theory/Tn/Tn_note.md
 = 通过
 ```
 
+当某个 T module 的固定产出是可执行程序时，还要有最小工程验收纪律：
+
+```text
+成功路径：明确打印/记录 PASS，exit status == 0
+失败路径：unexpected mismatch / non-finite / shape error / exception 可定位，exit status != 0
+数值比较：给出当前 case 的具体 dtype、epsilon、rtol/atol，不写“差不多相等”
+证据边界：说明这组 oracle 能证明什么、不能证明什么
+```
+
+这不等于把系统主线的 GoogleTest、CTest、sanitizer、压力测试和长 checklist 全部搬进理论线。理论产出按风险选择最小而明确的 oracle；纯手推 module 不为 exit code 制造空壳程序。
+
 ---
 
 # 第一阶段：Python / NumPy 与数学到模型计算的映射
@@ -714,7 +725,7 @@ finite_difference_gradient.py
 
 ### 通过标准
 
-能解释 gradient 是什么、shape 是什么、为什么 chain rule 支撑 backpropagation。
+能解释 gradient 是什么、shape 是什么、为什么 chain rule 支撑 backpropagation；能独立写 analytic 与 forward-only numerical 两条路径，并用具体 tolerance、finite/shape/input-non-mutation invariants 给出明确 PASS/failure。
 
 ---
 
