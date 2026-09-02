@@ -5135,7 +5135,7 @@ C++ vector 动机
 
 T1 动态证据：Ubuntu `t01_numpy_basics/.venv` 使用 Python 3.12.14 与 NumPy 2.5.2；normal shape/dtype、reduction、slice view/copy、expected `ValueError` probes 全部 PASS。27 个 Python snippets 通过 syntax parse，Markdown fences、Typora math delimiters 和 control-character scan 通过。
 
-T4~T10 仍是在旧模板下提前生成的草稿，不因本次反馈立即机械全文替换；正式进入每个 T 前必须按新的理论线模板复检和重排，尤其检查是否存在“长资料前置、Round 仪式压过理论、重复 invariant/checklist”的问题。T2、T3 已于 2026-09-02 按新标准完成重排，具体记录见本文件后续章节。
+T2~T10 已于 2026-09-02 按新的理论线标准完成首轮重排或校准。正式进入每个 T 时仍要根据前一个 T 的真实 code、note 与问题复检后续内容；提前生成和重排不表示对应 module 已开始或通过。
 
 ### 作用域隔离：不得影响系统主线 `daily.md`
 
@@ -5285,3 +5285,72 @@ vector_norm([[3,-4],[5,12]], axis=-1)->[5,13]
 正式学习顺序仍是 T1 -> review -> T2 -> review -> T3
 提前修改文件不表示 T2/T3 已开始或通过
 ```
+
+---
+
+## 2026-09-02：AI Theory T4~T10 新标准校准
+
+用户要求继续按数学基础、总规划、当前进度和 AI Theory 独立编写标准修改 T4~T10。本轮只修改 `ai_theory/T4~T10` 与 MEMORY，没有触碰系统主线 `week*/day*/day*.md`。
+
+逐份认知墙判断：
+
+```text
+T4 gradient/chain rule mapping：无硬闸门
+    用户微积分基础扎实，新增量是 computation graph、upstream/local derivative、accumulation 与 finite difference
+
+T5 probability -> sampling：无硬闸门
+    学校概率论负责数学体系，T5 连续映射 distribution/sample/empirical statistics/categorical/seed
+
+T6 stable softmax：保留单一闸门
+    先按定义实现并观察 extreme logits failure，再由 translation invariance 推出 subtract-max 与 log-sum-exp
+
+T7 linear regression：保留单一闸门
+    公式与 API 先给足，用户独立闭合 data -> prediction -> loss -> gradient -> update 的 training V1
+
+T8 softmax classifier/workflow：保留单一闸门
+    先独立完成 multiclass classifier，再揭示 train/validation/test、selection、overfitting 与 confusion evidence
+
+T9 Tensor layout：保留单一闸门
+    先预测 shape/stride/storage_offset/aliasing，再用 PyTorch observations 建立 storage + metadata 对象模型
+
+T10 Module/state/inference：无硬闸门
+    registration tree、parameter/buffer/activation/state_dict、eval/inference_mode 与 checkpoint 更适合连续对象链
+```
+
+实际调整：
+
+```text
+T4、T5、T7 重写为更短的主线版，删除前置资料负担、固定长 note 模板和重复 checklist
+T6 保留已正确的数值机制详解，外部资料降为 Round1 后查证，明确正文自包含
+T8、T9 保留完整机制与真正的 Reading Gate，但外部视频/文档不再作为开工前播放清单
+T10 明确取消硬 Reading Gate，把原 Round 名称改为基础观察、对象模型与综合实验
+T9 Tensor Views 链接从 main 文档改为 stable 文档
+修复 T7 三处 Typora math 命令缺少反斜杠：mathbf X、mathbf w、hat y
+```
+
+新的稳定经验：
+
+```text
+数学基础强不等于跳过 AI mapping；只跳过学校数学重复讲解
+真实认知墙必须对应 mental model 的冲突，不是“代码比较长”
+闸门前可以完整给公式、API、用途、inputs/outputs 与 observable contract，但不提供组合 control flow 或核心稳定化策略
+理论 module 可以保留一个综合产出，但不围绕 note 模板和多层 pass checklist组织全文
+framework object model 课若主要任务是建立正确名词和 ownership chain，可以连续讲解，不必为了独立感遮住 API semantics
+```
+
+技术校准：
+
+```text
+NumPy probes：scalar gradient、Bernoulli empirical mean、regression gradient shape、stable softmax finite/sum-to-one PASS
+PyTorch 当前官方 stable 文档版本为 2.13；已核对 view/reshape/contiguous、storage metadata、Module registration、persistent buffer、state_dict shallow-reference、eval/train 与 weights_only loading 口径
+Windows 当前 Python 未安装 torch，因此未宣称 T9/T10 本机 runtime PASS；正式学习时在各自 Ubuntu .venv 运行
+七份文档 git diff --check 通过，Markdown fences 与 display-math delimiters 均成对
+```
+
+正式顺序仍是：
+
+```text
+T1 -> review -> T2 -> review -> ... -> T10
+```
+
+本次只是提前把教程校准到新标准，不更新任何 T module 的学习通过状态。
