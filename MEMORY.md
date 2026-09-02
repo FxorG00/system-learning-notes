@@ -3148,16 +3148,21 @@ B 站资源：3Blue1Brown 官方账号负责线代/微积分直觉；李沐 D2L 
 当前状态：规划已生成，T1 尚未开始；系统主线下一步是 Week9，不因理论线停住
 ```
 
-AI Infra 理论伴随线的实际教学方式（2026-08-23）：
+AI Infra 理论伴随线的实际教学方式（2026-09-02 独立模板修订）：
 
 ```text
 AI_Infra理论伴随线规划.md 只负责 T1~T24 的路线、范围与 gate；它不是可直接开学的完整教程。真正进入某个 T 时，Codex 再结合当时系统主线进度、前一个 T note 和真实资源，单独生成 Txx.md
 不一次性提前生成 24 份 T 教程。按 T1 -> review -> T2 顺序逐个生成，让后续内容吸收用户真实问题和掌握速度；一个 T 可以跨两个自然周，不和系统 WeekN 强行对齐
-每份 Txx.md 必须明确“去哪里学”：列出主资料、精确章节/视频、看到哪里停止，以及必看/选看/当前不看；生成前实际核对官方文档、正式课程或可靠教材，不只扔课程名和搜索关键词
-Txx.md 是每天 30~60 分钟、按模块持续推进的轻量学习入口，不复制 30KB 级 daily encyclopedia。默认拆成 Session A 概念与顺讲、Session B 独立 coding、Session C 复盘与验证；每个 session 可单独停止，一个 T 可以跨多个自然周，避免要求一次全文读完
-固定包含：本 T 从哪个问题出发、必要术语/数学硬件补注、资源阅读顺序、Codex 顺着资料的自包含讲解、shape/formula 小例子、独立代码需求、assert/tolerance 验证、与 AI Infra 的连接、通过标准和 Txx_note.md 建议
-练习仍采用渐进披露：先给自包含 Round1 的文件名/用途/API/输入输出/第一条运行命令，让用户独立写 reference；之后再给机制复盘、数值陷阱和完整测试，不在首次 coding 前泄露组合实现
+主线 daily.md 与理论线 Txx.md 使用独立编写规则，不能把 C++ 并发/组件课的 Round、Reading Gate、contract 和多层 test checklist 机械移植到数值理论入门
+AI Theory 前期默认约 70% 概念讲解与推导、30% 手推/实验/coding；系统主线约 30% 学、70% 动手。T9 以后框架与 inference engineering 增多时，理论线 coding 比例可以提高，但仍先讲完整概念主线
+Txx.md 默认是一份从头可以连续阅读的自包含讲义：当前问题 -> 新对象/术语 -> 最小数值或 shape 例子 -> 完整推导 -> 紧邻小实验 -> 下一概念，不把知识拆成术语表、资料清单和孤立问答
+外部视频与官方文档是校准、查证或第二解释源。先由 Txx.md 把必学内容讲清，再把精确链接放到概念出现的位置并标明选看/延伸；不能让用户先跳出教程读一份冗长资料，再猜它应该插在何处
+通常只保留一个综合 coding 产出和 3~5 个高价值理解问题，不用“完成 checklist”冒充理解；简单 numerical exercise 不包装成大型工程 contract
+同一个 invariant 正文完整解释一次，结尾最多压缩一次；删除重复 pass criteria、训诫式错误全集、过长固定 note 模板和只为仪式感存在的环境/阅读闸门
+每份 Txx.md 仍必须包含：真实问题、必要术语、公式/shape 推导、可运行小例子、综合实验、correctness evidence、AI Infra 连接和明确停止边界
+用户完成某个 T 后，根据真实 note、代码、口述和问题补强薄弱概念；不再默认要求先验收 R1 再针对性重写预制 R2/R3
 资料和教程控制认知负荷：已掌握内容允许快扫，纯扩展内容明确标 optional；数学目标以能解释和实现 inference reference 为准，不把整门证明型课程塞进一个 T
+数学公式统一使用 Typora-compatible `$...$` / `$$...$$`；用户已有大学数学基础时只列复习知识点，不重写整门数学课
 建议 Windows 路径为 gpt_infra/ai_theory/Txx/Txx.md 与 Txx_note.md；Ubuntu code 继续使用 ~/code/system-learning/ai-theory/tXX_topic/。目录按实际进入的 T 逐个建立
 ```
 
@@ -3170,12 +3175,13 @@ Ubuntu code 目录已建立：~/code/system-learning/ai-theory/t01_numpy_basics
 主题：Python/NumPy 最低入口与 ndarray object model，核心是 shape/ndim/size/dtype/itemsize/nbytes、axis 第一层、创建/indexing/same-shape elementwise/reshape 与 incompatible-shape ValueError
 历史环境检查：Ubuntu 20.04 的 system Python 曾为 3.8.10，pip 与 NumPy 尚未安装；该信息只属于宿主机快照，不再作为 T1 技术基线
 环境方案（已于 2026-09-02 更新）：Ubuntu 日常 `python/python3` 使用直接安装在 `/usr/local` 的 Python 3.12.14；`/usr/bin/python3` 的 3.8.10 只留给系统脚本；AI Theory 不使用 uv，每个项目用标准库 `venv` 建立独立 `.venv`，当前 NumPy baseline 为 2.5.2；统一 setup 与宿主机快照写入 ai_theory/ENVIRONMENT.md
-资料主线：Python official Lists 仅作 10 分钟补缺；NumPy stable Absolute Beginner 定向阅读 import/array fundamentals/attributes/create/shape/reshape/indexing/basic operations，并明确跳过 sorting/stacking/newaxis/broadcasting/Pandas；Quickstart 只作 3D printing/shape 查缺
-教程结构：Session A environment+concept+resources，Session B Round1 independent numpy_basics.py，Round2 对照五个误区，Session C verification+AI Infra memory estimate；一个 Session 可以独立停止，T1 可跨两个自然周
-Round1 截断审计通过：已有精确文件名/用途、必要 Python syntax、API 小例子、固定 arrays、metadata/assert/error contract、py_compile/run commands 与阅读闸门；未提供完整 numpy_basics.py
-范围边界：不深入 broadcasting、stride、view/copy 全规则、matrix multiplication、PyTorch 或 CUDA；NumPy 作为以后 C++/CUDA operator 的小规模 correctness reference
-文档审计：核心 shape/index/reshape/error 示例使用稳定 NumPy 基础 API；环境升级后仍须重新运行本课 assertions，不能只靠旧版本兼容推断
-当前状态：T1.md 已就绪但用户尚未执行 environment gate、Session A 或代码验收；Week8 已完成，理论线仍不抢 Week9 epoll/Reactor 主线
+资料策略：T1.md 已吸收 NumPy Absolute Basics 中当前真正需要的 ndarray/shape/axis/dtype/create/indexing/reshape/basic operations 内容；官方文档与 Quickstart 改为对应概念后的可选查证，不再是开课前 35~50 分钟的必读任务
+教程结构：一条连续链——C++ vector 动机 -> ndarray -> shape/axis -> metadata/dtype/memory -> creation -> indexing -> reduction -> elementwise -> reshape -> slice view/copy -> 完整 shape 数据流 -> 综合 numpy_basics.py -> AI Infra memory estimate
+编辑收敛：删除 Blocks/Round1/Round2/Reading Gate、11 项固定复检、重复通过标准和七节 note 模板；保留四个自然学习段、一个综合实验和五个口头理解问题
+技术补强：axis reduction 明确写成 $y[i,k]=\sum_j x[i,j,k]$；basic slice view 提升为独立实验，并用 .copy() 对照 independent data
+范围边界：不深入 broadcasting、stride/contiguous 完整机制、matrix multiplication、PyTorch 或 CUDA；NumPy 作为以后 C++/CUDA operator 的小规模 correctness reference
+文档审计：核心 shape/index/reduction/reshape/view/error 示例按 NumPy 2.5 stable docs 校准；环境升级后仍须重新运行 assertions
+当前状态：T1.md 已按理论优先模板重写，Ubuntu T1 目录的 Python 3.12 `.venv` 与 NumPy 2.5.2 已配置，但用户尚未正式学习验收；系统主线已通过 Week9 Day1，理论线不阻塞 Week9 Day2 epoll
 ```
 
 Week8 周规划的固定主线：
@@ -5072,3 +5078,62 @@ venv 是 Python 标准库能力，继续保留
 ```
 
 已同步修改：`ai_theory/ENVIRONMENT.md`、`T1/T1.md`、`T9/T9.md`、`T10/T10.md` 以及 MEMORY 中旧的 uv 环境口径。T2~T8 只引用已激活的 `.venv`，没有 uv 安装命令，因此无需机械改写。
+
+## 2026-09-02：AI Theory 教程与系统主线教程正式分离
+
+用户反馈：T1 把 NumPy 官方长文设成 35~50 分钟必读，却没有说明它应插入教程哪一步；同时环境门、Reading Gate、Round、contract、固定复检、通过标准和 note 模板占比过高，导致一份 NumPy 入门课像并发组件的工程验收文档。
+
+本次判断：
+
+```text
+外部反馈对 T1 的技术准确性评价基本成立，没有需要为了锐评改掉的核心语义
+真正问题是教学组织，不是 ndarray/shape/dtype/reshape 的技术内容
+采纳：理论主线自包含、官方资料后置查证、减少流程仪式、提升 axis 与 view/copy 的解释
+不采纳：只为追求短小把必要理论砍掉；用户是 AI 理论初学者，前期需要较完整知识灌输
+```
+
+从现在起：
+
+```text
+系统主线：工程设计与 coding 优先，约学三动手七；复杂组件可继续 Round 渐进披露
+AI Theory：前期理论与推导优先，约学七动手三；默认连续讲义，不机械使用 Round/Reading Gate/contract
+T9 以后 coding 比例可随 Module/autograd/inference/KV Cache/benchmark 增加，但概念链必须先完整建立
+```
+
+理论讲义默认组织：
+
+```text
+真实问题
+-> 新对象与术语
+-> 最小数值/shape 例子
+-> 公式与完整推导
+-> 就地小实验
+-> 下一概念
+-> 一个综合产出
+-> 3~5 个高价值理解问题
+-> AI Infra 连接
+```
+
+外部视频/官方文档放在相应概念之后，标记查证/选看/延伸；正文在不打开外链时也必须可独立读懂。相同 invariant 只完整解释一次，结尾至多压缩一次。删除重复 checklist、训诫式错误全集与固定长 note 模板。
+
+T1 已重写为连续链：
+
+```text
+C++ vector 动机
+-> ndarray
+-> shape/axis
+-> metadata/dtype/memory
+-> creation
+-> indexing
+-> reduction
+-> elementwise
+-> reshape
+-> slice view/copy
+-> 完整 shape dataflow
+-> numpy_basics.py
+-> AI Infra memory estimate
+```
+
+T1 动态证据：Ubuntu `t01_numpy_basics/.venv` 使用 Python 3.12.14 与 NumPy 2.5.2；normal shape/dtype、reduction、slice view/copy、expected `ValueError` probes 全部 PASS。27 个 Python snippets 通过 syntax parse，Markdown fences、Typora math delimiters 和 control-character scan 通过。
+
+T2~T10 是在旧模板下提前生成的草稿，不因本次反馈立即机械全文替换；正式进入每个 T 前必须按新的理论线模板复检和重排，尤其检查是否存在“长资料前置、Round 仪式压过理论、重复 invariant/checklist”的问题。

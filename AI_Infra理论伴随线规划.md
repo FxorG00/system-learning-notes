@@ -289,16 +289,45 @@ T23 correctness/benchmark
 4. 一段“这和 AI Infra 有什么关系”的解释
 ```
 
-每个 T module 开始前，再单独生成一份 `Tn.md` 教程。它和系统主线的 `daily.md` 一样，必须自己完成概念铺垫、术语解释、完整因果链、Round1 独立实现、Round2 定向打磨和最终验证；视频只承担第二讲解源或课程校准，不能用“去看第几 P”代替教程正文。
+每个 T module 开始前，再单独生成一份 `Tn.md` 教程。理论线与系统主线使用不同的教学模板：
+
+```text
+系统主线 daily.md
+-> 工程与独立设计优先
+-> 默认约 30% 讲解、70% coding
+-> 复杂组件可以使用 Round1/Round2/Round3 渐进披露
+
+AI Theory Tn.md
+-> 概念理解、数学映射和数据流优先
+-> 前期默认约 70% 讲解、30% 手推/实验/coding
+-> 默认写成一份从头可连续阅读的自包含讲义
+-> 不机械套用 Round、Reading Gate、contract 和多层 checklist
+```
+
+视频与官方文档承担校准、补充或第二解释源，不能用“去看第几 P”代替教程正文；反过来，也不应把一份很长的外部资料变成必读前置，再让用户猜它应该插在教程哪一段。
+
+理论线每个概念应在主线第一次需要它的位置直接讲清楚：
+
+```text
+当前问题
+-> 新对象/新术语
+-> 最小数值或 shape 例子
+-> 完整推导与因果链
+-> 紧邻的小实验
+-> 自然进入下一个概念
+```
+
+外部链接放在对应概念之后，标明“查证 / 选看 / 延伸”；除非某一课程片段确实比文字讲义更适合承担主讲，否则不把跳出文档阅读设成必经闸门。
 
 固定顺序：
 
 ```text
 读取总规划、MEMORY、上一 T module 结果
 -> 生成完整 Tn.md
--> 列出本周精确对应的视频编号与标题
--> 用户先完成独立产出
--> 根据真实代码、note 和问题定向修改后半部分
+-> 把本 T 的必学知识编排成一条连续解释链
+-> 在相关位置列出精确视频/官方资料，默认作为补充
+-> 用户完成手推、最小实验和独立产出
+-> 根据真实 note、代码和问题补强薄弱概念
 -> 验收并同步 MEMORY 进度
 ```
 
@@ -1924,26 +1953,32 @@ Gate C 后：KuiperLlama / CUDA
 
 ## Session A：概念
 
+Session A 默认是 Tn.md 的连续理论主线，不是“先去外部读一份资料清单”：
+
 ```text
-1. 先读本周问题和停止边界
-2. 看指定主视频，不自动连播
-3. 只记录 3~5 个真正不懂的术语
-4. 手推一个最小例子
+1. 从一个真实计算问题出发
+2. 在需要的位置解释术语、公式和对象
+3. 用最小数值/shape 例子逐步推导
+4. 紧接一个观察性小实验
+5. 用一句过渡把当前结论连接到下一节
 ```
+
+外部视频与文档可以穿插定位，但正文必须在不打开外链时仍能独立读懂。
 
 ## Session B：代码
 
 ```text
-1. 关闭参考代码
-2. 自己写最小实现
-3. 加 shape / value assertions
-4. 与 NumPy/PyTorch reference 比较
-5. 故意测一个错误 shape / edge case
+1. 围绕本 T 的一个核心对象完成最小实现
+2. 用 shape / value / tolerance 验证关键结论
+3. 与 NumPy/PyTorch reference 比较（适用时）
+4. 观察一个真正有教学价值的错误 shape / numerical edge case
 ```
+
+前期 T1~T8 的 coding 服务于理解，不把简单 numerical exercise 包装成大型工程 contract。T9 以后涉及 PyTorch Module、autograd、inference、KV Cache 或 benchmark 时，可以提高 coding 比例，但仍不在解释主线前堆实现 checklist。
 
 ## Session C：复盘
 
-回答：
+只保留少量能暴露理解的复盘问题：
 
 ```text
 这周的对象有哪些？
@@ -1956,40 +1991,43 @@ Gate C 后：KuiperLlama / CUDA
 
 如果代码已经清楚证明某一点，不机械抄长篇验收答案。
 
+### Tn.md 编辑约束
+
+```text
+保留：完整理论链、术语首次解释、公式推导、shape/value 例子、一个综合实验、AI Infra 连接
+压缩：环境重复说明、资料导航、相同 invariant 的重复表述
+删除：为了仪式感存在的多层闸门、重复 pass checklist、训诫式常见错误全集、大段固定 note 模板
+```
+
+同一个 invariant 正文完整解释一次，结尾最多压缩一次。不能为了显得精确，把 `ndim=len(shape)` 一类简单关系在五处重复或反复套复杂 LaTeX。
+
+自检用于找出理解断点，不把“完成 checklist”冒充“掌握理论”。通常保留 3~5 个高价值问题即可。
+
 ---
 
 # 进度记录模板
 
+`Txx_note.md` 不要求固定七节。默认只记录：
+
 ```markdown
 # Theory Txx Note
 
-## 1. 本周主线
+## 我真正新理解的内容
 
-开始日期 / 当前系统 milestone / 预计有效工时 / 目标完成日期：
+## 一条关键推导或实验
 
-## 2. 我真正新理解的机制
-
-## 3. Shape / formula 手推
-
-## 4. Code and tests
-
-## 5. 与 AI Infra 的连接
-
-## 6. 当前不会的边界
-
-## 7. Questions
+## Questions
 ```
 
-验收记录至少包含：
+如果本 T 有 numerical experiment，再附最小 evidence：
 
 ```text
 运行命令
-输入 shape / dtype
-expected / reference
-tolerance（如涉及浮点）
-实际结果
-失败案例
+关键 input / expected / actual
+tolerance（仅在涉及浮点时）
 ```
+
+代码已经明确证明的 assertion 不在 note 里逐条复写。用户根据实际学习内容增删标题，不为了填模板制造笔记。
 
 ---
 
@@ -2000,7 +2038,7 @@ tolerance（如涉及浮点）
 如果某周内容已经由学校课程或实际代码证明掌握：
 
 ```text
-直接完成 code output + gate check
+直接完成关键推导、code output 和最小 evidence
 不用重复看完整视频
 ```
 
