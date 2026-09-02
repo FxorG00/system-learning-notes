@@ -5137,3 +5137,37 @@ C++ vector 动机
 T1 动态证据：Ubuntu `t01_numpy_basics/.venv` 使用 Python 3.12.14 与 NumPy 2.5.2；normal shape/dtype、reduction、slice view/copy、expected `ValueError` probes 全部 PASS。27 个 Python snippets 通过 syntax parse，Markdown fences、Typora math delimiters 和 control-character scan 通过。
 
 T2~T10 是在旧模板下提前生成的草稿，不因本次反馈立即机械全文替换；正式进入每个 T 前必须按新的理论线模板复检和重排，尤其检查是否存在“长资料前置、Round 仪式压过理论、重复 invariant/checklist”的问题。
+
+### 作用域隔离：不得影响系统主线 `daily.md`
+
+2026-09-02 的 AI Theory 教程改版只适用于：
+
+```text
+ai_theory/T*/T*.md
+AI_Infra理论伴随线规划.md 中的理论线执行模板
+```
+
+它不得覆盖、弱化或重新解释系统主线 `week*/day*/day*.md` 的既有规则。主线继续保留：
+
+```text
+前情提要 -> 教程 -> 收尾的三部分顺序
+工程学习默认约学三、动手七
+练习型/组件型任务使用 R1/R2/R3 progressive disclosure
+R1 提供自包含开工信息，但保留真实设计空间
+R1 正式通过后，根据实际 code/note/对话定向润色 R2/R3
+新 API 首次出现时解释英文来源、参数、返回值、作用，并给最小独立例子
+教学代码说明程序用途，并对不直观函数和关键因果链添加注释
+MIT 6.S081 / OS / network 内容讲清谁调用谁、状态变化和完整流程
+验收时逐部分检查 note、验收题、代码、动态证据和用户对 daily 的修改
+避免重复 dirty work，但不因此删除必要 correctness evidence
+```
+
+路径判定规则：
+
+```text
+目标位于 week*/day*/day*.md -> 使用系统主线 daily 规则
+目标位于 ai_theory/T*/T*.md -> 使用 AI Theory 连续讲义规则
+同时涉及两条线 -> 分别应用，不取交集，也不让其中一条覆盖另一条
+```
+
+以后若理论线反馈提到“删除 Round/Reading Gate/checklist”或“理论七、动手三”，必须先检查目标路径；这些意见不能传播到系统主线 daily。
