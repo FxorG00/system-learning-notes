@@ -5421,3 +5421,59 @@ in-place mutation of saved tensors can be rejected through autograd version chec
 资料以 PyTorch official Autograd tutorial、leaf/non-leaf tutorial、Autograd mechanics 与 Tensor.backward 为技术依据；视频继续对齐用户指定的李沐 07 自动求导和吴恩达 P67~P69。T11 不进入 optimizer/training loop、custom Function、higher-order derivatives、CUDA 或 autograd engine source。
 
 T11 生成后复检结果：约 30 KB、1,165 行；18 个 Python snippets 全部通过 syntax parse；85 组 Markdown code fences 与 11 组 display math delimiters 成对；无裸 LaTeX commands 或异常控制字符。当前 Windows Python 没有安装 PyTorch，因此本次只声明 PyTorch 2.13 official docs 语义校准与 static/syntax checks，没有冒充动态 autograd PASS；正式进入 T11 时在 Ubuntu CPU PyTorch environment 运行 fixed evidence。
+
+---
+
+## 2026-09-02：AI Theory T12 提前生成
+
+已生成 `ai_theory/T12/T12.md`。这只表示教材提前准备完成，不表示 T11 或 T12 已开始/通过；正式顺序仍是 `T11 -> review -> T12`。系统主线当前状态与 `week*/day*/day*.md` 均未改变。
+
+T12 是第一次完整连接：
+
+```text
+T8 NumPy classification workflow
++ T10 Module/state/checkpoint
++ T11 autograd/.grad
+-> MLP forward
+-> CrossEntropyLoss
+-> optimizer update
+-> checkpoint
+-> fresh-process inference
+```
+
+本 module 保留一个真实的 `training-loop composition gate`。闸门前完整讲清 MLP shapes、nonlinear activation、raw logits、`CrossEntropyLoss` input contract、SGD/Adam 第一层机制、batch/iteration/epoch、train/eval/grad-mode 边界、固定 XOR-like dataset 与单个 API；但不提前展示完整五步 training-loop control flow。Round1 独立组合 `mlp_train_and_infer.py` 的 `train`/`infer` lifecycle；闸门后才给出完整 causal chain，并在用户 R1 实现通过后按真实 code/note/questions 定向润色 Part 3。
+
+固定产出 contract：
+
+```text
+TinyMLP: 2 -> 16 -> ReLU -> 2 raw logits
+torch.float32 features; torch.long class-index labels
+torch.manual_seed(12) before model construction
+Adam lr=0.03; full-batch; max 1000 epochs
+train accuracy >= 0.95; eval accuracy >= 0.75
+checkpoint: tiny_mlp_state.pt
+infer: fresh object/process + load_state_dict + eval + inference_mode
+success exit 0 with TRAIN PASS / INFER PASS
+unexpected failure non-zero
+```
+
+需要长期保持的 T12 技术边界：
+
+```text
+nn.Linear stores weight as [out_features, in_features]
+stacked affine layers without nonlinear activation still collapse to one affine map
+CrossEntropyLoss receives raw logits [N,C], not manually-softmaxed probabilities
+class-index targets use shape [N] and dtype torch.long
+backward computes/accumulates gradients; optimizer.step mutates parameters
+zero_grad does not update parameters; step does not recompute gradients
+model.eval controls mode-sensitive Module behavior; inference_mode controls autograd/runtime recording
+ordinary inference needs both boundaries but no loss/backward/optimizer
+state_dict contains named state values, not the Python forward/class definition
+training memory categories include parameters, activations/saved state, gradients and optimizer state
+```
+
+闸门经验补充：如果 protected wall 是“多个 object 的组合顺序”，开头不能先用一张完整 flowchart 把答案交付。可以列 object inventory、逐个解释 API 与 contract；统一 causal chain 只放闸门后。高层问题本身也要检查是否偷偷变成组合伪代码。
+
+T12 以 PyTorch current official `CrossEntropyLoss`、optimizer/SGD/Adam、Module 与 save/load docs 校准。固定 XOR-like data、architecture 和 Adam hyperparameters 另用等价 NumPy forward/backward/Adam probe 做 100 组初始化检查，`min_train_accuracy=1.0`、`min_eval_accuracy=1.0`；这支持当前 teaching thresholds，但不冒充 PyTorch runtime、real-data generalization 或任意 configuration 证明。当前 Windows Python 没有 PyTorch，正式动态验收仍在 Ubuntu T12 venv 执行。
+
+发布前静态检查要求继续执行：Python fenced snippets 全部 `ast.parse`；Markdown code fences/display-math delimiters 成对；扫描裸 LaTeX command、异常控制字符和 `git diff --check`。公式只使用 Typora-compatible `$...$` / `$$...$$`。
