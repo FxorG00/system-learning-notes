@@ -5369,3 +5369,55 @@ T1 -> review -> T2 -> review -> ... -> T10
 ```
 
 本次只是提前把教程校准到新标准，不更新任何 T module 的学习通过状态。
+
+---
+
+## 2026-09-02：AI Theory T11 提前生成
+
+已生成 `ai_theory/T11/T11.md`。当前只是教程提前存在，不表示 T11 已开始或通过；正式学习顺序仍是前一个 T module review 通过后再进入下一个。系统主线当前仍为 Week9 Day2 epoll，理论线不能抢占主线优先级。
+
+T11 固定主线：
+
+```text
+T4 computation graph / finite difference
++ T9 Tensor metadata/storage
++ T10 Module/parameter/inference boundary
+-> requires_grad / leaf / non-leaf / grad_fn
+-> scalar backward and seed gradient
+-> leaf .grad accumulation
+-> graph lifetime vs grad-buffer lifetime
+-> retain_grad / vector-Jacobian product
+-> no_grad / detach / inference memory boundary
+```
+
+T11 保留一次真实闸门：
+
+```text
+闸门前完整讲清必要 autograd object model 与最小 API
+Round1 固定 scalar case 做 hand / finite difference / autograd three-path evidence
+同一 leaves 上重新 forward/backward，但不清空 .grad；用户先预测 overwrite / unchanged / accumulate / error
+闸门后才解释 accumulation、graph release/rebuild、retain_grad 与 vector backward
+```
+
+闸门保护的是 `graph lifetime != grad-buffer lifetime` 这一 mental-model conflict，不靠陌生 API 制造困难。Round1 不固定 helper signatures，也不提供组合 control flow。
+
+T11 技术 contract：
+
+```text
+user-created requires-grad parameter Tensor：leaf，grad_fn is None
+operation result involving requires-grad input：non-leaf，grad_fn non-None
+backward 默认把 contributions 累积到 requires-grad leaves 的 .grad
+non-leaf gradient 会参与传播，但 .grad 默认不保留；retain_grad() 只用于显式保留
+同一 graph 默认 backward 一次并释放 saved state；new forward creates a new graph
+retain_graph=True 不清空 .grad，并延长 graph resource lifetime
+non-scalar backward requires an external gradient and computes a vector-Jacobian product
+no_grad controls operations in a context；detach returns a history-free Tensor sharing storage
+saved-for-backward state 取决于 operator rule，不能简化成“所有 activations 永远保存”
+in-place mutation of saved tensors can be rejected through autograd version checks
+```
+
+固定 evidence 使用 `torch.float64`、`epsilon=1e-5`、`rtol=1e-5`、`atol=1e-7`。scalar gradients 为 `w.grad=6`、`b.grad=2`；第二个 fresh graph 未 reset 时累积为 `12/4`；reset 后恢复 `6/2`；retained `z.grad=2`。vector-Jacobian product case 为 `x=[2,3]`、`y=x*x`、`v=[1,10]`、`x.grad=[4,60]`。
+
+资料以 PyTorch official Autograd tutorial、leaf/non-leaf tutorial、Autograd mechanics 与 Tensor.backward 为技术依据；视频继续对齐用户指定的李沐 07 自动求导和吴恩达 P67~P69。T11 不进入 optimizer/training loop、custom Function、higher-order derivatives、CUDA 或 autograd engine source。
+
+T11 生成后复检结果：约 30 KB、1,165 行；18 个 Python snippets 全部通过 syntax parse；85 组 Markdown code fences 与 11 组 display math delimiters 成对；无裸 LaTeX commands 或异常控制字符。当前 Windows Python 没有安装 PyTorch，因此本次只声明 PyTorch 2.13 official docs 语义校准与 static/syntax checks，没有冒充动态 autograd PASS；正式进入 T11 时在 Ubuntu CPU PyTorch environment 运行 fixed evidence。
