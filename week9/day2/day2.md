@@ -252,6 +252,85 @@ epoll 关心 readiness condition，不保存 TCP message boundary。
 
 `EPOLLIN` 中的 `IN` 可以记成 input。它表示对应对象当前适合尝试 read-like operation，不表示已经把 input bytes 放进 `epoll_event`。
 
+### 8.1 event 是啥意思？在目前语境怎么理解？
+
+对，`event` 翻译成“事件”容易让人误以为它一定是“刚刚发生的一件事”。
+
+在 epoll 语境里，更准确地把它理解成：
+
+> 内核给 application 的一条“fd 状态通知”。
+
+它报告的是：
+
+```text
+这个 fd 当前发生了什么、或者当前满足什么处理条件。
+```
+
+例如网络数据真正到达 socket，才是现实里发生的一件事：
+
+```text
+网络包到达
+-> 内核把 bytes 放进 socket receive buffer
+-> socket 变为 readable
+```
+
+而 `epoll_wait` 返回的：
+
+```text
+EPOLLIN
+```
+
+不是“网络包”本身，也不是 bytes 本身；它是内核发给你的通知：
+
+```text
+你关心的这个 fd，
+它现在处于 readable 状态，
+你可以尝试 recv/read。
+```
+
+所以可以分两层：
+
+```text
+真实发生的事：
+数据到达、对端关闭、发送缓冲区腾出空间……
+
+epoll 所说的 event：
+内核把这些结果整理成“fd 当前可读 / 可写 / 出错 / 挂断”的通知。
+```
+
+尤其在 LT 下，`event` 甚至不一定对应“刚刚又发生了一件新事”。
+
+```text
+socket 里本来就有未读数据
+-> 你没有读
+-> 下一次 epoll_wait 又返回 EPOLLIN
+```
+
+第二次并不代表“又来了新数据”；它只是再次通知你：
+
+```text
+这个 fd 仍然可读。
+```
+
+因此在你目前的 Day2 中，脑中可以先把 `event` 换成：
+
+```text
+readiness notification
+= 就绪状态通知
+```
+
+`EPOLLIN` 就是：
+
+```text
+“这个 fd 当前具备 input/read 的就绪条件。”
+```
+
+不是：
+
+```text
+“epoll 把输入数据交给你了。”
+```
+
 ---
 
 ## 9. timeout
@@ -293,6 +372,101 @@ epoll_wait reports EPOLLIN
 ```
 
 Day6 才会把 LT 与 edge-triggered (`ET`) 做受控对照。今天不添加 `EPOLLET`。
+
+### 10.1 LT 与 ET 都是啥意思？
+
+`EPOLLET` 就是你在 `epoll_ctl` 注册事件时，可以额外加上的一个 flag：
+
+```cpp
+event.events = EPOLLIN | EPOLLET;
+```
+
+它的意思是：这个 fd 使用 edge-triggered（ET，边缘触发）语义。
+
+你现在 Day2 不写 `EPOLLET`：
+
+```cpp
+event.events = EPOLLIN;
+```
+
+所以默认就是 LT（level-triggered，水平触发）。
+
+可以把 socket 的“是否有未读数据”想成一个状态：
+
+```text
+无未读数据：not readable
+有未读数据：readable
+```
+
+LT 关心的是“现在这个状态是否仍成立”：
+
+```text
+socket 还有未读数据
+    |
+    v
+epoll_wait 返回 EPOLLIN
+    |
+    v
+你暂时不 recv，或只读了一部分
+    |
+    v
+socket 仍有未读数据，仍然 readable
+    |
+    v
+下一次 epoll_wait 还会返回 EPOLLIN
+```
+
+ET 关心的是“状态有没有发生变化”，尤其是：
+
+```text
+not readable
+    |
+    | 新数据到来
+    v
+readable
+```
+
+这个从“不可读”变成“可读”的瞬间，就是一个 edge（边缘）。
+
+```text
+socket 原本为空
+    |
+    v
+新数据到来：不可读 -> 可读
+    |
+    v
+epoll_wait 返回一次 EPOLLIN
+
+但你没有把数据读完
+    |
+    v
+socket 一直保持 readable
+    |
+    v
+之后 epoll_wait 通常不会因为那批剩余数据再次提醒你
+```
+
+所以核心区别就是：
+
+| 模式 | 内核问的是什么 |
+|---|---|
+| LT | “它现在还可读吗？” |
+| ET | “它刚刚变得可读了吗？” |
+
+ET 不是另一种 socket，也不是 `recv` 的替代品；它只是 epoll 通知你的规则变了。
+
+为什么 ET 更难？因为如果 ET 通知你一次，而你只 `recv` 一点点就返回事件循环，剩余数据可能不会再提醒你。于是 ET 下通常需要：
+
+```text
+收到 EPOLLIN
+-> 一直 recv
+-> 直到读完，或 recv 返回 EAGAIN
+-> 再回到 epoll_wait
+```
+
+而这又要求 fd 通常设成 nonblocking，否则“继续读到没有数据”为了等新数据可能卡住线程。
+
+Day2 暂时用 LT 很合理：你先把“readable 就处理”的主线建立起来，不必立刻背上“必须一次 drain 到 EAGAIN”的约束。
 
 ---
 
@@ -706,6 +880,9 @@ Day2 的 probe 是单线程、单 registration，事件后通常能直接读到�
 ```text
 event = notification
 recv result = actual I/O outcome
+
+EPOLLIN 是“刚才观察到可读”的通知，但是不保证等会 recv 的时候一定能读取到；
+实际能读取到什么，需要去执行 recv。
 ```
 
 ---
@@ -923,357 +1100,275 @@ V1 只需行为正确、证据清楚，不要求漂亮 abstraction。完成后�
 
 ---
 
-# Round 2：完成 V1 后再读，复检 readiness 模型
+# Round 2：沿着你的 R1 实现复盘
 
-> 下面是生成时的通用初版。R1 正式通过后，应按你的真实代码、note、问题和设计取舍定向调整，不把预制错误清单强套给你。
+> 2026-09-03 已按你的实际代码定向调整。R1 正式通过，95/100；当前进入 R2，不表示 Day2 整天已经验收。
+>
+> 你已独立完成 `socketpair -> non-blocking receiver -> epoll ADD -> wait -> drain`，也补齐了 `epfd` 清理、B/C 两次 event 的 count/fd/bit 校验，以及当前场景下 EOF 的失败返回。下面不重教这套实现，只补它背后最值得串清的关系。
 
-## 26. 三次 wait 分别在问什么
+## 26. 对照你实际执行的四次 wait
 
-你的 V1 应能映射到三类 query：
+这里的 A/B/C/E 对应你 `main` 中的阶段注释，D 是中间的 `receiver_work`。
 
-### 26.1 data 到达前
+| 阶段 | 调用前的状态 | 你的 timeout | 本次实测 |
+|---|---|---:|---|
+| A | receiver 空，sender 仍 open | 0 | count = 0 |
+| B | sender 已写入 15 bytes，还没 recv | 100 | count = 1，fd = receiver，包含 EPOLLIN |
+| C | B 返回后没 send，也没 recv | 100 | 仍是同一个 receiver 的 EPOLLIN |
+| D | `receiver_work` 用 2-byte buffer drain | 不适用 | 7 次读 2 bytes，1 次读 1 byte，最后 EAGAIN |
+| E | receiver 已空，sender 仍 open | 100 | count = 0 |
 
-```text
-receiver registered for EPOLLIN
-receiver queue empty
-peer remains open
--> no readable condition for bytes/EOF
--> epoll_wait(timeout=0) returns 0
-```
+这张表已经是你的真实证据，不需要再照抄成另一份 test cases。
 
-这不是 `EAGAIN`。`0` 是 `epoll_wait` 的结果，表示这次没有 returned event；只有你真正调用 `recv` 时，才可能得到 `-1 + EAGAIN`。
+一个文字与参数的小区别：你 C/E 的注释写了 `immediate`，但实际传入 `100`。C 因为已经 ready，可以马上返回；E 没有 event，会等待超时后返回。要严格观察“此刻有没有 event”，传 `0` 更准确；本次 `100` 不改变已经证明的 LT/drain 关系，不作为重新卡住 R1 的理由。
 
-### 26.2 data 到达后、consume 前
+本例没有其他 writer 或 consumer，所以你可以直接把程序控制的先后顺序与 socket 状态对应起来，不需要 `sleep` 猜时序。
 
-```text
-peer send puts payload into stream path
--> receiver becomes readable
--> kernel can make EPOLLIN ready for its registration
--> epoll_wait copies returned event information
-```
+## 27. 为什么同一批 bytes 带来了两次 event
 
-此时：
+你 B 与 C 之间只有校验、打印和第二次 `epoll_wait`，没有新的 `send`，也没有 `recv`：
 
 ```text
-epoll_wait has not removed payload
-interest registration still exists
-receiver remains readable until program consumes enough state
+sender_work 发出一份 payload
+    |
+    v
+receiver receive queue 有 15 bytes
+    |
+    v
+B：epoll_wait 返回 EPOLLIN
+    |
+    | application 还没有 recv
+    v
+receiver 仍有这 15 bytes
+    |
+    v
+C：LT 再次报告 EPOLLIN
 ```
 
-### 26.3 drain 完成后
+这正好印证你在 §8.1 里补充的理解：
+
+> event 是 fd 状态通知，不一定表示“刚刚又发生了一件新事”。
+
+真正取走 bytes 的是后面的 `receiver_work`，不是 B/C 的 wait。因此：
 
 ```text
-application repeatedly recv
--> bytes are consumed
--> final recv returns EAGAIN because peer open + queue empty
--> readable data condition no longer holds
--> immediate epoll_wait returns 0
+两次 EPOLLIN
+不意味着两份 payload
+也不意味着 socket 中有两条 message
 ```
 
-这条链把 Day1 与 Day2 接了起来：
+你的 2-byte buffer 又把另一层边界显现出来：一份 15-byte payload 被多个 `recv` 取走。通知次数、`send` 次数、`recv` 次数，三者不需要相等。
+
+## 28. 为什么你只 ADD 一次就够了
+
+你的 `epoll_ctl(EPOLL_CTL_ADD)` 只调用了一次，后面四次 wait 都使用同一个 `epfd`。
+
+它们操作的是不同层次：
 
 ```text
-epoll says“值得试”
--> recv says“这次实际拿到了什么”
--> EAGAIN says“当前已推进到边界”
--> event loop can wait again
+ADD：建立长期的关注关系
+wait：取得这次可交付的状态通知
+recv：消费 socket 当前可读的 bytes
 ```
+
+D 阶段把 receiver drain 空以后，变化的是 **readable condition**，不是 registration 被删除。你没有重新 ADD，原来的关注关系仍然存在；后面如果有新 I/O activity，这个 registration 仍可产生通知。
+
+今天使用默认 LT，没有 `EPOLLONESHOT`，因此也没有“每处理完一次 event 就重新武装”的步骤。无需为 Day2 再加 MOD/DEL 实验。
+
+## 29. 两个字段，分别由谁决定
+
+你的注册内容是：
+
+```cpp
+epoll_event interest{};
+interest.events = EPOLLIN;
+interest.data.fd = receiver_fd;
+```
+
+这段语句依赖已创建的 `receiver_fd`，不是独立程序。它指定了两种不同的信息：
+
+| 字段 | 注册时的意思 | 返回时的来源 |
+|---|---|---|
+| `events` | application 关心哪些状态 | kernel 报告本次就绪状态 bits |
+| `data.fd` | application 自己关联的标记 | kernel 返回此前保存的 user data |
+
+所以你补的两项断言不是重复工作：
+
+```text
+data.fd == receiver_fd：确认通知关联的是预期对象
+events & EPOLLIN：确认通知包含本次关心的状态
+```
+
+kernel 知道被监视对象，但不会替你给 `data.fd` 发明业务含义。它返回的是你在 ADD/MOD 时附带的数据。
+
+你使用按位判断而不是 `events == EPOLLIN` 也是合适的：返回 mask 可以同时包含多个状态位。今天不要求主动制造 HUP/ERR；只需要理解“包含某个位”与“整个数值刚好等于它”不同。
+
+## 30. 你的最后一次 recv，已经说明了 non-blocking 的价值
+
+不必先假设别的线程抢走数据；看你这次单线程程序就足够：
+
+```mermaid
+flowchart TD
+    A["receiver_work：recv 得到 n > 0"] --> B["保存实际 n bytes"]
+    B --> A
+    A --> C["15 bytes 已全部取走，再调用 recv"]
+    C --> D["sender 仍 open，receiver 当前为空"]
+    D --> E["O_NONBLOCK：返回 -1 / EAGAIN"]
+    E --> F["helper 返回 true，main 能继续执行 E 阶段"]
+```
+
+假如 receiver 是 blocking，最后这次 `recv` 就可能等下一批数据。可 sender 的下一步也得由同一个 `main` 来执行，整个程序会卡在这里。
+
+因此 epoll 与 non-blocking 各自解决一件事：
+
+```text
+epoll：没有可推进工作时，集中等待
+non-blocking recv：开始处理后，到了当前边界就能回来
+```
+
+这也对应你 §18 的增补：通知不是 reservation（预留）。更一般的程序中，wait 与实际 I/O 之间状态还可能变化；最终仍以 `recv` 的返回值为准。当前 probe 没有制造这种竞争，不需要为此加线程或新测试。
+
+## 31. 复用 Day1 helper，改变的是哪个前提
+
+你这次把 EOF 分支改为 `return false`，改得对：
+
+| 场景 | peer 的状态安排 | `recv == 0` 应怎样理解 |
+|---|---|---|
+| Day1 最后阶段 | 主动关闭 peer | 预期 EOF |
+| Day2 D 阶段 | peer 始终 open，没有 shutdown | 与实验安排不符，属于失败 |
+
+所以不是“EOF 永远是错误”，而是**这个 helper 在当前调用场景下承诺什么**。
+
+目前 `receiver_work` 返回 true，表示本轮读到了 would-block 边界；返回 false，表示这个实验不应出现的 EOF 或其他错误。对今天的小 probe，这种 bool 分工足够，不要求升级成通用状态类。
+
+同样，你已把新获得的 `epfd` 纳入 main 的正常与显式错误清理。它和两个 socket 是三份独立 owned fd；关闭 watched socket 不等于替你关闭 epoll instance。
+
+## 32. 对你新增的 LT/ET 解释，只补一个适用范围
+
+§10.1 的图适合帮助理解“有未读数据时，LT 可以再次提醒”。但需要给那张二态图加一个脑内前提：
+
+```text
+这里先只看 peer open、没有 error 的 data-readiness 场景。
+```
+
+没有 unread bytes，不代表任何时候都不可读；EOF/error 也可能使 read-like operation 立即得到结果。
+
+ET 也不要记成一个严格的“只在布尔值 0 -> 1 时触发一次”的装置。新 I/O activity 仍可能产生通知；可靠程序不能依赖尚未读完的旧数据会被再次提醒。这是 [Linux epoll(7)](https://man7.org/linux/man-pages/man7/epoll.7.html) 中 ET 示例想说明的边界。
+
+今天只补这句话，不扩展 ET 实验；受控 LT/ET 对照仍放在 Day6。
+
+关于 interest/ready，你的代码可以这样对号入座：
+
+```text
+interest：ADD 建立的关注关系，D 之后仍在
+ready：kernel 根据当前 I/O activity 维护的可交付通知
+payload：实际 socket receive queue 中的 bytes
+```
+
+它们不是同一份东西的三个名字。
+
+## 33. 从这份 probe 到 Day3，只差哪一步
+
+你已经拥有：
+
+```text
+登记 receiver
+-> 等待并识别它的 event
+-> 调用它对应的 recv handler
+-> 推进到 EAGAIN
+-> 再等待
+```
+
+Day3 将把一个 receiver 扩展成 listening socket 与多个 connection sockets，再让这条链持续运行。
+
+本次输出的 fd 3/4/5 只是一次实际分配结果，不应该写成程序常量。你已经使用变量和回传的 `data.fd`，这条方向可以直接延续。
 
 ---
 
-## 27. `epoll_wait` 返回 event，不消费 I/O state
+# Round 3：使用现有证据完成复盘
 
-这是 Day2 最重要的边界。
+## 34. 编译、运行和资源检查已经做过
 
-如果第一次 `epoll_wait` 返回后不调用 `recv`：
-
-```text
-payload still queued
--> receiver still readable
--> default LT condition still true
--> next wait can report EPOLLIN again
-```
-
-真正改变 socket receive state 的主体是：
-
-```text
-application 调用 recv/read
-```
-
-不是：
-
-```text
-epoll_wait 返回 event
-```
-
-因此不要写出这种 mental model：
-
-```text
-wait 拿走一个 data event
--> 所以 socket 少了一条 message
-```
-
-更准确的是：
-
-```text
-wait 取得 readiness information
-recv 才取得 bytes
-```
-
----
-
-## 28. interest list 不会被一次 wait 消费
-
-一次 `epoll_wait` 返回后：
-
-```text
-registration 仍在 interest list
-associated event mask 仍有效
-associated data 仍会在后续 event 中返回
-```
-
-所以 default LT 不需要每次 event 后 `EPOLL_CTL_ADD` 一遍。重复 ADD 同一个 registration 通常会失败，而不是“重新订阅成功”。
-
-今天没有使用 `EPOLLONESHOT`，因此也不存在 one-shot rearm。后续若真正学到 one-shot，才讨论用 `EPOLL_CTL_MOD` rearm。
-
----
-
-## 29. `data.fd` 是谁放进去的
-
-注册时：
-
-```text
-application writes interest.data.fd = receiver_fd
--> epoll_ctl ADD asks kernel to save this user data with registration
-```
-
-返回时：
-
-```text
-epoll_wait copies the saved data into returned event
--> application reads returned_event.data.fd
-```
-
-所以 `data.fd` 的意义由 application 决定。以后 Reactor 可能改存 pointer 或 stable token；今天只存 fd，保持对象关系直接可见。
-
-要避免一句不准确的话：
-
-```text
-kernel 在 event 发生时自动查出并填写 data.fd
-```
-
-kernel 返回的是你最近一次 `ADD/MOD` 时关联的 data。
-
----
-
-## 30. 为什么 watched fd 仍必须 non-blocking
-
-即使 epoll 报告 ready，可靠代码仍然不应让后续 I/O 可以无限睡住：
-
-```text
-readiness is observed
--> program gets scheduled and starts handling
--> actual state may have changed
--> recv remains the final authority
-```
-
-non-blocking fd 让最坏结果仍然是：
-
-```text
-recv returns EAGAIN
--> handler stops this drain
--> control returns to event loop
-```
-
-而不是：
-
-```text
-handler unexpectedly blocks
--> one event-loop thread can no longer process other ready fds
-```
-
-Day2 的单-thread/single-fd probe 主要用它建立长期正确模型；Day3 多 connections 时，这个性质才真正决定 server 是否会被一个 client 拖住。
-
----
-
-## 31. timeout 是控制实验的工具，不是业务 event
-
-`epoll_wait == 0` 只表示：
-
-```text
-在这次 timeout 区间内，没有 event 被返回
-```
-
-它不表示：
-
-```text
-所有 watched fds 永远不会再 ready
-connection 已关闭
-应删除 registration
-```
-
-Day2 使用 timeout `0` 是为了做瞬时状态断言；使用有限正 timeout 是为了让实验失败时能退出。真正 server 常在 event loop 中使用长期等待，但还会考虑 timer、shutdown 和 wakeup 机制，这些不进入今天。
-
----
-
-## 32. interest list 与 ready list 的最小准确模型
-
-```text
-interest list：
-    application 注册并维护的“关注集合”
-    保存 target reference、event mask 与 user data
-
-ready list：
-    kernel 根据 I/O activity 动态维护的 ready references
-    epoll_wait 从中取得可以交付的 event information
-```
-
-不要把它们画成两个完全独立的 fd copies：registration 关联 target fd 与对应 open file description。关于 `dup`、close 后 registration 何时真正移除、fd number reuse 与 stale events 的精确边界，留到 Day6 lifecycle。
-
-今天只要求：
-
-```text
-epfd 不是 watched socket
-interest 不是 ready
-ready event 不是 payload
-fd number 不是 kernel object 本身
-```
-
----
-
-## 33. Day2 结束时的 event-loop mental model
-
-```text
-program has no immediate work
--> epoll_wait on epoll instance
--> kernel returns zero or more event records
--> program inspects each returned record
--> program calls the corresponding real I/O operation
--> program advances state until current boundary
--> program waits again
-```
-
-今天 probe 只做一次受控循环。Day3 才把这一模型放进持续运行的 TCP accept/read loop。
-
----
-
-# Round 3：高价值验证与证据
-
-## 34. 编译与正常运行
+2026-09-03 对你的修改版重新执行：
 
 ```bash
-cd ~/code/system-learning/cpp/week9
 g++ -std=c++17 -Wall -Wextra -g epoll_stream_probe.cpp -o epoll_stream_probe
 ./epoll_stream_probe
-echo $?
 ```
 
-必须证据：
+结果：
 
 ```text
 零 warning
-before-data wait == 0
-after-send returned event identifies receiver and contains EPOLLIN
-before-consume LT wait reports receiver again
-drain reconstructs exact payload and ends at EAGAIN/EWOULDBLOCK
-after-drain wait == 0
-PASS，exit status 0
-all created fds closed
+B/C：count、data.fd、EPOLLIN assertions 通过
+15-byte payload exact match
+drain 最后为 EAGAIN
+PASS，exit 0
+normal path：epfd、receiver、sender 全部 close
 ```
 
-这是一条单线程、固定状态轨迹。一组解释清楚的 deterministic evidence 比机械运行 100 次更有价值。
+另外，Codex 对临时运行注入了一次 `epoll_ctl` 失败：程序输出错误、exit 1，三份已创建的 fd 都被关闭。该检查没有修改源码，也不要求你再实现一套故障注入框架。
 
----
+你后来如果继续修改 code，再重编译运行即可；不必为了进入 R2/R3 重复提交同一份 PASS 截图。
 
-## 35. 用 `strace` 看 create/register/wait/consume
+## 35. 用你这次的 strace 串完整条链
+
+需要自己重看时，命令仍是：
 
 ```bash
 strace -e trace=socketpair,fcntl,epoll_create1,epoll_ctl,epoll_wait,sendto,recvfrom,close \
     ./epoll_stream_probe
 ```
 
-不同 libc/kernel 路径下，source 中的 `send/recv` 可能显示为 `sendto/recvfrom`。观察重点：
-
-```text
-socketpair returns sender/receiver fds
-fcntl enables O_NONBLOCK on receiver
-epoll_create1 returns epfd
-epoll_ctl ADD registers receiver + EPOLLIN
-first epoll_wait returns 0
-sendto writes payload
-next epoll_wait returns receiver event
-LT wait before recv reports it again
-recvfrom drains bytes and reaches EAGAIN
-final epoll_wait returns 0
-all fds close
-```
-
-一段典型形状可能类似：
+`send/recv` 在本次 Linux 记录中显示为 `sendto/recvfrom`。下面摘录的是你修改后程序的实际调用形状，省略了地址和部分分段读取，不是新增测试要求：
 
 ```text
 epoll_create1(EPOLL_CLOEXEC) = 5
-epoll_ctl(5, EPOLL_CTL_ADD, 4, {events=EPOLLIN, ...}) = 0
+epoll_ctl(5, EPOLL_CTL_ADD, 4, {EPOLLIN, {u32=4, u64=4}}) = 0
+
 epoll_wait(5, [], 1, 0) = 0
-sendto(3, "...", ..., 0, NULL, 0) = ...
-epoll_wait(5, [{events=EPOLLIN, ...}], 1, 1000) = 1
-recvfrom(4, ..., ..., 0, NULL, NULL) = ...
-recvfrom(4, ..., ..., 0, NULL, NULL) = -1 EAGAIN
-epoll_wait(5, [], 1, 0) = 0
+sendto(3, "this is a test!", 15, 0, NULL, 0) = 15
+epoll_wait(5, [{EPOLLIN, {u32=4, u64=4}}], 1, 100) = 1
+epoll_wait(5, [{EPOLLIN, {u32=4, u64=4}}], 1, 100) = 1
+
+recvfrom(4, "th", 2, 0, NULL, NULL) = 2
+... 共 7 次返回 2 bytes，最后一次返回 1 byte ...
+recvfrom(4, "!", 2, 0, NULL, NULL) = 1
+recvfrom(4, ..., 2, 0, NULL, NULL) = -1 EAGAIN
+
+epoll_wait(5, [], 1, 100) = 0
+close(5) = 0
+close(4) = 0
+close(3) = 0
 ```
 
-具体 fd numbers、payload 分块和 structure pretty-print 不属于 contract。
+读这一段时，只串一次：
 
-`strace` 能直接证明：
+> 只注册一次、只发送一次；两次通知没有取走 payload；recv 才取走 bytes；到 EAGAIN 后再次 wait 不再得到 event；最后三份 fd 分别释放。
+
+strace 证明这里的调用、参数与结果；它不直接展示 kernel 内部 list 的具体实现，也没有证明复杂多线程竞争或未来 Reactor 生命周期。
+
+## 36. 今天不再新增哪些工作
+
+不新增 GoogleTest、CMake、ASan/TSan 打卡、100 次循环、TCP client 脚本、benchmark 或 README。
+
+当前代码、真实 trace 和你在教程里的增补已经承担了主要证据。剩下是把 §28~32 的对象关系读通，不是再造一遍 probe。
+
+头文件可顺手清理：直接包含 `<cerrno>`、`<cstdio>`，去掉未使用的 `<chrono>`、`<thread>`。这些不阻塞 R1，也不要求另开一轮验收。
+
+## 37. 笔记与 Day2 收口方式
+
+你的 `day2_note.md` 目前为空，但 §8.1、§10.1、§18 的主动增补已经说明你真正追问了什么，不要求把它们再抄一遍。
+
+R1 通过后，读完这份定向 R2/R3；若要用一句话收口，重点把三个主语串清：
 
 ```text
-你的 process 确实调用了这些 system calls
-传入了什么 fd、op、mask、timeout
-kernel 返回了什么 count、bytes 或 errno
+application 登记谁、读取谁
+kernel 通知什么
+socket 中的 bytes 由哪个调用真正消费
 ```
 
-它不能直接展示：
-
-```text
-kernel 内部 interest/ready structures 的完整实现
-CPU 为什么选择某个时刻调度当前 process
-未来 Reactor object ownership
-```
-
----
-
-## 36. 今天不需要的体力活
-
-```text
-GoogleTest
-CMake/CTest
-ASan/TSan 打卡
-100 次重复运行
-TCP multi-client script
-benchmark
-README / interview script
-```
-
-原因很简单：今天要证明的是 event information 与 socket state 的关系。单线程 probe 中 TSan clean 不能证明 readiness 模型正确；benchmark 也不能证明 wait 没有消费 bytes。
-
----
-
-## 37. `day2_note.md` 建议只记录什么
-
-```text
-## R1 design
-三个 fd 各自访问什么；五段状态怎样建立
-
-## Actual trace
-关键 wait count、returned bits、drain result、strace 观察
-
-## Questions
-真实卡住的问题
-
-## One-sentence model
-你自己的 readiness 一句话
-```
-
-如果代码和 trace 已经清楚证明某个判断，不要求把同样内容再机械抄成一套验收答案。
+可以直接口述或写几行。后面的验收问题作为回查入口，不要求全部重新书写；Day2 最终检阅结合你的新增理解与已有代码证据判断，不能只因为教材已调整就自动标记整天通过。
 
 ---
 

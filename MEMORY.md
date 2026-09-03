@@ -102,6 +102,8 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
+最新进度快照（2026-09-03）：Week1~Week8 已完成；Week9 Day1、Day2 均正式通过，Day2 最终 94/100；现进入 Day3 non-blocking TCP accept/read loop，day3.md 已生成，用户 R1 尚未提交或验收。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
+
 ### Week1：已完成
 
 主题：C++ 对象、内存和资源管理基础。
@@ -3117,7 +3119,9 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6、Week7、Week8 均已正式完成，系统主线当前为 Week9 Day2 epoll，随后按 gate 推进 Reactor -> HTTP Server -> Mini Redis。Week8 最终产出按用户真实判断定位为“BlockingQueue + ThreadPool + AsyncLogger 组件实现、测试、benchmark 与 integration harness”，不是有真实业务输入的完整小项目；README/interview 包装被用户主动省略，不作为 Week8 通过阻塞项。Day7 fresh normal CTest 18/18、fresh TSan CTest 18/18 通过，component_demo_smoke 已进入 CMake/CTest/TSan target graph，Day7 最终评分 95。用户选择不机械抄写验收题，并允许把测试体力活委托给 Codex，由代码、daily 主动补充和实测证据替代；某一天的核心若正是测试设计，则不能把所有核心 scenarios 都降级为 dirty work。AI Infra 理论伴随线 T1 已于 2026-09-03 正式通过，最终 90/100，代码、实机观察和综合 shape/value 手推共同覆盖核心；下一步 T2 尚未开始。理论线不能替代或阻塞系统主线。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 首次正式验收通过后，仍须在同一轮依据真实产出定向修改 R2/R3。
+2026-09-03 当前学习状态：Week9 Day2 整天正式通过，最终 94/100。Week9 Day3 教程已生成，当前进入 epoll_read_server.cpp 的独立 R1；用户尚未提交或通过 Day3。下一次按真实实现检阅，R1 正式通过时再定向润色 Day3 R2/R3。
+
+当前位置：Week5、Week6、Week7、Week8 均已正式完成，系统主线 Week9 Day2 已通过，Day3 non-blocking TCP accept/read loop 教程已生成，进入尚未验收的 R1；随后按 gate 推进 Reactor -> HTTP Server -> Mini Redis。Week8 最终产出按用户真实判断定位为“BlockingQueue + ThreadPool + AsyncLogger 组件实现、测试、benchmark 与 integration harness”，不是有真实业务输入的完整小项目；README/interview 包装被用户主动省略，不作为 Week8 通过阻塞项。Day7 fresh normal CTest 18/18、fresh TSan CTest 18/18 通过，component_demo_smoke 已进入 CMake/CTest/TSan target graph，Day7 最终评分 95。用户选择不机械抄写验收题，并允许把测试体力活委托给 Codex，由代码、daily 主动补充和实测证据替代；某一天的核心若正是测试设计，则不能把所有核心 scenarios 都降级为 dirty work。AI Infra 理论伴随线 T1 已于 2026-09-03 正式通过，最终 90/100，代码、实机观察和综合 shape/value 手推共同覆盖核心；下一步 T2 尚未开始。理论线不能替代或阻塞系统主线。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 首次正式验收通过后，仍须在同一轮依据真实产出定向修改 R2/R3。
 
 总规划已在 2026-08-26 完成 Week9 校准：
 
@@ -3145,7 +3149,7 @@ T17~T24：multi-head/Transformer block、decoder-only forward、sampling、train
 三个 Theory Gates：NumPy/math -> PyTorch/DL -> Transformer/inference；Gate 3 后再进入 mini-infer-cpu，CUDA 仍必须单独满足总规划 Gate C
 B 站资源：3Blue1Brown 官方账号负责线代/微积分直觉；李沐 D2L 为主课；小土堆只补 PyTorch API；李宏毅只选 ML/attention/Transformer 关键章节；我是傅傅猪后置到 CPU inference
 资源纪律：优先原作者/官方账号、大学官方课程和框架官方文档；不追“最新版几百集/三天精通/资料包”，视频时间必须落到代码和验证
-当前状态：T1 已于 2026-09-03 正式通过，最终 90/100；下一步 T2 尚未开始；系统主线在 Week9 Day2，不因理论线停住
+当前状态：T1 已于 2026-09-03 正式通过，最终 90/100；下一步 T2 尚未开始；系统主线 Week9 Day3 教程已生成、R1 未验收，不因理论线停住
 教材准备：T1~T13 已生成；T13 于 2026-09-03 提前准备，必须等 T12 正式通过后再学，不表示当前进度跳到 T13
 ```
 
@@ -5569,3 +5573,129 @@ Git diff 中两处用户增补逐条检阅：
 发布前检查：13 个 Python fenced snippets 全部通过 AST 语法检查；核心训练与 API 已用独立参考程序实测。完整教材向 Ubuntu 的额外上传被安全审核拦截，未绕过，未声称正文 13 段均单独动态执行。37 个数学表达式通过 KaTeX strict parsing，14 个 display formulas 已生成浏览器预览并目视检查；使用 Typora-compatible `$...$`/`$$...$$`，未声称直接操控 Typora 验证。Markdown fences、本地引用与配图齐全。
 
 本次不改总规划、不改主线 daily、不改用户 T1 内容。仅将 T13 教材及 MEMORY 更新做局部版本记录，不将用户其他未提交文件一并纳入。
+
+---
+
+## 2026-09-03：Week9 Day2 Round1 首次检阅
+
+用户报告 R1 完成。本次读取总规划、Week9 周规划、Day2 R1 contract、Day1_note、Day2_note 与 day2.md Git diff，并经既有 SSH 读取 Ubuntu canonical source：
+
+`/home/xgf/code/system-learning/cpp/week9/epoll_stream_probe.cpp`
+
+结论：90/100，核心 readiness / LT / drain 机制已经跑通；R1 尚未正式通过，待两处小修复检。不能把 R1 报告完成直接记为整个 Day2 通过。
+
+实测证据：
+
+- 重新以 g++ -std=c++17 -Wall -Wextra -g 编译到独立 /tmp 目录，零 warning。
+- 普通运行有 5 秒 timeout 保护，输出 data.fd=4、15-byte payload 的 8 次分段读取、EAGAIN 对应提示、PASS，exit 0。
+- strace：socketpair -> [3,4]，receiver 4 设置 O_NONBLOCK；epoll_create1 -> 5；ADD 注册 fd4 + EPOLLIN + data.fd4。
+- wait counts 为 0 -> 1 -> 1 -> drain -> 0；实际 timeout 分别为 0/100/100/100。
+- drain 确实读取完整 "this is a test!"，最终 recv=-1/EAGAIN；sender 在 drain 后仍 open。
+- 正常路径只有 close(4)、close(3)，没有 close(5)。
+- 对临时运行注入一次 epoll_ctl EINVAL：输出 diagnostic、exit 1，两个 socket 被关闭，但 epfd5 仍未显式 close。未修改用户源码。
+
+正式通过前需要修的两点：
+
+1. epoll_create1 成功后的 normal 与已有 error-return cleanup 都遗漏 close(epfd)。进程退出时内核会回收，所以不是退出后永久占住资源；但程序没有履行三份 owned fd 的主动清理。沿用现有 main cleanup 即可，不要求为此引入 RAII 新抽象。
+2. B 阶段只打印 returned_event.data.fd，没有验证等于 receiver_fd；C 阶段只 assert count，没有验证 data.fd 与 EPOLLIN。两次返回事件都应验证 count、关联 fd 和所需 bit，这是现有 PASS oracle 的小补齐，不要求另写 test suite。
+
+顺手校准的非阻塞项：
+
+- C/E 注释写 immediate，但实际 timeout=100；改为 0 更贴合实验的“立即观察当前状态”，不是当前 LT 机制运行失败。
+- receiver_work 把 EOF break 后返回 true；Day1 中这是正常状态，Day2 peer 始终 open 的 drain 中应按 unexpected failure 返回 false。当前程序后续 LT wait assertion 会拒绝真实 EOF readiness，未观察到整体 false PASS；这是 helper 语义迁移的整理，不要求引入完整 state enum。
+- 直接 include <cerrno>/<cstdio>，移除不用的 chrono/thread includes，属于非阻塞整理建议。
+- assert 的异常终止会由进程退出回收 fd，不为了此固定 probe 强制重写所有 assertions；重点补已有可控 cleanup paths。
+
+笔记与教程增补逐条检阅：
+
+- day2_note.md 当前为 0 bytes，无独立答案或图。用户允许 code/实际观察/教程增补替代重复笔记，不因此扣分，也不捏造笔记内容。
+- 新增 §8.1：把 event 解释为 fd 状态通知，区分真实 I/O activity、kernel receive buffer、EPOLLIN notification；正确。LT 第二次报告不代表又来新 payload，已由代码/strace 实证。
+- 新增 §10.1：LT 保持就绪可重复报告、ET 不应依赖剩余数据再次提醒、非阻塞 drain 的第一层直觉基本正确；“ET 只关心刚刚变得可读”不可升级为严格的布尔 0->1 规则，新 I/O activity 也可能产生通知；无数据也可能因 EOF/error readable。此处仅指出条件边界，Day2 不新增 ET 实验。
+- §18 增补：EPOLLIN 是先前观察到可读的通知，实际结果以 recv 为准；正确。当前单线程固定 probe 没有演示另一消费者抢走数据，不冒称已实测该竞争场景。
+
+验收题的证据状态（本次只是 R1，不要求提前完整做完 R2/R3）：
+
+- Q1 为什么 non-blocking 后仍需 epoll：代码使用 wait 取代持续 recv 轮询，但未单独口述完整因果链。
+- Q2 epfd/receiver_fd 对象：创建与使用正确，未独立画图；不能把代码行为自动等同于完整口述。
+- Q3 interest/ready list：注册一次、多次 wait 支持一部分认识，尚未独立回答两者完整职责。
+- Q4 readiness 非 I/O 结果：教程增补与 recv 分类共同覆盖。
+- Q5 LT 重复报告：代码与 strace 明确覆盖正确。
+- Q6 wait=0/EAGAIN/EOF：前两种当前正确观察；EOF 当前未制造，Day1 已有正确实验，helper 的当前场景边界见上。
+- Q7 data.fd：用户主动设置 interest.data.fd=receiver_fd，并观察回传正确；自动校验尚需补。
+- Q8 watched socket 仍非阻塞：代码正确设置，教程增补表明理解 readiness 非保留；无额外竞争测试要求。
+
+可复用经验：解释常见英文词 event 时要补“当前语境里的对象和状态”，不能仅翻译成“事件”；LT/ET 的入门图必须注明是 data-readiness 场景，不把便于理解的二态图冒充 Linux 全部通知条件。复用前日 helper 时，只复检今天改变的状态契约，不要求重新实现已经掌握的 send/drain。
+
+本轮只更新 MEMORY；Ubuntu source、用户新增 daily 内容与空 note 均不修改，普通 review 不自动 commit/push。R1 两处小修正式通过后，再按这份实际实现定向润色 Day2 R2/R3。
+
+---
+
+## 2026-09-03：Week9 Day2 Round1 正式通过与后续定向润色
+
+用户再次报告修改完成。本次重新读取 Ubuntu `cpp/week9/epoll_stream_probe.cpp`，确认 normal exit 与 epoll_create1 成功后的已有 error-return paths 均补上 close(epfd)；B/C 两次事件均验证 count、EPOLLIN bit 和 data.fd；receiver_work 在本日 peer 保持 open 的场景下遇到 EOF 返回 false。
+
+R1 正式通过，95/100；这是 R1 出口，不是整个 Day2 最终通过。day2_note.md 仍为空，已有代码、实际输出与用户对 daily 的补充作为证据，不要求重复誊写笔记或补整套测试。
+
+本次新验证：
+
+- g++ -std=c++17 -Wall -Wextra -g 重新编译，零 warning。
+- 正常运行 PASS、exit 0；strace 确认 wait counts 为 0 -> 1 -> 1 -> drain -> 0，15-byte payload 分 8 次读完，随后 EAGAIN。
+- 正常退出 close(5)、close(4)、close(3)，三份 owned fd 均主动关闭。
+- 对一次 epoll_ctl 注入 EINVAL，程序 diagnostic 后 exit 1，epfd 与两个 socket 均主动关闭。注入只作用于临时验证运行，未修改用户源码。
+
+按 R1 正式通过后的既定规则，仅定向重写 day2.md 的 Round2/Round3：用真实 B/C 重复通知、8 次 recv、最后一次 EAGAIN 串清主线；解释 ADD 注册持续存在、data.fd 是用户提供并由内核回传的关联数据、events 是就绪位；区分 wait 返回 0、recv EAGAIN 与本日非预期 EOF。LT/ET 补充限定为入门的数据就绪模型，不追加 Day6 才做的 ET 实验。已有 trace 和错误路径验证直接作为复盘材料，不要求用户重新打卡。
+
+C/E 仍用 timeout=100：C 因已经就绪立即返回，E 空闲时等待超时，不能把 E 描述成 timeout=0 的立即检查。此项及直接 include <cerrno>/<cstdio> 等整理此前已定为非阻塞建议，不在复检时提高门槛。
+
+可复用经验：R1 后续讲解应从用户真实程序的调用顺序与观测值展开，不把已有机制重新讲成泛化的防错清单。尤其本例最后一次 recv 需要非阻塞，本身就能由“数据已读空但 peer 仍 open”解释，不必虚构另一个线程抢走数据的竞争来证明。区分已有实测、可选整理与尚未口述的概念，不能把 R1 代码通过冒充整日全部理解题已答。
+
+编辑验证：Round2 之前的全文与 Part3 开始后的全文保持不变，用户原有增补保留；Markdown code fences 成对。普通 review 不自动 commit/push，未修改 Ubuntu source 或空 note。下一步进入定向润色后的 R2/R3，再按用户指令进行 Day2 最终验收。
+
+---
+
+## 2026-09-03：Week9 Day2 整天最终验收通过
+
+最终评分 94/100，Day2 正式通过，下一步 Day3 non-blocking TCP accept/read loop 尚未开始。用户说明 R2/R3 主要阅读，未新增代码；这符合本日机制复盘定位，不要求为了每个 Round 都有新文件而重复 coding/tests。
+
+本次实读总规划、Week9 周规划、Day2 教程、Day1 note、最新 Day2 note、daily Git diff，并通过 SSH 重新读取 Ubuntu `cpp/week9/epoll_stream_probe.cpp`。源码与本日已通过 R1 的版本一致，没有新功能性阻塞项；沿用刚才零 warning、PASS/exit 0、0->1->1->drain->0 的 strace 以及 epoll_ctl EINVAL 注入后 exit 1/三 fd 清理证据。本轮没有重新编译或运行，不把旧验证表述为新一轮动态测试。
+
+day2_note.md 现在包含 Q1/2/3/4/5/7 六段口述式回答，无其他章节或图片，已逐项检阅：
+
+- Q1：正确。non-blocking 避免某一次 recv 把执行流卡在一个 socket；epoll 避免不断遍历所有 socket 空转检查。开头“睡死”两句有口述省略，结合全文理解为 blocking 对照，不据此反判用户不理解 non-blocking。补准主体：kernel 维护就绪信息、唤醒/返回 wait，不是 socket 对象自己调用通知 API。
+- Q2：正确。epfd 访问 epoll instance，receiver_fd 访问 socket；未要求重复展开前日已学 fd/OFD 链。
+- Q3：interest/ready 的分工基本正确；EPOLLIN 对应 read/recv，不应概括为 read/write 都能推进。ready entries 是就绪 registration 的引用，不是业务 bytes 队列。Ingest/epo 等识别拼写不当作技术扣分。
+- Q4：核心正确。wait 是 notification，recv 才取得 bytes，真实结果以 recv 为准。“刚刚有数据可以读取”应收紧为“观察到读就绪”，因为 EOF/error 也可能令读操作就绪，不保证曾有业务 payload。
+- Q5：正确。未消费时 receive queue 仍有原来数据，LT 后续 wait 可以继续报告；首句把第一次口述成第二次不影响整段因果链。
+- Q6：未单独回答。Day2 wait=0/EAGAIN 的代码和已有 trace，加上 Day1 EOF 实验，覆盖当天区别；不要求再抄一题，不冒称本日独立口述过。
+- Q7：方向正确，明确否认 kernel 自动发现并填写。还需把 epoll_ctl 的 target fd 参数与 interest.data.fd 区分开：前者决定监视谁，后者是单独附带的 user data。实际代码第 120 行正确显式赋值；若把该 data.fd 填成 123，仍监视 receiver_fd，而 wait 回传的 data.fd 是 123。本例概念说明不要求另做测试，也不能把 123 当真实 socket 去 recv。
+- Q8：未单独回答，Q1 的解释、daily §18 增补与正确 non-blocking drain 共同覆盖主要意图；最后一次 recv 到 EAGAIN 是现成证据，不追加抢读竞争实验。
+
+daily Git diff 的来源分开判断：§8.1 event 解释、§10.1 LT/ET 补充、§18 readiness 非 reservation 是之前已有用户侧增补；Round2/Round3 大段变更来自 Codex 上轮定向润色，不冒充这次用户新增内容。前三项继续按上轮边界评价：event/readiness 主线正确，LT/ET 二态图只作为 peer-open/no-error 的第一层模型，不断言 ET 严格只有布尔 0->1。
+
+评分依据：实现与实测证据 48/50，机制与口述 46/50，共 94。保留问题是 EPOLLIN/read-write 措辞、readiness 与 payload 的区别、target fd 与 user data 的精确区分，以及 timeout=100 却注释 immediate 和 header 整理。不是因为没有新增 R2/R3 代码、没有补全八题、没有重复运行扣分；R1 的 95 与整日 94 评价范围不同。校准在对话中说明，不要求用户为这些非阻塞项再跑一轮验收。
+
+可复用经验：机制日 R1 若已完成完整实验，R2 可以只承担解释与修正模型，R3 可以复用足够的现有证据；“读完后没新增代码”本身不是缺陷。验收口述应辨别语音识别错误、自然省略和真实概念混淆；指出字段/参数边界时直接对应用户代码的一行，不重复整章。仍保留主线 daily 的三 Part/Round 规则，不因本日情况统一取消闸门或验证。
+
+本轮仅更新 MEMORY 的当前实际进度、当前下一步与本条历史记录；不修改 daily、用户 note 或 Ubuntu code，不执行普通 review 的 commit/push。未生成 Day3。
+
+---
+
+## 2026-09-03：Week9 Day3 正式生成
+
+已生成 `week9/day3/day3.md`，主题为单线程 non-blocking TCP accept/read loop，唯一独立主产出 `epoll_read_server.cpp`。Day2 正式通过是前置；用户尚未完成 Day3 R1，生成阶段的验证不是用户验收证据。
+
+按总规划 Milestone A 与 Week9 Day3 范围推进：从一个 local receiver 扩展到 listener + 多个 connected sockets。默认 LT、loopback TCP、只接收不回显；message framing/per-connection buffers 留到 Day4，partial write/dynamic EPOLLOUT 留到 Day5，完整 HUP/ERR/RDHUP/ET 与生命周期加固留到 Day6，正式 Reactor 抽象留到 Week10。
+
+保持系统主线三 Part 和 Round 结构，不受 AI Theory 模板变更影响。R1 闸门前已经给文件名、用途、默认 endpoint、输出内容、退出方式、最小行为约束、旧 API 回查、accept4/flags/输出参数、event 数组、DEL 的独立调用及首条编译/client 命令；不提供完整 dispatch/accept/read 循环或容器布局。R2 才串完整正常路径、listener 与 connection 的不同消费对象、accept/read drain、动态注册、EOF 和清理。R1 正式通过后必须按真实代码再次定向润色 R2/R3。
+
+吸收 Day2 新 note 与反馈：readiness 用“读就绪”而非“保证有业务 bytes”；target fd 与 data.fd 分开说明。R2/R3 若只承担机制复盘与已有证据复用，可以不新增代码，不为了 Round 数量制造重复工作。现成 Python client 工具可委托 Codex 运行，不要求用户为检验 server 先独立写一套测试框架。
+
+发布前技术核验：实际查阅 Linux accept/listen/socket/epoll_ctl/epoll_wait/epoll/recv/ss 官方 man pages。特别核对 accept4 的 SOCK_NONBLOCK 只设置新 socket，listener 本身仍需 non-blocking；Linux accept 不继承 O_NONBLOCK；maxevents 是一次交付容量，不是最大连接数；DEL 不 close、不 erase C++ 记录；LT 一次只 accept 一个不一定错误，本周采用 drain 以明确当前边界，不伪称 LT 也只能全部读完。
+
+Ubuntu 隔离验证（未改学生代码）：g++ 10.5.0，C++17 + -Wall -Wextra -g。两个完整 C++ 小例子零 warning 并正常运行；其余 7 个声明/上下文片段补必要上下文后通过 syntax check。客户端 Python 脚本与两条 inline commands 通过 AST/实际运行。私有参考 server 验证 A 已 accept 且 idle -> B 完成 -> A 后发 -> C 新接入；逐连接重建 payload 分别为 B-data/A-later/C-new，6/7/5 bytes，fd 数量回到初始 5。另验证暂停 application、建立两条 pending connections、恢复后连续 accept 的选做观察；ss/pgrep/strace 命令可用。错误 server 回传不应存在的 response 时，client 工具正确 non-zero exit。所有验证进程已终止。
+
+证据边界在正文明确：client EOF/CLIENT CHECK PASS 只证明当前场景中的完成和无响应，不能单独证明 server 读取了全部 payload，需要 server byte log 或 trace；connect 成功不证明 application 已 accept，测试先核对 accept 输出；Ctrl+C 后 kernel 回收 fd 不证明 C++ 析构执行或存活期间清理正确；控制台日志也可能阻塞，不宣称所有 I/O 永不阻塞。
+
+结构检查：约 46 KB，33 个连续主节、三个 Part、唯一教程开始、单一 R1 阅读闸门，40 对 Markdown fences。完成本篇纵向与 Day2->Day3->Day4/5 横向对齐；两个 Mermaid 图按对象、边与正文核对，未声称直接在 Typora 里渲染验证。没有为达到篇幅添加重复的 sanitizer、benchmark、README 或整套错误测试。
+
+本次只新建 Day3 与同步 MEMORY，不改总规划/周规划/已完成 Day2/理论线正文。按用户“新 daily 生成后 git add .、commit、push repo master”的规则发布，已有用户笔记改动保留并一并纳入；发布结果以本轮实际 Git 返回为准。
