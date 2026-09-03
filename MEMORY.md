@@ -3117,7 +3117,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-当前位置：Week5、Week6、Week7、Week8 均已正式完成，系统主线下一步进入 Week9 non-blocking I/O / epoll，随后按 gate 推进 Reactor -> HTTP Server -> Mini Redis。Week8 最终产出按用户真实判断定位为“BlockingQueue + ThreadPool + AsyncLogger 组件实现、测试、benchmark 与 integration harness”，不是有真实业务输入的完整小项目；README/interview 包装被用户主动省略，不作为 Week8 通过阻塞项。Day7 fresh normal CTest 18/18、fresh TSan CTest 18/18 通过，component_demo_smoke 已进入 CMake/CTest/TSan target graph，Day7 最终评分 95。用户选择不机械抄写验收题，并允许把测试体力活委托给 Codex，由代码、daily 主动补充和实测证据替代；某一天的核心若正是测试设计，则不能把所有核心 scenarios 都降级为 dirty work。AI Infra 理论伴随线 T1 已生成但尚未开始，不能替代或阻塞系统主线。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 首次正式验收通过后，仍须在同一轮依据真实产出定向修改 R2/R3。
+当前位置：Week5、Week6、Week7、Week8 均已正式完成，系统主线当前为 Week9 Day2 epoll，随后按 gate 推进 Reactor -> HTTP Server -> Mini Redis。Week8 最终产出按用户真实判断定位为“BlockingQueue + ThreadPool + AsyncLogger 组件实现、测试、benchmark 与 integration harness”，不是有真实业务输入的完整小项目；README/interview 包装被用户主动省略，不作为 Week8 通过阻塞项。Day7 fresh normal CTest 18/18、fresh TSan CTest 18/18 通过，component_demo_smoke 已进入 CMake/CTest/TSan target graph，Day7 最终评分 95。用户选择不机械抄写验收题，并允许把测试体力活委托给 Codex，由代码、daily 主动补充和实测证据替代；某一天的核心若正是测试设计，则不能把所有核心 scenarios 都降级为 dirty work。AI Infra 理论伴随线 T1 已于 2026-09-03 正式通过，最终 90/100，代码、实机观察和综合 shape/value 手推共同覆盖核心；下一步 T2 尚未开始。理论线不能替代或阻塞系统主线。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 首次正式验收通过后，仍须在同一轮依据真实产出定向修改 R2/R3。
 
 总规划已在 2026-08-26 完成 Week9 校准：
 
@@ -3145,7 +3145,8 @@ T17~T24：multi-head/Transformer block、decoder-only forward、sampling、train
 三个 Theory Gates：NumPy/math -> PyTorch/DL -> Transformer/inference；Gate 3 后再进入 mini-infer-cpu，CUDA 仍必须单独满足总规划 Gate C
 B 站资源：3Blue1Brown 官方账号负责线代/微积分直觉；李沐 D2L 为主课；小土堆只补 PyTorch API；李宏毅只选 ML/attention/Transformer 关键章节；我是傅傅猪后置到 CPU inference
 资源纪律：优先原作者/官方账号、大学官方课程和框架官方文档；不追“最新版几百集/三天精通/资料包”，视频时间必须落到代码和验证
-当前状态：规划已生成，T1 尚未开始；系统主线下一步是 Week9，不因理论线停住
+当前状态：T1 已于 2026-09-03 正式通过，最终 90/100；下一步 T2 尚未开始；系统主线在 Week9 Day2，不因理论线停住
+教材准备：T1~T13 已生成；T13 于 2026-09-03 提前准备，必须等 T12 正式通过后再学，不表示当前进度跳到 T13
 ```
 
 AI Infra 理论伴随线的实际教学方式（2026-09-02 独立模板修订）：
@@ -3181,7 +3182,7 @@ Ubuntu code 目录已建立：~/code/system-learning/ai-theory/t01_numpy_basics
 技术补强：axis reduction 明确写成 $y[i,k]=\sum_j x[i,j,k]$；basic slice view 提升为独立实验，并用 .copy() 对照 independent data
 范围边界：不深入 broadcasting、stride/contiguous 完整机制、matrix multiplication、PyTorch 或 CUDA；NumPy 作为以后 C++/CUDA operator 的小规模 correctness reference
 文档审计：核心 shape/index/reduction/reshape/view/error 示例按 NumPy 2.5 stable docs 校准；环境升级后仍须重新运行 assertions
-当前状态：T1.md 已按理论优先模板重写，Ubuntu T1 目录的 Python 3.12 `.venv` 与 NumPy 2.5.2 已配置，但用户尚未正式学习验收；系统主线已通过 Week9 Day1，理论线不阻塞 Week9 Day2 epoll
+当前状态：T1 已于 2026-09-03 正式通过，最终 90/100。Ubuntu Python 3.12.14 / NumPy 2.5.2 下用户 numpy_basics.py 运行 exit 0，metadata、expected ValueError、view/copy 已有真实证据；用户已正确补齐 indexing/elementwise/reduction 综合 shapes 与 z/r values，且准确解释 nbytes 不含 object/allocator 等开销。不要求再写重复测试或长 note；下一步 T2，系统主线 Week9 Day2 epoll 不变
 ```
 
 Week8 周规划的固定主线：
@@ -5477,3 +5478,94 @@ training memory categories include parameters, activations/saved state, gradient
 T12 以 PyTorch current official `CrossEntropyLoss`、optimizer/SGD/Adam、Module 与 save/load docs 校准。固定 XOR-like data、architecture 和 Adam hyperparameters 另用等价 NumPy forward/backward/Adam probe 做 100 组初始化检查，`min_train_accuracy=1.0`、`min_eval_accuracy=1.0`；这支持当前 teaching thresholds，但不冒充 PyTorch runtime、real-data generalization 或任意 configuration 证明。当前 Windows Python 没有 PyTorch，正式动态验收仍在 Ubuntu T12 venv 执行。
 
 发布前静态检查要求继续执行：Python fenced snippets 全部 `ast.parse`；Markdown code fences/display-math delimiters 成对；扫描裸 LaTeX command、异常控制字符和 `git diff --check`。公式只使用 Typora-compatible `$...$` / `$$...$$`。
+
+---
+
+## 2026-09-02：AI Theory T1 首次验收
+
+用户报告 T1 完成。已读取当前 T1.md、Git diff、AI 理论规划 T1 contract、Ubuntu 的 `numpy_basics.py` 与 `01.py`，并在实际项目 venv 运行。未发现本地或 Ubuntu 的独立 T1_note.md；不因用户省略重复笔记扣分，本次将教程增补与 code/evidence 分开评价。
+
+当前暂评：86/100。已实现部分正确；尚未最终判定整个 T1 通过，待一条综合 indexing -> elementwise -> reduction 的 shape/value 手推后收口。用户不需要为了这一缺口新写一套 test suite，也不需要机械回答全部问题。
+
+实机证据：
+
+```text
+path: /home/xgf/code/system-learning/ai-theory/t01_numpy_basics/numpy_basics.py
+Python 3.12.14 / NumPy 2.5.2
+normal execution exit 0
+1D: shape (6,), ndim 1, size 6, int32, itemsize 4, nbytes 24
+2D: shape (2,3), ndim 2, size 6, float32, itemsize 4, nbytes 24
+3D: shape (2,3,4), ndim 3, size 24, float32, itemsize 4, nbytes 96
+test2: 三条 metadata invariant assertions 正常通过
+test3: 12 elements reshape(5,3) 捕获 ValueError，并 assert error_seen
+view write: original[2] 随 window[0] 变为 999
+copy write: window_copy[0] 变为 114514，original[2] 保持 999
+01.py: 相同 basic-slice 观察，代码正确，不要求重复运行
+```
+
+代码逐部分结论：
+
+```text
+descirbe + test1：打印与创建正确；descirbe 拼写属于非阻塞风格问题
+test1 的 3D 用 float32 而教程指定 int32：两者当前均 4 bytes，不是功能 bug；只要能说明 dtype 选择即可
+test2：现有 assertions 正确，但只覆盖 1D metadata；尚未展示 indexing、axis reduction、same-shape elementwise 等核心操作
+test3：expected failure 与 view/copy 关系正确；当前 prints 已有观察证据，不把改成 assert 当作本次阻塞项
+```
+
+五个理解问题的证据状态：
+
+```text
+Q1 shape/ndim/size：代码输出覆盖正确数值，未单独口述
+Q2 float32/nbytes：代码覆盖 96 bytes；metadata/allocator overhead 不计入 nbytes 的解释尚无用户证据
+Q3 x[:,1,:]：用户增补核心意思基本正确，应把“任意选”准确说成“两个冒号选择对应 axis 的全部位置”
+Q4 reduction 沿哪个 axis 聚合：当前 code/增补没有覆盖，是本次需要补确认的核心点
+Q5 new ndarray object 与 shared data：view/copy code、注释及本次真实输出正确覆盖
+```
+
+Git diff 中两处用户增补逐条检阅：
+
+1. 第 2.1 节逐行解释 mkdir/cd、python -m venv、activate、python -m pip、version/import 验证，主要概念正确。可复用经验：用户熟悉 C++/Linux 不代表熟悉 Python package 环境；不能因为他已有工程经验就省略“哪一个 interpreter、pip 装到哪里、activation 改了哪一层选择”的对象关系。以后解释新语言工具链时给一个小型完整因果链，但不机械复制全部 362 行到后续 T。
+2. 第 7.3 节增补“定住第二维=1，其余维任意选”：固定 axis 1 的意思正确，冒号准确含义为保留全部位置。该中文行放在 python code fence 内且未加 `#`，复制整块会 SyntaxError；仅指出，未擅自修改 T1.md。
+
+下一次只需用户先预测教程第 12 节四行程序中 y/z/r 的 shapes 和 r values，再按需运行核对；无需重写 metadata、ValueError、view/copy，也不要求补长 note。普通 review 不自动 Git commit/push；本次只更新 MEMORY，保留用户 T1.md 改动和 Ubuntu source。
+
+---
+
+## 2026-09-03：AI Theory T1 最终复检通过
+
+用户已在对话中正确回答 x/y/z/r shapes 分别为 (2,3,4)、(2,4)、(2,4)、(2,)，并准确解释 nbytes = element count * itemsize，不包含 Python object 自身、allocator metadata 和其他关联对象的全部内存。
+
+最初把 r 第二项写成 108，经指出后用户独立补出完整 z = [[8,10,12,14],[32,34,36,38]]，确认 r = [44,140]。因此首次检阅中缺少的 indexing -> elementwise -> reduction 核心证据已补齐；不再把这一处已纠正的数值错误当作理解缺口。
+
+结合 2026-09-02 Ubuntu 用户代码 exit 0、metadata assertions、expected ValueError 和 view/copy 实测，T1 正式通过，最终评分 90/100。五道理解题的核心现在均由代码、教程增补、对话回答和实测组合覆盖，不要求重新誊写答案或补一套重复测试。
+
+保留非阻塞整理建议：descirbe 拼写、metadata 输出标签、将 view/copy 观察收为 assertions，以及 T1.md 中未加 # 的中文代码块注解。这些不是当前进入 T2 的障碍。本轮只更新 MEMORY；T1.md、Ubuntu code 和主线 daily 均不修改，普通 review 不自动 commit/push。
+
+下一步：可进入已生成的 T2，正式开始前按 T1 真实掌握情况定向核对；T2 尚未开始，不能因教程已存在提前标记通过。系统主线维持 Week9 Day2 epoll。
+
+---
+
+## 2026-09-03：AI Theory T13 提前生成
+
+已生成 `ai_theory/T13/T13.md`，主题严格对应理论总规划的 generalization、overfitting/underfitting、weight decay、dropout、train/eval、data leakage、baseline 与 reproducibility。当前真实进度仍为 T1 通过、T2 未开始；T13 的前置是 T12 正式通过。系统主线 Week9 Day2 以及所有主线 daily.md 均未改变。
+
+固定产出为 `t13_generalization/overfit_observation.py`。正文保持自足中文讲义，仅设置一个 baseline 观察闸门：先给问题、数据、模型、MSE、测量口径、接口小例子和交付用途，让用户独立取得 baseline 曲线与首次解释；参考曲线、干预分析和配对实验设计放在闸门后。R1 正式通过时，仍须按用户真实 code/curve/note/questions 定向润色后续内容，不把教材中的通用分析直接当作个性化检阅。
+
+实验固定为 noisy scalar regression、24 个 train / 256 个 validation 样本、1->64->64->1 ReLU MLP、CPU float32、AdamW lr=0.01、2000 次 full-batch 更新；baseline weight_decay=0.0，对照 0.1，两组从相同 initial state 开始，各自创建新 optimizer。mandatory 训练只比较这一种 regularization；Dropout 通过小型模式观察理解，不要求额外训练第三组或扩大调参。约 5~7 个有效小时，服务 Week15 / 2026-12-15 理论核心锚点。
+
+这次新增的可复用教学检查点：
+
+- 实验性质与程序性质分开：CHECKS PASS 不等于正则化有效；不把“validation 必须改善”或“曲线必须漂亮”设为正确性断言。
+- 两条 loss 曲线须用同一 checkpoint、eval 模式、同一种纯 data loss；不能将带随机 Dropout 或 penalty 的 training objective 和 validation data MSE 直接比较。
+- L2 penalty 与 weight decay 的普通 SGD 等价关系不可无条件推广到 Adam；AdamW 是 decoupled decay，baseline 需要显式 weight_decay=0.0。
+- Dropout 的保留概率不是固定数量配额；eval 恒等、no_grad 不切换 mode；activation 的期望保持不等于整个非线性网络输出期望保持。
+- snapshot = state_dict() 不是独立数值快照；initial/best state 使用深拷贝或当场序列化，避免被后续训练污染。
+- 固定预算最后 checkpoint 与 validation-selected checkpoint 是不同比较问题；test 只在选择结束后使用，不能反复用 test 挑配置。
+- 同种子不是跨版本逐位复现保证；三次初始化只说明当前 split 下的初始化变化，不代表换数据也成立。
+- 继续沿用用户强数学基础规则：只列出需要恢复的学校数学标题，不重讲完整概率论、微积分或线性代数。
+
+验证证据：Ubuntu 独立临时 venv，Python 3.12.14 / PyTorch 2.14.0+cpu / NumPy 2.5.2。三种初始化 seeds 13、23、33 各跑 baseline/regularized，共六组正常结束；共同初始数值、101 条记录、最佳 state 恢复、最终选定状态 save/load 与保留 test 的评估路径均核对。seed 13 的 weight decay 没有改善验证表现，正文如实呈现，没有换 seed 筛选漂亮结果。附参考曲线与原始 JSON，环境快照放独立 `reference_evidence.md`，不作为永久环境 pin 或用户验收证据。
+
+发布前检查：13 个 Python fenced snippets 全部通过 AST 语法检查；核心训练与 API 已用独立参考程序实测。完整教材向 Ubuntu 的额外上传被安全审核拦截，未绕过，未声称正文 13 段均单独动态执行。37 个数学表达式通过 KaTeX strict parsing，14 个 display formulas 已生成浏览器预览并目视检查；使用 Typora-compatible `$...$`/`$$...$$`，未声称直接操控 Typora 验证。Markdown fences、本地引用与配图齐全。
+
+本次不改总规划、不改主线 daily、不改用户 T1 内容。仅将 T13 教材及 MEMORY 更新做局部版本记录，不将用户其他未提交文件一并纳入。
