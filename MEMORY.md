@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-05）：Week1~Week8 已完成；Week9 Day1、Day2、Day3 均正式通过，Day3 最终 93/100；Week9 Day4 教程已生成并进入学习，主题为 per-connection input state 与 message boundary，用户尚未完成 Round1。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
+最新进度快照（2026-09-05）：Week1~Week8 已完成；Week9 Day1、Day2、Day3、Day4 均正式通过，Day4 最终 92/100；Week9 Day5 教程已生成并进入 buffered non-blocking write、partial write 与 dynamic EPOLLOUT，用户尚未完成 Round1。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
 
 ### Week1：已完成
 
@@ -5799,3 +5799,64 @@ Round2 串清 kernel socket receive buffer、一次 `recv` 的 caller-owned temp
 独立参考实现使用 C++17 + `-Wall -Wextra -g` 零 warning 编译运行，固定三批输入、A/B state isolation 与 `"\n"` 空 message 均通过 assertions 并输出 PASS。该实现只用于确认教程 contract 自洽，没有写入用户 Ubuntu source，也不作为用户 Round1 已完成的证据。
 
 可复用经验：message framing 教程必须先把 transport bytes 与 application messages 分开，再明确状态由谁持有、跨哪几次 event 存活；固定输入应同时覆盖 fragmentation 与 coalescing，并把每一步 exact state 写清楚。高价值边界用一个空 frame 验证 parser 必须推进即可，不为测试数量制造重复工作。EOF 是否补成最后一条 message 是 application protocol policy，不可由 TCP 或 `recv == 0` 偷偷决定。
+
+---
+
+## 2026-09-05：Week9 Day4 Round1 首次检阅
+
+用户已完成 `connection_state_demo.cpp` 初版并保存 `day4_note.md`。本次按 Round1 contract 检阅，不用未开始的 Round2/Round3 要求扣分，也没有修改用户 Ubuntu source、note 或 daily。
+
+核心设计正确：每个 `ConnectionState` 独立保存 input/output；逐 byte append，遇到 newline 就把当前完整 frame 追加到 output、增加 count 并清空 input；同一次 chunk 中后续 bytes 会继续处理。因此固定 feed 2 能依次完成 `hello`、`world` 并留下 `par`，feed 3 能完成 `partial`。`std::string` 足以表达本日 bytes，接口采用 `append(const std::string&)` 在 R1 demo 中可工作，只是 Day5 接 `recv(temp,n)` 时会比 pointer+length contract 多一次构造或复制，当前不是正确性阻塞项。
+
+两个正式阻塞项：
+
+1. `std::size_t message_count_;` 没有初始化。第一次 `++message_count_` 会读取 indeterminate value，行为未定义。三次普通运行碰巧显示 2、3 不构成证据；Valgrind 明确报告 uninitialised value 来自 `main` 中的 stack allocation，并在两次输出 count 时传播。
+2. Round1 contract 要求程序自动判断 feed 1/2/3 的 exact pending input、pending output、message count，失败 non-zero exit，成功打印固定 PASS。当前 `main` 只在 feed 2/3 后打印观察值，没有检查 feed 1，也没有 assertion/error return/PASS，因此错误实现也可能 exit 0。
+
+note 逐项：per-connection parsing state、input 保存 incomplete suffix、newline delimiter、output 只由 complete messages 形成、append 后遇到 newline 才发布 message 的主线均正确；已保存版本使用 `string`，与真实代码一致。更精确地说，当前 `output` 是扁平的 response byte buffer，不是保存 message objects 的容器；实现把 input 中已有的 newline 一起复制进去，observable behavior 等价于“取 delimiter 前 message，再补 newline”。拼写 `messsage/delimter` 只是文字整理项，不影响机制判断。
+
+非阻塞整理项：删除未使用的 `<cstring>/<unistd.h>/<vector>`，直接 include `<cstddef>`；`delimiter` 可命名为 `delimiter_` 并使用 `static constexpr char`；这些不作为 R1 正式通过条件。当前暂定评分 84/100。修复 count 初始化并加入 exact automatic oracle 后即可复检；不要求改 parsing architecture、补 GoogleTest、接 socket/epoll、实现空 message 或多 connection 场景。
+
+---
+
+## 2026-09-05：Week9 Day4 Round1 正式通过
+
+用户修复 `connection_state_demo.cpp`：构造函数把 `message_count_` 初始化为 0；feed 1/2/3 的中间状态均打印，最终自动比较 empty pending input、`hello\nworld\npartial\n` output 与 count 3，成功打印 PASS/return 0，失败打印 FAIL/return 1。虽然没有为每个中间阶段逐条写 assertion，但真实输出与最终 exact oracle 已覆盖本日核心状态，不要求为了测试形式继续补体力 work。
+
+本轮重新读取最终 source，以 `g++ -std=c++17 -Wall -Wextra -g` 编译零 warning；普通运行得到 feed 1 的 `hel/0/empty`、feed 2 的 `par/2/hello+world`、feed 3 的 `empty/3/hello+world+partial`，最终 PASS。Valgrind 复检不再报告 uninitialized read，程序正常结束。Round1 正式通过，评分 94/100；这是 R1 出口，不代表 Day4 整日已完成。
+
+按 R1 通过后的固定规则，保留 Round1 原文，只定向润色 day4.md 的 Round2/Round3：把通用 `append -> find -> erase` 主线替换为用户真实的逐 byte `push_back -> delimiter check -> publish -> clear` state machine；明确 input 在判断前已包含 newline，因此当前实现直接保留 delimiter 而非 strip 后重加；删除与用户实现无关的 front-erase/iterator 复盘；补充 `append(const std::string&)` 接 Day5 `recv(temp,n)` 时需要 length-aware temporary string，或届时演进为 pointer+length API。Round3 的 fd-to-state 图也改为当前接口，不提前实现 Day5 partial write。
+
+可复用经验：R1 通过后的个性化讲解不能只替换变量名，应删除与真实实现无关的算法分支与风险提醒，并准确描述用户代码实际发生的状态转换。自动 oracle 的强度按当天风险决定；本日固定三批输入的中间 trace 加最终 exact comparison 已足够，不机械要求 GoogleTest 或重复 assertions。普通 review 不自动 commit/push，本轮不修改 Ubuntu source 和用户 note。
+
+---
+
+## 2026-09-05：Week9 Day4 整日正式通过
+
+用户阅读完按真实 R1 重写后的 Round2/Round3，判断其中没有需要继续编码的新机制，并请求按实际学习价值收口。Day4 正式通过，最终评分 92/100，下一步进入 Day5 buffered non-blocking write、partial write 与 dynamic EPOLLOUT。
+
+通过依据：最终 `connection_state_demo.cpp` 已在上一轮用 C++17 + Wall/Wextra 零 warning编译，固定三批输入得到 exact trace 与 PASS，Valgrind clean；代码同时覆盖 fragmentation、一次 chunk 中多个 delimiters、pending suffix 和顺序保持。note 准确说明每个 connection 保存独立 parsing state、input 保存 incomplete suffix、newline 决定完整 frame、完整 bytes 才进入 output。
+
+R2/R3 的机制覆盖判断：kernel receive buffer、recv temporary buffer、user-space input state 三层模型已在教程中串清，用户的接口接 `recv(temp,n)` 时应使用 length-aware string 或演进 pointer+length；fd 只是 kernel socket 的访问编号，application parsing state 仍需由 per-connection object 保存。EOF 不自动把 suffix 变成 message，取决于 application framing contract。本周选择严格 newline policy。
+
+没有要求补 A/B 与 empty-line 的重复测试：`ConnectionState` 的 input/output/count 都是非 static members，多个实例天然隔离；对 `"\n"`，逐 byte 代码会 push delimiter、发布 output、count + 1 并 clear input，可以直接从已经检阅的控制流推出。它们是有价值的边界说明，但在当前低风险单线程 demo 中不值得为了 checklist 再制造体力 work。也不要求用户逐题誊写五个收口问题。
+
+残余非阻塞项：删除未使用 headers、直接 include `<cstddef>`、把 `append(const std::string&)` 在 Day5 演进为更贴近 `recv` 的 pointer+length 接口、为生产协议增加 maximum frame size。这些分别属于整洁、下一日接口整合和后续 hardening，不反判 Day4。
+
+可复用验收经验：当高价值主场景已经同时覆盖 fragmentation、coalescing、pending state 与 exact final oracle，额外实例隔离/空消息可根据代码结构静态推出时，不应机械要求每个教程 bullet 都变成新 test。整日验收仍需逐项判断哪些是新增机制、哪些只是重复证据，并把未做项的证据边界说清楚。普通 review 不自动 commit/push，本轮不修改用户 source、note 或 daily。
+
+---
+
+## 2026-09-05：Week9 Day5 正式生成并进入学习
+
+已生成 `week9/day5/day5.md`。Day4 已正式通过；Day5 用户尚未完成 Round1，生成阶段的私有 reference 验证只证明教程 contract 自洽，不能替代用户学习或验收。
+
+本日沿用 Day3 `epoll_read_server.cpp` 与 Day4 `ConnectionState`，唯一 canonical 产出为 Ubuntu `~/code/system-learning/cpp/week9/epoll_echo_server.cpp`。Round1 要求自行合成一个 newline echo server V1：non-blocking read/parse 后把 response 追加到 per-connection output；`send` 成功多少只消费多少；未发送 suffix 及 write offset 留在对应 state；pending output 决定是否动态关注 `EPOLLOUT`。闸门前只提供程序用途、line protocol、observable contract、必要 API 小例子、normal client 与编译运行方式，没有给完整 write loop、event-handler 控制流或容器布局。
+
+Round2 在 R1 之后串清 `send > 0`、`EINTR`、`EAGAIN/EWOULDBLOCK`、fatal error 四类状态转换；区分 application output、local kernel socket send buffer 与 peer receive side；说明 `EPOLL_CTL_MOD` 应从当前 pending state 重算整份 mask，写空后移除 `EPOLLOUT`，避免 LT event loop 因长期 writable 而空转。`MSG_NOSIGNAL` 只压制本次 `SIGPIPE`，不会把 `EPIPE` 变成成功。
+
+Round3 只保留一个慢读大响应实验：accepted socket 可临时调小 `SO_SNDBUF`，client 发送 4 MiB newline payload 后短暂停读，再按 exact byte count 与 payload equality 验证恢复推进。partial/EAGAIN 的具体出现次数受 loopback、buffer、TCP 与 scheduler 影响；没有在一次运行中观察到不等于分支可以删除，payload 不丢不重仍是强制正确性标准。
+
+教程技术语义已用 Linux `send(2)`、`epoll_ctl(2)`、`epoll(7)` 与 `socket(7)` 复核。独立 reference server 在 Ubuntu 以 `g++ -std=c++17 -Wall -Wextra -g` 零 warning 编译，normal fragmented input 精确 echo，4 MiB slow reader 精确通过；该次运行真实观察 `partial=65`、`EAGAIN=42`、`+EPOLLOUT=42`、最终 `-EPOLLOUT` 恢复。reference 文件与远端临时产物已删除，没有写入用户学习代码。
+
+可复用编写经验：partial-I/O 教程必须把“bytes 属于谁”与“进度由什么证据前进”同时写清；`send` 的返回值才是 output offset 的推进依据，readiness event 只表示值得重试。压力实验应把 exact payload oracle 与“是否恰好观察到 partial/EAGAIN”分开，不能把时序概率当成正确性契约。Day5 R1 通过时，应读取用户真实 state layout、write helper 和 event order，再定向润色 Round2/Round3；不要提前假定用户采用某个 helper 架构。

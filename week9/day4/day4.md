@@ -167,8 +167,8 @@ pending suffix："par"
 Day4 先关注两个成员：
 
 ```text
-input buffer：已经从 kernel 读入，但还没有全部消费的 bytes
-output buffer：已经由 application 生成，但还没有全部发送的 bytes
+input buffer：已经从 kernel 读入，但还没有全部消费的 bytes（存的是还没有形成完整 message 的 bytes）
+output buffer：已经由 application 生成，但还没有全部发送的 bytes（已经是完整 message）
 ```
 
 今天没有真实 socket，因此 output buffer 只用于观察生成结果；Day5 才会处理 partial write。
@@ -184,7 +184,7 @@ B.input = ""
 B.output = "world\n"
 ```
 
-如果 A/B 共用一个全局 input string，可能拼出并不存在的 `helworld`。连接之间的 byte streams 相互独立，解析状态也必须相互独立。
+如果 A/B 共用一个全局 input string，可能拼出并不存在的 `helworld`。连接之间的 byte streams 相互独立，**解析状态也必须相互独立。**
 
 ## 7. 三种 buffer 不要混在一起
 
@@ -529,38 +529,46 @@ echo $?
 
 # Round 2：完成 V1 后，把 parser 状态从头串清楚
 
-> 下面是生成时的完整初版。R1 通过后会按你的真实实现改写，不把这份通用分析冒充个性化 code review。
+> R1 已正式通过。下面不再假设你使用 `find + erase`，而是围绕你实际写出的逐 byte state machine 复盘。
 
-## 17. 完整主线：append、extract、retain
+## 17. 你的 V1 实际是怎样推进状态的
 
-一次 `on_bytes(data, size)` 的职责可以压成：
+你的 `append(const std::string& data)` 没有先把整个 chunk 拼进 input 再搜索，而是逐个读取 `data[i]`：
 
 ```text
-把本次 size 个 bytes 追加到 input
--> 只要 input 中还能找到 '\n'
-   -> delimiter 前面是一个完整 message
-   -> 根据 message 生成 response，追加到 output
-   -> 从 input 删除 message + delimiter
--> 找不到 '\n'
-   -> 当前剩余 input 就是 pending suffix
-   -> 返回 caller
+for each byte c in data
+-> input.push_back(c)
+-> c != '\n'
+   -> 这条 message 还没结束，继续读下一个 byte
+-> c == '\n'
+   -> 此时 input 已包含完整 message 和 delimiter
+   -> 把整个 input 追加到 output
+   -> message_count_ + 1
+   -> input.clear()
+-> chunk 用完后返回
 ```
 
-对应流程图：
+对应你的代码流程：
 
 ```mermaid
 flowchart TD
-    A["caller 调用 on_bytes(data, size)"] --> B["ConnectionState append [data,data+size)"]
-    B --> C{"input 中能找到 '\\n' 吗？"}
-    C -->|是| D["delimiter 前缀形成一个 complete message"]
-    D --> E["application 生成 response 并 append 到 output"]
-    E --> F["erase 已消费的 message + delimiter"]
-    F --> C
-    C -->|否| G["剩余 input 保留为 pending suffix"]
-    G --> H["on_bytes 返回"]
+    A["append(data)"] --> B{"data 还有下一个 byte 吗？"}
+    B -->|有| C["c = data[i]"]
+    C --> D["input.push_back(c)"]
+    D --> E{"c == '\\n' 吗？"}
+    E -->|否| B
+    E -->|是| F["把当前 input 全部追加到 output"]
+    F --> G["message_count_++"]
+    G --> H["input.clear()"]
+    H --> B
+    B -->|没有| I["保留当前 input，append 返回"]
 ```
 
-这里的 loop 不是为了“保险多跑几次”，而是因为一次 input 里可能已经有多个 delimiters。每次成功 extraction 都缩短 input，直到不能再形成完整 message。
+这里没有单独的 `find`，delimiter check 已经融入每个 byte 的推进过程。因此一次 chunk 中即使包含多个 `\n`，每次遇到一个都会完成一次 output/count/clear，后面的 bytes 随即开始下一条 message。
+
+这与教程原先设想的“append 整块，再循环 `find + erase`”是两种合法实现。你的版本已经满足今天的 observable contract，不需要为了和教程长得一样而重写。
+
+还有一个容易说错的细节：你的 input 在判断 delimiter 前已经执行了 `push_back('\n')`，所以复制到 output 的内容本来就带 `\n`。你的实现不是“去掉 delimiter 后再重新补回”，而是直接保留了同一个 delimiter byte；两者在今天的 echo-like protocol 下产生相同结果。
 
 ## 18. 用三批输入手推每次状态
 
@@ -569,8 +577,8 @@ flowchart TD
 ```text
 old input = ""
 new bytes = "hel"
-append 后 = "hel"
-find('\n') = npos
+逐 byte 经过 h、e、l
+始终没有遇到 '\n'
 ```
 
 因此：
@@ -588,26 +596,27 @@ count = 0
 ```text
 old input = "hel"
 new bytes = "lo\nworld\npar"
-append 后 = "hello\nworld\npar"
 ```
 
-第一次 extraction：
+读到 `l`、`o` 时，input 先变成 `hello`；读到第一个 `\n` 后：
 
 ```text
-message = "hello"
-output += "hello\n"
-input erase 前 6 bytes -> "world\npar"
+input = "hello\n"
+output += input
+count = 1
+input.clear()
 ```
 
-第二次 extraction：
+接着读 `world\n`，第二次遇到 delimiter：
 
 ```text
-message = "world"
-output += "world\n"
-input erase 前 6 bytes -> "par"
+input = "world\n"
+output += input
+count = 2
+input.clear()
 ```
 
-第三次查找没有 delimiter，于是停止：
+最后读入 `par`，没有 delimiter，因此 `append` 返回时：
 
 ```text
 input = "par"
@@ -620,10 +629,11 @@ count = 2
 ```text
 old input = "par"
 new bytes = "tial\n"
-append 后 = "partial\n"
+依次读入 t、i、a、l 后，input = "partial"
+读到 '\n' 后，input = "partial\n"
 ```
 
-提取 `partial` 后：
+这一刻第三次发布完整 frame，然后 clear input：
 
 ```text
 input = ""
@@ -764,57 +774,48 @@ malicious peer 一直不发 newline，pending input 可能持续增长
 
 Mini Redis 后续会学习 RESP framing；HTTP 也会使用 request line、headers、Content-Length 等规则。它们都建立在今天的基本问题上：transport 给 bytes，protocol 自己决定何时完整。
 
-## 24. `erase(0, n)` 的复杂度取舍
+## 24. 你的版本没有 front erase
 
-从 string 前端 erase 后，剩余 bytes 通常需要向前移动。若长连接持续处理大量 messages，反复 front erase 可能造成额外复制。
+教程初版讨论了 `erase(0, n)`，但你的实现不需要它：每个 byte 只 append 到当前 input；完整 frame 发布后直接 `clear()`。因此不存在“每提取一条 message，就把后面 pending bytes 整体向前搬”的问题。
 
-今天可以接受：
-
-```text
-输入很小
-目标是先证明 state transition 正确
-实现短、容易检查
-```
-
-后续可选优化：
+你当前主要的数据移动是：
 
 ```text
-保留 read offset，只在必要时 compact
-使用专门的 Buffer abstraction
-ring buffer / segmented buffer
+每个新 byte：写入 input 一次
+遇到 delimiter：把这一整条 input 再复制进 output
 ```
 
-不要在 Day4 为避免一份小 demo 的移动成本，提前写复杂 buffer class。先把 framing correctness 做对；性能问题要靠实际 workload 和 benchmark 决定。
+对于本日小型 line protocol，这个成本完全可接受。`for (auto c : input) output.push_back(c)` 也可以写成一次 `output.append(input)`，但只是表达和常数差异，不是 R1 正确性修复，更不要求你为了这一点重写。
 
-## 25. iterator、reference 与 position 的失效
+## 25. 你的接口在 Day5 接 socket 时要怎样理解
 
-`std::string::erase` 会修改 string。不要在 erase 后继续使用此前指向被修改 string 的 iterator、pointer、reference，或者想当然地复用旧 delimiter position。
+`append(const std::string& data)` 在函数执行期间借用 caller 的 string，并把其中每个 byte 复制进自己的 input/output；函数返回后不依赖 caller 的生命周期，所以当前 ownership 是安全的。
 
-简单安全的循环关系是：
+Day5 的 `recv` 给出的却是：
 
 ```text
-当前 string 上 find
--> 使用本次 position
--> erase
--> 回到循环重新 find
+char temp[capacity]
+有效范围 [temp, temp + n)
 ```
 
-这不是要求你每次都采用最高性能实现，而是确保 position 对应当前 string 状态。
+若保持当前接口，caller 需要先构造 `std::string(temp, n)`。它按明确长度保留包括 `\0` 在内的 bytes，但会多一个临时 string。接入 server 时可以再把入口演进成 `append(const char* data, std::size_t size)`；parser 内部逐 byte 主线不需要改变。今天不为了明天的接口预演反改已经通过的 V1。
 
-## 26. R2 复检目标
+另外，`pending_input()` 和 `pending_output()` 返回的是内部 string 的 const reference。caller 可以观察但不能修改；reference 也不能保存到 `ConnectionState` 被销毁之后。
 
-完成 V1 后，只检查这些真正相关的点：
+## 26. R2 从你的真实证据收口
+
+本次 R1 已经建立：
 
 ```text
-append 是否使用明确 size，而不是依赖 '\0'
-是否循环提取一次 input 中的全部完整 messages
-erase 是否同时消费 delimiter
-没有 delimiter 的 suffix 是否跨调用保留
-output 是否只由完整 messages 生成
-message count 是否恰好为 3
+message_count_ 从 0 开始
+feed 1 后保留 "hel"
+feed 2 后输出 hello/world 并保留 "par"
+feed 3 后输出 partial，input 为空，count 为 3
+最终 exact state 不符时 non-zero exit，正确时 PASS
+Valgrind 不再报告 uninitialized read
 ```
 
-若 V1 已经满足，不为展示另一种写法重构。若实现使用 scan offset 而不是 front erase，也按它自己的 invariant 检查。
+因此 R2 不再要求你补一套 `find + erase` 实现，也不要求把中间打印机械改成更多 tests。现在真正需要带走的是：你的逐 byte loop 本身就是 incremental parser state machine，而不是“恰好拼字符串拼对了”。
 
 ---
 
@@ -831,7 +832,7 @@ flowchart TD
     C --> D["epoll ADD client_fd"]
     D --> E["connection ready"]
     E --> F["recv 得到 temp[0,n)"]
-    F --> G["connections[fd].on_bytes(temp,n)"]
+    F --> G["connections[fd].append(std::string(temp,n))"]
     G --> H{"pending output 为空吗？"}
     H -->|是| I["继续等待后续 input"]
     H -->|否| J["Day5：安排 non-blocking send"]
@@ -840,6 +841,8 @@ flowchart TD
 ```
 
 图中创建 state 与 epoll ADD 的具体先后可以有不同错误回滚写法，但最终必须满足：ADD 失败时不会留下 orphan fd/state，成功后 event 能找到仍存活的 state。
+
+这张图按你当前接口写成 `append(std::string(temp, n))`；其中 `(temp, n)` 很重要，不能让构造函数把 recv buffer 当成依赖 `\0` 的 C string。若 Day5 把接口改为 pointer + length，图中的临时 string 就可以消失。
 
 今天不把它真正接入 `epoll_read_server.cpp`，避免同时引入 Day5 output interest。你只需要能把自己的 V1 类型放进图中的 `connections[fd]` 位置。
 
@@ -867,7 +870,7 @@ A feed "lo\n"      -> A output = "hello\n"
 
 按照“delimiter 前面的 bytes 是 message”这一规则，它形成一条长度为 0 的完整 message，response 是 `"\n"`。
 
-建议在现有 demo 中补一次，确认 loop 不会因 delimiter 位于 position 0 而卡住。处理后必须消费一个 delimiter byte，否则下一轮 `find` 仍返回 0，形成无限循环。
+在你的逐 byte 实现中，这个 case 会先把 `\n` push 到空 input，立即复制到 output，然后 clear input；所以它不涉及 `find` 返回 position 0。补这个观察的目的，是确认 `"\n"` 也会让 count 前进一次，并且不会残留在 input。
 
 这是一条高价值边界，因为它直接检验 parser 是否真的推进；不要求继续罗列十种普通字符串。
 
