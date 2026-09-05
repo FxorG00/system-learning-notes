@@ -232,7 +232,7 @@ high-water mark
 
 ## 8. SIGPIPE 与 MSG_NOSIGNAL
 
-`SIGPIPE` 是 `signal + pipe`：向已经没有有效读取端的 stream 写入时，kernel 可能向进程发送的 signal。
+`SIGPIPE` 是 `signal + pipe`：向**已经没有有效读取端的 stream 写入**时，kernel 可能向进程发送的 signal。
 
 signal 的默认处理可能直接终止整个进程。一个 client 出错不应该轻易杀死整个 server。
 
@@ -253,6 +253,96 @@ MSG_NOSIGNAL
 保证 peer 存活
 让 EPIPE 变成成功
 ```
+
+---
+
+### 8.1 区分 EPIPE, EAGAIN
+
+不是。你说的“现在塞不进 kernel socket send buffer”对应的是：
+
+```text
+send(...) == -1
+errno == EAGAIN / EWOULDBLOCK
+```
+
+这时连接仍然可写，只是本机 socket send buffer 暂时没有足够空间。保留 pending bytes，等将来 `EPOLLOUT` 后重试。
+
+而 `EPIPE` 是另一类情况：
+
+```text
+send(...) == -1
+errno == EPIPE
+```
+
+它表示这条 stream 已经不能再写了，例如 peer 已关闭接收方向、连接已失效，或本地写方向已被关闭。不是“缓冲区暂时满”，等 `EPOLLOUT` 也不会把它救回来；应清理这条 connection。
+
+可以这样记：
+
+| `send` 结果 | 意义 | 下一步 |
+|---|---|---|
+| `n > 0` | kernel 收下了 `n` 个 bytes | offset 前进 `n` |
+| `EAGAIN` | 暂时塞不进去 | 保留 suffix，等 `EPOLLOUT` |
+| `EPIPE` | 这条连接不能写了 | 清理 connection |
+
+`MSG_NOSIGNAL` 只改变 `EPIPE` 出现时的附带行为：
+
+```text
+没有 MSG_NOSIGNAL
+-> 可能先收到 SIGPIPE
+-> 默认可能杀死整个 server
+
+有 MSG_NOSIGNAL
+-> 不发 SIGPIPE
+-> send 正常返回 -1 / EPIPE
+-> 你的代码自己清理该 client
+```
+
+所以它不是让发送成功，而是把“可能杀整个进程的 signal”变成你能正常处理的一次错误返回。
+
+---
+
+### 8.2 今天怎么处理 EPIPE
+
+对，你这个判断是对的，而且刚好点中了 TCP 的“双向独立”本质。
+
+```text
+A 的 send  -> B 的 recv    （A -> B 方向）
+B 的 send  -> A 的 recv    （B -> A 方向）
+```
+
+`EPIPE` 直接说明的是：
+
+```text
+A -> B 这个方向不能继续 send
+```
+
+它本身不必然逻辑推出：
+
+```text
+B -> A 方向已经没有数据
+```
+
+例如最明确的一种情况是：你自己曾调用过
+
+```cpp
+shutdown(fd, SHUT_WR);
+```
+
+这会关闭本地的发送方向。之后再 `send`，可能得到 `EPIPE`；但 peer 仍然完全可以继续 `send` 数据给你，而你仍可 `recv`。
+
+所以更精确地说：
+
+```text
+EPIPE：
+不能再依赖这条 fd 的 write direction。
+
+不是：
+recv direction 必然立刻失效。
+```
+
+但在今天这个 echo server 里，教程让你对 fatal `send` error 直接清理 connection，是一个 application policy：既然 server 已无法可靠地把 response 回给 client，继续读新的 request 通常没有业务意义。
+
+底层上，`EPIPE` 后若你硬要 `recv`，可能仍读到 peer 之前已经发来的 bytes；也可能读到 EOF，或收到例如 `ECONNRESET` 之类的错误。单凭一次 `EPIPE`，不能精确判断反向 byte stream 的最终状态。
 
 ## 9. 今天最重要的 state invariant
 
@@ -654,7 +744,22 @@ slow-reader 如何扩大 partial write
 
 # Round 2：完成 V1 后，把 write state 从头串清楚
 
-> 下面是生成时的完整初版。R1 通过后必须按你的真实代码改写，不把通用分析冒充个性化 review。
+> R1 已于 2026-09-05 正式通过，评分 92/100。下面只针对你的真实实现复盘：`std::map<int, ConnectionState>` 保存每连接 state，`output + offset` 表示 write progress，parser 产生完整 message 后先 MOD 加入 `EPOLLOUT`，再由后续 event 调用 `sender_work`。
+
+你的 R1 已经跑通的主线是：
+
+```text
+EPOLLIN
+-> receiver_work recv 到 EAGAIN
+-> connection_state[fd].append_char
+-> 遇到 '\n'，input 追加到 output
+-> EPOLL_CTL_MOD：EPOLLIN | EPOLLOUT
+-> 后续 EPOLLOUT
+-> sender_work
+-> send_output 从 offset 继续 send
+```
+
+这一轮不重写已经正确的 parser、accept drain 或 normal client，只处理真实实现里仍值得打磨的 write-state 与 connection-lifetime 边界。
 
 ## 18. 一条 response 的完整因果链
 
@@ -663,11 +768,14 @@ slow-reader 如何扩大 partial write
 ```mermaid
 flowchart TD
     A["EPOLLIN：connection read-ready"] --> B["recv 到 n > 0"]
-    B --> C["把 temp[0,n) 交给该 ConnectionState parser"]
+    B --> C["逐 byte 调用 append_char"]
     C --> D{"产生 complete response 吗？"}
     D -->|否| E["保留 incomplete input，继续 read/drain"]
-    D -->|是| F["append response 到 user-space output"]
-    F --> G["从 write_offset 开始调用 send(MSG_NOSIGNAL)"]
+    D -->|是| F["input 追加进 output，input.clear"]
+    F --> Q["MOD：EPOLLIN | EPOLLOUT"]
+    Q --> R["receiver_work 继续 recv，直到 EAGAIN"]
+    R --> S["未来 epoll_wait 返回 EPOLLOUT"]
+    S --> G["send_output 从 offset 调用 send(MSG_NOSIGNAL)"]
     G --> H{"send result"}
     H -->|"n > 0"| I["write_offset += n"]
     I --> J{"还有 pending output 吗？"}
@@ -676,7 +784,7 @@ flowchart TD
     K --> L["MOD：只保留 EPOLLIN"]
     H -->|"EINTR"| G
     H -->|"EAGAIN / EWOULDBLOCK"| M["保留 output + offset"]
-    M --> N["MOD：EPOLLIN | EPOLLOUT"]
+    M --> N["保持 EPOLLIN | EPOLLOUT"]
     H -->|"fatal error"| O["DEL + close + erase ConnectionState"]
     N --> P["未来 EPOLLOUT"]
     P --> G
@@ -768,6 +876,8 @@ output 本身始终只保存 pending suffix
 
 两种方案不要混用，否则很容易既 erase 又增加旧 offset，跳过一段数据。
 
+你的 R1 当前属于“完整 output + offset”方案，但写完后只移除了 `EPOLLOUT`，没有执行 `output.clear()` 与 `offset = 0`。短期 echo 结果仍正确，因为下一条 response 会追加在旧 string 后面，offset 也从旧末尾继续；但这会让已经发送的前缀一直占用 user-space memory。R2 应在 `offset == output.size()` 时回收这段已完成数据。
+
 ## 22. kernel send buffer 满时，谁在等待
 
 不是 kernel 替你保存尚未成功提交的 application suffix。
@@ -811,6 +921,14 @@ if wants_write:
 
 再用 `EPOLL_CTL_MOD` 提交整份新 mask。
 
+你在 R1 note 里写了“发送完毕后 DEL”。这里应改成：
+
+```text
+EPOLL_CTL_MOD：从 interest mask 中移除 EPOLLOUT
+```
+
+`EPOLL_CTL_DEL` 的含义是把整个 fd 从 epoll instance 注销，只在 connection cleanup 时使用，不是删除某一个 event bit。
+
 为什么强调“重新计算”：
 
 ```text
@@ -818,6 +936,8 @@ if wants_write:
 避免 MOD 时漏掉原有 EPOLLIN
 避免 event mask 与 output state 分裂
 ```
+
+当前 `append_char` 与 `send_output` 会调用 `modify_epoll_info`，但忽略它返回的 `false`。一旦 MOD 失败，application state 已认为“以后会收到 OUT”或“已经停止关注 OUT”，kernel registration 却没有完成相同变化。R2 不要求复杂恢复，只要让 MOD failure 明确进入当前 connection 的清理路径，不能只 `perror` 后继续假装状态一致。
 
 ## 24. 为什么永久监听 EPOLLOUT 可能空转
 
@@ -857,9 +977,7 @@ epoll_wait 返回
 
 这样正常的小响应通常当场完成，不需要额外经历一次 `epoll_wait`。
 
-另一种实现是 output 变 non-empty 后直接注册 `EPOLLOUT`，等下一轮通知再写。它也能正确，但多一次 event-loop 往返。
-
-今天优先第一种。理由是减少无必要 wakeup，不是因为 `EPOLLOUT` 不可靠。
+另一种实现是 output 变 non-empty 后直接注册 `EPOLLOUT`，等下一轮通知再写。你的 R1 正在使用这一种：`append_char` 负责 MOD，`sender_work` 在后续 event 才发送。它是正确方案，只比“先主动 send”多一次 event-loop 往返，不需要为了形式重写。
 
 ## 26. 同一个 returned event 同时有 IN 和 OUT 怎么办
 
@@ -888,6 +1006,19 @@ else if EPOLLOUT:
 ```
 
 具体先读还是先写不是今天唯一答案，但 connection 一旦在前一个分支被清理，后续不能继续使用它的 fd/state。
+
+这正好对应你当前 dispatch 的真实风险：
+
+```cpp
+if (events & EPOLLIN) {
+    receiver_work(...);  // 这里可能 clear_connection
+}
+if (events & EPOLLOUT) {
+    sender_work(...);    // 仍可能继续
+}
+```
+
+若同一个 event 同时包含 IN/OUT，而 `receiver_work` 因 EOF/error 执行了 DEL + close + erase，第二个 `if` 仍会运行。随后 `connection_state[fd]` 不是“找到旧对象”，而是可能默认插入一个新的空 `ConnectionState`。R2 需要让 handler 把“connection 是否仍存活”反馈给 dispatch，或在进入第二阶段前重新确认 map 中仍存在该 fd；不要用 `operator[]` 把 stale access 静默变成新对象。
 
 ## 27. MSG_NOSIGNAL 解决什么，不解决什么
 
@@ -1097,6 +1228,8 @@ INTEREST fd=7 -EPOLLOUT
 ```
 
 不要每个 byte 打一行，否则 console I/O 会反过来扰动实验。
+
+你的 R1 目前会把每次 `recv` 的全部 payload 输出到 `std::cout`。对 4 MiB slow-reader 实验，这会产生数 MB console I/O，明显改变 event-loop 时序。进入 R3 前先关闭 payload dump，只保留 fd、`n` 和上面的 write/interest counters。
 
 ## 34. 什么算通过
 

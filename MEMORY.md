@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-05）：Week1~Week8 已完成；Week9 Day1、Day2、Day3、Day4 均正式通过，Day4 最终 92/100；Week9 Day5 教程已生成并进入 buffered non-blocking write、partial write 与 dynamic EPOLLOUT，用户尚未完成 Round1。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
+最新进度快照（2026-09-06）：Week1~Week8 已完成；Week9 Day1、Day2、Day3、Day4、Day5 均正式通过，Day4 最终 92/100，Day5 最终 96/100。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
 
 ### Week1：已完成
 
@@ -5860,3 +5860,51 @@ Round3 只保留一个慢读大响应实验：accepted socket 可临时调小 `S
 教程技术语义已用 Linux `send(2)`、`epoll_ctl(2)`、`epoll(7)` 与 `socket(7)` 复核。独立 reference server 在 Ubuntu 以 `g++ -std=c++17 -Wall -Wextra -g` 零 warning 编译，normal fragmented input 精确 echo，4 MiB slow reader 精确通过；该次运行真实观察 `partial=65`、`EAGAIN=42`、`+EPOLLOUT=42`、最终 `-EPOLLOUT` 恢复。reference 文件与远端临时产物已删除，没有写入用户学习代码。
 
 可复用编写经验：partial-I/O 教程必须把“bytes 属于谁”与“进度由什么证据前进”同时写清；`send` 的返回值才是 output offset 的推进依据，readiness event 只表示值得重试。压力实验应把 exact payload oracle 与“是否恰好观察到 partial/EAGAIN”分开，不能把时序概率当成正确性契约。Day5 R1 通过时，应读取用户真实 state layout、write helper 和 event order，再定向润色 Round2/Round3；不要提前假定用户采用某个 helper 架构。
+
+---
+
+## 2026-09-05：Week9 Day5 Round1 正式通过
+
+用户完成 Ubuntu `/home/xgf/code/system-learning/cpp/week9/epoll_echo_server.cpp` 与本地 `week9/day5/day5_note.md`。R1 以 92/100 正式通过；这是 Round1 出口，整日 Day5 尚未完成。
+
+真实设计：`std::map<int, ConnectionState>` 维护 fd-to-state；每个 state 保存 `input`、`output`、`offset` 与 owner fd。`receiver_work` non-blocking recv 到 EAGAIN，并逐 byte 调用 `append_char`；遇到 newline 后把完整 input 追加到 output、清空 input，并通过 MOD 把 connected fd interest 改成 `EPOLLIN | EPOLLOUT`。后续 `sender_work` 从 `output.c_str() + offset` 调用 `send(..., MSG_NOSIGNAL)`；成功按返回值推进 offset，EINTR 重试，EAGAIN 保持 state，fatal error 清理当前 connection，写完后 MOD 回 `EPOLLIN`。
+
+实际验证：最终 source 使用 `g++ -std=c++17 -Wall -Wextra -g` 编译零 warning；用户的 `echo_client.py` 通过两批发送 `hel` 与 `lo\nworld\n` 验证 fragmentation/coalescing，连续运行三次均输出 `CLIENT PASS`，每次结束后 server 仍能接受下一连接。本轮另做 4 MiB 后 RST 的错误路径观察，server 按 connection 粒度记录 `ECONNRESET` 并 close，没有杀死 listener；这不冒充 partial/EAGAIN 证据。临时 review binary、log 与进程已清理。
+
+笔记主线正确：每 connection 独立 state；non-blocking send 到 EAGAIN 后等待 writable；listener/connections 由一个 epoll 管理；按 fd/event dispatch receiver/sender；map 比固定数组更适合 fd-to-state。需要纠正一处术语：发送完成时不是对 `EPOLLOUT` 做 `EPOLL_CTL_DEL`，而是用 `EPOLL_CTL_MOD` 从 mask 中移除该 bit；DEL 会注销整个 fd。
+
+R1 后定向润色已完成：Round2 改成用户真实的“parser 先 MOD 加 OUT、未来 event 再 send”路径；明确当前 output 已发送前缀不回收会使单连接 memory 持续增长；指出 MOD failure 不能只 perror 后忽略；重点处理同一 returned event 同时有 IN/OUT 时，IN handler 可能先 erase state，而第二个独立 if 又通过 `connection_state[fd]` 默认插入 ghost state。Round3 说明当前逐 byte payload dump 会严重扰动 4 MiB slow-reader 实验，应只保留长度与 write/interest counters。
+
+非阻塞整理项：`fds.erase(fds.find(fd))` 可改为 `fds.erase(fd)`，避免 missing fd 时把 end iterator 交给 erase；handlers 对 map 应优先 `find/at`，不要用 `operator[]` 隐式创建 connection；写完后 clear output/reset offset；处理 `modify_epoll_info == false`；删未用 headers、`set_nonblocking`、`append_string` 与未使用的 message count。fatal epoll-wait cleanup 当前 set 已包含 listener，之后又单独 close listener，存在重复 close，后续统一 ownership 即可。
+
+可复用验收经验：R1 的通过标准应以闸门前 contract 为准，不能把 R2 才揭示的全部边界倒扣为未通过；但 review 必须把真实实现暴露出的状态裂缝带入 R2。普通 success client 能证明 normal echo 与 server survival，不能证明 partial/EAGAIN；错误实验也要明确它只覆盖哪个分支。R1 通过后的个性化修改应准确复述实际 event order，并把用户代码中的具体风险嵌入对应机制章节，而不是追加一份泛化 bug checklist。
+
+---
+
+## 2026-09-06：Week9 Day5 整日首次复检
+
+用户完成 R2/R3 修改并补充 `day5_note.md`。当前暂定 93/100，Day5 尚未正式通过，只剩一个高信号生命周期阻塞项；不要求重写架构或补测试框架。
+
+最终动态证据针对 Ubuntu `/home/xgf/code/system-learning/cpp/week9/epoll_echo_server.cpp`：C++17 + Wall/Wextra 编译零 warning，两个 Python clients 均通过 syntax check；normal fragmented client 先单独 `CLIENT PASS`，随后 4 MiB slow reader 与另一个 normal client 交错运行，normal client 在 slow client 暂停读取期间仍 `CLIENT PASS`，slow client 最终 `SLOW CLIENT PASS bytes=4194305`。server 日志真实记录 slow fd 第一次 send progression 为 2,588,672 bytes、remaining 1,605,633 bytes，之后另一个 fd 完成 12-byte echo，未来 `EPOLLOUT` 再发送剩余 1,605,633 bytes并移除 interest。该证据同时覆盖 exact payload、EAGAIN/pending recovery、dynamic EPOLLOUT 与 event loop 未被 slow connection 阻塞。临时 binary/log/process 已清理。
+
+用户已修复 R1 后指出的大部分问题：发送完成后 clear output/reset offset；所有 connection handlers 操作前检查 active-fd set，避免 IN cleanup 后 OUT 分支通过 map operator[] 重建 ghost state；MOD failure 不再只 perror；raw payload dump 已改为长度日志；`vis_epollout` 记录 interest transition。note 对 MOD failure 与 ghost-state 原因的记录正确，R1 中 DEL/MOD 术语也已修正。
+
+唯一正式阻塞项：`modify_epoll_info` 当前在 `epoll_ctl MOD` 失败时直接调用 `clear_connection`，会 erase 正在执行其 member function 的 `ConnectionState`。若调用来自 `append_char`，helper 返回后代码还会访问 `message_count_`、`input`，receiver loop 也可能继续通过 `connection_state[fd]` 默认插入对象；若调用来自 `send_output` 完成分支，helper 返回后仍执行 `output.clear()` 与 `offset=0`。这是被销毁对象继续访问的 undefined behavior。修法应让 MOD helper 返回成功/失败而不在内部销毁 caller object，再由能够立即终止控制流的上层统一 cleanup；或者完整传播 alive/dead status，确保清理后不再触碰 state。
+
+非阻塞项：accept 成功后的 `vis_epollout[fd]=0` 使用了 listener branch 的 `fd`，应是 `connection`；当前通过后续 operator[] 默认 false 使日志仍工作，但留下无意义 listener entry。fatal epoll_wait cleanup 的 set 已含 listener，循环后又 close listener；`fds.erase(fds.find(fd))` 可简化成 `erase(fd)`；unused headers/helper/member 可后续整理。EOF 立即 close 会丢弃已经生成但尚未发送的 output，half-close policy 留给 Day6，不倒扣当前 Day5。
+
+可复用复检经验：对 event-driven component，helper 内部“顺手 cleanup”可能反过来销毁 caller 所属 state；必须沿调用栈检查 cleanup 后是否还有任何 member access或下一轮 loop。normal/slow exact payload 与 pending recovery 可以证明核心机制，但不能替代罕见 error-path 的 lifetime correctness。正式通过应聚焦这一处因果链，不把非阻塞整理项扩成新的体力清单。
+
+---
+
+## 2026-09-06：Week9 Day5 生命周期修复复检
+
+用户将 `append_char` 改成纯 state operation，由 `receiver_work` 在完整 message 形成后调用 MOD；这一方向正确，MOD failure 返回后 receiver 会立即结束，不再继续访问已清理 state。最新 source 继续通过 C++17 + Wall/Wextra 零 warning编译和 normal `CLIENT PASS` smoke；本轮未重复 4 MiB 实验，沿用上一轮同 source 主机制的完整 slow/concurrent evidence。临时 review binary/process 已清理。
+
+Day5 仍暂不放行，因为同一种生命周期问题在 send path 残留：`send_output` 写完后调用 `modify_epoll_info(EPOLLIN)`；若 MOD 失败，helper 会 clear/erase 当前 object，但 `send_output` 随后仍执行 `output.clear()`、`offset=0`。此外 send fatal error 已在 `send_output` 内 clear 后 return，但 `sender_work` 随后仍使用 `connection_state[fd]` 检查 `output_empty()`，会通过 operator[] 重建 ghost state。应让 send path 明确返回 alive/dead 或 result enum，清理后在 caller 立刻停止；不能只在函数入口检查 active fd。
+
+当前评分仍为 93/100。下一次只复检 modify/send/sender 三者的 return-status 与 cleanup 顺序，不重复运行 slow reader 或重看已正确的 parser、note 和普通机制。
+
+2026-09-06 第二次短复检：用户已把写完后的 MOD 从 `ConnectionState::send_output` 移到 `sender_work`，因此 MOD failure 不再导致 send_output 在 object 被 erase 后继续 clear output/offset；最新 source C++17 + Wall/Wextra 零 warning编译。但 send fatal/zero 分支仍在 `send_output` 内 clear connection 后 return，`sender_work` 随即无再次 active-fd check 就执行 `connection_state[fd].output_empty()`，会用 map operator[] 重建 ghost state。当前仍为 93/100、未正式通过；最后修复只需在 send_output 返回后先确认 fd/state 仍存在，或让 send_output 返回 alive/dead 并在 dead 时立即结束。无需重复 slow-reader 验证。
+
+2026-09-06 最终短复检：用户让 `send_output` 返回 connection 是否已经关闭；fatal/zero send 在 cleanup 后返回 `true`，`sender_work` 收到后立即 return，不再访问 `connection_state[fd]`，因此最后一条 ghost-state 生命周期链已闭合。写完后的 MOD 仍由上层执行，MOD failure 清理后也没有后续 state access。最新 source 使用 `g++ -std=c++17 -Wall -Wextra -g` 零 warning 编译；沿用此前 normal、4 MiB slow-reader 与 concurrent-small 的完整动态证据，不重复体力测试。Week9 Day5 正式通过，最终 `96/100`。非阻塞整理项保留：accept 分支 `vis_epollout[fd]=0` 应使用 `connection`；fatal epoll-wait cleanup 可能重复 close listener；可逐渐用 `find/at` 代替 map `operator[]`，但不影响本日核心通过。
