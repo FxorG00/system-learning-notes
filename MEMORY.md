@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-03）：Week1~Week8 已完成；Week9 Day1、Day2 均正式通过，Day2 最终 94/100；现进入 Day3 non-blocking TCP accept/read loop，day3.md 已生成，用户 R1 尚未提交或验收。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
+最新进度快照（2026-09-05）：Week1~Week8 已完成；Week9 Day1、Day2、Day3 均正式通过，Day3 最终 93/100；Week9 Day4 教程已生成并进入学习，主题为 per-connection input state 与 message boundary，用户尚未完成 Round1。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
 
 ### Week1：已完成
 
@@ -5699,3 +5699,103 @@ Ubuntu 隔离验证（未改学生代码）：g++ 10.5.0，C++17 + -Wall -Wextra
 结构检查：约 46 KB，33 个连续主节、三个 Part、唯一教程开始、单一 R1 阅读闸门，40 对 Markdown fences。完成本篇纵向与 Day2->Day3->Day4/5 横向对齐；两个 Mermaid 图按对象、边与正文核对，未声称直接在 Typora 里渲染验证。没有为达到篇幅添加重复的 sanitizer、benchmark、README 或整套错误测试。
 
 本次只新建 Day3 与同步 MEMORY，不改总规划/周规划/已完成 Day2/理论线正文。按用户“新 daily 生成后 git add .、commit、push repo master”的规则发布，已有用户笔记改动保留并一并纳入；发布结果以本轮实际 Git 返回为准。
+
+---
+
+## 2026-09-05：Week9 Day3 Round1 二次检阅
+
+用户根据首次提醒重写 event-loop 主线：listener 与 accepted connections 现在注册到同一个 epoll instance，main 根据 returned_event.data.fd 区分 listener/connection；不再在外层循环裸扫 non-blocking accept。R1 核心机制与多连接目标已经成立，但错误路径尚未满足当天明确 contract，因此本轮暂不正式通过 R1，也不提前改写 R2/R3。
+
+本轮真实验证：
+
+- SSH 读取 Ubuntu canonical source `/home/xgf/code/system-learning/cpp/week9/epoll_read_server.cpp`。
+- 使用 `g++ -std=c++17 -Wall -Wextra -g` 编译到 `/tmp/codex_week9_day3_r1`，零 warning。
+- 启动隔离 binary 后运行 A-idle/B-active/A-later/C-new：client 输出 `CLIENT CHECK PASS`；server 依次记录 A/B accept、B-data 6 bytes、B EOF/close、A-later 7 bytes、A EOF/close、C-new 5 bytes、C EOF/close。fd 5 被 C 复用，用户代码对 fd 可复用的行为没有作错误假设。
+- 验收结束后已 Ctrl+C 终止临时 server；首次客户端命令只因 PowerShell/SSH quoting 产生 Python SyntaxError，未向 server 建立连接，不算程序失败；随后用 base64 传递同一脚本成功运行。
+
+当前正式通过前的高信号问题：
+
+1. accepted fd 的 `EPOLL_CTL_ADD` 失败后只 perror，没有 close(connection)，导致资源泄漏且该 fd 不再受 event loop 管理。
+2. `receiver_work` 遇到 EINTR 或其他真实 recv error 时返回 false，main 直接 return 1；这会让一个 connection 的错误终止整个 server，并且退出前不主动清理 listener、epfd 和其他活跃 connections，与 R1 “只结束该 connection，server 继续”的契约不符。
+3. accept4/recv/epoll_wait 尚未区分 EINTR；epoll_wait 的不可恢复错误只打印后继续，可能形成持续失败的紧循环。应按当天表格把 retry、would-block、per-connection failure 与 infrastructure failure 分开。
+
+非阻塞整理项：`epoll_wait(..., 100)` 已避免此前的 timeout=0 busy polling，但第 117 行注释仍称 timeout 为 0；若当前没有 timer 工作，可以用 -1 真正睡到事件到来。一次只 accept 一个、一次只取一个 returned event 在默认 LT 下可以正确推进，不把它误判为 R1 必错；R2 再升级 accept drain 与 event array。`listen(..., backlog)` 用户在 daily 中补成 accept queue capacity，当前第一层方向正确，但 Linux 实际值还可能被 somaxconn cap，不把该增补提升为精确内核容量保证。
+
+笔记逐项：R1 note 已准确识别旧版 non-blocking accept polling 会浪费 CPU，并自行改成一个 epoll 同时关注 listener/connections、按 fd role dispatch；这正是本日核心纠偏。IP/port 部分对 inet_ntop、ntohs、htons(0) 与 getsockname 的解释正确。当前 note 没有冒充已经实现 accept drain 或完整错误分类。
+
+普通 review 不自动 commit/push。本轮只更新 MEMORY，不修改 Ubuntu source、用户 note 或 day3.md；待上述错误路径复检正式通过后，再根据真实实现与 note 定向润色 R2/R3。
+
+---
+
+## 2026-09-05：Week9 Day3 Round1 第三次复检
+
+用户继续修改 Ubuntu `epoll_read_server.cpp`：`epoll_wait` 已改为 timeout=-1；增加 `std::set<int>` 记录 accepted fds；`EPOLL_CTL_ADD` 失败时已调用 close；epoll_wait 非 EINTR 错误分支开始关闭 connections/listener/epfd。正常路径再次以 C++17 + Wall/Wextra 零 warning 编译，并重新通过 A-idle/B-active/A-later/C-new 客户端脚本，server 的 6/7/5-byte 日志及逐连接 EOF/close 均正确。临时 server 已在验收后终止。
+
+R1 仍暂缓正式通过，因为新增错误路径存在两处实际控制流 bug：
+
+1. `EPOLL_CTL_ADD` 失败后 close(connection)，但分支外仍无条件执行 `connection_fds.insert(connection)`，将已关闭 fd 写入活动集合。以后数字复用时可能把一份 stale fd 当作仍持有的资源。
+2. epoll_wait 遇到不可恢复错误后关闭全部 fd，但没有 break/return；while 会继续拿已关闭 epfd 调用 epoll_wait，产生持续 EBADF，并可能再次 close 已关闭或已复用的整数。
+
+此外，recv 真错误和 EINTR 的分类仍未完成：当前都只 perror/return，既没有对 EINTR 立即重试，也没有在真正的 connection error 上 DEL/close/erase；坏连接可能继续留在 epoll 与 set 中反复报告。accept4 的 EINTR/EAGAIN 也仍统一 perror。以上均是当天 R1 明写 contract，不要求新增测试框架，但需把已有分支的状态转移补完整。
+
+非阻塞整理：`connection_fds.erase(connection_fds.find(fd))` 在预期正常路径可用，但 `erase(fd)` 更直接且不依赖 find 一定成功；inet_ntop 失败路径仍遗漏 close(listener)；注释末尾“发生1”是笔误。一次只处理一个 LT event/accept 继续不作为 R1 阻塞项。
+
+本轮不修改用户代码、note 或 daily，不定向润色 R2/R3，不执行普通 review 的 Git commit/push。正式通过条件仍聚焦上述错误状态与资源状态一致，不要求为了验收重写架构。
+
+---
+
+## 2026-09-05：Week9 Day3 Round1 正式通过
+
+用户最终补齐第三轮指出的状态转移：ADD 失败后 close 且不插入 `connection_fds`；epoll_wait 非 EINTR 错误清理全部 active connections、listener、epfd 后 return 1；recv EINTR 通过内层循环直接重试，真实 connection error 执行 DEL/close/erase 后只结束该 handler，不终止 server。
+
+R1 正式通过，最终评分 95/100；这是 Round1 出口，不代表整个 Day3 已完成。真实验证重新针对最终 source 执行：
+
+- `/home/xgf/code/system-learning/cpp/week9/epoll_read_server.cpp` 使用 C++17 + Wall/Wextra 编译到隔离 `/tmp` binary，零 warning。
+- A-idle/B-active/A-later/C-new 再次通过；client 输出 `CLIENT CHECK PASS`，server 记录 B-data 6 bytes、A-later 7 bytes、C-new 5 bytes，以及各自 EOF/close。
+- 当前 event loop 使用一个 epoll instance、`epoll_wait(..., 1, -1)`、`data.fd` role dispatch、`std::set<int>` active-fd bookkeeping；listener 和 accepted sockets 均 non-blocking。
+- 临时 server 已在验证后 Ctrl+C 终止，没有遗留本轮运行进程。
+
+未阻塞 R1 的整理项：accept4 的 EINTR/EAGAIN 目前统一 perror 后回外层 LT wait；一次只 accept 一个和一次只接收一个 event 在 default LT 下能够正确推进，R2 再升级 accept drain 与 event array。`erase(find(fd))` 可简化为 `erase(fd)`；inet_ntop 失败可补 close(listener)；删去未用 headers/helper 与注释笔误属于代码整洁，不要求为此再次复检。
+
+按 R1 通过规则已定向润色 day3.md 的 R2/R3：用用户真实的 timeout=-1、fd role dispatch、set 所有权记录和三轮纠错过程串主线；明确当前 LT 单 accept/maxevents=1 为什么能工作，以及下一步如何升级到 accept drain/event array；把刚取得的 A/B/C 证据写入 R3，避免要求用户重复同类测试。R1 内容、用户 note、Ubuntu source 均未修改。
+
+普通 review 不自动 commit/push。本轮只修改 day3.md 的 R2/R3 与 MEMORY；下一步由用户阅读/按需升级后再发起 Day3 最终验收。
+
+---
+
+## 2026-09-05：Week9 Day3 整日最终验收通过
+
+Week9 Day3 正式通过，最终评分 93/100，下一步进入 Day4 per-connection input state / message boundary。没有因为 note 简短、未重答六道收口题或未另写测试框架扣分；当天核心机制已由代码、R1/R2 note、三轮纠错和多连接实测共同覆盖。
+
+最终 Ubuntu source：`/home/xgf/code/system-learning/cpp/week9/epoll_read_server.cpp`。R2 在已通过 R1 的版本上增加 listener accept drain：listener ready 后循环 accept4；成功的 connection 完成 ADD 后才进入 `connection_fds`；EINTR 重试；EAGAIN/EWOULDBLOCK 结束本轮；其他错误诊断后离开 accept loop。connection read path 继续 recv 到 EAGAIN、EOF 或真实错误，并按连接粒度清理，不杀死整个 server。
+
+本轮重新以 C++17 + Wall/Wextra 编译最终 source，零 warning。尝试启动隔离 binary 时 9090 被用户自己正在运行的 `./epoll_read_server`（PID 9060）占用；本轮没有擅自终止该进程，而是确认占用者后直接对现有 server 做回归。A 保持 idle，随后 8 个 burst clients 分别发送 `burst-0` 到 `burst-7` 并获得 EOF；之后 A-later 与 fresh C-new 也完成，客户端输出 `DAY3 FINAL CLIENT CHECK PASS`。该进程是用户原本运行的 server，验收后保持原状。
+
+笔记逐项检阅：
+
+- R1：用途描述正确；用户准确识别旧版问题不是 non-blocking accept 单次调用本身，而是外层持续 polling 导致 CPU 空转，并改成 listener/connections 共用一个 epoll、按 returned data.fd role dispatch。口述第一句略简写，但后续因果链消除了歧义。
+- IP/port：inet_ntop 的 network-to-presentation、ntohs/htons 的方向、port 0 + bind + getsockname 的关系均正确。
+- R2：准确解释一次 listener readiness 可能对应多个 pending connections，需要 non-blocking accept4 到 EAGAIN。实际代码与这段总结一致。
+- note 未单独写 R3；已有 A/B/C 与本轮 burst-client 证据直接覆盖“同时/交错/分别关闭/server 继续接客”，不要求重复誊写。
+
+验收问题覆盖状态：listener EPOLLIN -> accept4、connection EPOLLIN -> recv 的角色区分由代码与 note 覆盖；listener 与 accepted socket 的 non-blocking 责任由 socket/accept4 flags 覆盖；accept/read 边界由两个 drain loops 覆盖；EOF 只结束一个 connection 由 handler 与实测覆盖；maxevents=1 不限制连接总数，由 set 中多连接和连续服务覆盖；A-idle/B-active 证明唯一 application thread 未阻塞在 A，payload 完整性另由此前 server byte logs 覆盖。无需再逐题抄答案。
+
+扣分与残余风险：accept4 的其他错误统一 break 后继续 server，对 EMFILE/ENFILE 等持续故障可能形成反复通知/诊断，后续 hardening 应区分 connection-local transient error 与 listener/infrastructure failure；inet_ntop 失败路径仍遗漏 close(listener)；`erase(find(fd))` 可改成更直接的 `erase(fd)`；未用 headers/helper 与注释末尾笔误属于整洁问题。maxevents=1 在 default LT 下正确但吞吐有限，event array 批处理可在后续迭代补，不反判 Day3。
+
+可复用验收经验：机制型 daily 的简短 note 可以由真实 code state transition 和动态 evidence补足；但要明确哪部分是用户运行、哪部分是 Codex 委托验证。本轮 client PASS 能证明连接完成与 server 存活，payload 内容证据沿用此前最终 R1 server logs，不能仅凭 EOF 冒称读完业务数据。普通 review 不自动 commit/push；本轮只更新 MEMORY，不修改用户代码、note 或 daily。
+
+---
+
+## 2026-09-05：Week9 Day4 正式生成并进入学习
+
+已生成 `week9/day4/day4.md`，主题为 TCP byte stream 上的 application message boundary，以及每条 connection 独立持有的 incremental parsing state。Day3 已正式通过；Day4 用户尚未完成 Round1，教程生成阶段的私有参考验证不能替代用户验收。
+
+本日唯一独立主产出为 Ubuntu `~/code/system-learning/cpp/week9/connection_state_demo.cpp`。Round1 暂时拿掉 socket/epoll，只要求一个 newline-delimited state component 依次接收 `"hel"`、`"lo\nworld\npar"`、`"tial\n"`，自动验证 complete messages 才进入 output、incomplete suffix 跨调用保留、一次输入中的多条 messages 不丢失。R1 前给出程序用途、精确 observable state、可调整的最小 public contract、必要 `std::string` API 小例子、编译命令和阅读闸门，但没有给出完整 extraction loop、容器布局或接入 Day3 的完整实现。
+
+Round2 串清 kernel socket receive buffer、一次 `recv` 的 caller-owned temporary array、user-space `ConnectionState.input` 三层对象；区分本次 read bytes、application message、consumed prefix 与 pending suffix；解释 fd integer 本身不保存 application protocol state，fd close/reuse 前必须同步清理 registration 与 state。Round3 只设计 `fd -> ConnectionState` 映射，并用 A/B 两个 state 与空 message 验证 connection isolation 和 parser progress；真实 socket 接入、partial write、output offset 与 dynamic EPOLLOUT 明确留给 Day5。
+
+技术核验以 Linux `tcp(7)`、`recv(2)` 和 C++ `basic_string` draft 为依据：TCP 保证可靠有序 byte stream，但不保留 record boundaries；`recv` 的前 `n` bytes 才有效；`append(data, n)` 不依赖 NUL terminator；`find`/`substr`/`erase` 的本日语义与边界已复核。生成时发现并修正固定第二批输入的长度笔误：`"lo\nworld\npar"` 是 12 bytes，不是 14。
+
+独立参考实现使用 C++17 + `-Wall -Wextra -g` 零 warning 编译运行，固定三批输入、A/B state isolation 与 `"\n"` 空 message 均通过 assertions 并输出 PASS。该实现只用于确认教程 contract 自洽，没有写入用户 Ubuntu source，也不作为用户 Round1 已完成的证据。
+
+可复用经验：message framing 教程必须先把 transport bytes 与 application messages 分开，再明确状态由谁持有、跨哪几次 event 存活；固定输入应同时覆盖 fragmentation 与 coalescing，并把每一步 exact state 写清楚。高价值边界用一个空 frame 验证 parser 必须推进即可，不为测试数量制造重复工作。EOF 是否补成最后一条 message 是 application protocol policy，不可由 TCP 或 `recv == 0` 偷偷决定。

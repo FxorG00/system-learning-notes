@@ -792,6 +792,16 @@ epoll instance 的 interest list 新增一项
 
 ---
 
+第 7 题，你实际代码已经写对了：
+
+```
+interest.data.fd = receiver_fd;
+```
+
+第三个参数决定**监视谁**，这一行决定**附带什么数据回来**。假如这一行填 `123`，仍然监视 watched fd 对应的 socket，但返回的 `data.fd` 就是 `123`。[Linux 接口说明](https://man7.org/linux/man-pages/man2/epoll_ctl.2.html)
+
+---
+
 ## 17. `epoll_wait`：等待并取得 ready event information
 
 ### 17.1 接口

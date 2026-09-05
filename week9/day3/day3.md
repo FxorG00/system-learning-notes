@@ -73,7 +73,7 @@ A/B 都找相同的 server 地址，但 server 后面使用的是不同的 conne
 
 因此两个 fd 都可能报告 `EPOLLIN`，但不表示应该对它们做同一个操作。
 
-`backlog` 是等待处理的积压量。Linux TCP 的 `listen(..., backlog)` 主要约束已建立、尚未 accept 的队列长度，**不是 server 一生最多能服务多少个 clients，也不是全部已 accept connections 的数量上限**。半连接队列和参数调优今天不展开。[Linux listen(2)](https://man7.org/linux/man-pages/man2/listen.2.html)
+`backlog` 是等待处理的积压量。Linux TCP 的 `listen(..., backlog)` 主要约束已建立、尚未 accept 的队列长度，**不是 server 一生最多能服务多少个 clients，也不是全部已 accept connections 的数量上限；只是 accept queue 的 capacity**。半连接队列和参数调优今天不展开。[Linux listen(2)](https://man7.org/linux/man-pages/man2/listen.2.html)
 
 ## 4. connected socket 与 accepted fd
 
@@ -536,11 +536,25 @@ python3 -c 'import socket; s=socket.create_connection(("127.0.0.1",9090),5); pri
 
 # Round 2：完成 V1 后，沿实际 server 复盘
 
-> 这是生成时的通用初版，不是对你尚未提交代码的评价。R1 通过后再按实际实现润色；如果某节只是重复你已经解释清楚的关系，可以快速对照，不为它另造一次实验。
+> R1 已正式通过。下面直接沿你的 `epoll_wait(-1) + data.fd dispatch + std::set<int>` 实现复盘；已经由代码和运行证明的关系只快速对照，不为它另造实验。
 
 ## 18. 把一次正常运行从头串到底
 
-先在你自己的代码里找到以下发生点，再对照解释。
+你的 V1 当前有一个 `epfd`：listener 与成功注册的 connected sockets 都由它关注。`main` 阻塞在 `epoll_wait(..., 1, -1)`；返回后读取 `returned_event.data.fd`，用 `fd == listener` 区分 accept 分支，否则进入 `receiver_work`。`connection_fds` 记录当前由 server 持有的 connected fds，用于连接结束和基础设施失败时清理。
+
+这次最重要的修正过程是：
+
+```text
+旧版：外层循环不断 accept4 + timeout=0 wait
+-> 没工作时仍持续运行，占用 CPU
+
+当前版：listener 和 connections 注册到同一个 epoll
+-> epoll_wait(-1) 可以真正等待
+-> kernel 返回哪一个角色 ready
+-> application 再 dispatch 到 accept 或 recv
+```
+
+下面把一次真实运行串到底。
 
 server 启动后，listener 已经 bind/listen，并向 epoll 注册读就绪关注。此时 event loop 可以睡在 `epoll_wait` 上，因为还没有业务工作。
 
@@ -556,11 +570,11 @@ B 后来结束发送，server 在数据耗尽后看到 recv 0，清理 B；liste
 
 ```mermaid
 flowchart TD
-    W["server 调用 epoll_wait"] --> E["kernel 返回一批就绪信息"]
+    W["server 调用 epoll_wait"] --> E["kernel 返回一项就绪信息"]
     E --> K{"当前这一项属于哪个角色？"}
     K -->|listener| A["server accept 当前待接收连接"]
-    A --> R["server 管理并注册新 connection fd"]
-    R --> B["继续处理当前批次，完成后回到 wait"]
+    A --> R["ADD 成功后，把新 fd 记入 connection_fds"]
+    R --> B["完成当前工作后回到 wait"]
     K -->|connection| C["server recv 当前可得结果"]
     C -->|bytes| D["记录实际 bytes，继续读取当前可得数据"]
     D --> C
@@ -570,7 +584,7 @@ flowchart TD
     B --> W
 ```
 
-图里的 accept 分支同样需要考虑多个 pending connections，下一节单独展开。图不表示每次 wait 只有一个 event；你应该处理本次实际返回的所有有效项。
+这张图对应你当前 `maxevents=1` 的版本。它已经能在 default LT 下正确推进多个 clients；R2 的升级是把输出改成 event array，并遍历 `[0, ready_count)`，以及让 accept 分支一次推进到 EAGAIN。它们提升一轮处理的完整性，不否定当前 A/B/C 运行证据。
 
 主语始终是：**kernel 提供通知，你的 server 调用 accept/recv 并修改自己管理的状态。**
 
@@ -629,6 +643,8 @@ epoll 不拥有你的 C++ 连接记录，也不保存三份 socket payload。图
 这就是 **accept drain**：取走当前可得的待接收连接，直到 would-block，再回到外层 event loop。
 
 default LT 下，一次只 accept 一个也可能正常工作，因为剩余 pending connection 会让 listener 继续 ready。不能说“一次不全部 accept 在 LT 下一定错误”。本周采用 drain，是为了清楚标识当前工作的边界，也为后面的 ET 对照建立一致基础。
+
+你的 R1 正是“一次 listener event 只调用一次 accept4”。刚才 A/B/C 已全部完成，说明它在当前 LT 场景下功能正确。R2 可以把这个分支改成 accept loop：成功得到一个 connection 就完成 ADD 与所有权登记，然后继续 accept；EINTR 重试，EAGAIN/EWOULDBLOCK 表示本轮 accept 工作结束，其他错误再按策略报告或退出。注意保留你刚修好的顺序：只有 ADD 成功，fd 才进入 `connection_fds`。
 
 listener 必须 non-blocking 的原因现在很具体：前三次都成功，第四次队列空了；如果这一调用进入 blocking wait，它可能把已经到手的 A/B/C 后续数据都晾在一边，直到又有 D 连接。
 
@@ -729,21 +745,22 @@ R2 应优先改你这份 V1 实际存在的问题。没有遇到的极端故障�
 
 # Round 3：用一个实验串起多连接、EOF 与继续服务
 
-## 26. 这次要新增的证据是什么
+## 26. R1 已经取得的证据
 
-Day2 的证据不用重新提交。今天最有价值的新证据是：
+2026-09-05 的 R1 复检已经使用你最新的 Ubuntu source 取得这条证据：
 
 ```text
 A 已经 accept，保持连接但不发送
--> B 被接收，发送的数据被读取
+-> B 被接收，读取 B-data（6 bytes）
 -> B 结束，server 清理 B
--> A 才发送，并成功结束
--> C 后来接入，server 仍能工作
+-> A 后来发送 A-later（7 bytes）并结束
+-> C 后来接入，读取 C-new（5 bytes）并结束
+-> client 输出 CLIENT CHECK PASS
 ```
 
-这里不是性能 benchmark，也不需要精确测微秒。A 在 B 完成前始终 idle/open，已经能暴露“整个执行流卡在 A”的错误。
+最终代码使用 `g++ -std=c++17 -Wall -Wextra -g` 编译，零 warning。server 日志同时证明 payload 被读取和逐连接 EOF/close；client 的 PASS 证明 A idle 时 B 仍能完成、关闭 B 不会杀死 server。测试结束后临时 server 已终止。
 
-client connect 成功不等于 server application 已经执行 accept，所以实验先看 server 的 A accept 记录再继续。不要只靠先创建 A、sleep 一下就宣称状态已经建立。
+这组证据已经完成，不要求你重新运行 §27 的同类脚本。继续保留 client 工具，是为了以后改 accept drain 或 event array 后快速回归；若代码未改变正常路径，可以直接阅读后面的证据边界。
 
 ## 27. 提供一个现成 client 工具，不要求你再写测试框架
 
