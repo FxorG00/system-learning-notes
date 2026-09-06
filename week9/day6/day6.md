@@ -1112,11 +1112,102 @@ ET server
 -> server 之后仍能接受一个 normal client
 ```
 
-### 37.4 复用 Day5 slow-reader evidence
+### 37.4 ET write-side transition
 
-Day5 已经证明 LT 下 partial/EAGAIN state 能恢复，不机械重跑 4 MiB。
+Day5 已经证明 LT 下 partial/EAGAIN state 能恢复，但这不能直接证明 ET write side 也能恢复。Day6 需要补一组直接证据，不过不再新写一套 server 或大量同义 cases。
 
-只有当 ET mode 的实现改动触及 send drain/interest，或者实际出现停住，才再运行现有 `slow_echo_client.py`。这时仍使用 exact payload equality，不增加一堆同义 case。
+在 **ET mode** 下复用 slow-reader 思路，同一 connection 连续完成两轮大消息：
+
+```text
+Round A：send large newline message
+-> 暂停 client recv
+-> exact recv first echo
+
+Round B：在同一 connection 再 send large newline message
+-> 再次暂停 client recv
+-> exact recv second echo
+```
+
+两轮而不是一轮，是为了直接观察：
+
+```text
+第一轮 output 从 empty 变 non-empty
+-> +EPOLLOUT
+-> send partial/EAGAIN，保留 pending
+-> future EPOLLOUT
+-> output drained
+-> -EPOLLOUT
+
+第二轮产生新 output
+-> 再次 +EPOLLOUT
+-> 再次推进到 drained
+-> 再次 -EPOLLOUT
+```
+
+可以把下面脚本保存为 `et_write_cycle_client.py`，也可以在验收时让我代跑：
+
+```python
+# 目标：在同一 connection 上制造两轮 large response，验证 ET 模式下
+# EPOLLOUT 被移除后，可以在新 output 到来时重新加入并继续推进。
+import socket
+import time
+
+
+def recv_exact(sock: socket.socket, expected_size: int) -> bytes:
+    received = bytearray()
+    while len(received) < expected_size:
+        chunk = sock.recv(min(65536, expected_size - len(received)))
+        if not chunk:
+            raise RuntimeError(
+                f"unexpected EOF: got {len(received)} of {expected_size} bytes"
+            )
+        received.extend(chunk)
+    return bytes(received)
+
+
+payloads = [
+    b"a" * (4 * 1024 * 1024) + b"\n",
+    b"b" * (4 * 1024 * 1024) + b"\n",
+]
+
+with socket.create_connection(("127.0.0.1", 9091), timeout=5.0) as sock:
+    sock.settimeout(20.0)
+
+    for round_index, payload in enumerate(payloads, start=1):
+        sock.sendall(payload)
+
+        # 暂停 application recv，让 server send buffer 更容易到达 EAGAIN。
+        time.sleep(1.0)
+
+        response = recv_exact(sock, len(payload))
+        if response != payload:
+            raise RuntimeError(f"round {round_index}: echo payload mismatch")
+
+        print(f"ROUND {round_index} PASS bytes={len(response)}")
+
+print("ET WRITE CYCLE PASS")
+```
+
+server 仍只保留状态变化日志，不打印 8 MiB payload：
+
+```text
+INTEREST fd=... +EPOLLOUT
+WRITE fd=... EAGAIN pending=...
+WRITE fd=... accepted=... remaining=0
+INTEREST fd=... -EPOLLOUT
+```
+
+通过要求：
+
+```text
+两轮 payload 都 exact PASS
+至少真实观察一次 send EAGAIN 或 partial send
+观察到第一轮 drained 后 -EPOLLOUT
+观察到第二轮新 output 后再次 +EPOLLOUT
+第二轮最终再次 -EPOLLOUT
+```
+
+若当前机器一次写完，可以沿用 Day5 的实验手段：临时调小 accepted socket 的 `SO_SNDBUF`，或延长 client 暂停读取时间。不要用伪造 counter 代替真实返回值。
 
 ## 38. 用 `strace` 回答一个问题
 
@@ -1128,11 +1219,14 @@ strace -f \
   ./epoll_echo_server et
 ```
 
-只回答：
+只回答两条：
 
 ```text
 half-close client 到来后，server 是否先 recv 到已有 bytes，
 再观察 recv==0，并在 pending output 发完后才 DEL/close？
+
+ET write cycle 中，第一次 -EPOLLOUT 之后，
+第二批 output 是否通过 MOD 重新 +EPOLLOUT，并由未来 writable event 推进？
 ```
 
 不要把整页 trace 全部复制进 note。保留 8~15 行能串起因果链的代表片段即可。
@@ -1152,6 +1246,15 @@ half-close client 能证明：
 ```text
 peer shutdown write half 后，server 没丢已形成的 output
 server 最终按当前 policy 关闭 connection
+```
+
+ET write-cycle client 与状态日志能证明：
+
+```text
+send buffer 施压后，ET write handler 能从 partial/EAGAIN 保存进度
+未来 EPOLLOUT 能继续推进 pending suffix
+output drained 后会移除 EPOLLOUT
+同一 connection 的新 output 能再次加入 EPOLLOUT 并完成第二轮 exact echo
 ```
 
 active-fd/state 静态检查能证明：
@@ -1190,12 +1293,13 @@ multi-threaded Reactor lifetime
 8. half-close 后 pending echo 能完整发出
 9. cleanup 后不再访问旧 ConnectionState
 10. normal LT、normal ET、ET half-close 三组 exact evidence 通过
+11. ET write cycle 两轮 payload exact，且观察到 EPOLLOUT remove -> re-add
 ```
 
 不要求：
 
 ```text
-重跑 Day5 全部 slow-client 实验
+重跑 Day5 全部 slow-client cases；只补一组 ET write-cycle 证据
 GoogleTest / CMake / README
 完整 fd-generation framework
 EPOLLONESHOT
@@ -1203,7 +1307,7 @@ fairness scheduler
 正式 Reactor class hierarchy
 ```
 
-## 41. 五个收口问题
+## 41. 六个收口问题
 
 可以口述，也可以直接指向 probe output、server code 和 trace，不机械抄长答案。
 
@@ -1212,6 +1316,7 @@ fairness scheduler
 3. client `shutdown(SHUT_WR)` 后，为什么 server 仍然可以把 echo 发给 client？
 4. 同一个 event 同时有 IN/OUT，IN path 关闭 connection 后，OUT path 应怎样知道必须停止？
 5. old connection 和 new connection 都曾使用整数 fd 7，为什么不能据此认定它们是同一个对象？
+6. ET 下 output drained 后为什么要移除 EPOLLOUT？后来产生新 output 时，什么操作让 kernel 重新检查 writable condition？
 
 ## 42. note 只写今天真正新增的东西
 
@@ -1220,7 +1325,7 @@ fairness scheduler
 ```text
 R1：LT/ET partial-consume 的真实输出与你的解释
 R2：half-close 从 RDHUP -> recv bytes -> recv 0 -> flush output -> cleanup
-R3：canonical server 的 mode/lifecycle 改动与三组证据
+R3：canonical server 的 mode/lifecycle 改动、half-close 与 ET write-cycle 证据
 Questions：真正卡住的概念
 ```
 
