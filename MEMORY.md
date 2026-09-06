@@ -5915,7 +5915,7 @@ Day5 仍暂不放行，因为同一种生命周期问题在 send path 残留：`
 
 已生成 `week9/day6/day6.md`，主题为 LT/ET、half-close、close/error event 与 fd/registration/ConnectionState lifecycle。Day5 已正式通过；Day6 用户尚未完成 Round1，生成阶段的 reference 验证不能替代用户学习证据。
 
-本日继续演进 canonical `epoll_echo_server.cpp`，不重写 partial-write server。Round1 独立产出 `lt_et_probe.cpp`：同一对 non-blocking local stream endpoints 在 LT/ET 下接收相同 bytes，第一次只消费 3 bytes，第二次有限 timeout wait 对照“LT 仍报告、ET 无新 transition 时 timeout”，随后 drain 到 EAGAIN，再写入新 bytes 验证 ET 会因新的 ready transition 再次报告。闸门前只给程序用途、observable contract、必要 API 小例子和命令，不提供完整 event loop 或 drain 实现。
+本日继续演进 canonical `epoll_echo_server.cpp`，不重写 partial-write server。Round1 独立产出 `lt_et_probe.cpp`：同一对 non-blocking local stream endpoints 在 LT/ET 下接收相同 bytes，第一次只消费 3 bytes；用户必须在第二次有限 timeout wait 前先分别预测 LT/ET 结果，再原样记录 observation；随后 drain 到 EAGAIN，并对新写入 bytes 的第三次 wait 再做预测与观察。LT/ET 正确结果和因果解释只在闸门后的 Round2 展开。闸门前只给程序用途、observable contract、必要 API 小例子和命令，不提供完整 event loop、drain 实现或预期输出。
 
 Round2 在实验之后串清 condition 与 transition、non-blocking + drain-to-EAGAIN、accept/recv/send 三类 drain boundary；区分 `EPOLLRDHUP`、`EPOLLHUP`、`EPOLLERR` 与 `recv==0`；half-close policy 定为先 drain input、保存 peer write-side closed、继续发送已形成 output，最后在 output empty 时 cleanup。复合 event 的控制流延续 Day5 真实修复：任何下层 cleanup 必须向 event-loop owner 传播 dead outcome，cleanup 后当前 event 不再访问旧 state。
 
@@ -5926,3 +5926,5 @@ Round3 只加固现有 server：默认 LT、ET 可切换；listener/connections 
 可复用编写经验：LT/ET 不能从定义直接跳到“为什么 ET 要 drain”，应先让用户在同一批 bytes 上故意 partial consume，建立 condition still true 与 no new transition 的可见差异，再串 handler discipline。close/error 教程不要按 event-bit 百科平铺；以 `send -> shutdown(SHUT_WR) -> IN/RDHUP -> recv bytes -> recv 0 -> flush output -> cleanup` 的完整对象/状态链作为主线。rare fd-reuse risk 只讲到当前 maxevents=1 过程式实现真正需要的程度，把 generation/deferred destruction 留给 Week10。
 
 2026-09-06 Day6 生成后技术修订：外部反馈正确指出最初 `lt_et_probe` 只直接观察 read-side ET，而 Day5 的 4 MiB slow-reader 证据来自 LT，不能证明 ET 下 write readiness 的 EAGAIN recovery 与 dynamic interest remove/re-add。教程已补 ET write-cycle 高价值实验：同一 connection 两轮 large exact echo，第一轮 drained 后移除 EPOLLOUT，第二轮新 output 再次加入，至少真实观察一次 partial/EAGAIN，并保留两轮 `+OUT/-OUT` 状态日志。可复用经验：当主题同时影响 read/write 两个方向时，不能用一边的 direct evidence 加另一边的纸面类比宣称完整观察；应补最小正交证据，但不扩成重复 test suite。
+
+2026-09-07 Day6 闸门编排修订：外部反馈正确指出初版在 Part1 术语、Round1 contract、预期输出和阅读闸门四处提前写明“LT 第二次 ready、ET timeout”，使 probe 从 discovery 退化为 answer confirmation。现已把 Part1 收为 LT/ET 名称、condition/transition 和 `EPOLLET` 作用对象的中性解释；Round1 要求运行前写下 WAIT2/WAIT3 prediction，程序只输出 raw observation，不把模式答案编码进 PASS；准确结果与 drain 原因统一放到 Round2。可复用经验：有真实认知墙的实验，闸门前不能同时给机制结论、expected output 和通过答案；必要术语仍可保留，但应只赋予读题能力。observable contract 应规定输入、动作、记录字段和错误纪律，不规定当天要发现的核心现象。

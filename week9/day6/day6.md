@@ -50,7 +50,7 @@ peer 停止发送，不等于 server 也不能继续发送
 HUP/RDHUP 到达时，kernel receive buffer 里可能仍有数据
 
 把 EPOLLET 加进 mask 很容易
-但如果没有把 accept/recv/send 推进到正确边界，server 可能永久停住
+但 handler 的推进边界是否需要改变，要用今天的实验回答
 ```
 
 Day6 就集中解决这三组状态关系。
@@ -59,7 +59,7 @@ Day6 就集中解决这三组状态关系。
 
 `LT` 是 `Level-Triggered`，中文常译为“水平触发”或“电平触发”。
 
-今天不要把 `level` 理解成音量高低。它表示某个 readiness condition 当前是否仍然成立。
+今天不要把 `level` 理解成音量高低。这个名字来自对 readiness condition 当前状态的观察。
 
 以可读为例：
 
@@ -67,8 +67,6 @@ Day6 就集中解决这三组状态关系。
 kernel receive buffer 中仍有 bytes
 -> readable condition 仍为 true
 ```
-
-在 LT 模式下，只要这个 condition 仍成立，后续 `epoll_wait` 仍可以再次报告该 fd。
 
 它不表示：
 
@@ -84,7 +82,7 @@ LT 是 Linux epoll 的默认模式；registration 中不加 `EPOLLET` 就是 LT�
 
 `ET` 是 `Edge-Triggered`，中文常译为“边沿触发”。
 
-这里的 `edge` 指状态发生变化，例如：
+这里的 `edge` 指 readiness condition 发生一次状态变化，例如：
 
 ```text
 当前没有数据可读
@@ -92,24 +90,14 @@ LT 是 Linux epoll 的默认模式；registration 中不加 `EPOLLET` 就是 LT�
 -> 变成有数据可读
 ```
 
-ET 重点通知这种 readiness transition。你收到通知后若只读取一部分，剩余 bytes 仍然可读，但不会因为“状态一直没回到 not-ready”就稳定地重复提醒你。
+先只记住：ET 改变的是 readiness notification behavior，不改变 `recv`、`send` 或 TCP byte stream 本身。partial consume 后第二次 `epoll_wait` 会怎样，留给 Round1 先预测、再实测。
 
-因此 ET 的工作纪律是：
-
-```text
-使用 non-blocking fd
-收到 event 后持续推进对应 I/O
-直到 system call 返回 EAGAIN/EWOULDBLOCK
-然后才回到 epoll_wait
-```
-
-它不表示：
+它不是：
 
 ```text
-一个 fd 一生只通知一次
-一次 event 后必须把一条业务请求处理完
 ET 自动比 LT 快
-ET 会替 application 保存没读完或没写完的 bytes
+一种新的 read/write API
+application message boundary
 ```
 
 ## 4. readiness condition 与 readiness transition
@@ -120,14 +108,7 @@ ET 会替 application 保存没读完或没写完的 bytes
 
 `transition`：转变；condition 从一种状态变到另一种状态。
 
-可以先压缩成：
-
-```text
-LT 更关注：现在是不是仍 ready
-ET 更关注：刚才是否变成 ready
-```
-
-这只是帮助入门的主模型，不是 Linux 内核所有 event 合并、排队和唤醒细节的完整实现说明。
+这两个词只是理解名称所需的最小词汇。它们怎样影响 partial read 后的下一次 wait，现在不要继续向下推答案：先把自己的预测写进 Round1。完整因果链放在闸门之后。
 
 ## 5. `EPOLLET`
 
@@ -271,7 +252,7 @@ Day6 的正确性不是“所有东西都还在 `std::map` 里”这么简单，
 
 # Part 2：教程主体
 
-# 教程开始：为什么 ET 下还剩 5 bytes，下一次 wait 却可能不提醒你
+# 教程开始：只读 3 bytes 后，第二次 wait 会发生什么
 
 # Round 1：先亲眼比较 LT 与 ET
 
@@ -319,42 +300,42 @@ LT / ET mode
 6. peer 一次写入 8 bytes：ABCDEFGH
 7. 第一次 epoll_wait 必须报告 receiver readable
 8. receiver 故意只 recv 3 bytes，本次得到 ABC
-9. 不再写入新数据，进行第二次有限超时 epoll_wait
-10. LT 下应再次观察到 readable；ET 受控实验中应观察到 timeout
-11. 把当前剩余 bytes drain 到 EAGAIN，最终得到 DEFGH
-12. peer 再写入 IJ
-13. 两种模式都应再次收到 readable event，并读到 IJ
+9. 调用第二次 wait 前，分别写下 LT/ET 结果预测和一句理由
+10. 不再写入新数据，进行第二次有限超时 epoll_wait
+11. 原样记录第二次 wait 返回 ready、timeout 还是 error，不按预期篡改输出
+12. 把当前剩余 bytes drain 到 EAGAIN，并记录实际得到的 bytes
+13. peer 再写入 IJ
+14. 第三次 wait 前再次预测，然后记录 event 与最终读取结果
 ```
 
 这里第二次 wait 必须使用有限 timeout，例如 `300 ms`，不能用 `-1` 把实验永远挂住。
 
-建议输出只保留状态证据：
+预测可以先写进 `day6_note.md`：
 
 ```text
-MODE LT
-WAIT1 ready=1 events=IN
-READ1 bytes=3 data=ABC
-WAIT2 ready=1
-DRAIN data=DEFGH end=EAGAIN
-WAIT3 ready=1
-READ3 data=IJ
-PASS
+LT WAIT2 prediction：...
+原因：...
+
+ET WAIT2 prediction：...
+原因：...
+
+new write 后 WAIT3 prediction：...
+原因：...
 ```
 
-ET 对应：
+程序输出只需要提供可核对的原始事实，不在 label 里预埋正确答案：
 
 ```text
-MODE ET
-WAIT1 ready=1 events=IN
-READ1 bytes=3 data=ABC
-WAIT2 timeout
-DRAIN data=DEFGH end=EAGAIN
-WAIT3 ready=1
-READ3 data=IJ
-PASS
+MODE <LT-or-ET>
+WAIT1 count=<actual> events=<actual mask>
+READ1 bytes=<actual> data=<actual>
+WAIT2 count=<actual>
+DRAIN data=<actual> end=<actual recv result>
+WAIT3 count=<actual> events=<actual mask>
+READ3 data=<actual>
 ```
 
-这个实验验证 Linux 当前环境下的典型 LT/ET 行为。不要把一次具体 event count 扩张成“所有 kernel、所有并发时序都必须逐次这样排队”的结论。
+Round1 的任务是取得 observation，不是根据教程里预写的 LT/ET 答案打印 `PASS`。哪些结果符合 Linux LT/ET 模型，进入 Round2 后再对照。
 
 ## 15. 你自己决定的设计
 
@@ -514,9 +495,9 @@ strace -e trace=epoll_create1,epoll_ctl,epoll_wait,sendto,recvfrom,close \
 在继续 Round2 前，至少拿到：
 
 ```text
-LT：第二次 wait 仍报告 ready
-ET：第二次 wait 在有限 timeout 后返回 0
-两种模式最终都读到 ABCDEFGH 和 IJ
+运行前保存了 LT WAIT2、ET WAIT2 与 new-write WAIT3 的预测
+LT/ET 两次运行都原样记录 WAIT1/WAIT2/WAIT3 返回值
+第一次只读到 ABC，之后记录了剩余 bytes
 drain 的终点真实是 EAGAIN/EWOULDBLOCK
 C++17 + Wall/Wextra 零 warning
 ```
@@ -528,6 +509,17 @@ C++17 + Wall/Wextra 零 warning
 # Round 2：把 LT/ET、half-close 与复合 event 串成一条线
 
 ## 19. LT/ET 差异的完整因果链
+
+现在才展开结果对照。在本机受控实验中，典型输出应为：
+
+```text
+LT：WAIT2 ready=1
+ET：WAIT2 timeout
+两种模式 drain data=DEFGH，end=EAGAIN
+peer 新写入 IJ 后，两种模式 WAIT3 ready=1
+```
+
+先对照你在 Round1 写下的预测，再看下面的原因。这个实验说明的是当前受控 Linux stream 场景，不要把具体 event count 扩张成所有 kernel 与并发时序的逐次排队保证。
 
 ```mermaid
 flowchart TD
