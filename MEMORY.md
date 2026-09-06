@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-06）：Week1~Week8 已完成；Week9 Day1、Day2、Day3、Day4、Day5 均正式通过，Day4 最终 92/100，Day5 最终 96/100。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
+最新进度快照（2026-09-06）：Week1~Week8 已完成；Week9 Day1、Day2、Day3、Day4、Day5 均正式通过，Day4 最终 92/100，Day5 最终 96/100；Week9 Day6 教程已生成，用户尚未完成 Round1。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
 
 ### Week1：已完成
 
@@ -5908,3 +5908,19 @@ Day5 仍暂不放行，因为同一种生命周期问题在 send path 残留：`
 2026-09-06 第二次短复检：用户已把写完后的 MOD 从 `ConnectionState::send_output` 移到 `sender_work`，因此 MOD failure 不再导致 send_output 在 object 被 erase 后继续 clear output/offset；最新 source C++17 + Wall/Wextra 零 warning编译。但 send fatal/zero 分支仍在 `send_output` 内 clear connection 后 return，`sender_work` 随即无再次 active-fd check 就执行 `connection_state[fd].output_empty()`，会用 map operator[] 重建 ghost state。当前仍为 93/100、未正式通过；最后修复只需在 send_output 返回后先确认 fd/state 仍存在，或让 send_output 返回 alive/dead 并在 dead 时立即结束。无需重复 slow-reader 验证。
 
 2026-09-06 最终短复检：用户让 `send_output` 返回 connection 是否已经关闭；fatal/zero send 在 cleanup 后返回 `true`，`sender_work` 收到后立即 return，不再访问 `connection_state[fd]`，因此最后一条 ghost-state 生命周期链已闭合。写完后的 MOD 仍由上层执行，MOD failure 清理后也没有后续 state access。最新 source 使用 `g++ -std=c++17 -Wall -Wextra -g` 零 warning 编译；沿用此前 normal、4 MiB slow-reader 与 concurrent-small 的完整动态证据，不重复体力测试。Week9 Day5 正式通过，最终 `96/100`。非阻塞整理项保留：accept 分支 `vis_epollout[fd]=0` 应使用 `connection`；fatal epoll-wait cleanup 可能重复 close listener；可逐渐用 `find/at` 代替 map `operator[]`，但不影响本日核心通过。
+
+---
+
+## 2026-09-06：Week9 Day6 正式生成
+
+已生成 `week9/day6/day6.md`，主题为 LT/ET、half-close、close/error event 与 fd/registration/ConnectionState lifecycle。Day5 已正式通过；Day6 用户尚未完成 Round1，生成阶段的 reference 验证不能替代用户学习证据。
+
+本日继续演进 canonical `epoll_echo_server.cpp`，不重写 partial-write server。Round1 独立产出 `lt_et_probe.cpp`：同一对 non-blocking local stream endpoints 在 LT/ET 下接收相同 bytes，第一次只消费 3 bytes，第二次有限 timeout wait 对照“LT 仍报告、ET 无新 transition 时 timeout”，随后 drain 到 EAGAIN，再写入新 bytes 验证 ET 会因新的 ready transition 再次报告。闸门前只给程序用途、observable contract、必要 API 小例子和命令，不提供完整 event loop 或 drain 实现。
+
+Round2 在实验之后串清 condition 与 transition、non-blocking + drain-to-EAGAIN、accept/recv/send 三类 drain boundary；区分 `EPOLLRDHUP`、`EPOLLHUP`、`EPOLLERR` 与 `recv==0`；half-close policy 定为先 drain input、保存 peer write-side closed、继续发送已形成 output，最后在 output empty 时 cleanup。复合 event 的控制流延续 Day5 真实修复：任何下层 cleanup 必须向 event-loop owner 传播 dead outcome，cleanup 后当前 event 不再访问旧 state。
+
+Round3 只加固现有 server：默认 LT、ET 可切换；listener/connections 的 ET registration；`EPOLLRDHUP`；peer write-side state；集中 DEL/close/erase；LT/ET normal 与 ET half-close 三组代表证据。Day5 的 4 MiB slow-reader evidence 默认复用，只有 ET 改动触及 write path 或真实停住才重跑。当前 source 已知两处小 ownership 整理被准确带入：accept 初始化 `vis_epollout` 应使用 `connection`，fatal epoll-wait cleanup 不应重复 close listener。
+
+技术审计：正文使用 Linux man-pages 的 `epoll(7)`、`epoll_ctl(2)`、`recv(2)`、`shutdown(2)` 核验；三个 Part、三个 Round、单一 Round1 阅读闸门，Markdown fences 成对。临时 reference 在 Ubuntu 10.5.0 以 `g++ -std=c++17 -Wall -Wextra -g` 零 warning编译并通过，实际输出为 LT `wait2=1`、ET `wait2=0`，两者 drain 均得 `DEFGH`，新写 `IJ` 后 `wait3=1`。reference 只验证教程 contract，不写入用户学习目录。
+
+可复用编写经验：LT/ET 不能从定义直接跳到“为什么 ET 要 drain”，应先让用户在同一批 bytes 上故意 partial consume，建立 condition still true 与 no new transition 的可见差异，再串 handler discipline。close/error 教程不要按 event-bit 百科平铺；以 `send -> shutdown(SHUT_WR) -> IN/RDHUP -> recv bytes -> recv 0 -> flush output -> cleanup` 的完整对象/状态链作为主线。rare fd-reuse risk 只讲到当前 maxevents=1 过程式实现真正需要的程度，把 generation/deferred destruction 留给 Week10。
