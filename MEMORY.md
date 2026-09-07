@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-06）：Week1~Week8 已完成；Week9 Day1、Day2、Day3、Day4、Day5 均正式通过，Day4 最终 92/100，Day5 最终 96/100；Week9 Day6 教程已生成，用户尚未完成 Round1。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
+最新进度快照（2026-09-07）：Week1~Week8 已完成；Week9 Day1、Day2、Day3、Day4、Day5、Day6 均正式通过，Day4 最终 92/100，Day5 最终 96/100，Day6 最终 `95/100`；Week9 Day7 教程已生成，用户尚未完成 Round1。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
 
 ### Week1：已完成
 
@@ -5928,3 +5928,69 @@ Round3 只加固现有 server：默认 LT、ET 可切换；listener/connections 
 2026-09-06 Day6 生成后技术修订：外部反馈正确指出最初 `lt_et_probe` 只直接观察 read-side ET，而 Day5 的 4 MiB slow-reader 证据来自 LT，不能证明 ET 下 write readiness 的 EAGAIN recovery 与 dynamic interest remove/re-add。教程已补 ET write-cycle 高价值实验：同一 connection 两轮 large exact echo，第一轮 drained 后移除 EPOLLOUT，第二轮新 output 再次加入，至少真实观察一次 partial/EAGAIN，并保留两轮 `+OUT/-OUT` 状态日志。可复用经验：当主题同时影响 read/write 两个方向时，不能用一边的 direct evidence 加另一边的纸面类比宣称完整观察；应补最小正交证据，但不扩成重复 test suite。
 
 2026-09-07 Day6 闸门编排修订：外部反馈正确指出初版在 Part1 术语、Round1 contract、预期输出和阅读闸门四处提前写明“LT 第二次 ready、ET timeout”，使 probe 从 discovery 退化为 answer confirmation。现已把 Part1 收为 LT/ET 名称、condition/transition 和 `EPOLLET` 作用对象的中性解释；Round1 要求运行前写下 WAIT2/WAIT3 prediction，程序只输出 raw observation，不把模式答案编码进 PASS；准确结果与 drain 原因统一放到 Round2。可复用经验：有真实认知墙的实验，闸门前不能同时给机制结论、expected output 和通过答案；必要术语仍可保留，但应只赋予读题能力。observable contract 应规定输入、动作、记录字段和错误纪律，不规定当天要发现的核心现象。
+
+2026-09-07 用户内容保护规则：用户会在阅读 daily 时直接补充术语解释、自己的推导、代码注释和问题答案。R1 正式通过后定向润色 R2/R3 时，必须以磁盘上的当前 daily 为唯一 edit base，禁止从生成时快照、旧 commit 或 assistant 留存文本整段重写。编辑前先执行 `git status` 与该 daily 的 `git diff`，识别并保留用户已有增补；只对 R2/R3 目标段落做窄 patch。编辑后必须复检：R1 全文保持不变；R2/R3 中不属于本轮目标的用户文字仍存在；`git diff` 只出现计划内改动。若无法区分用户文字与旧教程，默认保留并在旁边补充，不擅自删除。用户 note 永远不作为 daily 重写模板，也不得因 `git add .` 被忽略或覆盖。
+
+本次 Day6 Git 审计结论：当前 `day6.md` 与 HEAD 一致，没有未提交 daily 修改；唯一未提交文件为用户新建的 `week9/day6/day6_note.md`，本轮未触碰。Day6 三次 commit 中，`b6625ab` 只替换 R3 的旧 §37.4 并补 ET write-side evidence；`2c7f4cd` 只删除 Part1/R1 提前泄露的 LT/ET 答案，并把准确结果移至 R2 §19。现有 R2/R3 的 half-close、`SO_ERROR`、current-source 两处 cleanup、ET write-cycle 均仍存在。Git 与本机 VS Code Local History 均没有发现另一份已保存后消失的 Day6 版本；若用户指的是编辑器里未保存的文字，Git 无法恢复，需要用户提供记得的短语后再定点查找。
+
+---
+
+## 2026-09-07：Week9 Day6 Round1 首次检阅
+
+用户完成 `lt_et_probe.cpp` 与 `day6_note.md`。当前暂评 `87/100`，R1 核心机制理解正确但尚未正式通过，因此本轮不定向改写 R2/R3。
+
+真实验证：Ubuntu source 使用 `g++ -std=c++17 -Wall -Wextra -g` 编译零 warning；LT 运行得到 `WAIT1 ready -> ABC -> WAIT2 ready -> DEFGH -> EAGAIN -> WAIT3 ready`，ET 得到 `WAIT1 ready -> ABC -> WAIT2 timeout -> DEFGH -> EAGAIN -> WAIT3 ready`，非法 mode 会打印错误并结束。用户在运行前的 LT/ET WAIT2 与 new-write WAIT3 三项预测均正确，reasoning 能从 readable condition 与 controlled no-new-write transition 解释结果。
+
+正式通过还差三个窄修：第一，WAIT3 只观察 ready 后立刻 close，没有再次 `recv` 并验证最终 bytes 为 `IJ`，因此 contract 的最后一段 evidence 未闭合；第二，`epoll_ctl(ADD)` 返回值被完全忽略，registration 失败时可能直接进入无限 wait；第三，`receiver_work` 没有把 `EINTR` 作为 retry，而是落入 fatal error，与 R1 明示分类不一致。补完后只需零 warning编译并跑 LT/ET，不要求新增测试框架或 strace。
+
+非阻塞整理：`socketpair` 已带 `SOCK_NONBLOCK`，随后再次调用 `set_nonblocking(receiver_fd)` 是重复操作且返回值被忽略；`epoll_create1` 失败时漏 close 两个 socket fds；第一次无限 `epoll_wait` 使用 `assert(ready_count > 0)` 代替 syscall error/EINTR handling；若保留 learning assertion，应只用于验证已成功取得 observation 后的 data invariant。未用 headers 可后续删除，不影响本轮核心判断。
+
+笔记逐项：LT/ET/new-write 三项预测正确；`argc`/`argv`、`strcmp` 返回语义、`char* == literal` 比较地址而非字符串内容均正确；O_NONBLOCK 属于 open file description、dup 后共享，以及 listener non-blocking 不保证 accepted socket 自动 non-blocking 的说明正确。唯一措辞边界是“ET 关注是否从无数据到有数据”只适用于本次受控 no-new-write 简化模型，不能升级为 Linux ET 永远只有严格布尔 0->1 才产生通知。
+
+---
+
+## 2026-09-07：Week9 Day6 Round1 正式通过
+
+用户完成三个窄修：`epoll_ctl(ADD)` failure 现在会报告并结束；`receiver_work` 对 `EINTR` retry；WAIT3 ready 后真实读取并断言最终 bytes 为 `IJ`。Ubuntu source 使用 `g++ -std=c++17 -Wall -Wextra -g` 编译零 warning。LT 实际链为 `WAIT1 -> ABC -> WAIT2 ready -> DEFGH -> EAGAIN -> WAIT3 ready -> IJ -> EAGAIN`；ET 实际链为 `WAIT1 -> ABC -> WAIT2 timeout -> DEFGH -> EAGAIN -> WAIT3 ready -> IJ -> EAGAIN`。运行前写下的三项 prediction 全部命中，Round1 正式通过，最终 `93/100`。
+
+`day6_note.md` 四部分均正确：LT/ET/新写入预测，`argc/argv`，`strcmp` 内容比较，以及 `O_NONBLOCK` 与 open file description/accepted socket 的边界。仍需保留的限定是：本次 ET 解释只针对受控 stream 实验，不能概括成所有 Linux ET 事件都严格等于布尔值的 `0 -> 1`。
+
+R1 通过后的 R2/R3 已按真实实现定向润色：§19 使用用户自己的 LT/ET output，并补出 `socketpair -> partial consume -> WAIT2 -> drain to EAGAIN -> new write -> WAIT3` 的完整实验链；指出 `buffer[1]` 与读取次数上限只是 probe 手段，不能迁移成 server 模板；Round3 只迁移 non-blocking 与 drain-to-EAGAIN discipline；证据表改为用户真实观察。编辑只发生在 `# Round 2` 之后，`day6_note.md` 未修改。
+
+不阻塞后续的整理项：WAIT3 timeout 当前仍返回 0；第一次 wait 主要依赖 `assert`；`SOCK_NONBLOCK` 后重复调用 `set_nonblocking` 且忽略返回值；`epoll_create1` failure path 没有关闭 socketpair fds；存在未用 headers 与较碎的逐字节日志。它们不影响本日 R1 机制闭环，不要求为了通过继续做体力修改。
+
+---
+
+## 2026-09-07：Week9 Day6 整日首次验收
+
+当前暂评 `78/100`，Day6 尚未正式通过。Ubuntu 最终 `epoll_echo_server.cpp` 的 SHA-256 为 `42ea7052f91efe04555b6d87074ab8107aee53bb8848f386cdea2ce89243f197`。真实动态证据：运行中的 ET server 与当前已编译 binary 一致；normal client 输出 `CLIENT PASS`；同一 connection 的两轮 4 MiB client 均 exact PASS，并输出 `ET WRITE CYCLE PASS`；但 exact half-close probe 发送 `hello\nworld\n` 后调用 `shutdown(SHUT_WR)`，最终收到 0 bytes，退出码 2，预期应收到完整 12 bytes。server 在失败后仍能服务 normal client，因此是 connection-local protocol/lifecycle 错误，不是 listener 崩溃。
+
+根因是一条集中链：`receiver_work` 在 `recv == 0` 时立即 `clear_connection`，把刚由 newline parser 形成但尚未发送的 output 一起销毁；返回 `connection_handler` 后，RDHUP/HUP 分支仍执行 `connection_state[fd].set_peer_write_closed(true)`，`operator[]` 又为已关闭 fd 默认插入 ghost state；后续 EPOLLIN/OUT 与最终 policy 还可能继续访问该 ghost state。因而本日通过标准中的“half-close 后 pending echo 发完”和“cleanup 后不访问旧 state”均未满足。修复方向只需让 EOF 表示 `peer_write_closed`，由 owner 在 output drained 后统一 cleanup，并确保每个可能 cleanup 的 handler 返回后先停止当前 event 的后续访问；无需重写 parser、send offset 或 ET probe。
+
+编译证据：`g++ -std=c++17 -Wall -Wextra -g` 当前仍有两条 `-Wextra`，均来自 `edge_triggered ? EPOLLET : 0` 混用 enum/non-enum，位置为 registration helper 与 `ConnectionState` 初始 mask，因此零 warning 条件也尚未满足。非核心但真实的 error-path 问题：connection ADD 失败时 `register_to_epoll` 会关闭共享 `epfd`，caller 又 close connection 并继续 event loop；这不应与 half-close 主修复混在一起扩成重构，但之后应把“helper 报错”和“owner 决定关闭哪些资源”分开。
+
+笔记逐项结论：R1 prediction、`argc/argv`、`strcmp`、`O_NONBLOCK` 四部分正确；R2 的目标 1/2/3 已落地，4 只有“先读”落地但 EOF 后行为错误，5/6 没有成立，7 在正常路径成立但 half-close cleanup 后失效。`HUP/RDHUP 到达后仍应 drain` 正确，但不需要分别在 RDHUP、HUP、EPOLLIN 三个分支重复调用 receiver；应把复合 mask 合并成一次 read-like action，并传播 alive/dead outcome。用户补进 daily 的 `EPOLLHUP` 后 send、event bitmask、默认成员初始化器和 `SO_ERROR` 解释总体正确，保留不动。
+
+可复用检阅经验：用户在 note 中把 contract 项标成 `ok` 不能替代 exact oracle。half-close 的高价值 oracle 是 `shutdown(SHUT_WR)` 后仍收到完整 payload；“server 没崩”只能证明 listener survival。复合 event handler 必须检查同一次 returned mask 中第一个 action 是否已经 cleanup，尤其警惕 `map::operator[]` 在 fd 被 erase 后静默重建 state。整日复检应把失败收敛为一条因果链，不要求重复已经成立的 normal/large-write 体力测试。
+
+2026-09-07 Day6 第二次短复检：用户已把 `recv == 0` 改为只设置 `peer_write_closed`，并在后续访问前增加 `alive(fd, fds)`；两处 enum/non-enum warning 通过 `0U` 消失。最新 source SHA-256 为 `799cf8c3d2a340bd99aeaa02f47f40ea2b5fd07cb64b4d12b4d1e8bf9be73058`，C++17 + Wall/Wextra 零 warning。12-byte half-close exact PASS，失败后 normal client 仍 PASS。
+
+尚余一个同链阻塞项：RDHUP/HUP 分支在 `sender_work` 后无条件调用 `clear_connection`。当 small output 一次 send 完时测试会通过；当 output 大于当前 send-buffer capacity 时，`sender_work` 在 EAGAIN 处保留 suffix，但紧接着的 cleanup 仍将 suffix 销毁。真实 4 MiB + newline half-close probe 只收到 `2,588,672 / 4,194,305` bytes，退出码 2；随后 normal client 仍 PASS。修复只需让 cleanup 条件真正服从 `peer_write_closed && output_empty`，pending output 时保留 EPOLLOUT 等未来 writable event；无需重跑 R1、normal 或独立 ET write-cycle。当前暂评 `88/100`，未正式通过。
+
+2026-09-07 Day6 最终短复检：用户移除 RDHUP/HUP 分支中 `sender_work` 后的无条件 cleanup，统一让末尾 policy 只在 `peer_write_closed && output_empty` 时关闭；pending output 会保留 EPOLLOUT，等待未来 writable event 继续推进。最终 source SHA-256 为 `e8f355a6302a364295299126a8e2ed8963a4c0b31a7334adc04a4d0b987c1b65`，使用 `g++ -std=c++17 -Wall -Wextra -g` 编译零 warning。
+
+最终针对性证据：ET server 下 4 MiB + newline client 发送完成后 `shutdown(SHUT_WR)`，暂停读取制造 send pressure，最终收到 `4,194,305 / 4,194,305` bytes，exact match、退出码 0；随后 normal client 输出 `CLIENT PASS`，证明 large half-close drain 与 listener survival 同时成立。结合此前 R1 LT/ET probe、normal echo、两轮 4 MiB ET write-cycle，Week9 Day6 正式通过，最终 `95/100`。不再要求重复测试。非阻塞整理项仍是 registration failure 的 epfd ownership、复合 RDHUP/HUP/IN 分支可合并为一次 read-like action，以及 status MOD failure 的 owner policy；不影响本日机制通过。
+
+---
+
+## 2026-09-07：Week9 Day7 正式生成
+
+已生成 `week9/day7/day7.md`，主题为 integrated evidence、Week9 exit review 与 Week10 Reactor ownership handoff。Day6 已正式通过；Day7 用户尚未完成 Round1，教程中引用的前六天 evidence 是已验收历史，不冒充 Day7 新运行结果。
+
+Day7 不再新增 I/O mechanism，不重写 canonical server，也不要求重新运行 Day1~Day6 的 probes/clients。Part1 先解释 claim、evidence、oracle、evidence ledger、baseline、leak 与 known limitation，并列出 Day1~Day6 已经取得的真实 evidence inventory。Round1 的独立产出只有 `day7_note.md` 中两项：使用当前真实函数名画 canonical server 的 event/handler/state/cleanup flowchart；填写六行最小 evidence ledger，并自行识别 Week9 尚缺 direct evidence 的 claim。闸门前不提前点明答案。
+
+Round2 在 R1 后提供 reference flow，并只补前六天没有直接覆盖的 repeated-connect fd observation：后台启动 server 并保存 `$!` PID，记录 `/proc/<pid>/fd` baseline，复用已有 exact `echo_client.py` 顺序连接 100 次，再记录 stable after count。正文解释 `/proc` pseudo-filesystem、fd symlink、`find`/`wc -l`/shell substitution 与 observation boundary；不要求新写 client，不把一次 fd count 扩张成所有 error paths 的 leak proof。`ss` 与 `strace` 只说明各自能证明什么，Day2 已有 trace 可复用。
+
+Round3 提供压缩后的 Week9 evidence ledger、代表性命令、四项 known limitations，以及 Week9 真实职责到 Week10 `EventLoop`/`Channel`/`Acceptor`/`Connection`/`Buffer` 的映射。通过标准以 flowchart、ledger、baseline/after 数字、zero warning 与 ownership 口述为核心；明确不要求 README、interview、GoogleTest/CTest、QPS、重跑全部 probes 或提前实现 Reactor classes。
+
+可复用编写经验：milestone exit day 不应把前几天的 reliable evidence 全部重跑，也不应再造一个“大一统测试框架”。先建立 claim-to-evidence ledger，明确每条 evidence 的 oracle 与边界，再只补一个真正未覆盖的高价值 observation。整合日的 Round1 可以是 evidence audit 而非新 feature coding，但必须有可验收的独立产出和阅读闸门；Round2 再揭晓 gap、提供最小操作路径。流程图必须使用用户当前 source 中真实函数和状态，抽象课程应从已暴露的 responsibility/ownership 问题自然生长。

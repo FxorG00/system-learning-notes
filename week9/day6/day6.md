@@ -186,6 +186,89 @@ server 最终 recv == 0
 
 否则可能丢掉已经到达的数据。
 
+---
+
+### 8.1 EPOLLHUP 之后尝试 send
+
+不一定。更准确地说：
+
+> `EPOLLHUP` 不能让你推出“下一次 `send` 必定立刻失败”。
+
+网络是异步的。即使对端已经不再真正接收你的数据，`send` 仍可能先成功返回，因为它只保证：
+
+```text
+你的数据被本机 kernel 接收并放进发送缓冲区
+```
+
+它不保证：
+
+```text
+peer 的应用真的收到了数据
+```
+
+常见情况是：
+
+```text
+server 收到 HUP / RDHUP
+-> server 调用 send
+-> send 可能暂时成功
+-> 之后内核收到 RST，或下一次 send 才得到 EPIPE / ECONNRESET
+```
+
+尤其要区分 half-close：
+
+```text
+client: shutdown(SHUT_WR)
+```
+
+这表示 client 不会再向 server 写数据了，因此 server 最终 `recv == 0`，也可能看到 `EPOLLRDHUP`。
+
+但 client 的读方向仍开着，所以 server 仍然应该可以：
+
+```text
+send(server_fd, response, ...)
+```
+
+这正是 Day6 half-close policy 为什么要求：
+
+```text
+收到 RDHUP / EOF
+-> 不再期待新的 input
+-> 但先把已经形成的 output 发完
+-> output 清空后再 close
+```
+
+真正该写的逻辑不是：
+
+```text
+收到 HUP
+-> 永远不 send
+```
+
+而是：
+
+```text
+若仍有 pending output
+-> 继续按 send 的真实返回值处理
+
+send > 0
+-> 推进 offset
+
+send == -1 && errno == EAGAIN
+-> 保留 output，等待未来 EPOLLOUT
+
+send == -1 && errno == EPIPE / ECONNRESET / ENOTCONN
+-> 这条 connection 的写方向已经确定失败，清理它
+```
+
+并且要用 `MSG_NOSIGNAL`：
+
+```cpp
+::send(fd, data, length, MSG_NOSIGNAL);
+```
+
+否则已断开的 peer 上 `send` 可能触发 `SIGPIPE`，默认行为会直接终止整个 server。
+
 ## 9. `EPOLLERR`
 
 `ERR` 来自 `Error`，表示 fd 对应对象出现 error condition。
@@ -193,6 +276,104 @@ server 最终 recv == 0
 `EPOLLERR` 与 `EPOLLHUP` 会由 `epoll_wait` 报告，即使 registration mask 没有显式写入这两个 bits。因此它们不能被理解成“只有我订阅才可能出现的普通业务 event”。
 
 对 socket，可以使用 `getsockopt(..., SO_ERROR, ...)` 读取 pending socket error。Day6 的 V1 policy 可以把确认过的 socket error 当作 connection-local fatal error，记录后清理这一个 connection，不杀死 listener。
+
+---
+
+## 9.1 这几个 EPOLL 状态放一块
+
+对。`epoll_wait` 返回后，每个就绪 fd 都对应一个 `epoll_event`，其中：
+
+```cpp
+returned_events[i].events
+```
+
+就是一个 bitmask，里面可能同时带着多个 flag。
+
+```cpp
+struct epoll_event returned_events[16];
+
+const int count = ::epoll_wait(epoll_fd, returned_events, 16, timeout_ms);
+
+for (int i = 0; i < count; ++i) {
+    const std::uint32_t flags = returned_events[i].events;
+
+    if (flags & EPOLLIN) {
+        // 可读
+    }
+    if (flags & EPOLLRDHUP) {
+        // peer 关闭了 write half，或整个连接
+    }
+    if (flags & EPOLLHUP) {
+        // hang up
+    }
+    if (flags & EPOLLERR) {
+        // 有 error condition
+    }
+}
+```
+
+同一个返回 event 完全可能是：
+
+```text
+EPOLLIN | EPOLLRDHUP
+```
+
+意思是：
+
+```text
+peer 不会再发新数据了
+但此前已经发来的数据还在 receive buffer 中
+所以你现在仍然应该 recv
+```
+
+甚至也可能有：
+
+```text
+EPOLLIN | EPOLLHUP
+```
+
+所以 `HUP`、`RDHUP` 不能让你跳过读逻辑。
+
+有一个很关键的订阅区别：
+
+```text
+EPOLLRDHUP：
+通常需要你在 epoll_ctl(ADD/MOD) 的 registration mask 里显式请求。
+
+EPOLLERR / EPOLLHUP：
+即使 registration mask 没写，epoll_wait 也可能自动把它们报告出来。
+```
+
+例如：
+
+```cpp
+event.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
+::epoll_ctl(epoll_fd, EPOLL_CTL_ADD, connection_fd, &event);
+```
+
+此后 `epoll_wait` 返回的 `events[i].events` 才可能带有你关心的 `EPOLLRDHUP`。
+
+还有一层要分开：
+
+```text
+EPOLLERR 出现在 events bitmask 中
+-> 只说明“这个 socket 有错误条件”
+
+SO_ERROR
+-> 不在 epoll 的 events 字段中
+-> 要你额外 getsockopt(fd, SOL_SOCKET, SO_ERROR, ...) 才能知道具体 errno
+```
+
+所以可以记成：
+
+```text
+epoll event flags：内核通知你“应该处理哪类状态”
+recv / send / getsockopt：你真正读取具体结果
+```
+
+而且 `epoll_wait` 的返回不是一份永久事件日志；它是内核这次交给你的就绪状态集合。多个状态变化可能合并成一次返回，因此 handler 要按位检查所有相关 flag，而不是写 `else if` 只处理一个。
+
+---
 
 ## 10. fd reuse
 
@@ -247,6 +428,82 @@ ConnectionState
 ```
 
 Day6 的正确性不是“所有东西都还在 `std::map` 里”这么简单，而是这四层的创建、修改和销毁顺序必须一致。
+
+---
+
+## 13 默认成员初始化器
+
+对，效果上可以理解为：构造 `ConnectionState` 时，如果构造函数初始化列表没有专门写它，就自动初始化为 `false`。
+
+```cpp
+bool peer_write_closed = false;
+```
+
+这是 C++11 之后的“默认成员初始化器”。
+
+```cpp
+class ConnectionState {
+public:
+    explicit ConnectionState(int fd)
+        : fd(fd) {
+    }
+
+private:
+    bool peer_write_closed = false;
+    int fd;
+};
+```
+
+此时构造对象后：
+
+```cpp
+ConnectionState state(10);
+// state.peer_write_closed == false
+```
+
+它和这个构造函数中的效果一样：
+
+```cpp
+explicit ConnectionState(int fd)
+    : peer_write_closed(false), fd(fd) {
+}
+```
+
+但默认成员初始化器更好一点：每个构造函数都能自动获得这个默认值，不需要重复写。
+
+初始化优先级是：
+
+```cpp
+bool peer_write_closed = false;  // 默认值
+
+ConnectionState(int fd)
+    : peer_write_closed(true),   // 这里显式写了，就覆盖默认值
+      fd(fd) {
+}
+```
+
+此时结果是 `true`。
+
+顺便纠正一个小措辞：`bool` 不是“默认构造为 false”。如果你只写：
+
+```cpp
+bool peer_write_closed;
+```
+
+它在很多构造场景下会是未初始化值；`= false` 才明确保证它初始化为 `false`。
+
+你这段成员的实际默认状态是：
+
+```text
+input / output              -> 空 string
+message_count_              -> 0
+delimiter                   -> 类共享的 '\n'，不属于每个对象各一份
+fd                          -> 必须由构造函数初始化，否则可能是未初始化值
+offset                      -> 0
+peer_write_closed           -> false
+```
+
+所以这正适合你的连接状态：新连接默认还没有收到 peer 的 write-half close。
 
 ---
 
@@ -510,7 +767,7 @@ C++17 + Wall/Wextra 零 warning
 
 ## 19. LT/ET 差异的完整因果链
 
-现在才展开结果对照。在本机受控实验中，典型输出应为：
+你的 Round1 已于 2026-09-07 正式通过，评分 `93/100`。运行前写下的三项预测全部命中，Ubuntu 上的真实输出为：
 
 ```text
 LT：WAIT2 ready=1
@@ -519,7 +776,27 @@ ET：WAIT2 timeout
 peer 新写入 IJ 后，两种模式 WAIT3 ready=1
 ```
 
-先对照你在 Round1 写下的预测，再看下面的原因。这个实验说明的是当前受控 Linux stream 场景，不要把具体 event count 扩张成所有 kernel 与并发时序的逐次排队保证。
+这组结果来自你自己的 `lt_et_probe.cpp`，不是教程预先准备的 reference output。先对照 Round1 的预测，再看下面的原因。这个实验说明的是当前受控 Linux stream 场景，不要把具体 event count 扩张成所有 kernel 与并发时序的逐次排队保证。
+
+### 19.1 你的代码怎样制造这次对照
+
+你实际写出的实验链是：
+
+```text
+socketpair 创建两个 non-blocking stream endpoints
+-> sender_fd 发送 ABCDEFGH
+-> WAIT1 得到 EPOLLIN
+-> receiver_work(receiver_fd, 3, str) 只取出 ABC
+-> 立刻执行 WAIT2
+-> receiver_work(receiver_fd, 100, str) 读取 DEFGH，直到 EAGAIN
+-> sender_fd 再发送 IJ
+-> WAIT3 再次得到 EPOLLIN
+-> receiver_work 读取 IJ，直到 EAGAIN
+```
+
+这里的 `buffer[1]` 和 `limit == 3` 是为了制造 partial consume 的实验工具，不是正式 server 的读取模板。`limit == 100` 在这次实验中能够走到 `EAGAIN`，是因为你明确知道余下只有 5 bytes 或 2 bytes；正式 server 不能依赖任意次数上限，而应持续读取，直到 `EAGAIN`、EOF 或 fatal error。
+
+`socketpair` 已经带有 `SOCK_NONBLOCK`，所以随后再次对 `receiver_fd` 调用 `set_nonblocking` 是冗余的；若为了练习保留这个调用，就要检查它的返回值。当前 `WAIT3 timeout` 分支仍以 0 退出、第一次 wait 仍主要依赖 `assert`，作为学习 probe 不阻塞通过；以后若把它变成自动回归测试，这两类异常 observation 应转成 non-zero exit。
 
 ```mermaid
 flowchart TD
@@ -751,6 +1028,8 @@ close：释放当前 fd reference
 
 ## 26. `SO_ERROR`：读取 pending socket error
 
+### api
+
 接口：
 
 ```cpp
@@ -790,6 +1069,81 @@ socket_error != 0：它本身是一个 errno value
 ```
 
 注意：`getsockopt` 自己失败时看当前 `errno`；调用成功但 `socket_error != 0` 时，真正的 socket error 在 `socket_error` 中。
+
+---
+
+### 是个啥
+
+它是用来问内核：
+
+> “这个 socket 之前异步发生过错误吗？如果有，具体是什么错误？”
+
+`pending socket error` 可以理解为 socket 自己带着的一条“尚未被用户程序取走的错误记录”。
+
+网络操作常常不是调用结束时就能知道最终结果。例如 non-blocking `connect`：
+
+```text
+connect(fd, ...)
+-> 立刻返回 -1，errno = EINPROGRESS
+-> 内核后台继续发 SYN、等待对方回应
+-> 之后可能连接成功，也可能收到拒绝/重置
+-> 内核把结果暂存在这个 socket 的 error state 中
+-> epoll 通知该 fd 有 EPOLLERR / EPOLLOUT 等事件
+-> 程序用 getsockopt(..., SO_ERROR, ...) 问最终结果
+```
+
+完整链是：
+
+```text
+你的程序：connect(non-blocking socket)
+    |
+    v
+内核：连接尚未完成，返回 EINPROGRESS
+    |
+    v
+内核后台处理 TCP 握手
+    |
+    +--> 成功：socket_error = 0
+    |
+    +--> 失败：记录例如 ECONNREFUSED
+    |
+    v
+epoll：通知 fd 有状态变化/错误
+    |
+    v
+你的程序：getsockopt(fd, SOL_SOCKET, SO_ERROR, ...)
+    |
+    +--> 0：没有待领取的 socket error
+    |
+    +--> ECONNREFUSED 等：取到真实失败原因
+```
+
+为什么不能只看 `EPOLLERR`？
+
+因为 `EPOLLERR` 只是在说：
+
+```text
+“这个 fd 有错误情况，你来处理一下。”
+```
+
+它没有直接告诉你究竟是 `ECONNRESET`、`ECONNREFUSED` 还是别的错误。`SO_ERROR` 才是读取具体原因的地方。
+
+这里有两个“错误位置”，很容易混：
+
+```text
+getsockopt 自己返回 -1
+-> 这次 getsockopt 调用失败
+-> 看 errno
+
+getsockopt 返回 0，但 socket_error != 0
+-> getsockopt 调用成功
+-> socket 之前发生的真实网络错误在 socket_error 里
+-> 用 strerror(socket_error) 看原因
+```
+
+而 `pending` 的意思就是“内核已经知道，但你的代码还没取走”。读取 `SO_ERROR` 会把这条待处理错误清掉，所以它更像读取 socket 的错误信箱，不是普通的永久状态查询。
+
+Day6 里它最重要的用途是：处理 `EPOLLERR`，尤其是判断 non-blocking `connect` 最终到底成功还是失败。
 
 ## 27. Day6 的 half-close policy
 
@@ -949,6 +1303,8 @@ fd number 为什么不是永久 connection identity
 # Round 3：加固 canonical `epoll_echo_server.cpp`
 
 ## 33. 这轮具体改什么
+
+Round1 probe 的职责到这里已经结束。不要把 `buffer[1]`、固定读取次数或 `ABCDEFGH/IJ` payload 搬进 server；需要迁移的是 `non-blocking + 持续处理到 EAGAIN` 这条 handler discipline。
 
 继续修改：
 
@@ -1228,9 +1584,9 @@ ET write cycle 中，第一次 -EPOLLOUT 之后，
 `lt_et_probe` 能证明：
 
 ```text
-在受控 local stream 实验中，partial consume 后 LT/ET 的第二次 wait 表现不同
-ET 在新一批数据到达后会再次报告
-drain 确实推进到了 EAGAIN
+同一批 ABCDEFGH 到达后只取 ABC：LT 的 WAIT2 ready，ET 的 WAIT2 timeout
+两种模式随后都读取 DEFGH，并把 recv 推进到 EAGAIN
+peer 新写入 IJ 后，两种模式的 WAIT3 都 ready，并再次读取 IJ 到 EAGAIN
 ```
 
 half-close client 能证明：
