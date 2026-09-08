@@ -279,30 +279,322 @@ Week10 后续每个 Connection 都会依赖这些关系；如果 Buffer 自己�
 
 ## 10. 先明确今天要造什么
 
+### 10.1 先不用网络术语：Buffer 到底有什么功能
+
+你可以先把 Buffer 想成一个**可以从右边追加、从左边取走数据的 byte 容器**。
+
+例如刚开始：
+
+```text
+Buffer 中没有数据：[]
+```
+
+调用：
+
+```cpp
+buffer.append("hello", 5);
+```
+
+现在 Buffer 保存：
+
+```text
+[h e l l o]
+```
+
+此时：
+
+```text
+readable_bytes() == 5
+empty() == false
+peek() 指向第一个还没取走的 byte，也就是 'h'
+```
+
+接着调用：
+
+```cpp
+buffer.retrieve(2);
+```
+
+意思是：前两个 bytes `he` 已经被使用者处理完，不再属于有效数据。Buffer 现在对外呈现：
+
+```text
+[l l o]
+```
+
+再调用：
+
+```cpp
+buffer.append(" world", 6);
+```
+
+新数据追加在仍然有效的数据后面：
+
+```text
+[l l o   w o r l d]
+```
+
+所以这个类最核心的功能只有一句话：
+
+> 保存一串尚未处理完的 bytes，允许调用者在尾部追加新 bytes，并在处理成功后从头部消费若干 bytes。
+
+它很像 queue，但接口一次面对的是一段连续 bytes，而不是一次只操作一个 element。
+
+### 10.2 `prefix` 到底是什么
+
+`prefix`：前缀，也就是一串数据最前面的一段。
+
+假设当前 readable bytes 是：
+
+```text
+ABCDE
+```
+
+那么：
+
+```text
+长度为 2 的 prefix：AB
+去掉这个 prefix 后留下的 suffix：CDE
+```
+
+因此：
+
+```cpp
+buffer.retrieve(2);
+```
+
+表达的是：
+
+```text
+调用者已经处理完最前面的 AB
+-> Buffer 把 AB 标记为已消费
+-> 仍然 readable 的数据是 CDE
+```
+
+这里说“移除 prefix”，描述的是 Buffer 对外的逻辑状态；不要求实现每次都立刻把底层 memory 中的 `AB` 擦掉或搬走。
+
+### 10.3 今天这个 component 的完整任务说明
+
 今天构建一个普通 C++ component：
 
 ```text
 名称：Buffer
-输入：caller 提供的一段 pointer + length bytes
-内部职责：拥有这些 bytes，并记录哪些 bytes 仍然 readable
-输出：只读查看 readable prefix，或把 readable prefix 取成 std::string
+功能：暂存尚未处理完的一串 bytes
+输入：caller 提供的一段 pointer + length，Buffer 把这些 bytes 复制到自己内部
+内部职责：拥有已经 append 的 bytes，并记录其中哪些尚未被 retrieve
+输出方式一：临时查看当前所有 readable bytes，不复制、不转移 ownership
+输出方式二：把最前面的若干 readable bytes 复制成独立 std::string，并同时消费它们
 正常结束：Buffer object 析构，RAII storage 自动释放
 ```
 
-使用者将来可以这样思考：
+今天只实现和测试这个 byte container，不实现 `recv`、`send`、parser 或 epoll。
+
+### 10.4 每个接口分别干什么
+
+#### Constructor
+
+```cpp
+Buffer buffer(8);
+```
+
+创建一个 empty Buffer。`8` 只是初始 storage 大小，不表示里面已经有 8 个 readable bytes：
+
+```text
+buffer.readable_bytes() == 0
+buffer.empty() == true
+```
+
+#### `append(data, length)`
+
+```cpp
+buffer.append("hello", 5);
+```
+
+把 pointer `data` 指向的前 `length` 个 bytes 复制进 Buffer，并放在现有 readable bytes 后面。
+
+```text
+调用前：[]
+调用后：[hello]
+```
+
+#### `readable_bytes()`
+
+```cpp
+const std::size_t count = buffer.readable_bytes();
+```
+
+告诉你当前有多少 bytes 还没有被消费。它只查询状态，不取走数据。
+
+#### `empty()`
+
+```cpp
+if (buffer.empty()) {
+    // 当前没有 readable bytes
+}
+```
+
+它是 `readable_bytes() == 0` 的直接表达。
+
+#### `peek()`
+
+```cpp
+const char* begin = buffer.peek();
+```
+
+返回第一个 readable byte 的地址。它让调用者查看 Buffer 内部数据，但：
+
+```text
+不复制 bytes
+不消费 bytes
+不把 ownership 交给 caller
+```
+
+`peek()` 只给起点，不单独携带长度，所以必须和 `readable_bytes()` 一起使用：
+
+```cpp
+const std::string copy(buffer.peek(), buffer.readable_bytes());
+```
+
+当 Buffer empty 时，不要解引用 `peek()`。
+
+#### `retrieve(length)`
+
+```cpp
+buffer.retrieve(2);
+```
+
+表示最前面的 `2` 个 readable bytes 已经处理完成，让它们不再 readable。它不返回内容。
+
+```text
+调用前：[hello]
+调用后：[llo]
+```
+
+#### `retrieve_as_string(length)`
+
+```cpp
+const std::string result = buffer.retrieve_as_string(2);
+```
+
+它一次完成两件事：
+
+```text
+1. 把最前面的 2 个 readable bytes 复制到 result
+2. 从 Buffer 中消费这 2 个 bytes
+```
+
+例如：
+
+```text
+调用前 Buffer：[hello]
+result          ：he
+调用后 Buffer  ：[llo]
+```
+
+`result` 是独立 owning string；之后即使 Buffer 析构，`result` 仍然存在。
+
+#### `retrieve_all_as_string()`
+
+```cpp
+const std::string result = buffer.retrieve_all_as_string();
+```
+
+把当前全部 readable bytes 复制出来，并让 Buffer 变 empty：
+
+```text
+调用前 Buffer：[hello]
+result          ：hello
+调用后 Buffer  ：[]
+```
+
+### 10.5 一个完整的接口使用过程
+
+下面只展示 public interface 怎样配合，不展示 Buffer 内部怎样实现：
+
+```cpp
+Buffer buffer(8);
+
+buffer.append("hello", 5);
+// readable content: hello
+
+buffer.retrieve(2);
+// readable content: llo
+
+buffer.append("!", 1);
+// readable content: llo!
+
+const std::string first = buffer.retrieve_as_string(3);
+// first == "llo"
+// readable content: !
+
+const std::string rest = buffer.retrieve_all_as_string();
+// rest == "!"
+// buffer.empty() == true
+```
+
+### 10.6 它以后怎样帮助 Reactor
+
+现在再回到网络场景。
+
+#### 作为 input Buffer
 
 ```text
 recv 得到 n bytes
--> input_buffer.append(temp, n)
-
-parser 已经处理 consumed bytes
--> input_buffer.retrieve(consumed)
-
-send 成功写出 n bytes
--> output_buffer.retrieve(n)
+-> append：先把这 n bytes 保存下来
+-> parser 通过 peek + readable_bytes 查看当前全部未处理数据
+-> parser 确认最前面 consumed bytes 已经组成完整 message
+-> retrieve(consumed)：只消费已经解析成功的 prefix
+-> 不完整 suffix 留在 Buffer，等待下次 recv 继续 append
 ```
 
-注意，这只是说明 component 的用途，不是今天要接 socket。
+具体例子：
+
+```text
+第一次 recv 得到 "hel"
+Buffer：[hel]
+parser 发现 message 不完整，retrieve 0
+
+第二次 recv 得到 "lo\n"
+Buffer：[hello\n]
+parser 处理完整 message 后 retrieve 6
+Buffer：[]
+```
+
+#### 作为 output Buffer
+
+```text
+程序生成 response
+-> append：把 response 放进 output Buffer
+-> send(peek(), readable_bytes())：尝试发送当前 pending bytes
+-> send 成功返回 n：retrieve(n)，消费已经发送成功的 prefix
+-> send 返回 EAGAIN：retrieve 0，全部未发送 bytes 留到下次 EPOLLOUT
+```
+
+具体例子：
+
+```text
+output Buffer：[ABCDEFG]
+send 只成功发送 3 bytes
+-> retrieve(3)
+output Buffer 留下：[DEFG]
+
+下一次 socket writable 时继续：
+send(peek(), readable_bytes())
+-> 发送的起点自然是 D，长度是 4
+```
+
+Buffer 因此替 Connection 保存了“这次没处理完的 bytes”。Connection 不需要再让 `output string` 与另一个裸 `offset` 共同表达 pending range。
+
+今天只需要先完成这个普通容器：
+
+```text
+append 到尾部
+查看当前内容
+从头部消费
+取出部分或全部内容
+始终保持剩余 bytes exact
+```
+
+理解这一点后，再进入 Round1 的文件和 public contract。
 
 ---
 
