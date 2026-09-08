@@ -84,6 +84,7 @@ slow reader does not block fast client
 ```text
 source inspection：从控制流和状态字段检查设计
 program oracle：client 自动比较 expected/actual，并用 exit code 表示结果
+program oracle 就是：程序里用来自动判断“结果对不对”的规则。
 system observation：strace、ss、/proc 等工具观察 kernel-facing behavior
 ```
 
@@ -277,6 +278,13 @@ finished/fatal cleanup
 
 在 note 中填写下面六行，不增加更多 checklist：
 
+含义是：
+
+- `Claim`：你想证明的结论。
+- `Evidence artifact`：哪一个具体程序、client、trace 或命令提供证据。不能写“我测试过”。
+- `它实际观察了什么`：真实发生了什么、输出了什么。
+- `还不能推出什么`：这份证据的边界，防止结论说过头。
+
 | Claim | Evidence artifact | 它实际观察了什么 | 还不能推出什么 |
 |---|---|---|---|
 | idle client 不阻塞 active client |  |  |  |
@@ -301,6 +309,8 @@ zero warning
 ```
 
 写下你认为仍缺 direct evidence 的一项，并说明为什么前六天的其他测试不能自动替代它。
+
+
 
 ## 9. Round1 只做一次 build sanity check
 
@@ -372,7 +382,49 @@ send -> EAGAIN：output suffix/offset 还活着，回 epoll_wait
 recv -> 0 且 output 非空：peer_write_closed，但写方向仍要推进
 ```
 
+### 11.1 根据你的 R1 流程图补三条边
+
+你的手绘图和 Mermaid 已经把 `main`、listener path、connection path 与 `receiver_work` 主干串起来。下面只修三处会改变程序语义的省略，不要求重画全部图片。
+
+第一，进入 event loop 前还有两步：
+
+```text
+init listener
+-> epoll_create1 创建 epoll instance
+-> register_to_epoll 注册 listener interest
+-> event loop / epoll_wait
+```
+
+第二，`recv > 0` 后不是无条件加入 `EPOLLOUT`：
+
+```text
+append_char(byte)
+-> 只有遇到 newline、形成完整 output 时返回 true
+-> 此时才 update_epoll_status(..., EPOLLOUT, ADD_FLAG)
+```
+
+如果只有 incomplete suffix 留在 input 中，当前还没有 response，因此不需要监听 writable。
+
+第三，combined event 的 cleanup 分支要明确真假出口：
+
+```text
+EPOLLERR
+-> getsockopt(SO_ERROR)
+-> clear_connection
+-> return，不再处理同一 mask 的其他 bits
+
+peer_write_closed && output.empty()
+-> clear_connection
+
+peer_write_closed && output 仍有 pending
+-> 不 close，保留 EPOLLOUT 等未来 writable event
+```
+
+你最终的 C++ source 已经按第三条正确工作；这里修的是流程图表达，不是让你再次修改 server。
+
 ## 12. 一条 evidence 为什么只能支撑有限 claim
+
+你不需要重新记住 Day1~Day4 每份 probe 的实现细节。它们已经完成并验收，可以作为 archived evidence；今天只需要理解“某条 claim 为什么要由某种 observation 支撑”。下面的 ledger 是现成索引，不要求你再凭记忆抄写一份。
 
 以 Day5 slow-reader 为例：
 
@@ -472,6 +524,53 @@ $!  ：最近一个后台 process 的 PID
 
 把 PID 保存在 `server_pid`，比重新猜测进程名更可靠。
 
+---
+
+这条命令的意思是：以 `ET` 模式在后台启动 server，并把它的输出写进日志文件。
+
+```bash
+./epoll_echo_server et > /tmp/week9_server.log 2>&1 &
+```
+
+拆开看：
+
+```text
+./epoll_echo_server et
+```
+
+运行当前目录下的 server，命令行参数是 `et`，选择 edge-triggered 模式。
+
+```text
+> /tmp/week9_server.log
+```
+
+把原本要打印到终端的标准输出 `stdout` 重定向到 `/tmp/week9_server.log`。
+
+```text
+2>&1
+```
+
+把标准错误 `stderr` 也重定向到和标准输出相同的位置，也就是同一份 log。这里：
+
+```text
+1 = stdout
+2 = stderr
+```
+
+```text
+&
+```
+
+让整个 server 在后台运行。这样终端立刻返回，你可以继续执行 `echo_client.py`、查看 `/proc/<pid>/fd` 等命令。
+
+运行后通常紧接着写：
+
+```bash
+server_pid=$!
+```
+
+`$!` 就是刚刚这个后台 server 的 PID。
+
 ### 15.2 记录 baseline
 
 ```bash
@@ -485,13 +584,56 @@ echo "baseline fd count=$baseline"
 
 ```text
 find PATH       ：从 PATH 枚举目录项
--maxdepth 1     ：只看这一层，不递归进入其他目录
+-maxdepth 1     ：把搜索范围明确限制在 `/proc/<pid>/fd` 这一层。这里的 fd entries 是 symbolic links；`find` 默认不会跟随它们进入目标路径，因此该参数主要用于收紧并说明本次统计边界
 -type l         ：只选择 symbolic link；/proc/<pid>/fd 的 fd entries 是 symlinks
 wc -l           ：统计输出行数
 $(command)      ：执行 command，并把 stdout 结果赋给 shell variable
 ```
 
 不要预设 baseline 必须等于某个固定数字。重定向 log、terminal 和运行环境都会影响它。
+
+---
+
+#### -maxdepth 1
+
+对 `/proc/<pid>/fd` 这个特定目录来说，`-maxdepth 1` 实际上几乎没有额外效果。
+
+```bash
+find "/proc/$server_pid/fd" -maxdepth 1 -type l
+```
+
+目录层级是：
+
+```text
+/proc/1234/fd          depth 0，是目录本身
+/proc/1234/fd/0        depth 1，是一个符号链接
+/proc/1234/fd/1        depth 1，是一个符号链接
+/proc/1234/fd/3        depth 1，是一个符号链接
+```
+
+默认的 `find` 不会跟随这些符号链接进入它们指向的地方，所以即使不写 `-maxdepth 1`，它也不会顺着：
+
+```text
+/proc/1234/fd/0 -> /dev/pts/...
+/proc/1234/fd/3 -> socket:[...]
+```
+
+继续搜下去。
+
+因此这里的 `-maxdepth 1` 主要是：
+
+```text
+表达意图：我只关心 fd 目录这一层的条目
+防御性限制：以后目录结构或命令选项变化时，也不意外向下遍历
+```
+
+但当前命令确实可以简化成：
+
+```bash
+find "/proc/$server_pid/fd" -type l | wc -l
+```
+
+结果通常一样。这里真正决定“只统计 fd entry”的关键是 `-type l`；`-maxdepth 1` 更多是写得更明确，不是这次统计必须依赖的条件。
 
 ### 15.3 顺序完成 100 次已有 client
 
@@ -546,6 +688,44 @@ wait "$server_pid" 2>/dev/null
 `kill` 默认发送 `SIGTERM`。`wait` 让当前 shell 回收这个 background child 的退出状态。
 
 当前 server 还没有 graceful shutdown mechanism，所以这个 `SIGTERM` 主要用于结束学习实验；它不是生产级 shutdown evidence。
+
+---
+
+这两行是实验结束后，停止后台 server，并把它从当前 shell 的后台任务列表里收干净。
+
+```bash
+kill "$server_pid"
+```
+
+向这个 PID 发送默认信号 `SIGTERM`，请求 server 退出。
+
+```bash
+wait "$server_pid"
+```
+
+等待这个后台 server 真正退出，并让当前 shell 回收它的退出状态。否则 shell 会留下一个“已经结束、但还没被 wait 回收”的后台任务记录。
+
+```bash
+2>/dev/null
+```
+
+只重定向 `wait` 自己可能打印的标准错误。
+
+例如 server 已经自行退出了，或者 PID 已不再是当前 shell 管理的后台 child，`wait` 可能报错：
+
+```text
+wait: pid ... is not a child of this shell
+```
+
+这条报错对“结束实验”没有额外价值，所以把它丢到 `/dev/null`。`/dev/null` 可以理解为 Linux 的黑洞设备：写进去的数据直接被丢弃。
+
+注意它不是把 server 的错误日志丢掉。server 的 stdout/stderr 早已在启动时写进：
+
+```text
+/tmp/week9_server.log
+```
+
+这里丢掉的只是 `wait` 命令本身可能产生的提示。
 
 ## 16. `ss` 与 `strace` 怎样放进 ledger
 
@@ -614,7 +794,7 @@ epoll_wait
 
 ## 18. Week9 最终 evidence ledger
 
-不要重新复制所有 terminal output。最终 ledger 可以压缩成下面这样，并把 Day7 的两个 fd count 填进去：
+这张表作为 Week9 的 evidence archive 直接保留在教程里。你不需要重写前九行，只把 Day7 的两个 fd count 填进最后缺数字的那一行：
 
 | Week9 claim | Evidence | Result | Evidence boundary |
 |---|---|---|---|
@@ -719,9 +899,9 @@ flowchart LR
 ```text
 1. final epoll_echo_server.cpp 使用 C++17 + Wall/Wextra 零 warning
 2. 用当前真实函数名画出 event -> handler -> state -> cleanup 流程图
-3. 六行最小 evidence ledger 能区分 claim、evidence 与 boundary
+3. 能根据 R2 指出流程图中三条需要补准的语义边，不要求重画全部图片
 4. repeated-connect observation 记录 baseline 与 after 两个 fd count
-5. 能说明前六天哪些 evidence 可以复用，不重复跑同义测试
+5. 旧 evidence ledger 直接复用，不要求回忆并誊写 Day1~Day4
 6. 能从当前 ownership/control-flow 问题自然说明 Week10 为什么需要 Reactor objects
 ```
 
@@ -754,11 +934,9 @@ flowchart LR
 
 ## Actual server flowchart
 
-## Minimal evidence ledger
-
-## Missing direct evidence
-
 # R2
+
+## Three corrected edges
 
 ## Repeated-connect fd observation
 
@@ -772,7 +950,7 @@ after 100 clients =
 ## Known limitations carried into Week10
 ```
 
-流程图和 ledger 已经是今天的回答，不要求再复制五个收口问题。
+你的四张手绘图和四张 Mermaid 已经是 R1 的主要回答。旧 evidence ledger 由教程保存，不要求补抄；流程图修正、两个 fd count 和 Week10 handoff 就是剩余内容，也不要求再复制五个收口问题。
 
 ## 25. Week9 的最终一句话
 

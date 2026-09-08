@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-07）：Week1~Week8 已完成；Week9 Day1、Day2、Day3、Day4、Day5、Day6 均正式通过，Day4 最终 92/100，Day5 最终 96/100，Day6 最终 `95/100`；Week9 Day7 教程已生成，用户尚未完成 Round1。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
+最新进度快照（2026-09-08）：Week1~Week9 已完成；Week9 Day4 最终 `92/100`，Day5 最终 `96/100`，Day6 最终 `95/100`，Day7 最终 `94/100`。Week9 的 non-blocking/epoll 主线已经以 canonical echo server、真实流程图和 claim-to-evidence archive 收口；Week10 周规划与 Day1 教程已生成，当前进入 Day1 `Buffer` Round1，尚未验收。AI Theory T1 已通过，T2 尚未开始；Week10 出口前应推进到 T3，提前生成教材不计为已学习。
 
 ### Week1：已完成
 
@@ -5994,3 +5994,57 @@ Round2 在 R1 后提供 reference flow，并只补前六天没有直接覆盖的
 Round3 提供压缩后的 Week9 evidence ledger、代表性命令、四项 known limitations，以及 Week9 真实职责到 Week10 `EventLoop`/`Channel`/`Acceptor`/`Connection`/`Buffer` 的映射。通过标准以 flowchart、ledger、baseline/after 数字、zero warning 与 ownership 口述为核心；明确不要求 README、interview、GoogleTest/CTest、QPS、重跑全部 probes 或提前实现 Reactor classes。
 
 可复用编写经验：milestone exit day 不应把前几天的 reliable evidence 全部重跑，也不应再造一个“大一统测试框架”。先建立 claim-to-evidence ledger，明确每条 evidence 的 oracle 与边界，再只补一个真正未覆盖的高价值 observation。整合日的 Round1 可以是 evidence audit 而非新 feature coding，但必须有可验收的独立产出和阅读闸门；Round2 再揭晓 gap、提供最小操作路径。流程图必须使用用户当前 source 中真实函数和状态，抽象课程应从已暴露的 responsibility/ownership 问题自然生长。
+
+---
+
+## 2026-09-08：Week9 Day7 Round1 正式通过
+
+用户在 `day7_note.md` 中提供四张手绘图和四张 Mermaid，分别覆盖 `main/event loop`、`listener_handler`、`connection_handler` 与 `receiver_work`。主干理解正确：epoll_wait 后按 listener/connection role dispatch；listener 用 accept4 循环到 EAGAIN；receiver 按 bytes/EOF/EAGAIN/EINTR/fatal 分类；connection handler 按 combined event bits 推进 read/write/half-close/cleanup。R1 正式通过，评分 `90/100`；没有修改 Ubuntu source，也没有重复运行已通过的网络测试。
+
+需要在 R2 补准的三处不是新 coding task：第一，main flow 在 event loop 前遗漏 `epoll_create1 -> register listener`；第二，receiver flow 画成每次 `append_char` 后都加 EPOLLOUT，实际只有 newline 形成完整 output、`append_char` 返回 true 时才加；第三，connection flow 需明确 EPOLLERR 是 `getsockopt -> clear -> return`，以及 `peer_write_closed && output non-empty` 必须保留 EPOLLOUT而不能流向 cleanup。最终 C++ source 对第三条已经实现正确，修的是图的表达边界。
+
+用户没有填写 Round1 的六行 evidence ledger，理由成立：Part1 §5 已经把前六天 inventory 基本填好，而且用户当前只稳定记得最终 `epoll_echo_server`，重抄旧 probes 会变成记忆/搬运工作，不增加系统理解。本次不扣学习分。`day7.md` 的 R2/R3 已按当前磁盘版本窄 patch：旧 evidence table 改为教程保存的 archive，只需填写 Day7 baseline/after 数字；R2 新增针对用户流程图的三条边；最终通过标准和 note 模板不再要求重写 Day1~Day4 ledger。R1 hash 在修改前后保持 `3821431920783BB0193597BB777F69A4BDE77788EC00065BB615DF5BE55DD750`，用户加入的 oracle/表头解释和 note/assets 均未覆盖。
+
+可复用编写经验：不要在 Part1 已提供完整 evidence inventory 后，又把同一张表设为 Round1 必做产出；这会把 discovery/audit 变成誊写。对已经忘记但曾可靠验收的旧 demo，milestone exit 可以把 MEMORY/evidence ledger 当 archive 使用，不要求重新记住实现细节。Round1 应聚焦当前 canonical component 的真实流程；旧证据只用于支撑 claim，唯一未覆盖的高价值 observation 再放到后续 Round。
+
+---
+
+## 2026-09-08：Week9 Day7 与 Week9 正式通过
+
+Day7 最终评分 `94/100`，Week9 正式完成。`day7_note.md` 的四组手绘图与 Mermaid 已覆盖真实主干：`main -> epoll_wait -> role dispatch`、listener 的 `accept4` drain loop、connection combined-event dispatch，以及 receiver 对 bytes/EOF/EINTR/EAGAIN/fatal 的分类。R1 后修正的三项已进入当前图：event loop 前创建并注册 epoll、只有完整 newline response 才增加 `EPOLLOUT`、`EPOLLERR` 经 `getsockopt -> clear -> return`。仍有两处轻量表达省略：`peer_write_closed && output non-empty` 应显式回到 event loop 并保留写 interest；形成 output 并更新 `EPOLLOUT` 后 receiver 仍继续 drain `recv`。它们不改变用户已经掌握和实现正确的核心机制，不要求为此重画。
+
+Day7 新 evidence 已复核：当前 Ubuntu 源码以 `g++ -std=c++17 -Wall -Wextra -g` 编译成功且无 warning；运行中的 ET server 连续 100 次 `echo_client.py` 均成功，`/proc/<pid>/fd` 从 baseline `5` 回到 after `5`，支持“本次正常连接/断开路径未观察到 fd 持续增长”。证据边界是运行中 binary 比当前 source 早约 7 分钟构建，因此动态结果严格对应当时启动的 binary；Day7 未修改 server，且最终 source 已在 Day6 完整验收，所以这不阻塞 Week9 通过。
+
+逐段检阅结论：用户新增的 `program oracle`、ledger 列名、shell redirection、`kill/wait` 解释总体正确；`find -maxdepth 1` 原先写成“否则会进入 fd/N 下继续递归”不准确，因为 `find` 默认不跟随这些 symlink，已窄修为“明确限制本次统计层级”。Day7 不要求再誊写前六天 ledger、重跑所有 probe、写 README/interview 或补新测试。Week10 应直接从已暴露的 ownership 与 responsibility 出发提炼 `EventLoop`、`Channel`、`Acceptor`、`Connection` 和 `Buffer`，不回头重复 Week9 体力工作。
+
+可复用检阅经验：对 milestone day，最终验收应逐项区分 source evidence、program oracle 与 system observation，并主动写出 evidence boundary；数字相同必须同时确认 workload 成功完成，不能只比较前后计数。流程图的省略只在改变 lifetime、interest 或 error-control-flow 语义时扣分，普通实现细节压缩不要求重画。用户自己补充命令解释时也要核对工具默认行为，例如 `find` 默认是否跟随 symbolic link，避免把“用于收紧范围的参数”误写成“阻止一个默认就不会发生的行为”。
+
+---
+
+## 2026-09-08：Week10 周规划正式生成
+
+已生成 `week10/week10.md`，Week10 定位为系统主线 Milestone B：不重复 Week9 epoll 机制，也不把函数机械搬进 class，而是从已经暴露的 ownership、registration、callback 与 cleanup 问题生长出 single-thread Reactor V1。最终产出是 `Buffer`、`Channel`、`EventLoop`、`Acceptor`、`Connection`、等价的 server owner 与 Reactor Echo Server；Week9 canonical server 保留为 behavior baseline，Week10 使用新的结构化 canonical codebase 持续演进，不按 Day 复制项目。
+
+七天依赖固定为：Day1 `Buffer` readable/pending bytes；Day2 `Channel` interest/ready/callback 与 lambda capture；Day3 `EventLoop` epoll ownership 和 add/update/remove；Day4 `Acceptor` 与 accepted-fd ownership transfer；Day5 `Connection` 接回 Week9 echo behavior；Day6 专门处理 callback 中 remove/close、self-destruction、stale event 与 fd reuse；Day7 用代表性 clients、lifetime evidence、owner/event-flow 图收口，并把 lambda lifetime、virtual/object layout、composition、template instantiation、atomic/CAS/acquire-release/happens-before、cache line/false sharing 做一次与真实代码关联的第一层定向补缺。
+
+停止边界：不做 multi-threaded Reactor、one-loop-per-thread、eventfd cross-thread wakeup、TimerQueue 正式接入、ThreadPool integration、io_uring、lock-free、HTTP/TLS 或完整网络库源码。Week10 优先 ASan/UBSan 和 deterministic lifetime probe；single-thread event loop 不把 TSan 当默认打卡。Day7 不强制 README/interview，因为当前 Reactor 是 Mini Redis 底座组件，不冒充独立产品项目。
+
+周规划继续保护主线 daily 规则：每份 daily 首次生成仍完整包含三个 Part 和 R1/R2/R3；R1 先讲清文件用途、外部行为、最小 contract 和运行入口，但不得预先决定 registry container、pointer/shared/weak ownership 或 deferred-cleanup algorithm。R1 通过后，依据用户真实 code/note/design 定向润色 R2/R3，并以磁盘当前 daily 为 edit base，保留用户增补。已有 Week9 clients/evidence 直接复用，不制造重复测试体力活；Day6 的 lifetime scenario 是当天核心，不能把全部设计思考降级为 dirty work。
+
+AI 伴随线与主线时间锚点同步：T1 已通过，T2/T3 教程虽已生成但尚未学习；Week10 期间维持每天 30~60 分钟，出口前至少完成 T3。T2/T3 不嵌入 Week10 daily，也不把 AI Theory 的编排规则带入系统主线。MIT 6.S081 本周不新增 lecture 压力；CSAPP 只按需选读 I/O multiplexing/event-driven server 相关部分；CS144 完整 TCP implementation 继续后置。
+
+可复用周规划经验：抽象周不能按 class 名平均分七天，而要按 dependency 和风险排列：先稳定 bytes state，再建立 event descriptor，再让 event loop 管 registration，然后迁移 accept/connection behavior，最后单独处理 callback lifetime。最危险的 ownership 问题不能散成每一天的重复警告，应集中成一个需要 deterministic evidence 的核心 Day；周出口比较重构前后的 behavior 与可解释性，而不是统计 class 数量或代码行数。
+
+---
+
+## 2026-09-08：Week10 Day1 教程正式生成
+
+已生成 `week10/day1/day1.md`，主题为 Reactor input/output bytes 的独立 `Buffer` responsibility。教程直接对照 Week9 最终 `ConnectionState` 中的 `input`、`output` 与 `offset`，只抽取 byte storage/consume 状态，不接 socket、epoll、delimiter parser 或 Connection。Day1 不是回退到 Week1 raw owning pointer 练习；明确使用 RAII storage，不重做 `new[]/delete[]` 与 Rule of Five。
+
+Round1 固定产出 `include/reactor/buffer.hpp`、`src/buffer.cpp`、`tests/buffer_test.cpp`。闸门前给出程序用途、binary-safe pointer+length contract、`readable_bytes/empty/peek/append/retrieve/retrieve_as_string/retrieve_all_as_string` public interface、五组 observable scenarios 与首条 g++ 命令；没有给内部 container、read/write indices、compact/grow 顺序或 implementation algorithm。允许 V1 先以外部正确为主；R1 通过后再按真实 representation 判断是否需要从每次 prefix erase 升级为 logical consume。
+
+Round2 才解释 half-open readable range、常见 read/write-index representation、compact-vs-grow 决策、vector size/capacity 与 reserve/resize 边界、overlap 时 `memmove`、reallocation 后 pointer invalidation、Buffer-vs-parser responsibility，以及为什么 Day1 不提前增加 direct recv-to-internal-storage API。Round3 只保留 focused byte-range tests、normal/ASan/UBSan、最小 CMake target 与 Day1 出口，不加入 benchmark、TSan、socket 或重复 test framework。
+
+技术核验：私有 reference implementation 未写入学习目录；在 Windows MinGW C++17 与 Ubuntu 20.04 g++ 10.5 下均以 `-Wall -Wextra -g` 零 warning 编译并输出 `BUFFER TEST PASS`、exit 0，Ubuntu ASan/UBSan build 同样 PASS。教程公式全部使用 Typora-compatible `$...$`/`$$...$$`；独立 `std::string(pointer,count)` 与 `std::memmove` examples 已包含在 reference compile coverage。交付前修正三项：`char` 只在当前 Linux/x86-64 明确为 8-bit byte，标准层写为 `sizeof(char)==1`/`CHAR_BIT`；Day1 V1 明确不支持 aliasing self-append；CMake snippet 补齐 `cmake_minimum_required/project` 与 test target compile options。
+
+可复用教程经验：从过程式代码抽 component 时，一天只抽一个已经真实存在的 responsibility，并保留旧实现作为 behavior baseline。R1 可以固定 public contract，但不应同时给 representation 与 algorithm；允许 first implementation 行为正确但复杂度一般，R2 再根据用户真实选择讨论数据移动和失效边界。pointer+length component 必须明确 binary bytes、view lifetime 和 input aliasing contract，否则“没有完整实现代码”仍不等于 contract 完整。
