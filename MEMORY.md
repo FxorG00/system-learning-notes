@@ -6062,3 +6062,5 @@ Round2 才解释 half-open readable range、常见 read/write-index representati
 R1 后已按当前磁盘版本定向润色 Day1 R2/R3，R1 区域 SHA-256 保持为 `6C063E2A9A94795D00C7C2E32903A04FF1B1F2D5E9864A7A20749E352B11490E`。后半段现在明确把 `offset` 映射为 read index、把 `data_.size()` 映射为 write position，重点只处理长期不 empty 时 consumed prefix 无法复用、vector reallocation 后 peek pointer 失效，以及消费状态逻辑重复。现有五个 GTest 不要求重写；Round2 只需为真正的 prefix reuse path 补一条 exact-content case，并补 empty/zero-length 小缺口。
 
 可复用检阅经验：测试名称不能作为状态已建立的证据，必须逐行确认 setup 确实制造了名称声称的场景；异常后的 strong-state check 应同时锁住 content 与 count。note 中的设计策略也必须与 source control flow 对照，不能因为外部结果正确就忽略“记录说 reset、代码没 reset”这类偏差。对于 R1 已经正确但性能策略尚简单的 component，应按 R1 contract 正式放行，再把 representation 的真实长期成本带入 R2，而不是用闸门后才讲的 compact/grow 要求倒扣第一次实现。
+
+用户确认本次 Day1 的定向润色方式符合预期，后续把它作为 R1 通过后的标准动作：不能只在 Round2 开头追加一段“你的实现是怎样的”便结束个性化，而要逐节检查 R2/R3 与真实 R1 的关系。对每个相关小节分别回答：用户已经怎样实现、这一选择为什么成立、该节通用模型怎样映射到真实成员和控制流、哪些问题已经被用户解决、哪些新边界才值得继续学习、现有 tests 已经提供什么证据。与真实 R1 无关的通用段落应压缩或标成对照；已经完成的工作不再次布置；后续命令、target 名称、测试数量和 sanitizer 参数也要改成用户当前工程能够直接运行的版本。润色必须“顺着用户的设计继续讲”，而不是把用户代码硬改成预设 reference architecture，也不是在原教程旁边并排粘贴一份 code review。
