@@ -1388,34 +1388,78 @@ peek pointer 由谁拥有、什么时候视为失效
 
 # Round 3：只补能证明 range invariant 的证据
 
-## 29. Round3 不需要重新写一套 Buffer
+## 29. 根据你的 R1，Round2 / Round3 明确要完成什么
 
-继续维护 R1 的三个文件。根据 R2 对真实 representation 做必要升级：
-
-```text
-如果 R1 每次 retrieve 都移动全部 suffix
--> 改为 logical consume，必要时再 compact/grow
-
-如果 R1 已经有 read/write positions
--> 不为迎合教程改名或重写，只核对 invariant
-
-如果 R1 采用另一种正确 representation
--> 用复杂度、contiguous peek 与 pointer lifetime 解释它是否适合后续 Connection
-```
-
-R2/R3 的目标是打磨你的 V1，不是把代码替换成我预先想好的版本。
-
-你的 R1 baseline 已经确认：
+你的 R1 已经确定使用：
 
 ```text
-vector<char> + offset 外部行为正确
-完全消费时 reset 已落地
-5 个 GTest 全部通过
-normal build 零 warning
-ASan/UBSan 本次执行无报告
+std::vector<char> data_
+std::size_t offset
+
+[0, offset)             ：已经消费的 prefix
+[offset, data_.size())  ：仍然 readable 的 bytes
+data_.size()            ：当前 logical write position
 ```
 
-因此 Round3 不重写这五个 tests。只在实现 consumed-prefix reuse 后，补一条能真实经过该路径的 exact-content test。
+这套 representation 保留，不增加重复的 `write_index`，也不重写成另一种 Buffer。接下来只完成下面三项升级。
+
+### 29.1 升级 `append()`：在需要时复用 consumed prefix
+
+你当前始终向 `data_` 尾部 `push_back`。只要 Buffer 长期留着少量 suffix、没有彻底 empty，`[0, offset)` 就一直占着 vector 的 size。
+
+把 `append()` 的决策改成：
+
+```text
+本次尾部还能直接容纳 incoming bytes
+-> 直接追加
+
+本次尾部不够，并且 offset > 0
+-> 一次性移除/压缩 [0, offset) 的 consumed prefix
+-> offset 重置为 0
+-> 再追加 incoming bytes
+
+压缩后仍超过当前 capacity
+-> 继续让 std::vector 自己完成 reallocation/grow
+```
+
+你可以增加一个 private helper，例如 `compact()`；名字由你决定。这里的要求是：不要自己管理 raw allocation，也不要向只有 capacity、尚不存在 element 的位置直接写入。
+
+### 29.2 升级消费路径：只保留一个状态推进实现
+
+你当前的 `retrieve()` 已经负责：
+
+```text
+检查越界
+推进 offset
+完全消费时 reset
+```
+
+但 `retrieve_as_string()` 又写了一遍“推进 offset + 判断 reset”。把它调整为：
+
+```text
+先根据当前 readable range 构造 owning std::string result
+-> 再调用 retrieve(length) 推进 Buffer 状态
+-> 返回 result
+```
+
+这样以后 reset policy 只需要维护一处。`length == 0` 时仍须满足原 contract，不要解引用 empty Buffer 的 `peek()`。
+
+### 29.3 增加两条针对本次升级的证据
+
+现有五个 GTest 保留，不重写。再增加：
+
+```text
+Test 1：empty Buffer 执行 append(..., 0) 和 retrieve(0) 后仍然 empty
+
+Test 2：先 append 一段数据
+        -> retrieve 较长 prefix，留下短 suffix
+        -> 再 append 一段更长的数据
+        -> 最终 readable bytes 必须 exact 等于“旧 suffix + 新数据”
+```
+
+Test 2 用来保护 compact 前后的 byte content 和顺序。是否真正走入 compact branch，还要同时查看你的 source decision；不要为了测试给 public API 增加 `capacity()` 或 `compact_count()`。
+
+完成以上三项后，再按第 30 节运行 normal build 与 ASan/UBSan。除此之外，Round3 不要求改 public contract、不接 socket，也不增加另一套 Buffer tests。
 
 ---
 

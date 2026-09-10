@@ -6064,3 +6064,5 @@ R1 后已按当前磁盘版本定向润色 Day1 R2/R3，R1 区域 SHA-256 保持
 可复用检阅经验：测试名称不能作为状态已建立的证据，必须逐行确认 setup 确实制造了名称声称的场景；异常后的 strong-state check 应同时锁住 content 与 count。note 中的设计策略也必须与 source control flow 对照，不能因为外部结果正确就忽略“记录说 reset、代码没 reset”这类偏差。对于 R1 已经正确但性能策略尚简单的 component，应按 R1 contract 正式放行，再把 representation 的真实长期成本带入 R2，而不是用闸门后才讲的 compact/grow 要求倒扣第一次实现。
 
 用户确认本次 Day1 的定向润色方式符合预期，后续把它作为 R1 通过后的标准动作：不能只在 Round2 开头追加一段“你的实现是怎样的”便结束个性化，而要逐节检查 R2/R3 与真实 R1 的关系。对每个相关小节分别回答：用户已经怎样实现、这一选择为什么成立、该节通用模型怎样映射到真实成员和控制流、哪些问题已经被用户解决、哪些新边界才值得继续学习、现有 tests 已经提供什么证据。与真实 R1 无关的通用段落应压缩或标成对照；已经完成的工作不再次布置；后续命令、target 名称、测试数量和 sanitizer 参数也要改成用户当前工程能够直接运行的版本。润色必须“顺着用户的设计继续讲”，而不是把用户代码硬改成预设 reference architecture，也不是在原教程旁边并排粘贴一份 code review。
+
+用户随后指出，R1 已经正式通过后，Round3 不能继续保留“如果你用了 A/B/C representation”这种生成时的通用分支，让用户自己判断该做哪一个。定向润色必须把后续动作写成针对当前 R1 的确定任务：明确保留哪些现有成员和设计、具体修改哪个函数或状态路径、为何需要这次升级、增加哪一条最小 evidence、运行哪组已有命令，以及哪些内容明确不用重做。通用 alternatives 可以留在机制对比章节，但 action/出口章节必须给出单一路径；不能一边声称已经依据 R1 个性化，一边仍把关键决策以多个 `if` 退还给用户。Week10 Day1 §29 已据此改为保留 `vector<char> + offset`，明确升级 append 的 consumed-prefix reuse、让 `retrieve_as_string` 复用唯一消费路径，并只补 zero-length 与 compact 后 exact-content 两条证据。
