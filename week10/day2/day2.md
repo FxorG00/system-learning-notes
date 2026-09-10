@@ -125,13 +125,13 @@ fd 9 有数据吗？
 
 ```mermaid
 flowchart TD
-    A[多个 socket 的状态发生变化] --> B[Linux kernel 记录 readiness]
-    B --> C[epoll_wait 返回 ready events]
-    C --> D[EventLoop 遍历本轮 events]
-    D --> E[找到每个 fd 对应的 Channel]
-    E --> F[Channel dispatch callbacks]
-    F --> G[Acceptor / Connection 执行 accept、recv 或 send]
-    G --> H[业务状态改变，必要时更新 interest]
+    A["多个 socket 的状态发生变化"] --> B["Linux kernel 记录 readiness"]
+    B --> C["epoll_wait 返回 ready events"]
+    C --> D["EventLoop 遍历本轮 events"]
+    D --> E["找到每个 fd 对应的 Channel"]
+    E --> F["Channel dispatch callbacks"]
+    F --> G["Acceptor 或 Connection 处理 IO"]
+    G --> H["业务状态改变并更新 interest"]
     H --> C
 ```
 
@@ -392,12 +392,12 @@ combined event 的下一个 callback 还能否继续调用？
 
 ```mermaid
 flowchart TD
-    A[Connection state 改变] --> B[Channel 保存新的 interest mask]
-    B --> C[EventLoop 用 epoll_ctl 同步给 kernel]
-    C --> D[epoll_wait 返回 ready mask]
-    D --> E[EventLoop 把 ready mask 写入 Channel]
-    E --> F[Channel handle_event dispatch]
-    F --> G[Connection read/write callback]
+    A["Connection state 改变"] --> B["Channel 保存新的 interest mask"]
+    B --> C["EventLoop 用 epoll_ctl 同步给 kernel"]
+    C --> D["epoll_wait 返回 ready mask"]
+    D --> E["EventLoop 把 ready mask 写入 Channel"]
+    E --> F["Channel handle_event dispatch"]
+    F --> G["Connection read and write callbacks"]
     G --> A
 ```
 
@@ -895,22 +895,22 @@ Day2 不让基础 event descriptor 擅自决定全局错误策略。
 
 ```mermaid
 flowchart LR
-    T[Test owns counters] --> C[Channel]
-    C -->|non-owning fd integer| F[fd resource owned elsewhere]
-    C -->|stores| CB[callbacks referring to counters]
+    T["test owns counters"] --> C["Channel stores callbacks"]
+    C --> F["fd resource owned elsewhere"]
+    C --> CB["callbacks refer to counters"]
 ```
 
 未来：
 
 ```mermaid
 flowchart LR
-    S[TcpServer owns] --> CO[Connection]
-    CO --> FD[connected fd]
-    CO --> CH[Channel]
-    CO --> BI[input Buffer]
-    CO --> BO[output Buffer]
-    CH -->|callbacks return to| CO
-    EL[EventLoop] -->|non-owning registration relation| CH
+    S["TcpServer owns"] --> CO["Connection"]
+    CO --> FD["connected fd"]
+    CO --> CH["Channel"]
+    CO --> BI["input Buffer"]
+    CO --> BO["output Buffer"]
+    CH --> CO
+    EL["EventLoop"] --> CH
 ```
 
 这里最需要记住：
