@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-08）：Week1~Week9 已完成；Week9 Day4 最终 `92/100`，Day5 最终 `96/100`，Day6 最终 `95/100`，Day7 最终 `94/100`。Week9 的 non-blocking/epoll 主线已经以 canonical echo server、真实流程图和 claim-to-evidence archive 收口；Week10 周规划与 Day1 教程已生成，当前进入 Day1 `Buffer` Round1，尚未验收。AI Theory T1 已通过，T2 尚未开始；Week10 出口前应推进到 T3，提前生成教材不计为已学习。
+最新进度快照（2026-09-10）：Week1~Week9 已完成；Week9 Day4 最终 `92/100`，Day5 最终 `96/100`，Day6 最终 `95/100`，Day7 最终 `94/100`。Week9 的 non-blocking/epoll 主线已经以 canonical echo server、真实流程图和 claim-to-evidence archive 收口；Week10 Day1 `Buffer` Round1 已正式通过，当前进入按真实 `vector<char> + offset` representation 打磨 compact/reuse 与 focused evidence 的 Round2。AI Theory T1 已通过，T2 尚未开始；Week10 出口前应推进到 T3，提前生成教材不计为已学习。
 
 ### Week1：已完成
 
@@ -6050,3 +6050,15 @@ Round2 才解释 half-open readable range、常见 read/write-index representati
 可复用教程经验：从过程式代码抽 component 时，一天只抽一个已经真实存在的 responsibility，并保留旧实现作为 behavior baseline。R1 可以固定 public contract，但不应同时给 representation 与 algorithm；允许 first implementation 行为正确但复杂度一般，R2 再根据用户真实选择讨论数据移动和失效边界。pointer+length component 必须明确 binary bytes、view lifetime 和 input aliasing contract，否则“没有完整实现代码”仍不等于 contract 完整。
 
 2026-09-08 根据用户阅读反馈补充：练习的任务说明不能只列“名称、输入、内部职责、输出”这类 component metadata，因为它们不一定能让学习者形成可执行的功能模型。首次交付一个抽象容器或组件时，应先用一句白话说明它替 caller 解决什么问题，再给一条最小状态轨迹，例如 `[] -> append("hello") -> [hello] -> retrieve(2) -> [llo]`；首次出现 `prefix/suffix/readable/pending` 等词时，用同一份具体数据解释。随后逐个说明 public interface 的用途、是否复制、是否消费、返回对象是否 owning，以及必须与哪个长度或状态接口配合。网络或 Reactor 场景应放在容器自身行为讲清之后，用来解释未来用途，不能代替“今天究竟要写什么”。这种补充只建立外部行为模型，不应泄露 R1 的 representation、indices、compact/grow 顺序或完整实现控制流。
+
+---
+
+## 2026-09-10：Week10 Day1 Round1 正式通过
+
+用户在 Ubuntu `/home/xgf/code/system-learning/cpp/week10` 完成 `Buffer` V1：`std::vector<char> data_` 保存连续 storage，`offset` 标记第一个 readable byte，`data_.size()` 充当 logical write position；`append` 逐 byte `push_back`，`retrieve` 只推进 offset，完全消费时 `reset()`，两个 string retrieve 接口返回 owning copy。binary `\0`、越界前状态保持和 partial consume 后继续 append 均满足 public contract。
+
+首次复检发现三处窄缺口：`RetrieveThenAppend` 名称虽正确但当时没有真正调用 retrieve；越界测试只核对 bytes、没有核对 readable count；note 声称完全消费会 reset，但 `retrieve()` 当时没有执行 reset。用户随后全部修正。最终 Ubuntu CMake clean build 在 `-std=c++17 -Wall -Wextra -g` 语义下零 warning，CTest `5/5` 通过；独立 ASan/UBSan build 同样 `5/5` 通过且无报告。Round1 最终评分 `94/100`，正式进入 Round2；不以尚未实现 consumed-prefix compaction 倒扣 R1。
+
+R1 后已按当前磁盘版本定向润色 Day1 R2/R3，R1 区域 SHA-256 保持为 `6C063E2A9A94795D00C7C2E32903A04FF1B1F2D5E9864A7A20749E352B11490E`。后半段现在明确把 `offset` 映射为 read index、把 `data_.size()` 映射为 write position，重点只处理长期不 empty 时 consumed prefix 无法复用、vector reallocation 后 peek pointer 失效，以及消费状态逻辑重复。现有五个 GTest 不要求重写；Round2 只需为真正的 prefix reuse path 补一条 exact-content case，并补 empty/zero-length 小缺口。
+
+可复用检阅经验：测试名称不能作为状态已建立的证据，必须逐行确认 setup 确实制造了名称声称的场景；异常后的 strong-state check 应同时锁住 content 与 count。note 中的设计策略也必须与 source control flow 对照，不能因为外部结果正确就忽略“记录说 reset、代码没 reset”这类偏差。对于 R1 已经正确但性能策略尚简单的 component，应按 R1 contract 正式放行，再把 representation 的真实长期成本带入 R2，而不是用闸门后才讲的 compact/grow 要求倒扣第一次实现。

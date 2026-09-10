@@ -390,20 +390,7 @@ buffer.retrieve(2);
 
 ### 10.4 每个接口分别干什么
 
-#### Constructor
-
-```cpp
-Buffer buffer(8);
-```
-
-创建一个 empty Buffer。`8` 只是初始 storage 大小，不表示里面已经有 8 个 readable bytes：
-
-```text
-buffer.readable_bytes() == 0
-buffer.empty() == true
-```
-
-#### `append(data, length)`
+####  `append(data, length)`
 
 ```cpp
 buffer.append("hello", 5);
@@ -905,7 +892,37 @@ R1 正式通过后，我会根据你实际选择的 representation、复杂度�
 
 # Round 2：R1 之后再看 representation、compact 与 grow
 
-> 以下是完整的通用初版教程，不是对你尚未出现的代码预判。R1 验收后会按真实实现压缩、确认或改写相关部分。
+> 你的 Round1 已正式通过。下面不再讨论一个假想实现，而是以你当前的 `std::vector<char> + offset + reset()` 为基线继续打磨。
+
+## 17.1 先把你的真实 representation 画出来
+
+你当前没有单独保存 `write_index`；`data_.size()` 自然承担了它的职责：
+
+```text
+0                    offset                 data_.size()
+| consumed prefix     | readable bytes       |
+```
+
+因此当前不变量是：
+
+$$
+0 \le \text{offset} \le \text{data\_.size()}
+$$
+
+$$
+\text{readable\_bytes}=\text{data\_.size()}-\text{offset}
+$$
+
+这套表示已经正确解决了 Round1 的关键问题：
+
+```text
+retrieve(n) 只推进 offset，不搬动剩余 suffix
+peek() 返回 data_.data() + offset
+append() 用 push_back 把新 bytes 接在 readable suffix 后面
+完全消费后 reset()，让 data_ 和 offset 一起回到 empty state
+```
+
+所以 Round2 不要求你推翻代码。今天真正需要补的是：当 Buffer 长期保留少量 suffix、一直没有彻底 empty 时，怎样让前面越来越大的 consumed prefix 得到复用。
 
 ## 18. 为什么 `erase(0, n)` 能正确，却未必适合 Reactor Buffer
 
@@ -942,6 +959,8 @@ Reactor 中的 parser 和 send 经常是“推进一部分，剩余部分留到�
 ```
 
 这不是为了炫耀复杂数据结构，而是让一次 partial consume 接近常量时间。
+
+你的 R1 已经没有这个问题：`retrieve()` 只执行 offset arithmetic，并在完全消费时 `reset()`，没有每次移动 suffix。这一节现在只作为“为什么你选择 offset 是对的”的对照，不需要再写一个 erase 版本。
 
 ---
 
@@ -992,6 +1011,16 @@ $$
 
 这里的 `reclaimable` 表示前面已经被消费的区域将来可以复用，不表示里面的旧 bit pattern 已经被清零。
 
+映射回你的代码：
+
+```text
+read_index  <=> offset
+write_index <=> data_.size()
+storage allocation <=> data_ 当前 capacity
+```
+
+因此你实际上已经拥有同一套 logical range，只是没有额外保存一个始终等于 `data_.size()` 的成员。不要为了和图上的名字完全一样，再机械增加一个重复状态。
+
 ---
 
 ## 20. 操作怎样改变 ranges
@@ -1012,6 +1041,8 @@ $$
 旧 readable bytes + 新 bytes
 ```
 
+你的 `append()` 当前逐 byte `push_back`。它的外部语义正确，并且 vector 会自动处理 capacity 不足时的 allocation。后面可以考虑一次 range insert，但那只是表达和效率优化，不改变今天的 ownership 模型。
+
 ### 20.2 retrieve
 
 ```text
@@ -1027,6 +1058,8 @@ read_index == write_index
 
 通常可以把两个 index 一起重置到 `0`，让整个 storage 重新可用。
 
+你的修订版已经在 `retrieve()` 中完成这个 reset，因此 note 与代码现在一致。`retrieve_as_string()` 当前又重复写了一次“推进 offset + 判断 reset”；Round2 可以考虑在成功构造 result 后复用 `retrieve(length)`，让消费状态只有一个实现位置。
+
 ### 20.3 peek
 
 ```text
@@ -1038,6 +1071,17 @@ storage 起点 + read_index
 ---
 
 ## 21. append 空间不够时的两个问题
+
+你当前的 `append()` 始终 `push_back`：
+
+```text
+capacity 够 -> vector 在 allocation 尾部继续构造 element
+capacity 不够 -> vector 自动 reallocate 到更大的 allocation
+```
+
+它保证了 correctness，但不会主动复用 `[0, offset)`。例如每轮都留下一个不完整 suffix，Buffer 长期不变 empty 时，`data_.size()` 会继续增长，即使前面已有很多 consumed bytes。
+
+Round2 的改进目标不是手写 allocator，而是在下一次 append 前做一次 policy decision：当前尾部不合适时，究竟复用 consumed prefix，还是让 vector grow。先理解下面两个 case，再按你的 representation 选择最小实现。
 
 当尾部空间小于本次 append length 时，不能立刻断言“一定要扩容”。先分别问：
 
@@ -1080,6 +1124,8 @@ flowchart TD
 ```
 
 这张图描述 responsibility，不规定必须按哪一个 growth factor 扩容。
+
+由于你的 vector `size()` 当前只覆盖“历史上仍留在 vector 中的 elements”，它和下图固定大小 storage 的 `storage_size` 不是完全同一个量。实现 compact 时，应先决定 compact 后 vector 中哪些 elements 继续存在，再追加 incoming range；不要直接向只有 capacity、没有相应 size 的位置写入。
 
 ---
 
@@ -1218,6 +1264,8 @@ allocation failure 没有让 indices 指向不存在的 range
 
 如果底层使用 `std::vector<char>`，让 storage object 管理 allocation，就不需要自己实现 raw-memory Rule of Five。
 
+你的 grow 已由 `push_back` 交给 vector 完成，因此当前不需要另写 growth factor。Round2 更值得处理的是 consumed prefix 的复用，以及 reallocation 后旧 `peek()` pointer 失效；不要为了“实现 grow”重复实现 vector 已经提供的工作。
+
 ---
 
 ## 25. `peek()` 返回的是 view，不是 ownership
@@ -1327,6 +1375,13 @@ peek pointer 由谁拥有、什么时候视为失效
 为什么 Buffer 不认识 newline
 ```
 
+对你当前版本，再额外回答两句即可：
+
+```text
+为什么 data_.size() 可以充当 write position，而不需要第二个成员
+如果 Buffer 很久不彻底 empty，当前 consumed prefix 会发生什么
+```
+
 ---
 
 # Part 3：收尾、验证与验收
@@ -1350,27 +1405,39 @@ peek pointer 由谁拥有、什么时候视为失效
 
 R2/R3 的目标是打磨你的 V1，不是把代码替换成我预先想好的版本。
 
+你的 R1 baseline 已经确认：
+
+```text
+vector<char> + offset 外部行为正确
+完全消费时 reset 已落地
+5 个 GTest 全部通过
+normal build 零 warning
+ASan/UBSan 本次执行无报告
+```
+
+因此 Round3 不重写这五个 tests。只在实现 consumed-prefix reuse 后，补一条能真实经过该路径的 exact-content test。
+
 ---
 
 ## 30. 最小 final evidence
 
 ### 30.1 Normal build
 
-```bash
-g++ -std=c++17 -Wall -Wextra -g \
-    -Iinclude \
-    src/buffer.cpp \
-    tests/buffer_test.cpp \
-    -o buffer_test
+你当前 tests 使用 GoogleTest，继续走已经存在的 CMake target：
 
-./buffer_test
+```bash
+cmake -S . -B build
+cmake --build build --clean-first
+cd build
+ctest --output-on-failure
+cd ..
 ```
 
 要求：
 
 ```text
 zero warning
-BUFFER TEST PASS
+5/5 tests passed
 exit 0
 ```
 
@@ -1380,11 +1447,14 @@ exit 0
 g++ -std=c++17 -Wall -Wextra -g \
     -fsanitize=address,undefined \
     -fno-omit-frame-pointer \
-    -Iinclude \
+    -Iinclude/reactor \
     src/buffer.cpp \
     tests/buffer_test.cpp \
+    -lgtest_main -lgtest -pthread \
     -o buffer_test_asan
 
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+UBSAN_OPTIONS=halt_on_error=1 \
 ./buffer_test_asan
 ```
 
@@ -1415,18 +1485,16 @@ Day1 没有多个 threads，因此不运行 TSan。
 
 ## 31. 建议保留的 focused tests
 
-最终 tests 不需要很多，保留下面六类即可：
+你当前五个 tests 已经覆盖 partial retrieve、retrieve 后 append、两种 string retrieve、binary bytes 和越界状态保持。不要把它们重新抄一遍。
+
+Round2 改动后只补两个小缺口：
 
 ```text
-1. empty / zero-length operations
-2. append + exact readable content
-3. partial retrieve + append
-4. retrieve_as_string / retrieve_all state transition
-5. binary '\0' bytes
-6. out_of_range leaves state unchanged
+1. empty Buffer 的 zero-length append/retrieve 保持 empty
+2. 制造较大的 consumed prefix，再 append 足够多 bytes，最终 readable content exact
 ```
 
-如果实现采用 read/write indices，再加一组能够经过：
+第二条的动作仍然是：
 
 ```text
 append
@@ -1449,7 +1517,14 @@ reactor_buffer library
 -> CTest registers buffer_test
 ```
 
-可以在 R1 核心实现通过后再加入：
+你已经接入 GoogleTest。保留当前结构即可，只做两项轻量整理：
+
+```text
+project(Week8 ...) 改成与 Week10/Reactor 相符的名字
+不需要的 Threads dependency 和测试头文件可以删除
+```
+
+若以后从头建立同类 target，最小关系仍是：
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
@@ -1483,8 +1558,12 @@ add_test(NAME buffer_test COMMAND buffer_test)
 ```bash
 cmake -S . -B build
 cmake --build build
-ctest --test-dir build --output-on-failure
+cd build
+ctest --output-on-failure
+cd ..
 ```
+
+当前 Ubuntu 使用 CMake 3.16；本次实测从 source directory 执行 `ctest --test-dir build` 没有发现 tests，而进入 `build` 后运行 `ctest` 能正确执行 5 项，因此这里使用兼容当前环境的写法。
 
 这段 CMake 只组织今天的 library/test，不要求一次写完 Week10 全部 targets。
 
