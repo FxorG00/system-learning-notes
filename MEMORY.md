@@ -6070,3 +6070,17 @@ R1 后已按当前磁盘版本定向润色 Day1 R2/R3，R1 区域 SHA-256 保持
 2026-09-10 Day1 最终验收暂未正式放行：用户已实现 tail-space 检查、`compact()`、`retrieve_as_string -> retrieve` 复用，并新增 empty/zero-length 与 large consumed-prefix tests；CMake clean build 零 warning，CTest `7/7` 通过，ASan/UBSan 对这 7 项无报告。源码审计后额外运行 `Buffer(0); append("x", 1)` 的独立 UBSan probe，真实报告 `src/buffer.cpp:40: null pointer passed as argument 1`：当 capacity、size、offset 均为 0 且 append length 为 1 时，tail 不足分支无条件调用 `compact()`，其中 `memmove(data_.data(), data_.data() + offset, 0)` 把 null pointers 传给要求有效 pointer 的接口。public contract 未禁止 `initial_capacity == 0`，因此这是技术边界而非额外优化。最终通过前只需让 `offset == 0`/没有 consumed prefix 时跳过 compact，直接让 vector append/grow，并补 `Buffer(0)` case；不要求重跑或重写其余七项测试。
 
 2026-09-10 Day1 最终短复检：用户在 `compact()` 开头增加 `offset == 0` 直接返回，零容量 empty Buffer 不再把 null `data()` 传给 `memmove`；同时修正 `EmptyBufferTest` 命名中的拼写。CMake clean build 零 warning，CTest `7/7` 通过，ASan/UBSan 对完整 7 项无报告。Codex 再次以相同独立 probe 验证 `Buffer(0); append("x", 1)`，结果 readable count 为 1、首 byte 为 `x`、exit 0 且 sanitizer 无报告。虽然该 edge case 尚未保存为 repository regression test，但技术修复和独立证据已经闭环，不再阻塞本日；Week10 Day1 最终 `96/100` 正式通过。
+
+---
+
+## 2026-09-10：Week10 Day2 教程正式生成
+
+已生成 `week10/day2/day2.md`，主题为 Reactor `Channel` V1。它直接承接已通过的 Day1 `Buffer`：Day1 管理跨 I/O 调用保留的 bytes，Day2 管理一个 fd 的 desired interest、current ready mask 与 callbacks；二者暂不组合，真正的 epoll registration 留给 Day3，Acceptor/Connection 与 close/remove lifetime 分别留给后续对应 Day。
+
+Round1 固定产出 `include/reactor/channel.hpp`、`src/channel.cpp`、`tests/channel_test.cpp`，只用 `EPOLLIN`、`EPOLLOUT`、`EPOLLERR` constants 和 simulated ready masks，不调用 `epoll_create1/epoll_ctl/epoll_wait`。public contract 包含 non-owning fd、独立 interest/ready state、read/write/error callback setters 与 `handle_event()`；闸门前给清组件用途、接口语义、focused scenarios、编译入口和成功标准，但不提供 private representation、完整 callback members、branch order 或 dispatch algorithm。combined `EPOLLIN | EPOLLOUT` 与 `EPOLLERR | EPOLLIN` 必须让每个匹配 callback 各执行一次，测试不把 callback 先后顺序写成 contract；空 callback 跳过，Channel destructor 不 close fd。
+
+Round2 预留 interest-vs-ready 因果链、bitmask 组合/检测、Linux event bits 第一层、`std::function<void()>` type erasure/empty-call/exception 边界、setter value/move 语义，以及 `[&]`、`[this]`、`[shared]`、`[weak]` 的 lifetime 差别。当前不让 Channel 内部以 interest 重新过滤 ready，也不把 `EPOLLRDHUP/EPOLLHUP`、Connection close policy、callback self-destruction 或 shared ownership architecture 提前写死。Round3 在 R1 正式通过后必须基于用户真实 source/note/tests 逐节定向改写，并把 action/出口收敛成明确单一路径；初始只保留 combined-mask、empty callback、interest-ready independence、non-owning fd 和 Day1 regression 等高价值证据。
+
+本日教程继续严格使用主线 daily 规则，与 AI Theory 编排完全独立：三个 Part、明确“教程开始”、完整 R1/R2/R3、R1 self-contained 且不泄露实现、术语首次出现解释英文来源和当前含义、API 给最小调用、真实流程用 Mermaid/因果链表达。Day2 不使用 TSan，不写 socket server、benchmark、README 或继承层次；single-thread simulated dispatch 的主要风险是 event-state/lifetime，不是 data race。
+
+技术核验：一份未写入学习目录的 private reference implementation 已在 Ubuntu 20.04 / g++ 10.5 下使用 `-std=c++17 -Wall -Wextra -g` 编译，零 warning、exit 0。运行时 assertions 覆盖初始状态、interest 不改变 ready、zero-ready 不 dispatch、`EPOLLIN | EPOLLOUT` 两个 callback 各一次、`EPOLLERR | EPOLLIN` 两个 callback 各一次、empty callback 跳过，以及 Channel 析构后 `fcntl(fd, F_GETFD)` 仍成功，最终输出 `CHANNEL_REFERENCE_PASS`。该 reference 只用于验证教程 API 和 contract，不提供给用户，也不进入 canonical codebase。
