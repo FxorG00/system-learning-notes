@@ -19,3 +19,28 @@ vector 没有 pop_front，我们只能开个 offset，表示 [0,offset) 这一�
 
 ```
 
+## R2
+
+```text
+`retrieve_as_string()` 当前又重复写了一次“推进 offset + 判断 reset”；Round2 可以考虑在成功构造 result 后复用 `retrieve(length)`，让消费状态只有一个实现位置。
+
+ok了；复用了一下。
+```
+
+
+
+```text
+
+
+当尾部空间<append 的元素个数的时候；尾部空间=capacity-size
+
+我们不一定要 push_back 然后触发 vector 自动扩容；
+如果 capacity>=used+append 的话，说明我们的 vector 是可以放进去的，只是需要把 used 挪到开头，然后再去 append 元素，并且让 offset=0
+
+我的实现是，尾部空间不够的时候就先压缩再 append，这样后续够与不够 vector 会决定
+
+
+size()：当前 vector 中实际存在多少个 char elements
+capacity()：当前 allocation 在不重新分配时最多能容纳多少 elements
+```
+

@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-10）：Week1~Week9 已完成；Week9 Day4 最终 `92/100`，Day5 最终 `96/100`，Day6 最终 `95/100`，Day7 最终 `94/100`。Week9 的 non-blocking/epoll 主线已经以 canonical echo server、真实流程图和 claim-to-evidence archive 收口；Week10 Day1 `Buffer` Round1 已正式通过，当前进入按真实 `vector<char> + offset` representation 打磨 compact/reuse 与 focused evidence 的 Round2。AI Theory T1 已通过，T2 尚未开始；Week10 出口前应推进到 T3，提前生成教材不计为已学习。
+最新进度快照（2026-09-10）：Week1~Week9 已完成；Week9 Day4 最终 `92/100`，Day5 最终 `96/100`，Day6 最终 `95/100`，Day7 最终 `94/100`。Week9 的 non-blocking/epoll 主线已经以 canonical echo server、真实流程图和 claim-to-evidence archive 收口；Week10 Day1 `Buffer` 已正式完成并以 `96/100` 通过，下一步进入 Day2 `Channel`。AI Theory T1 已通过，T2 尚未开始；Week10 出口前应推进到 T3，提前生成教材不计为已学习。
 
 ### Week1：已完成
 
@@ -6068,3 +6068,5 @@ R1 后已按当前磁盘版本定向润色 Day1 R2/R3，R1 区域 SHA-256 保持
 用户随后指出，R1 已经正式通过后，Round3 不能继续保留“如果你用了 A/B/C representation”这种生成时的通用分支，让用户自己判断该做哪一个。定向润色必须把后续动作写成针对当前 R1 的确定任务：明确保留哪些现有成员和设计、具体修改哪个函数或状态路径、为何需要这次升级、增加哪一条最小 evidence、运行哪组已有命令，以及哪些内容明确不用重做。通用 alternatives 可以留在机制对比章节，但 action/出口章节必须给出单一路径；不能一边声称已经依据 R1 个性化，一边仍把关键决策以多个 `if` 退还给用户。Week10 Day1 §29 已据此改为保留 `vector<char> + offset`，明确升级 append 的 consumed-prefix reuse、让 `retrieve_as_string` 复用唯一消费路径，并只补 zero-length 与 compact 后 exact-content 两条证据。
 
 2026-09-10 Day1 最终验收暂未正式放行：用户已实现 tail-space 检查、`compact()`、`retrieve_as_string -> retrieve` 复用，并新增 empty/zero-length 与 large consumed-prefix tests；CMake clean build 零 warning，CTest `7/7` 通过，ASan/UBSan 对这 7 项无报告。源码审计后额外运行 `Buffer(0); append("x", 1)` 的独立 UBSan probe，真实报告 `src/buffer.cpp:40: null pointer passed as argument 1`：当 capacity、size、offset 均为 0 且 append length 为 1 时，tail 不足分支无条件调用 `compact()`，其中 `memmove(data_.data(), data_.data() + offset, 0)` 把 null pointers 传给要求有效 pointer 的接口。public contract 未禁止 `initial_capacity == 0`，因此这是技术边界而非额外优化。最终通过前只需让 `offset == 0`/没有 consumed prefix 时跳过 compact，直接让 vector append/grow，并补 `Buffer(0)` case；不要求重跑或重写其余七项测试。
+
+2026-09-10 Day1 最终短复检：用户在 `compact()` 开头增加 `offset == 0` 直接返回，零容量 empty Buffer 不再把 null `data()` 传给 `memmove`；同时修正 `EmptyBufferTest` 命名中的拼写。CMake clean build 零 warning，CTest `7/7` 通过，ASan/UBSan 对完整 7 项无报告。Codex 再次以相同独立 probe 验证 `Buffer(0); append("x", 1)`，结果 readable count 为 1、首 byte 为 `x`、exit 0 且 sanitizer 无报告。虽然该 edge case 尚未保存为 repository regression test，但技术修复和独立证据已经闭环，不再阻塞本日；Week10 Day1 最终 `96/100` 正式通过。
