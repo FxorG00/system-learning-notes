@@ -86,6 +86,92 @@ Channel：解释这个 fd 的 ready bits，调用已经注册的 callbacks
 
 ---
 
+## 2.1 `Reactor` 到底是什么
+
+`Reactor` 来自英文 `react`，即“作出反应”；通常翻译成**反应器模式**。
+
+它是一种 event-driven architecture pattern：
+
+```text
+event-driven：事件驱动，根据发生的事件推进程序
+architecture pattern：组织多个组件协作方式的架构模式
+```
+
+白话来说，Reactor 解决的问题是：
+
+> 一个线程同时管理很多 fd 时，不为每个 fd 一直阻塞等待，而是统一等待“谁 ready 了”，再把这个 event 分发给对应处理函数。
+
+假设 server 同时管理 1000 条连接。Reactor 不会按顺序逐个问：
+
+```text
+fd 7 有数据吗？
+fd 8 有数据吗？
+fd 9 有数据吗？
+...
+```
+
+而是把关注项交给 I/O multiplexing mechanism，在 Linux 上可以使用 epoll：
+
+```text
+我关心这些 fd 的这些 events
+-> 当前 execution flow 在 epoll_wait 等待
+-> kernel 返回本轮 ready 的 fd/events
+-> EventLoop 找到相应 Channel
+-> Channel 调用 read/write/error callback
+-> callback 推进真正的 accept/recv/send 工作
+```
+
+完整流程是：
+
+```mermaid
+flowchart TD
+    A[多个 socket 的状态发生变化] --> B[Linux kernel 记录 readiness]
+    B --> C[epoll_wait 返回 ready events]
+    C --> D[EventLoop 遍历本轮 events]
+    D --> E[找到每个 fd 对应的 Channel]
+    E --> F[Channel dispatch callbacks]
+    F --> G[Acceptor / Connection 执行 accept、recv 或 send]
+    G --> H[业务状态改变，必要时更新 interest]
+    H --> C
+```
+
+### Reactor 不是 epoll 的另一个名字
+
+这几个概念处于不同层：
+
+```text
+epoll：Linux kernel 提供的 I/O multiplexing API / mechanism
+Reactor：用户态代码怎样组织“等待 -> 分发 -> 处理”的 architecture pattern
+EventLoop：持续 wait 并驱动分发的对象
+Channel：描述一个 fd 的 interest、ready events 和 callbacks
+Acceptor / Connection：真正处理 listening socket 或 connected socket 的业务对象
+```
+
+所以：
+
+```text
+使用 epoll 不一定已经写出了职责清楚的 Reactor
+Reactor 也不在概念上只能由 epoll 实现
+```
+
+Week9 的过程式 server 已经具有事件驱动主循环，但 listener、connection、event mask、I/O state 和 cleanup 仍集中在一组过程式分支里。Week10 所说“构建 Reactor V1”，就是在**保持 Week9 行为正确**的基础上，把这条事件链拆成 ownership 与 responsibility 清楚的组件。
+
+本周逐日组装的是：
+
+```text
+Day1 Buffer：保存跨事件仍未消费/发送的 bytes
+Day2 Channel：描述 fd 关注什么，ready 后调用谁
+Day3 EventLoop：拥有 epoll fd，负责 wait 与 registration
+Day4 Acceptor：处理 listening socket ready
+Day5 Connection：处理 connected socket 的 read/write state
+Day6：处理 callback 中 remove/close 的 lifetime
+Day7：组合并验证 Reactor Echo Server V1
+```
+
+今天只造 Reactor 中的 `Channel`，不是一天写完 Reactor。
+
+---
+
 ## 3. `channel` 在这里是什么意思
 
 `channel`：通道、渠道。
