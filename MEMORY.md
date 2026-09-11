@@ -6100,3 +6100,15 @@ Round2 预留 interest-vs-ready 因果链、bitmask 组合/检测、Linux event 
 R1 correctness 已闭环，评分 `94/100`，正式进入 Round2。轻量扣分项：用户 combined test 缺 assertion；三个 by-value callback setters 当前又 copy 到 member，正确但可改用 `std::move`；header 有未使用的 `<sys/socket.h>`/`<unistd.h>`，note 只记录了 `explicit` 与 `noexcept`。后两项不属于 R1 correctness blocker。note 对 `explicit` 只出现在 declaration、`noexcept` 必须与 out-of-class definition 保持一致的解释正确。
 
 R1 后已以用户当前磁盘版 Day2 为 edit base 定向润色 R2/R3，完整保留用户新增的两节 I/O multiplexing/Reactor 解释与 `cmake -E chdir build ctest` 命令。R2 逐节把通用模型映射到真实 members、三个独立 `if`、`[&value]` capture 和 implicit non-owning destructor；Round3 收敛为单一路径：保留 representation/dispatch，三个 setters 改 move，清理两个无用 header，并直接使用 Codex 补充测试，不让用户重写 dirty-work cases。可复用检阅经验：允许用户只写一部分 tests 时，不能因“测试数量少”直接扣掉已由独立 evidence 覆盖的 correctness；但仍要逐项区分用户测试真正能失败的 assertion 与仅打印的人工观察，并把 Codex 测试放进单独文件，避免覆盖用户学习代码。
+
+---
+
+## 2026-09-11：Week10 Day2 正式通过
+
+用户完成 R2/R3 收口：`channel.cpp` 引入 `<utility>`，三个 by-value callback setters 均改为 `std::move(callback)`；`channel.hpp` 删除无用的 `<sys/socket.h>` 与 `<unistd.h>`，保留当前语义所需的 `<sys/epoll.h>`。最终 source SHA-256：`channel.hpp` 为 `674c1f603f56d5b7fa18ec9e14e3bbf7cfbc721812e6ca41975ca15727d52984`，`channel.cpp` 为 `45d5f5bd071932df79afe04e89e64e61201def6bfc2c2031ab16bdbea772dd0f`。
+
+最终动态证据均基于修改后 source 重新构建：CMake `--clean-first` 零 warning，原工程 CTest `11/11` PASS（Buffer 7 + 用户 Channel 4）；独立 `channel_codex_test.cpp` 重新编译后 normal `7/7` PASS，ASan/UBSan `7/7` PASS 且无报告。覆盖 interest/ready independence、read/write/error dispatch、combined exact-once、empty/zero-ready、masks 保留与 Channel non-owning fd。一次尝试使用 GoogleTest 1.10 不支持的 `--gtest_brief=1` 只打印帮助、没有执行测试，因此不计入 evidence；随后使用无额外参数的正常运行取得真实 7/7 结果。
+
+笔记逐段结论：R1 对 `explicit` 只属于 declaration、`noexcept` 必须与 out-of-class definition 一致的解释正确；R2 对 callback setter 不应轻率标 `noexcept`、by-value 参数移入 member 应使用 move，以及 Channel 描述但不拥有 fd 的三点均正确，并与最终 source 一致。用户没有誊写全部验收题，但 code、note 和独立 tests 已覆盖当天机制，不要求补做重复文字工作。
+
+Week10 Day2 最终评分 `96/100`，正式通过，下一站为 Day3 `EventLoop`。剩余非阻塞项：用户自己的 combined test 仍以输出而非 assertion 为主，但已有独立 exact-count oracle；Codex 补充 tests 尚未接入 CTest，只能通过单独命令运行；header 中的 Round1 模板注释与紧凑格式属于 style，不影响 contract。可复用检阅经验：验证工具的未知 command-line flag 可能打印帮助并以成功状态结束，不能只看 exit code 就宣称 tests PASS；必须看到实际 test count 与 assertions 被执行。最终验收还要确认优化/清理后的 source 被重新编译，不能沿用修改前 binary 的结果。
