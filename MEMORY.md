@@ -6112,3 +6112,17 @@ R1 后已以用户当前磁盘版 Day2 为 edit base 定向润色 R2/R3，完整
 笔记逐段结论：R1 对 `explicit` 只属于 declaration、`noexcept` 必须与 out-of-class definition 一致的解释正确；R2 对 callback setter 不应轻率标 `noexcept`、by-value 参数移入 member 应使用 move，以及 Channel 描述但不拥有 fd 的三点均正确，并与最终 source 一致。用户没有誊写全部验收题，但 code、note 和独立 tests 已覆盖当天机制，不要求补做重复文字工作。
 
 Week10 Day2 最终评分 `96/100`，正式通过，下一站为 Day3 `EventLoop`。剩余非阻塞项：用户自己的 combined test 仍以输出而非 assertion 为主，但已有独立 exact-count oracle；Codex 补充 tests 尚未接入 CTest，只能通过单独命令运行；header 中的 Round1 模板注释与紧凑格式属于 style，不影响 contract。可复用检阅经验：验证工具的未知 command-line flag 可能打印帮助并以成功状态结束，不能只看 exit code 就宣称 tests PASS；必须看到实际 test count 与 assertions 被执行。最终验收还要确认优化/清理后的 source 被重新编译，不能沿用修改前 binary 的结果。
+
+---
+
+## 2026-09-11：Week10 Day3 教程正式生成
+
+已生成 `week10/day3/day3.md`，主题为 `EventLoop` V1。它严格承接已通过的 Day2 `Channel`：Day2 已证明 simulated ready mask 可以正确 dispatch callbacks，Day3 只补 `Channel desired interest -> epoll registration -> real readiness -> Channel ready mask -> callback` 这条 kernel/user-space 主线，不提前混入 Acceptor、Connection、TCP server、cross-thread wakeup 或 callback self-destruction。
+
+Round1 固定 public behavior 为 EventLoop RAII 管理 epoll fd，并提供 `add_channel`、`update_channel`、`remove_channel` 与 `poll_once`；使用 nonblocking `socketpair` 构造 local stream probe，连续证明 no-data timeout、ADD 后 read dispatch、MOD 到 EPOLLOUT、MOD 回 EPOLLIN、DEL 后不再 dispatch。教程在闸门前给清程序用途、文件名、API、error/lifetime contract、完整 observable scenario、编译命令和成功出口，但保留 private registry、event buffer representation 以及 `epoll_event.data` 选择为用户 R1 设计空间。Round1 明确 registration 不等于 ownership：EventLoop 只拥有 epoll fd，Channel 仍 non-owning target fd，probe 拥有 socketpair fds；Channel 必须活过 registration，callback 内 remove/destroy 留给 Day6。
+
+Round2 预留 `data.fd + registry` 与 `data.ptr` 的第一层比较、desired state 到 kernel registration 的同步 invariant、`epoll_event.events/data` 双向语义、ready record count 与 callback count 区别、EINTR、callback exception 与 same-execution-flow 边界。Round3 只保留 focused probe、Buffer/Channel regression、ASan/UBSan 与过滤后的 strace，不要求重复 GTest、TSan、benchmark、README 或 ET 教学。R1 正式通过后，必须继续以用户当前磁盘文件为 edit base，逐节把 R2/R3 映射到真实 members、identity 选择、note 与 evidence，并把行动部分收敛成一条确定升级路径，保留用户在阅读期间加入的所有内容。
+
+本日教程生成前已用 Linux man-pages 核对：`epoll_create1` 返回指向 kernel epoll instance 的 fd；`EPOLL_CTL_ADD/MOD/DEL` 分别建立、修改、删除 interest-list entry；现代 Linux 的 DEL 可传 null event；`epoll_event.data` 由 ctl 保存并由 wait 原样带回；`epoll_wait` 返回 ready record count，timeout 返回 0，EINTR 单独报告；`socketpair` 提供 connected local bidirectional stream。主线 daily 的既有三 Part、R1 闸门、术语/API 解释、Typora Mermaid 8.8.3 与“不泄露 R1 implementation”规则保持不变。
+
+技术交付前另写了一份未进入学习目录的 `data.ptr` private reference implementation，在用户 Ubuntu 使用 `g++ -std=c++17 -Wall -Wextra -g` 零 warning 编译运行，五段 probe 输出 `EVENT_LOOP_REFERENCE_PASS`；ASan/UBSan build 同样 PASS 且无报告。该验证只证明教程的 public contract、API 组合与 probe 顺序可执行，不把 `data.ptr` 规定为用户 R1 的标准答案。
