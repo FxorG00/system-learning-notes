@@ -6138,3 +6138,17 @@ Round2 预留 `data.fd + registry` 与 `data.ptr` 的第一层比较、desired s
 另有两项需要与 R1 contract 对齐：ADD/MOD/DEL 失败当前只 `perror + return`，`poll_once` 的非 EINTR failure 返回 `-1`，与教程统一的 `std::system_error` exception contract 不一致；CMake 的 `event_loop` target 没有链接 `channel`，空的 `event_loop_probe.cpp` 又被交给 `gtest_discover_tests`，所以 clean build 虽成功但 `CTest` 明确输出 `No tests were found`，真实 probe 通过 CMake target 链接时会出现 Channel undefined references。header 中重复 `<map>/<unistd.h>` 及大量无用 includes 只属清理项，不阻塞核心 R1。
 
 可复用检阅经验：一个空 executable 能让 static library 的 unresolved dependency 暂时不被 linker 拉入，`cmake --build` 成功不证明 target dependency 完整；必须让 probe 真实引用 component。`gtest_discover_tests` 也不能把普通 `main()` 自动变成 test，必须看到 CTest 的实际 test count。对于 event-loop wrapper，“poll once”应先明确一次 kernel wait 的 batch boundary；ready record count、callback count、当前 ready fd 总数与整个 timeout 期间累计事件数是四个不同概念。Round1 修复后需重跑 Codex probe，再决定正式通过与 R2/R3 定向润色。
+
+---
+
+## 2026-09-12：Week10 Day3 Round1 正式通过
+
+用户修正 `poll_once` 的 batch boundary：当前使用容量 1024 的 local `epoll_event` array，单次成功 `epoll_wait` 后遍历 `[0, ready_count)` 并立即返回；只在 EINTR 时继续等待，并用 `steady_clock` 计算有限 timeout 的剩余时间。原先 LT EPOLLOUT 下 20ms 累计 `59378` records/callbacks 的错误已经消失，同一 probe 现在稳定得到 `write_records=1`、`write_calls=1`。ADD/MOD/DEL 与 `data.fd + std::map<int, Channel*>` 的 identity/registry 设计保留，EventLoop owns epoll fd、map non-owning Channel、probe owns socketpair fds 的 ownership 合理。
+
+动态证据：Ubuntu CMake clean build 零 warning；用户 probe 直接运行 PASS；同一 Codex exact-check probe 通过 direct g++ build 并 PASS；ASan/UBSan build PASS 且无报告。测试覆盖 no-data timeout、ADD read dispatch、MOD 到 EPOLLOUT、MOD 回 EPOLLIN、DEL 后不再 dispatch、exact callback count 与 exact byte。用户不亲手写 probe 不扣核心实现分，Codex 独立 test file 已被用户接入为 `tests/event_loop_probe.cpp`。
+
+R1 剩余非阻塞工程项：底层先 `perror` 再用 `errno` 构造 `system_error`，应改为先保存原始 error code并由上层统一输出；`event_loop.hpp` 有重复及 implementation-only includes；普通自带 main 的 probe 仍使用 `gtest_discover_tests`，所以 CTest 输出 `No tests were found`，应改用 `add_test` 并移除该 target 的无用 GTest links。有限 timeout 的 EINTR retry 以后若正式强化，还需区分剩余时间已经耗尽与原始 `-1` infinite timeout，当前不扩展 signal probe，不阻塞 R1。
+
+已按当前磁盘文件定向润色 Day3 R2/R3，并完整保留用户在 R1 阅读期间新增的“multiplex/demultiplex”与 `std::system_error` 解释。后半教程现已明确选择 `data.fd + map_`，把 1024-record batch 与第一次失败证据映射到真实代码；Round3 收敛为保存 errno、清理 header 与正确 CTest registration 三项单一路径，不要求用户重写 probe、改成 data.ptr 或完成重复验收题。Week10 Day3 Round1 评分 `95/100`，正式进入 Round2。
+
+可复用经验：R1 的核心 behavior 已由独立动态证据证明时，普通 probe 未接入 CTest 属于工程组织缺口，可放入 R3，不应继续否定 component V1；但最终 Day 通过前必须让 CTest 显示实际测试数量。R1 后定向润色要保留用户阅读中加入的解释，并把真实失败数据写入后半教程，使 R2 解释“为什么第一版错、第二版为何正确”，而不是恢复成通用 alternatives。

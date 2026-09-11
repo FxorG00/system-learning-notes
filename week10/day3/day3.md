@@ -265,6 +265,65 @@ callback：执行 accept/recv/send 等具体动作
 
 ---
 
+## 8.1 区分复用与解复用
+
+对，你这个图像化理解是对的。你第二个“复用”应该是想说“解复用”。
+
+可以先把它记成一对反方向的图：
+
+```text
+复用 multiplex：
+
+fd A ─┐
+fd B ─┼──> 一个 epoll instance / 一次 epoll_wait
+fd C ─┘
+```
+
+多个 I/O 来源汇到同一个“统一等待点”。这就是 I/O 多路复用：一个 EventLoop 用一次等待能力，同时关注很多 fd。
+
+然后 `epoll_wait` 返回的不是某个 fd 的数据，而是一批“谁 ready 了”的记录。EventLoop 再把它们分回去：
+
+```text
+一次 epoll_wait 返回的 ready event batch
+                |
+                v
+      ┌─────────┼─────────┐
+      v         v         v
+ Channel A  Channel B  Channel C
+ callback   callback   callback
+```
+
+这就是解复用：从统一拿到的一批结果，找到每条记录原本对应的 Channel，再交给各自 callback。
+
+你的“多个上面分支汇总到下面一个点；再从一个点延伸到多个出口”的直觉非常好。只要补一个关键修正：
+
+```text
+epoll 不把多个 fd 的真实 bytes 混在一起。
+它复用的是“等待和通知”的入口，
+不是复用数据本身。
+```
+
+例如 A 收到 `"hello"`、B 收到 `"world"`：
+
+```text
+epoll_wait 只会告诉 EventLoop：
+A 可读
+B 可读
+
+之后仍然是：
+Channel A 的 callback -> recv(A)
+Channel B 的 callback -> recv(B)
+```
+
+所以可以压成一句：
+
+```text
+I/O 多路复用：多个 fd 共用一次等待。
+事件解复用：把一次等待得到的多条 ready 结果送回各自 Channel。
+```
+
+---
+
 ## 9. `stable identity`
 
 `identity`：身份标识。
@@ -679,6 +738,140 @@ throw std::system_error(
 
 注意先保存 `errno` 或立刻构造 exception，不要先调用一串可能改写 `errno` 的函数。
 
+### 13.5.1 system_error 补充
+
+`std::system_error` 是 C++ 用来表达“底层系统操作失败”的 exception。
+
+它特别适合你现在这种场景：
+
+```text
+epoll_create1 失败
+epoll_ctl 失败
+epoll_wait 失败
+socketpair 失败
+```
+
+这些 Linux API 通常遵循同一个约定：
+
+```text
+成功：返回正常值
+失败：返回 -1，并把失败原因写到 errno
+```
+
+所以 `std::system_error` 的作用就是把：
+
+```text
+errno 里的错误码
++ 你补充的操作上下文
+```
+
+打包成一个可以 `throw` 的 C++ exception。
+
+最常见写法：
+
+```cpp
+#include <cerrno>
+#include <system_error>
+
+const int epfd = ::epoll_create1(EPOLL_CLOEXEC);
+
+if (epfd == -1) {
+    const int saved_errno = errno;
+
+    throw std::system_error(
+        saved_errno,
+        std::generic_category(),
+        "epoll_create1"
+    );
+}
+```
+
+假设系统打开 fd 数量达到限制，此时可能得到类似信息：
+
+```text
+epoll_create1: Too many open files
+```
+
+三个参数分别是：
+
+```cpp
+saved_errno
+```
+
+系统调用失败时的具体错误码，例如 `EMFILE`、`EINVAL`、`EBADF`。
+
+```cpp
+std::generic_category()
+```
+
+告诉 C++：这个错误码按 POSIX/Linux 通用错误码解释。你现在处理 `errno` 时，用它就合适。
+
+```cpp
+"epoll_create1"
+```
+
+你自己补的上下文。因为单看 `Too many open files`，不知道是 `socketpair`、`accept` 还是 `epoll_create1` 出问题；加上操作名才好定位。
+
+你也可以抽一个小 helper：
+
+```cpp
+[[noreturn]] void throw_system_error(const char* context) {
+    const int saved_errno = errno;
+
+    throw std::system_error(
+        saved_errno,
+        std::generic_category(),
+        context
+    );
+}
+```
+
+之后写起来就是：
+
+```cpp
+if (::epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &event) == -1) {
+    throw_system_error("epoll_ctl ADD");
+}
+```
+
+调用者可以在顶层统一接住：
+
+```cpp
+int main() {
+    try {
+        EventLoop loop;
+        // 正常工作
+    } catch (const std::system_error& error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
+}
+```
+
+`error.what()` 是最常用的；若你想拆开看：
+
+```cpp
+std::cerr << error.code().value() << '\n';       // 例如 errno 数值
+std::cerr << error.code().message() << '\n';     // 例如 "Bad file descriptor"
+std::cerr << error.code().category().name() << '\n';
+```
+
+它和 `perror` 的区别是：
+
+```text
+perror：
+立刻把 errno 打印到 stderr
+当前函数自己决定 return、continue 还是 exit
+
+std::system_error：
+把失败变成 exception
+让上层决定怎样处理
+```
+
+对于 `EventLoop`，构造 epoll 失败后对象根本不能正常存在，所以直接 `throw std::system_error` 很自然。
+
+还有一个小规则：会 `throw std::system_error` 的构造函数、`add_channel`、`update_channel`、`remove_channel`、`poll_once` 不能标 `noexcept`；否则 exception 一旦离开函数，程序会直接 `std::terminate()`。
+
 ---
 
 ## 14. Round1 local stream probe
@@ -871,9 +1064,21 @@ DEL 后不再 dispatch
 
 ---
 
-## 17. Round2：EventLoop 到底拥有谁
+## 17. Round2：把 ownership 映射到你的真实 R1
 
-这一节先给通用模型；R1 通过后会映射到你的真实 members。
+你的 R1 已经正式通过。当前 representation 是：
+
+```cpp
+int epfd_ = 0;
+std::map<int, Channel*> map_;
+```
+
+这里两个 members 的语义不同：
+
+```text
+epfd_：EventLoop owning resource
+map_ 中的 Channel*：EventLoop non-owning references
+```
 
 ```mermaid
 flowchart LR
@@ -885,14 +1090,16 @@ flowchart LR
 
 虚线表示 non-owning relationship。
 
-今天的 ownership 结论：
+映射到你的 probe，ownership 结论是：
 
 ```text
-EventLoop owns epoll fd
-EventLoop does not own Channel
-Channel does not own target fd
-probe owns both socketpair fds
+EventLoop owns epfd_
+EventLoop 的 map_ 不拥有 Channel
+Channel 不拥有自己描述的 socket fd
+probe 中的 SocketPair owns 两个 socket fds
 ```
+
+所以 `map_.erase(fd)` 只删除 mapping，不应 `delete Channel*`；`remove_channel` 也不应顺手 close target fd。你的 R1 已经遵守这两点。
 
 因此正确 destruction order 至少满足：
 
@@ -939,6 +1146,18 @@ channel.interest_events
 
 > 每次 caller 改变已注册 Channel 的 desired interest 后，都必须经过 EventLoop update，kernel state 才与 Channel state 对齐。
 
+你的代码中，这条链已经具体落在：
+
+```text
+channel.interest_events()
+-> epoll_event.events
+-> epoll_ctl ADD 或 MOD
+-> data.fd 保存 target fd identity
+-> map_[fd] 保存对应的 non-owning Channel pointer
+```
+
+`remove_channel` 则先让 `EPOLL_CTL_DEL` 成功，再 `map_.erase(fd)`。这保证正常路径上不会出现“user-space mapping 已删，但 kernel registration 仍存在”的状态。
+
 以后 Connection 的 output Buffer 从 empty 变成 non-empty 时，就会沿这条链增加 `EPOLLOUT`；发送完全部 pending bytes 后，再沿同一条链移除 `EPOLLOUT`。
 
 ---
@@ -972,7 +1191,7 @@ epoll_wait：kernel 返回本轮 ready bits，并带回最近一次保存的 eve
 
 ---
 
-## 20. `data.fd` 与 `data.ptr`
+## 20. 你的选择：`data.fd + map_`
 
 `epoll_data_t` 是 union，可以保存多种 user data。当前最相关的是：
 
@@ -981,7 +1200,7 @@ int fd;
 void* ptr;
 ```
 
-### 20.1 保存 `data.fd`
+### 20.1 你的 R1 正在使用 `data.fd`
 
 流程是：
 
@@ -991,6 +1210,8 @@ epoll_wait 返回 fd
 -> 得到 Channel
 -> dispatch
 ```
+
+你在 note 中选择它的理由正确：`epoll_wait` 只带回 fd identity，而 callback 保存在 Channel 中，因此 EventLoop 再通过 `map_` 找回 Channel。
 
 优点：
 
@@ -1007,7 +1228,7 @@ fd integer 以后可能被复用
 remove/close 与 registry 更新顺序必须一致
 ```
 
-### 20.2 保存 `data.ptr`
+### 20.2 `data.ptr` 只作为对照，不要求改写
 
 流程是：
 
@@ -1032,7 +1253,16 @@ Channel 必须在 remove 和相关 dispatch 完成前一直存活
 stale pointer 比 stale fd 更直接地变成 use-after-free
 ```
 
-今天两者都不判错。R1 通过后再看你的 V1 是否满足自己所选方案的 lifetime contract。
+你的 R1 不需要为了少一次 map lookup 改成 `data.ptr`。当前更重要的是守住：
+
+```text
+ADD 成功后，kernel registration 与 map_ 同时存在
+DEL 成功后，map_ 删除该 identity
+registered Channel 的 address 保持有效
+fd 被 close 或复用前，先完成 DEL 与 map erase
+```
+
+fd reuse 与 stale event 的最终处理留给 Day6；今天先能解释风险来源，不提前重构。
 
 ---
 
@@ -1060,6 +1290,31 @@ callbacks 或外部 references 是否保存 EventLoop address
 ---
 
 ## 22. `poll_once` 的真实返回边界
+
+你的第一版曾把 `maxevents` 设为 1，并在整个 timeout 窗口中反复 wait。独立 probe 在 LT `EPOLLOUT` 下实际观察到：
+
+```text
+write_records = 59378
+write_calls = 59378
+```
+
+修正后的版本使用容量为 1024 的 local `epoll_event` array：
+
+```text
+调用一次 epoll_wait
+-> 得到 ready_count
+-> 只遍历 [0, ready_count)
+-> dispatch 完本批后立即返回 ready_count
+```
+
+同一个场景现在得到：
+
+```text
+write_records = 1
+write_calls = 1
+```
+
+`1024` 只是你为单批 output buffer 选择的容量，不是 EventLoop 能注册的 fd 总数。超过单批容量的其余 ready entries 可以由下一次 `poll_once` 继续取得。
 
 假设 `epoll_wait` 返回 `ready_count == 2`：
 
@@ -1099,9 +1354,9 @@ callback count = 2
 等待过程被 signal 打断
 ```
 
-今天选择在 `poll_once` 内重新等待，是为了让 public behavior 仍然表达“完成一次 readiness wait”。
+你的实现选择在 `poll_once` 内重新等待，并用 `steady_clock` 计算有限 timeout 的剩余毫秒数。这保住了“完成一次 readiness wait”的 public behavior，也避免每次 EINTR 后重新获得一整段 timeout。
 
-但要知道一个细节：若使用有限 timeout，最严谨的 retry 会计算剩余时间；简单地再次传入完整 timeout，signal 可能让总等待略长。当前 probe 不主动安装 signal handler，这个时间精度边界不阻塞 V1；不要把它扩展成 signal subsystem。
+当前 probe 不主动制造 signal，所以这段 retry 只经过 source review，没有形成动态 evidence。Round3 不为此扩展 signal subsystem；保留当前思路即可。以后若正式测试它，需要额外处理“剩余有限时间已经耗尽”与“原始 timeout 为 -1”这两个分支，避免把过期后的负数误解释成无限等待。
 
 ---
 
@@ -1164,26 +1419,51 @@ Channel destruction 与 dispatch 怎样并发
 
 # Part 3：收尾、打磨与验收
 
-## 27. Round3：当前版本只补高价值证据
+## 27. Round3：沿你的 R1 做三个明确收口
 
-R1 正式通过后，本节会根据你的真实 implementation 收敛成一条确定路径。生成时先规定证据目标，不预设 private design。
+R1 的 `data.fd + map_` 与 batch dispatch 保持不变，不重写 EventLoop。只完成下面三项。
 
-最终至少保留：
+### 27.1 让 syscall error 保留原始 `errno`
+
+你已经把 ADD/MOD/DEL/WAIT 改成抛 `std::system_error`。下一步删除“先 `perror`、再使用 `errno`”这组重复上报，或在任何输出前先保存 error code；本日选择更直接的路径：底层 EventLoop 只保存原始 error code 并抛异常，由最外层 probe 统一输出 `error.what()`。
+
+constructor、ADD、MOD、DEL、WAIT 使用同一条 error policy。destructor 仍然不能抛异常。
+
+### 27.2 清理 `event_loop.hpp` dependencies
+
+当前 header 重复包含 `<map>`、`<unistd.h>`，还包含 socket、网络地址、I/O、chrono、vector、fcntl、assert、set 等并未出现在 class declaration 中的 headers。
+
+保留 public/private declaration 真正需要的依赖即可：
 
 ```text
-no data -> timeout
-ADD -> real read readiness -> callback
-MOD to EPOLLOUT -> write callback
-MOD back to EPOLLIN -> no repeated write callback
-DEL -> peer writes but no dispatch
-Buffer 7 tests regression
-Channel existing tests regression
-normal build zero warning
-ASan/UBSan no report on covered path
-focused strace shows create/control/wait/close mainline
+channel.hpp
+map
 ```
 
-不要求你重写一套 GTest fixture。若 probe 已经有可失败的 exact checks，它就是今天的主 oracle；缺少的纯测试体力活可以由我放到独立 test file 补齐。
+系统调用、chrono 和 system_error 等 implementation-only includes 放进 `event_loop.cpp`。因为 member 是 `std::map<int, Channel*>`，不能只靠 forward declaration 隐藏 `<map>`。
+
+### 27.3 把普通 probe 正确注册给 CTest
+
+你的 `event_loop_probe.cpp` 是自带 `main()` 的普通 executable，不是 GoogleTest suite。因此保留 executable 与 `event_loop` 链接，删除它的 `gtest_discover_tests` 和无用 GTest libraries，改为普通 CTest registration：
+
+```cmake
+add_test(
+    NAME event_loop_probe
+    COMMAND event_loop_probe
+)
+```
+
+已有 Codex probe 不需要你重写。它已经用可失败的 exact checks 覆盖：
+
+```text
+no-data timeout
+ADD read dispatch
+MOD to EPOLLOUT
+MOD back to EPOLLIN
+DEL stops dispatch
+exact callback counts
+exact received byte
+```
 
 ---
 
@@ -1194,7 +1474,7 @@ focused strace shows create/control/wait/close mainline
 ```bash
 strace -f \
     -e trace=epoll_create1,epoll_ctl,epoll_wait,close \
-    ./event_loop_probe
+    ./build/event_loop_probe
 ```
 
 你要从输出中识别的不是固定 fd number，而是 operation chain：
@@ -1270,21 +1550,18 @@ EINTR 与其他 errors 被区分
 callback exception 没被空 catch 吞掉
 ```
 
-如果你的 representation 与我的 reference 不同，只要这组 invariants 与证据成立，不要求为迎合教程重写。
+你的 `data.fd + map_` 已经满足这些核心 invariants。Round3 复检时只额外确认 error code 保存、header dependency 与 CTest registration，不要求改成 reference implementation 的 `data.ptr`。
 
 ---
 
 ## 31. Day3 note 建议
 
-今天 note 不需要抄整篇教程。建议只留下：
+你的 R1 note 已经正确记录 EventLoop 职责、`fd -> Channel*` mapping、non-owning 关系与 ADD/MOD/DEL/WAIT 主线。Round3 只补下面三条实际证据，不抄整篇教程：
 
 ```text
-1. 我的 EventLoop private representation
-2. 我选择 data.fd 或 data.ptr 的理由
-3. ADD、MOD、DEL、WAIT 的完整主线
-4. EventLoop、Channel、socket fd 各自由谁拥有
-5. probe 实际输出与我遇到的问题
-6. 我对 Day4 Acceptor 还不清楚的地方
+1. 第一版为什么在 LT EPOLLOUT 下累计出 59378 次 dispatch
+2. 修正后为什么一次 poll_once 只得到本批 1 条 record
+3. 最终 normal、ASan/UBSan、CTest 与 strace 证据
 ```
 
 如果代码和 probe 已经足够表达某条 contract，不要求再把它机械改写成文字验收题。
@@ -1293,33 +1570,29 @@ callback exception 没被空 catch 吞掉
 
 ## 32. Day3 验收问题
 
-这些问题用于确认模型，不要求重复回答代码已经充分证明的项目：
+代码和 note 已经证明的大部分问题不重复誊写。最终只需要能口述：
 
-1. `Channel::set_interest_events(EPOLLIN)` 后，为什么还必须调用 `EventLoop::update_channel`？
-2. `poll_once` 返回 1，为什么 callback 可能执行多于一次？
-3. `EventLoop` 为什么拥有 epoll fd，却不因此拥有 Channel 和 socket fd？
-4. 若选择 `data.ptr`，Channel 必须满足什么 lifetime 条件？
-5. 若选择 `data.fd + registry`，fd reuse 会带来什么第一层风险？
-6. `remove_channel` 为什么不能顺手 close target fd？
-7. `strace` 今天能证明什么，又不能证明什么？
+1. 为什么 `maxevents=1024` 是单批容量，不是 fd 总数上限？
+2. 为什么 `map_` 保存 non-owning `Channel*`，却不能负责 delete/close？
+3. 为什么修改 `Channel::interest_events()` 后还必须执行 MOD？
+4. `data.fd + map_` 在 fd reuse 时会留下什么第一层风险？
 
 ---
 
 ## 33. Day3 通过标准
 
-满足下面这组核心出口即可进入 Day4：
+R1 已正式通过。Round3 完成下面的工程收口后，Day3 即可最终通过：
 
 ```text
-EventLoop constructor/destructor 正确管理 epoll fd
-add/update/remove 对应 ADD/MOD/DEL
-poll_once 能把真实 ready mask 送到正确 Channel
-socketpair probe 五段行为成立
-R1 lifetime contract 没被违反
-规定编译参数零 warning
-Buffer/Channel regression 仍通过
-ASan/UBSan 对当前路径无报告
-能解释 EventLoop、Channel、socket fd 的 ownership
-能解释自己选择的 event identity 方案
+保留当前 data.fd + map_ design
+syscall failure 保留原始 errno 并统一抛 system_error
+event_loop.hpp 清理 implementation-only includes
+普通 probe 通过 add_test 注册进 CTest
+CMake clean build 零 warning
+CTest 有真实 test count，不再显示 No tests were found
+event_loop probe PASS
+ASan/UBSan probe PASS
+focused strace 能看到 CREATE ADD WAIT MOD DEL CLOSE 主线
 ```
 
 不是必须完成：
