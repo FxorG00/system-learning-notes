@@ -86,6 +86,145 @@ Channel：解释这个 fd 的 ready bits，调用已经注册的 callbacks
 
 ---
 
+## 2.0 I/O multiplexing 是什么意思
+
+这里的 `I/O multiplexing`，中文通常叫 **I/O 多路复用**。先不要把“复用”理解成“重复使用数据”；它说的是：
+
+> 用一个等待与分发机制，同时管理很多个 I/O 对象。
+
+这里的 I/O 对象主要就是很多个 fd，例如：
+
+```text
+listening fd
+client A socket fd
+client B socket fd
+client C socket fd
+...
+```
+
+如果没有 I/O 多路复用，一个直觉写法是：
+
+```text
+先阻塞 read client A
+-> A 没数据时，整个线程卡住
+-> 即使 B、C 已经有数据，也暂时处理不了
+```
+
+而 `epoll` 的方式是：
+
+```text
+把 A、B、C 的 fd 都注册给 epoll
+-> 一个线程调用 epoll_wait()
+-> kernel 等待“其中任意一个 fd 出现我关心的状态”
+-> kernel 返回本轮 ready 的那些 fd
+-> 程序分别处理它们
+```
+
+所以“多路”是很多条 I/O 路径、很多个 fd；“复用”是同一个 event loop 线程、同一次 `epoll_wait` 等待和同一套 dispatch 逻辑服务它们。
+
+```text
+一个 EventLoop thread
+        |
+        v
+    epoll_wait
+        |
+        v
+本轮返回：A readable、C writable
+        |
+        +--> A 的 Channel -> read callback -> recv
+        |
+        +--> C 的 Channel -> write callback -> send
+```
+
+它并不表示一个线程真的在同一时刻执行两段 C++ 代码；它是：
+
+```text
+等到谁 ready
+-> 处理一点
+-> 不能继续时返回 event loop
+-> 再等下一批 ready events
+```
+
+这里还要区分两个东西：
+
+```text
+I/O multiplexing：
+epoll 负责告诉你“哪些 fd 现在值得处理”。
+
+non-blocking I/O：
+recv/send 实际执行时，没数据或暂时写不进去会返回 EAGAIN，
+不会把整个 event loop 卡住。
+```
+
+两者配合才是 Week9/Week10 的模型：
+
+```text
+epoll 选出 ready fd
+-> Channel 分发 callback
+-> callback 用 non-blocking recv/send 推进 I/O
+-> 遇到 EAGAIN 就回到 epoll_wait
+```
+
+所以 `Reactor` 是更上层的组织方式；`epoll` 是 Linux 提供的 I/O 多路复用工具；`EventLoop` 则是使用它持续等待、分发和推进状态的那个对象。
+
+---
+
+## 2.0.1 I/O multiplexing 与 Reactor 的关系
+
+`I/O 多路复用`是 Reactor 的底层事件来源；`Reactor` 是建立在它上面的整套组织方式。
+
+关系可以压成一句：
+
+```text
+I/O 多路复用负责发现“谁 ready 了”
+Reactor 负责决定“把这个 ready event 交给谁处理，并让状态继续推进”
+```
+
+以你的 Week10 代码为例：
+
+```text
+多个 socket fd
+    |
+    v
+epoll_wait()                    <- I/O 多路复用
+返回：fd=8 readable，fd=11 writable
+    |
+    v
+EventLoop 找到对应 Channel  <- Reactor 的分发部分
+    |
+    v
+Channel 调用 read/write callback
+    |
+    v
+Connection 执行 recv/send，更新 Buffer 与 interest
+```
+
+更严格一点说：
+
+```text
+epoll：
+Linux 的 I/O 多路复用机制。
+它维护“关注哪些 fd”，并在 wait 时告诉你“哪些 fd ready”。
+
+Reactor：
+用户态架构模式。
+它把 epoll、EventLoop、Channel、callbacks、Connection 等组织起来，
+形成“等待 -> 找到 handler -> 分发 -> 推进状态”的循环。
+```
+
+因此，只有 `epoll_wait` 的程序不一定就是完整的 Reactor。比如 Week9 的过程式 server 已经使用 epoll，但 `main` 里仍然直接判断 listener、connection、read/write；它有 I/O 多路复用，却还没有把职责拆成完整的 Reactor components。
+
+也可以这样记：
+
+```text
+epoll 像“很多 fd 的就绪通知系统”
+Reactor 像“收到通知后，整个程序如何分派和处理的架构”
+```
+
+Day3 你会真正把两者接起来：`EventLoop` 用 `epoll_wait` 取得多路复用结果，再把每条 ready event 交给 Day2 的 `Channel`。
+
+---
+
 ## 2.1 `Reactor` 到底是什么
 
 `Reactor` 来自英文 `react`，即“作出反应”；通常翻译成**反应器模式**。
@@ -603,7 +742,7 @@ g++ -std=c++17 -Wall -Wextra -g \
 ```bash
 cmake -S . -B build
 cmake --build build
-ctest --test-dir build --output-on-failure
+cmake -E chdir build ctest --output-on-failure
 ```
 
 成功标准：
@@ -638,7 +777,29 @@ ready mask 怎样匹配多个 callback
 
 ## 16. Round2：interest 与 ready 必须是两份状态
 
-这一节现在先保留为对照材料；R1 通过后按你的实现重写映射。
+你的 R1 已正式通过。当前 representation 是：
+
+```text
+fd_                 -> Channel 描述的 fd integer
+interest_mask_      -> desired interest
+ready_mask_         -> current ready events
+read_callback_      -> EPOLLIN callback
+write_callback_     -> EPOLLOUT callback
+error_callback_     -> EPOLLERR callback
+```
+
+这套 representation 足够直接，不需要为了“更像框架”更名或重写。
+
+你的 `InterestAndReadyAreIndependent` test 已经建立了关键证据：
+
+```text
+interest = EPOLLIN | EPOLLOUT
+-> ready = EPOLLIN
+-> 再把 interest 改为 EPOLLOUT
+-> ready 仍然是 EPOLLIN
+```
+
+这证明两个 setter 修改的是两份独立状态。
 
 假设未来 Connection 处于：
 
@@ -673,6 +834,8 @@ ready 是一次 wait 返回的 observed state
 ```
 
 `handle_event()` 的输入语义是 ready，不是 interest。否则程序会把“我想观察 writable”误当成“现在已经 writable”。
+
+在你的实现中，这一点已经落地：`handle_event()` 只读取 `ready_mask_`；`interest_mask_` 完全没有参与本轮 dispatch。Day3 会让 EventLoop 分别承担两件事：把 `interest_mask_` 同步给 epoll，再把 `epoll_wait` 的返回结果写入 `ready_mask_`。
 
 ---
 
@@ -710,7 +873,13 @@ mask &= ~static_cast<std::uint32_t>(EPOLLOUT);
 那么前一个命中不应该天然排斥后一个
 ```
 
-这正是 R1 要用 `EPOLLIN | EPOLLOUT` 证明的行为。这里不规定你必须使用哪一种具体分支布局，只规定 observable result。
+你的真实布局已经给出了正确答案：read、write、error 是三个彼此独立的 `if`，所以一个 bit 命中不会排斥后面的 bit。当前 source 顺序是：
+
+```text
+read -> write -> error
+```
+
+这个顺序只是实现细节，public contract 没有规定 callback order。你原来的 `CombinedReadWriteDispatchesBoth` 用终端输出观察到了两个 callback，但没有 assertion；新增的独立 `channel_codex_test.cpp` 已用两个计数器证明 read/write 各执行一次，因此不需要你再手写同义测试。
 
 ---
 
@@ -727,6 +896,8 @@ handle_event 内再次计算 ready & interest，才决定是否调用
 原因是 `EPOLLERR` 和 `EPOLLHUP` 即使没有显式写入 interest mask，也可能由 epoll 报告；而 ready mask 本身才是本轮事实。
 
 今天 R1 直接注入 simulated ready mask，所以测试也应以 ready mask 为 dispatch input。
+
+你的 `handle_event()` 正是直接检查 `ready_mask_ & EPOLL*`，没有再与 `interest_mask_` 求交，这部分保持不动。
 
 ---
 
@@ -783,6 +954,8 @@ std::function<void()> b = [] { /* work */ };
 
 不同 callable 的具体 type 被统一藏在同一个 wrapper interface 后面，这称为 type erasure，即类型擦除。
 
+在你的 Channel 中，三个 callback members 的静态 type 都是同一个 `Callback`，也就是 `std::function<void()>`。测试中的两个 lambda 本来是两个不同的闭包类型，但赋给 `read_callback_` 和 `write_callback_` 后，Channel 可以用统一的 `callback_()` 形式调用它们；这就是 type erasure 在你当前代码中的实际位置。
+
 对当前 Day2 最重要的三个事实：
 
 ```text
@@ -813,6 +986,20 @@ read_callback_ = std::move(callback);
 
 这里不要标 `noexcept`：`std::function` 的构造或赋值可能分配内存，失败时可能抛异常。
 
+你当前三个 setter 使用的是：
+
+```cpp
+read_callback_ = callback;
+```
+
+行为正确，但 `callback` 已经是 setter 内部的局部参数，这里再按 lvalue 赋值会复制一次 `std::function`。Round3 做一个确定的小升级：
+
+```cpp
+read_callback_ = std::move(callback);
+```
+
+write/error setters 同样修改，并在 `channel.cpp` 加入 `<utility>`。这只是减少一次不必要的 copy，不是修复 R1 correctness bug。
+
 ---
 
 ## 22. lambda capture 与 lifetime
@@ -838,6 +1025,8 @@ test local count
 ```
 
 这个顺序是安全的，因为 dispatch 发生在 `count` lifetime 内。
+
+你的 `CombinedReadWriteDispatchesBoth` 捕获的是 `[&value]`。`value` 与 `channel` 都位于同一个 test scope，且 `handle_event()` 在 scope 结束前同步执行，所以这次引用 lifetime 正确。测试里的 `std::cout` 可以帮助人工观察，但真正的 test oracle 应是 `EXPECT_EQ`；这一点已经由独立补充测试负责，不要求你重写。
 
 ### 22.2 `[this]`
 
@@ -878,6 +1067,8 @@ channel.set_read_callback([this] {
 R1 callback 不抛异常，便于只验证 dispatch。
 
 Channel V1 的 `handle_event()` 不标 `noexcept`，也不在内部吞掉 callback exception。若未来 callback 抛异常，exception 沿调用栈传播给 EventLoop caller。
+
+你的 source 符合这项边界：`handle_event()` 没有 `noexcept` 和 `try/catch`，三个 callback setters 也没有错误地标成 `noexcept`。note 对 `explicit` 与 `noexcept` 在类外 definition 中的区别解释正确。
 
 这并不等于最终 production policy。它只是当前最小且可解释的边界：
 
@@ -923,6 +1114,8 @@ EventLoop 拥有 epoll fd
 
 不要因为 Channel 保存一个 `int fd`，就让 Channel 和 Connection 同时 close 它。
 
+你的 `Channel` 没有自定义 destructor，也没有任何 `close` 调用，因此当前就是 non-owning。独立 `DestroyingChannelDoesNotCloseFd` test 进一步用真实 pipe fd 验证：局部 Channel 析构后，`fcntl(fd, F_GETFD)` 仍然成功。
+
 ---
 
 ## 25. 为什么当前使用 composition，不做继承层次
@@ -937,6 +1130,8 @@ Connection has a Channel
 ```
 
 Channel 通过 callbacks 调回不同业务对象，已经允许 listener 与 connected socket 复用 event dispatch 机制。
+
+你的 R1 没有 base class、virtual function 或业务 subclass，这与当前设计完全一致，保持不动。
 
 当前不需要：
 
@@ -953,30 +1148,33 @@ virtual callback hierarchy
 
 # Part 3：收尾、打磨与验收
 
-## 26. Round3 的初始方向
+## 26. Round3：沿着你的 R1 做三个小收口
 
-这一节会在 R1 正式通过后，按照你的真实实现改成明确任务。现在先给出 Day2 的停止边界与证据类别，不要求你提前执行。
-
-R1 通过后只打磨当前 `Channel`，不重写另一套 reference version。预计只保留这些高价值 evidence：
+不重写 `Channel`，保留：
 
 ```text
-combined EPOLLIN | EPOLLOUT 两个 callback 都发生
-EPOLLERR 与普通 event 组合时不吞掉其中之一
-empty callback 安全跳过
-interest 与 ready 独立
-Channel 析构不 close fd
-Day1 Buffer regression tests 继续通过
+fd_
+interest_mask_
+ready_mask_
+三个 Callback members
+handle_event 中三个独立 if
 ```
 
-具体补哪一条、改哪个 function、是否已经由 R1 tests 覆盖，要等检阅你的 code 后写成单一路径，不在这里用一串“如果 A/如果 B”把决策退回给你。
+只做以下三项明确工作：
+
+```text
+1. 三个 callback setter 改为 std::move(callback)，channel.cpp include <utility>。
+2. channel.hpp 删除当前没有使用的 <sys/socket.h> 与 <unistd.h>；保留 <sys/epoll.h>。
+3. 保留你的 channel_test.cpp；直接使用 Codex 已补的 channel_codex_test.cpp，不要求你再手写测试。
+```
+
+第 2 项只整理 header dependency，不改变 API。当前 public contract 语义直接使用 Linux `EPOLL*` bits，因此本周保留 `<sys/epoll.h>` 是清楚且务实的选择。
 
 ---
 
 ## 27. non-owning fd 的最小证据
 
-如果 R1 只从 source review 就能清楚看到 destructor 没有 `close`，Round3 不一定需要额外系统调用测试。
-
-若需要 executable evidence，可以使用 `pipe()` 创建两个真实 fd：
+这项 evidence 已由 `tests/channel_codex_test.cpp` 完成，不需要你再实现。它使用 `pipe()` 创建两个真实 fd：
 
 ```text
 pipe 创建 read fd 与 write fd
@@ -1003,7 +1201,7 @@ int fcntl(int fd, int command, ...);
 const int result = ::fcntl(read_fd, F_GETFD);
 ```
 
-这个 probe 只证明 Channel destructor 没有关闭该 fd，不证明整个未来 Connection lifetime 已正确。
+实际结果为 PASS。这个 probe 只证明 Channel destructor 没有关闭该 fd，不证明整个未来 Connection lifetime 已正确；Connection 的 owner/remove 顺序仍留给 Day5/Day6。
 
 ---
 
@@ -1015,16 +1213,18 @@ Day2 的 Channel dispatch 是单线程组件测试，默认运行：
 g++ -std=c++17 -Wall -Wextra -g \
     -fsanitize=address,undefined -fno-omit-frame-pointer \
     -Iinclude/reactor \
-    src/channel.cpp tests/channel_test.cpp \
+    src/channel.cpp tests/channel_codex_test.cpp \
     -lgtest_main -lgtest -pthread \
-    -o channel_test_san
+    -o channel_codex_test_san
 
-./channel_test_san
+./channel_codex_test_san
 ```
 
 今天不把 TSan 当打卡项：R1 没有并发执行流，核心风险是 state dispatch 与 lifetime，不是 data race。
 
 ASan/UBSan 没有报告只说明本次覆盖路径没有被它们发现 memory/undefined-behavior 问题，不替代 combined-mask assertions。
+
+本次已经实际执行：normal build 7/7 PASS，ASan/UBSan build 7/7 PASS 且无报告。你完成 setter 的 move 小改后，再运行一次即可，不增加新 case。
 
 ---
 
@@ -1038,6 +1238,8 @@ channel library/source
 ```
 
 Day1 的 `buffer_test` 继续存在。`ctest` 应同时汇总两组 component tests。
+
+你的 CMake 已经拥有 `buffer`、`buffer_test`、`channel`、`channel_test` targets。clean build 零 warning，当前 CTest 共 11/11 PASS，其中 Buffer 7 项、你写的 Channel 4 项。独立 Codex tests 当前用上节的直接 g++ 命令运行，不要求你再修改 CMake。
 
 今天不新增：
 
@@ -1066,11 +1268,13 @@ TSan target
 
 不需要把整篇教程重新抄一遍，也不要求重复回答已经被 code 和 tests 清楚证明的问题。
 
+你当前 note 中关于 `explicit`/`noexcept` 的一节正确，已经记录了今天实际遇到的编译语义问题。其余机制由 source 和 tests 已经清楚证明，不要求为了模板完整性补抄六节。
+
 ---
 
 ## 31. Day2 最终验收问题
 
-这些问题用于检查解释能力，不是强制誊写作业。若 code、note 与对话已经覆盖，可以直接用现有 evidence 验收。
+这些问题用于读完 R2 后口头检查，不是强制誊写作业。R1 的正式通过不依赖你把它们抄入 note。
 
 1. `interest_events` 与 `ready_events` 分别是谁的愿望和谁的事实？
 2. 为什么 `EPOLLIN | EPOLLOUT` 不能按“二选一”处理？

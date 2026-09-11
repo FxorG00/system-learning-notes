@@ -6088,3 +6088,15 @@ Round2 预留 interest-vs-ready 因果链、bitmask 组合/检测、Linux event 
 用户开始阅读 Day2 时指出，`Reactor` 在 Day1 和 Week10 主线中已经出现，却从未在 daily 术语区建立含义。已在 Day2 §2.1 补充：`Reactor` 源自 `react`，是组织“统一等待 ready events -> 分发 -> callback 处理”的 event-driven architecture pattern；用完整流程串联 kernel readiness、`epoll_wait`、EventLoop、Channel、Acceptor/Connection 与 interest update，并明确 Reactor 不等于 epoll，EventLoop/Channel 也分别只是该架构中的具体职责对象。可复用原则：一周的核心架构名词不能因为已在 week plan 或前一日标题中出现，就假定用户已经理解；首次真正依赖该概念的 daily，必须先解释英文来源、它解决的问题、完整执行链、与相邻机制的层次区别，以及今天只实现其中哪一部分，再进入子组件术语。
 
 用户使用的 Typora 内置 Mermaid 版本为 `8.8.3`。Day2 新增 Reactor 图中，未加引号的节点标签 `Acceptor / Connection 执行 accept、recv 或 send` 触发 lexical error；已将 Day2 全部 Mermaid node labels 统一改为双引号包裹的简单文本，并移除 label 中容易触发旧 parser 的 `/`、中文顿号及非必要 edge labels。可复用交付规则：主线与理论线的 Mermaid 图都必须以 Typora Mermaid 8.8.3 为兼容下限；节点文字统一写成 `ID["label"]`，避免在未引用 label 中放 `/`、括号、顿号或复杂代码表达式，生成后不能只检查 Markdown fence，还要检查旧版 Mermaid 可解析性。
+
+---
+
+## 2026-09-11：Week10 Day2 Round1 正式通过
+
+用户在 Ubuntu `/home/xgf/code/system-learning/cpp/week10` 完成 `Channel` V1。真实 representation 为 `fd_`、`interest_mask_`、`ready_mask_` 与 read/write/error 三个 `std::function<void()>` members；`handle_event()` 分别用三个独立 `if` 检查 `EPOLLIN`、`EPOLLOUT`、`EPOLLERR`，因此 combined bits 不会被互斥分支吞掉。Channel 无 destructor/close 行为，符合 non-owning fd contract；interest 与 ready 的 getters/setters 也保持两份独立状态。
+
+用户现有四项 GTest 中，`InitialState`、`InterestAndReadyAreIndependent`、`MissingCallbackIsSkipped` 有效；`CombinedReadWriteDispatchesBoth` 能人工看到两个输出，但没有任何 `EXPECT_*`，即使某个 callback 未执行也会 PASS，所以它不是自动 oracle。按照用户允许 Codex 代写体力测试的偏好，已在 Ubuntu 另建 `tests/channel_codex_test.cpp`，不修改用户原测试，补充 read-only、write-only、combined exact-once、error+read exact-once、zero-ready、dispatch 不清 masks、析构不 close pipe fd 共 7 项。用户 CMake clean build 零 warning，原 CTest `11/11` PASS（Buffer 7 + Channel 4）；独立 Codex normal tests `7/7` PASS，ASan/UBSan `7/7` PASS 且无报告。
+
+R1 correctness 已闭环，评分 `94/100`，正式进入 Round2。轻量扣分项：用户 combined test 缺 assertion；三个 by-value callback setters 当前又 copy 到 member，正确但可改用 `std::move`；header 有未使用的 `<sys/socket.h>`/`<unistd.h>`，note 只记录了 `explicit` 与 `noexcept`。后两项不属于 R1 correctness blocker。note 对 `explicit` 只出现在 declaration、`noexcept` 必须与 out-of-class definition 保持一致的解释正确。
+
+R1 后已以用户当前磁盘版 Day2 为 edit base 定向润色 R2/R3，完整保留用户新增的两节 I/O multiplexing/Reactor 解释与 `cmake -E chdir build ctest` 命令。R2 逐节把通用模型映射到真实 members、三个独立 `if`、`[&value]` capture 和 implicit non-owning destructor；Round3 收敛为单一路径：保留 representation/dispatch，三个 setters 改 move，清理两个无用 header，并直接使用 Codex 补充测试，不让用户重写 dirty-work cases。可复用检阅经验：允许用户只写一部分 tests 时，不能因“测试数量少”直接扣掉已由独立 evidence 覆盖的 correctness；但仍要逐项区分用户测试真正能失败的 assertion 与仅打印的人工观察，并把 Codex 测试放进单独文件，避免覆盖用户学习代码。
