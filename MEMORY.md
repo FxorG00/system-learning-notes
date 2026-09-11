@@ -6126,3 +6126,15 @@ Round2 预留 `data.fd + registry` 与 `data.ptr` 的第一层比较、desired s
 本日教程生成前已用 Linux man-pages 核对：`epoll_create1` 返回指向 kernel epoll instance 的 fd；`EPOLL_CTL_ADD/MOD/DEL` 分别建立、修改、删除 interest-list entry；现代 Linux 的 DEL 可传 null event；`epoll_event.data` 由 ctl 保存并由 wait 原样带回；`epoll_wait` 返回 ready record count，timeout 返回 0，EINTR 单独报告；`socketpair` 提供 connected local bidirectional stream。主线 daily 的既有三 Part、R1 闸门、术语/API 解释、Typora Mermaid 8.8.3 与“不泄露 R1 implementation”规则保持不变。
 
 技术交付前另写了一份未进入学习目录的 `data.ptr` private reference implementation，在用户 Ubuntu 使用 `g++ -std=c++17 -Wall -Wextra -g` 零 warning 编译运行，五段 probe 输出 `EVENT_LOOP_REFERENCE_PASS`；ASan/UBSan build 同样 PASS 且无报告。该验证只证明教程的 public contract、API 组合与 probe 顺序可执行，不把 `data.ptr` 规定为用户 R1 的标准答案。
+
+---
+
+## 2026-09-12：Week10 Day3 Round1 首次检阅，暂未通过
+
+用户在 Ubuntu `/home/xgf/code/system-learning/cpp/week10` 完成第一版 `EventLoop`：选择 `epoll_event.data.fd + std::map<int, Channel*>`，ADD/MOD/DEL 与 map 的插入、更新、删除主线已经形成，epoll fd 由 EventLoop constructor/destructor 管理，正常 CMake clean build 零 warning。用户不愿亲手写 probe，按既有 dirty-work testing 原则允许由 Codex 在独立文件 `tests/event_loop_codex_probe.cpp` 中补 evidence，不以此扣核心 coding 分。
+
+首次 source review 与动态 probe 发现一个 R1 blocker：`poll_once` 把“调用一次 `epoll_wait`，处理该次返回数组中的 `[0, ready_count)`”实现成“在整个 timeout 窗口中反复调用 `epoll_wait(..., maxevents=1)` 并累计 records”。对持续 writable 的 LT socket，20ms 内产生 `write_records=59378`、`write_calls=59378`，而正确的单次 wait/dispatch contract 在一个已注册 fd 上应返回一条 record 并 dispatch 一次。这个结果也回答了用户对 maxevents 的疑问：maxevents 是 caller 本轮 output array 的容量和单批上限，不是需要提前知道的 ready 总数；未装入本批的 ready entries 可由后续 `poll_once` 继续取得，不能通过持续 wait 到 timeout 来“收集完整总数”。当前 `timeout_ms=-1` 会直接返回、`timeout_ms=0` 也可能短暂自旋，均来自同一层控制流偏差。
+
+另有两项需要与 R1 contract 对齐：ADD/MOD/DEL 失败当前只 `perror + return`，`poll_once` 的非 EINTR failure 返回 `-1`，与教程统一的 `std::system_error` exception contract 不一致；CMake 的 `event_loop` target 没有链接 `channel`，空的 `event_loop_probe.cpp` 又被交给 `gtest_discover_tests`，所以 clean build 虽成功但 `CTest` 明确输出 `No tests were found`，真实 probe 通过 CMake target 链接时会出现 Channel undefined references。header 中重复 `<map>/<unistd.h>` 及大量无用 includes 只属清理项，不阻塞核心 R1。
+
+可复用检阅经验：一个空 executable 能让 static library 的 unresolved dependency 暂时不被 linker 拉入，`cmake --build` 成功不证明 target dependency 完整；必须让 probe 真实引用 component。`gtest_discover_tests` 也不能把普通 `main()` 自动变成 test，必须看到 CTest 的实际 test count。对于 event-loop wrapper，“poll once”应先明确一次 kernel wait 的 batch boundary；ready record count、callback count、当前 ready fd 总数与整个 timeout 期间累计事件数是四个不同概念。Round1 修复后需重跑 Codex probe，再决定正式通过与 R2/R3 定向润色。
