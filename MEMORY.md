@@ -6166,3 +6166,15 @@ R1 剩余非阻塞工程项：底层先 `perror` 再用 `errno` 构造 `system_e
 用户随后说明此前不知道 `poll_once(-1)` contract；该信息只埋在 epoll API 说明中，没有在 R1 public contract 和 method behavior 旁明确交付，因此不能把第一次遗漏归因于用户基础不扎实。未来 daily 的 wrapper API 若沿用底层 sentinel value，如 timeout `-1`、special fd、npos 或 EOF，必须在 R1 public contract、最小调用例子和 observable behavior 中同时写明，不能只在后文术语/API 表中出现。
 
 用户修复实现：先识别原始 `timeout_ms == -1`，infinite mode 向 `epoll_wait` 传 `-1`；finite mode 才在剩余时间小于 0 时返回 timeout。Ubuntu clean build 零 warning，正确的 CTest 3.16 入口 `cmake -E chdir build ctest --output-on-failure` 得到 12/12 PASS，ASan/UBSan probe PASS。用户把原 read-ready case 的参数改为 `poll_once(-1)`，它能回归“旧代码在 syscall 前直接返回 0”的 bug，但因为 bytes 在调用前已经 ready，不能区分 infinite wait 与 timeout 0 immediate poll：两者都会返回该 ready event。可复用 test-oracle 原则：测试名称或参数值不等于相应状态已经建立；要证明 blocking/infinite wait，必须先建立 not-ready，再由另一 execution flow 延迟制造 readiness，并断言 wait 在事件出现后返回。用户无需手写整套 probe，但这一条状态建立值得亲手完成；重复 RAII/helper/checks 仍可复用。当前实现 correctness 已修复，Day3 最终通过前只剩该最小 evidence 与 note 中两句旧表述同步。
+
+---
+
+## 2026-09-12：Week10 Day3 正式通过
+
+用户尝试亲手把 `poll_once(-1)` 改造成 delayed-readiness probe，但 lambda 使用 `[sockets]` 按值捕获了拥有两个 fd 的 `SocketPair`。该 RAII wrapper 当时允许隐式复制，于是多个 object 保存相同的 fd integers，并都会在 destructor 中执行 `close`；某个副本析构后，其他副本中的整数不再代表有效资源。这里不是 `send` 阻塞后抛异常：POSIX `send` 不抛 C++ exception，失败时返回 `-1` 并设置 `errno`。与此同时，局部 `std::thread` 没有 `join` 或 `detach`，如果程序正常走到其 destructor，还会触发 `std::terminate`。由于 delayed send 没有可靠地产生 readiness，main 最终停在 `poll_once(-1)`。
+
+应用户赶时间的要求，Codex 只重写 Ubuntu 的 `tests/event_loop_probe.cpp`，没有修改 `EventLoop` component：把 `SocketPair` 设为 non-copyable/non-movable；线程只捕获 non-owning sender fd integer 和结果变量；sender sleep 30ms 后使用 `send(..., MSG_NOSIGNAL)`；main 在初始 not-ready 状态进入 `poll_once(-1)`；随后 join sender，并精确检查 send result、ready record count、callback count 与收到的 byte；原有 MOD 到 EPOLLOUT、MOD 回 EPOLLIN 和 DEL 场景也全部恢复。这个 case 真正区分了 infinite wait 与 timeout 0 immediate poll，因为进入 wait 时 fd 尚未 ready。
+
+最终证据基于修复后 source：normal clean build 零 warning；直接运行输出 `EVENT_LOOP_PROBE_PASS`；使用兼容当前 CMake/CTest 3.16 的 `cmake -E chdir build ctest --output-on-failure` 得到 12/12 PASS；ASan/UBSan probe PASS 且无报告。Week10 Day3 最终评分 `97/100`，正式通过。用户的核心 EventLoop 实现、timeout 修复和第一次 probe 尝试均由自己完成；Codex 在时间约束下代写最后的测试脚手架，不影响当天机制掌握。
+
+可复用经验：资源拥有型 RAII wrapper 必须明确 copy/move contract，通常删除 copy 并按需要实现 move，绝不能让 compiler-generated copy 制造多个 owner；异步 probe 不要按值捕获 owning wrapper，优先只捕获生命周期已由外层保证的 non-owning handle。`std::thread` object 析构前必须已经 join/detach。检阅“卡在 send”时先确认究竟是哪一个 syscall 阻塞，并检查返回值与 `errno`，不能把普通 `-1` 误称为 exception。阻塞语义测试的关键是状态建立和因果链，重复的 RAII helper、join cleanup 与 assertions 可以由 Codex 代写，但必须向用户讲清该 case 为什么能区分目标行为。
