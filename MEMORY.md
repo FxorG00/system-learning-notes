@@ -6152,3 +6152,13 @@ R1 剩余非阻塞工程项：底层先 `perror` 再用 `errno` 构造 `system_e
 已按当前磁盘文件定向润色 Day3 R2/R3，并完整保留用户在 R1 阅读期间新增的“multiplex/demultiplex”与 `std::system_error` 解释。后半教程现已明确选择 `data.fd + map_`，把 1024-record batch 与第一次失败证据映射到真实代码；Round3 收敛为保存 errno、清理 header 与正确 CTest registration 三项单一路径，不要求用户重写 probe、改成 data.ptr 或完成重复验收题。Week10 Day3 Round1 评分 `95/100`，正式进入 Round2。
 
 可复用经验：R1 的核心 behavior 已由独立动态证据证明时，普通 probe 未接入 CTest 属于工程组织缺口，可放入 R3，不应继续否定 component V1；但最终 Day 通过前必须让 CTest 显示实际测试数量。R1 后定向润色要保留用户阅读中加入的解释，并把真实失败数据写入后半教程，使 R2 解释“为什么第一版错、第二版为何正确”，而不是恢复成通用 alternatives。
+
+---
+
+## 2026-09-12：Week10 Day3 最终复检，暂留一个技术边界
+
+用户完成 Round2/Round3 大部分收口：`event_loop.hpp` 已清到 `channel.hpp + map` 两项真实依赖；ADD/MOD/DEL/WAIT 的正常失败路径改为抛 `std::system_error`；CMake 为普通 probe 使用 `add_test`，`event_loop` 正确 PUBLIC link `channel`。Ubuntu clean build 零 warning，`cmake -E chdir build ctest --output-on-failure` 实际执行 12/12 PASS，event-loop probe、ASan/UBSan 与 focused strace 均 PASS；strace 明确显示 CREATE、ADD、timeout WAIT、read WAIT、MOD OUT、write WAIT、MOD IN、DEL、close 链。此前 `ctest --test-dir build` 显示 0 tests 是因为当前 CMake/CTest 3.16 不支持该新入口并仍在 source directory 运行，不是 `add_test` 失效；当前 Ubuntu 应继续使用 `cmake -E chdir build ctest` 或进入 build directory 后运行 ctest。
+
+最终 source/note review 发现一个不能由现有正 timeout probe 覆盖的真实 bug：`poll_once` 计算 `remained_ms = timeout_ms - elapsed_ms` 后无条件把 `remained_ms < 0` 当作 timeout，导致标准 epoll 语义中的 `timeout_ms == -1` infinite wait 在第一次 syscall 前直接返回 0。Codex 独立最小 probe 在 fd 已经 read-ready 时调用 `poll_once(-1)`，实际得到 `records=0 calls=0`、exit 1。用户 note 的“remained_ms<0 直接结束”也因此只对有限非负 timeout 成立；实现必须先区分原始 `-1` infinite mode 与 finite timeout。constructor 仍保留 `perror` 后再读取 errno 构造 exception，与 note 中“底层只抛、顶层统一输出”不一致，是轻微收口项；event-loop probe 仍链接不需要的 GTest/Threads libraries 只属清理，不阻塞 correctness。
+
+本次形成新的测试分工原则：用户说 probe/test 是 dirty work 时，不能直接批准跳过，也不能反过来要求手写整套 boilerplate。先判断该 probe 是否承载独立设计与机制学习。若它只是重复 fixture、RAII helper、批量 case 或已由其他 oracle 覆盖，可由 Codex 在独立文件补齐；若它要求用户预测 state transition、定义 observable contract、区分相近 API 语义，或当前实现确实曾因缺少该 probe 出现机制错误，则不是纯 dirty work。此时用户至少应亲手完成一个最小高价值 case，或亲自写出预测、运行、解释 failure、修改实现并复检。Week10 Day3 的整套 socketpair helper 可由 Codex提供，但 `poll_once(-1)` case 值得用户亲手补：它直接检验 finite timeout 与 infinite wait 的分支模型。最终 Day3 暂评 `94/100`；修复该 case、让 probe PASS并同步 note 后即可正式通过，不要求补写其余重复 tests。
