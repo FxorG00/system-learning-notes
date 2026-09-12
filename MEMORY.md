@@ -6178,3 +6178,19 @@ R1 剩余非阻塞工程项：底层先 `perror` 再用 `errno` 构造 `system_e
 最终证据基于修复后 source：normal clean build 零 warning；直接运行输出 `EVENT_LOOP_PROBE_PASS`；使用兼容当前 CMake/CTest 3.16 的 `cmake -E chdir build ctest --output-on-failure` 得到 12/12 PASS；ASan/UBSan probe PASS 且无报告。Week10 Day3 最终评分 `97/100`，正式通过。用户的核心 EventLoop 实现、timeout 修复和第一次 probe 尝试均由自己完成；Codex 在时间约束下代写最后的测试脚手架，不影响当天机制掌握。
 
 可复用经验：资源拥有型 RAII wrapper 必须明确 copy/move contract，通常删除 copy 并按需要实现 move，绝不能让 compiler-generated copy 制造多个 owner；异步 probe 不要按值捕获 owning wrapper，优先只捕获生命周期已由外层保证的 non-owning handle。`std::thread` object 析构前必须已经 join/detach。检阅“卡在 send”时先确认究竟是哪一个 syscall 阻塞，并检查返回值与 `errno`，不能把普通 `-1` 误称为 exception。阻塞语义测试的关键是状态建立和因果链，重复的 RAII helper、join cleanup 与 assertions 可以由 Codex 代写，但必须向用户讲清该 case 为什么能区分目标行为。
+
+---
+
+## 2026-09-12：Week10 Day4 教程正式生成
+
+已生成 `week10/day4/day4.md`，主题为 `Acceptor` 与 accepted-fd ownership handoff。教程严格承接已通过的 Day3：`EventLoop` 已能把真实 listener readiness 交给 `Channel`，Day4 只抽出 Week9 已验证的 listening path，并回答 listening socket 由谁拥有、listener ready 后谁执行 accept-drain、accepted fd 怎样立即得到唯一 owner。完整 echo、input/output Buffer、connected-socket Channel 留给 Day5 `Connection`；callback 内 self-destruction、stale event 与 fd reuse 留给 Day6。
+
+教程保持主线 daily 既有三 Part 与 R1/R2/R3 结构。Part1 从 Week9 `main` 职责过载的问题出发，先给出 Acceptor 的实际功能，再解释 accept、Acceptor、listening/accepted socket、accept queue、pending、drain、handoff、factory boundary、backlog 与 loopback；`socket`、`setsockopt`、`bind`、`listen`、`getsockname`、`accept4` 均保留 signature、参数、返回值与最小调用例子。三个 Mermaid flowcharts 均按 Typora Mermaid 8.8.3 编写，节点使用双引号简单 label。
+
+R1 固定文件与 public behavior，但不提供 Acceptor members、member callback wiring、accept loop source 或完整 probe code。public callback 使用 `std::function<void(UniqueFd)>`；教程提供已学过的最小 `UniqueFd` 支持组件，避免让用户重复完成 RAII boilerplate，也把 Day3 probe 暴露的 copied-owning-wrapper/double-close 教训直接落实到 accepted fd handoff。constructor 绑定 `127.0.0.1`，允许 port 0 并通过 `port()` 暴露实际端口；`start()` 执行 listen、EPOLLIN interest 与 EventLoop registration；EventLoop 必须比 Acceptor 活得久，Acceptor owns listening fd/Channel，上层 callback 接管 accepted UniqueFd。
+
+R1 probe 要求先完成 3 次 blocking connect，并让每个 client 发送同一字节 `A`，然后才调用一次 `poll_once(1000)`。精确 oracle 为 1 条 listener ready record、3 次 new-connection callback、3 个有效 accepted owners、每个 fd 同时具有 O_NONBLOCK/FD_CLOEXEC，并各自 recv 到 `A`。这个状态建立能确定性区分“一次只 accept 一个”与“callback 内 drain 到 EAGAIN”，也继续区分 ready-record count 和 accepted-resource count。普通 probe 通过 `add_test` 注册，不使用 `gtest_discover_tests`。
+
+R2 在闸门后串清 client connect、kernel accept queue、epoll readiness、Channel dispatch、accept4、UniqueFd move 与 server owner 的完整因果链；解释 listener/accepted fd flags 的独立性、move-only argument 穿过 `std::function`、constructor/member order exception safety、start commit point 与 unregister-before-close。Round3 初版只锁定 ownership、3-connection drain 与 evidence 三个出口，不猜用户 representation；R1 正式通过后必须以用户当前磁盘文件为 edit base，保留用户阅读期间新增内容，并把后半逐节改成针对真实 source 的唯一升级路径。
+
+技术交付前，另写了一份不进入学习目录的 temporary Acceptor reference，直接链接 Ubuntu 当前真实 `src/channel.cpp` 与 `src/event_loop.cpp`。使用 `g++ -std=c++17 -Wall -Wextra -g -pthread` 编译运行输出 `ACCEPTOR_REFERENCE_PASS`；ASan/UBSan build 同样 PASS 且无报告。它验证了 move-only `UniqueFd` 能作为 `std::function<void(UniqueFd)>` argument、一次 listener record 能 drain 三个已 pending connections、accepted fd flags 与 byte transport contract 可执行。临时 source 已从本地删除，用户 Ubuntu 学习目录未被修改。
