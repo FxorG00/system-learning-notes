@@ -6204,3 +6204,19 @@ R2 在闸门后串清 client connect、kernel accept queue、epoll readiness、C
 以后每次新建或修改主线 daily，都必须先读取 `DAILY_INDEX.md` 并判断是否需要同步。出现以下变化时更新索引：daily 路径或标题改变；核心问题、主要产出、技术范围或检索关键词发生实质变化；新增 Week/Day；已列出的后续计划成为真实 daily。若只补充解释措辞、注释、API 小例子、局部图示或不改变检索含义的勘误，可以不改索引，避免目录跟随每个细节膨胀。
 
 `DAILY_INDEX.md` 是从 daily 派生出的 navigation artifact，daily/weekly plan 才是内容事实来源。维护时只能让索引追随真实教程，绝不能为了让目录表述成立而反向改写 daily。生成后应核对 canonical daily 数量、每条相对链接存在、摘要与当前文件主问题一致，并确认 diff 中没有意外改动任何 daily。R1 后对 R2/R3 做定向润色时，也要检查核心产出或技术边界是否已经改变到需要更新索引；若没有实质变化，则保持目录稳定。
+
+---
+
+## 2026-09-13：callback-driven component 的接口讲解与最小用法样例
+
+用户阅读 Week10 Day4 `Acceptor` R1 contract 时指出：教程只列出 `start()`、new-connection callback setter 与一个含义模糊的 `fd()` accessor，却没有明确展示“谁真正执行 accept”“谁把 accept handler 注册成 Channel 的 read callback”，导致即使 public API 已列全，也无法形成可实现的 event-driven 调用链。用户同时需要一个很小的 API 使用样例先检查 component wiring，而不是写完整三连接 probe 后才知道第一步是否接通。
+
+本次已在 `week10/day4/day4.md` 明确区分两层 callback：Channel read callback 是 Acceptor 自己安装的 `void()` framework callback，listener 出现 `EPOLLIN` 时调用 private `handle_accept()`；`NewConnectionCallback` 是上层 owner 安装的 `void(UniqueFd)` callback，由 `handle_accept()` 每次 `accept4` 成功后调用并移交 accepted-fd ownership。完整链固定为 `listener EPOLLIN -> Channel read callback -> handle_accept -> accept4 -> NewConnectionCallback -> server owner`。所谓“持续 accept”不是后台无限循环或 public caller 重复调用，而是每次 listener readiness 到来后 drain 到 `EAGAIN`，返回 EventLoop，下一次 readiness 再进入。
+
+可复用编写原则：callback-driven component 不能只列 public methods 和 callback typedef。教程在 R1 闸门前必须说明每个 callback 的签名、安装者、触发者、调用目标和所在层次；若真正完成核心动作的是 private event handler，应给出 private declaration 与 wiring chain，但仍保留 handler body 和控制流给用户独立实现。相邻 callback 名字都含 read/accept/connection 时，要主动区分 framework callback 与 upward notification callback，避免把“收到 readiness”和“产出业务对象”混成一次调用。
+
+资源 accessor 应按角色命名。Day4 将模糊的 `fd()` 改为 `listen_fd()`，并明确它只借用返回 Acceptor 拥有的 listening fd，不返回 accepted connection fd，也不转移 ownership；accepted fds 只能经 `NewConnectionCallback` 移交。以后一个 component 同时涉及 listener、accepted socket、epoll fd 等多个 handles 时，不使用脱离语境的 `fd()`，除非该 class 只有一个无歧义的核心 handle。
+
+复杂 component 的 R1 可以先提供一条最小 smoke usage，再保留严格 probe：smoke 只建立一个 client，验证 `start -> connect -> poll_once -> internal handler -> upper callback` 与一次 ownership handoff，帮助快速定位 wiring；完整 probe 再承担 drain、flags、多连接和精确计数等高价值证据。必须明确 smoke 不接入 CTest、不替代最终 probe，避免让用户误以为要维护两套完整测试。这个最小样例可以展示 public API 怎样组合，但不能提前给出 private representation、accept loop 或核心实现答案。
+
+本次修改完整保留用户已加入 Day4 的 `std::exchange`、forwarding-reference 等内容；`DAILY_INDEX.md` 已复核，Day4 的标题、核心问题、产出与检索边界没有变化，因此不更新索引。

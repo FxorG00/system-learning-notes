@@ -116,7 +116,7 @@ flowchart TD
     C --> D["Connections enter kernel accept queue"]
     D --> E["epoll_wait returns listener readiness"]
     E --> F["EventLoop dispatches listening Channel"]
-    F --> G["Channel invokes accept callback"]
+    F --> G["Channel invokes internal accept handler"]
     G --> H["Acceptor obtains accepted fd"]
     H --> I["Acceptor transfers fd owner"]
     I --> J["Server owner stores accepted socket"]
@@ -133,6 +133,55 @@ Acceptor 从 accept queue 取出 accepted fd
 ```
 
 `EventLoop` 和 `Channel` 只负责把 listener readiness 送到 `Acceptor`，不会自动拥有新连接。
+
+### 3.1 今天其实有两个 callbacks
+
+这里最容易混淆的地方是：文档前面都叫它们 callback，但它们处在不同边界。
+
+第一层是 `Channel` 的 read callback：
+
+```text
+类型：void()
+设置者：Acceptor 自己
+触发者：listening Channel
+触发条件：EventLoop 把 listener 的 EPOLLIN 交给 Channel
+调用目标：Acceptor private handle_accept()
+```
+
+第二层是 `Acceptor::NewConnectionCallback`：
+
+```text
+类型：void(UniqueFd)
+设置者：Acceptor 的 caller，也就是未来的 server owner
+触发者：Acceptor::handle_accept()
+触发条件：每一次 accept4 成功取得一个 connected fd
+调用目标：上层接管 accepted socket 的逻辑
+```
+
+两层连起来才是：
+
+```text
+listener EPOLLIN
+-> Channel read callback
+-> Acceptor::handle_accept()
+-> accept4 得到 connected fd
+-> Acceptor NewConnectionCallback
+-> server owner 接管 UniqueFd
+```
+
+`handle_accept()` 是 Acceptor 的 private member function，不是给 `main` 主动调用的 public API。public caller 只调用一次 `start()`；之后由 EventLoop 的 readiness dispatch 驱动它。
+
+也不能把它理解成 Acceptor 永远占着 CPU 反复调用 `accept4`：
+
+```text
+每次 listener ready
+-> handle_accept 本轮循环到 EAGAIN
+-> 返回 EventLoop
+
+以后又有新连接
+-> listener 再次 ready
+-> handle_accept 再执行一轮
+```
 
 ---
 
@@ -500,6 +549,192 @@ const int accepted_fd = ::accept4(
 
 ---
 
+## 7.0 std::exchange
+
+你猜得对，基本就是这个意思。
+
+```cpp
+std::exchange(A, B)
+```
+
+做两件事：
+
+```text
+1. 保存 A 的旧值
+2. 把 A 改成 B
+3. 返回刚才保存的 A 旧值
+```
+
+它不是 `swap`，因为 `B` 不会得到 A 的旧值。
+
+```cpp
+#include <utility>
+
+int value = 10;
+
+int old_value = std::exchange(value, 99);
+
+// old_value == 10
+// value == 99
+```
+
+你 Day4 的 `UniqueFd` 里最关键的用法是：
+
+```cpp
+fd_(std::exchange(other.fd_, -1))
+```
+
+等价于更展开的写法：
+
+```cpp
+fd_ = other.fd_;    // 当前对象拿走旧 fd
+other.fd_ = -1;     // old owner 不再拥有 fd
+```
+
+所以：
+
+```text
+other.fd_ 原来是 7
+-> exchange 返回 7
+-> other.fd_ 变成 -1
+-> 当前对象 fd_ 初始化为 7
+```
+
+这正是 move 的核心：资源从 `other` 转走后，`other` 进入一个明确的空状态，不会在析构时重复 `close(7)`。
+
+函数大致长这样：
+
+```cpp
+template <class T, class U = T>
+T exchange(T& object, U&& new_value);
+```
+
+其中第一个参数必须是可修改的左值，例如 `other.fd_`；第二个参数是它的新值。常见写法还有：
+
+```cpp
+auto* old_ptr = std::exchange(ptr, nullptr);
+bool was_started = std::exchange(started_, true);
+int old_fd = std::exchange(fd_, -1);
+```
+
+压缩记忆：
+
+```text
+std::exchange(A, B)
+= 返回 A 的旧值，同时让 A 变成 B
+```
+
+---
+
+### 7.0.1 U&& 是什么意思？
+
+注释 1
+
+`U&& new_value` 的写法看起来像“右值引用”，但这里更准确叫 forwarding reference（转发引用）：第二个参数不一定是右值。
+
+```cpp
+int x = 1;
+int y = 2;
+
+std::exchange(x, 99);  // 99 是右值
+std::exchange(x, y);   // y 是左值，也合法
+```
+
+原因是 `U` 由第二个实参单独推导：
+
+```cpp
+std::exchange(x, 99);
+```
+
+这里：
+
+```text
+T = int
+U = int
+U&& = int&&
+```
+
+而：
+
+```cpp
+std::exchange(x, y);
+```
+
+这里 `y` 是左值，因此：
+
+```text
+U = int&
+U&& = int& &&
+
+引用折叠后：
+int& && -> int&
+```
+
+所以它最终能接收左值。
+
+函数内部大致是：
+
+```cpp
+T old_value = std::move(object);
+object = std::forward<U>(new_value);
+return old_value;
+```
+
+`std::forward<U>(new_value)` 的作用是保留第二个实参原本的左值或右值身份：
+
+```cpp
+std::string a = "old";
+std::string b = "new";
+
+std::exchange(a, b);            // b 是左值，通常复制给 a
+std::exchange(a, std::move(b)); // b 是右值，可以移动给 a
+```
+
+为什么不用单个 `T`，写成：
+
+```cpp
+T exchange(T& object, T&& new_value);
+```
+
+因为此时 `T` 已经由第一个参数决定了。例如：
+
+```cpp
+std::string a = "old";
+std::string b = "new";
+
+std::exchange(a, b);  // 若第二个参数是 T&&，这里不合法
+```
+
+`T` 已经是 `std::string`，第二个参数就固定为 `std::string&&`，不能绑定左值 `b`。
+
+而 `U&&` 可以同时接受：
+
+```text
+同类型左值：b
+同类型右值：std::move(b)
+可赋值的不同类型："hello"
+空值初始化：{}
+```
+
+例如：
+
+```cpp
+std::string text = "old";
+
+std::exchange(text, "hello"); // T 是 std::string
+                              // U 从字符串字面量推导
+                              // text 可被赋值为 const char*
+```
+
+`class U = T` 里的 `= T` 是默认模板参数：默认认为“新值通常和原对象同类型”，但仍允许编译器从第二个参数推导出更合适的 `U`。它尤其让这种写法自然成立：
+
+```cpp
+std::string text = "hello";
+auto old = std::exchange(text, {});
+```
+
+这里 `{}` 可按默认的 `U = T` 理解成一个空 `std::string`。
+
 ## 7. 为什么今天需要 move-only fd owner
 
 `int fd` 只是一个整数，本身不会表达：
@@ -655,12 +890,15 @@ public:
     void set_new_connection_callback(NewConnectionCallback callback);
     void start();
 
-    int fd() const noexcept;
+    int listen_fd() const noexcept;
     std::uint16_t port() const noexcept;
     bool listening() const noexcept;
 
 private:
-    // Round1: design the representation yourself.
+    // Channel invokes this private entry when the listener is readable.
+    void handle_accept();
+
+    // Round1: design the remaining representation yourself.
 };
 ```
 
@@ -738,16 +976,18 @@ void start();
 ### 9.4 accessors
 
 ```cpp
-int fd() const noexcept;
+int listen_fd() const noexcept;
 std::uint16_t port() const noexcept;
 bool listening() const noexcept;
 ```
 
 ```text
-fd：只返回 non-owning fd number，caller 不得 close
+listen_fd：只返回 Acceptor 拥有的 listening fd number，caller 不得 close
 port：返回 host byte order 的实际绑定端口
 listening：表示 start 是否已成功完成
 ```
+
+`listen_fd()` 不会返回任何 accepted connection fd。Acceptor 不长期保存那些 fds：每个 `accept4` 成功后，accepted fd 都沿 `NewConnectionCallback` 移交给上层 owner。
 
 ### 9.5 ready behavior
 
@@ -793,11 +1033,21 @@ Acceptor 不得在自己的 listening callback 中销毁自己
 Acceptor 如何保存 EventLoop relationship
 listening fd owner 与 Channel 的成员排列
 怎样记录 actual port 和 listening state
-怎样把 member function 接成 Channel callback
 怎样组织一次 accept-drain
 start 失败时哪些状态可以提交
 destructor 怎样执行 non-throwing cleanup
 ```
+
+有一条 wiring 不再留给你猜：
+
+```text
+start
+-> listening Channel read callback 指向 this->handle_accept()
+-> Channel 关注 EPOLLIN
+-> EventLoop ADD listening Channel
+```
+
+你仍然需要自己决定如何用 C++ 表达这条 wiring，以及 `handle_accept()` 内部的控制流；教程不在闸门前给出完整实现。
 
 现在不要继续阅读 Part 2 后半和 Part 3。先完成 R1 source 与 probe；否则后面的 ownership 分解会直接替你做掉今天最值得练习的设计。
 
@@ -813,7 +1063,120 @@ std::vector<UniqueFd> accepted_connections
 
 它不是最终 `TcpServer`，只是今天用来证明 ownership 已经离开 `Acceptor` 的容器。
 
-### 11.1 确定性场景
+### 11.1 先跑一个最小 smoke test
+
+`smoke` 原意是“冒烟”。工程里的 smoke test 表示：先用一个很小的场景确认最基本的链路能够工作，再进入更全面的测试。
+
+下面这份程序只检查：
+
+```text
+一个 client connect
+-> listener EPOLLIN
+-> Channel 调用 handle_accept
+-> accept4 成功
+-> NewConnectionCallback 得到一个 UniqueFd
+```
+
+它不检查三连接 drain、accepted fd flags、callback exception 或完整 lifecycle。先让它通过，可以快速判断你的 component 是否已经接通。
+
+```cpp
+#include "acceptor.hpp"
+
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#include <cstdio>
+#include <iostream>
+#include <utility>
+#include <vector>
+
+int main() {
+    EventLoop loop;
+    std::vector<UniqueFd> accepted_connections;
+
+    // Bind to loopback with port 0, so the kernel selects a free port.
+    Acceptor acceptor(loop, 0);
+
+    // This is the upper-layer callback: it becomes the fd owner.
+    acceptor.set_new_connection_callback(
+        [&accepted_connections](UniqueFd connection) {
+            accepted_connections.push_back(std::move(connection));
+        }
+    );
+
+    acceptor.start();
+
+    // Create one blocking client only for this small smoke test.
+    UniqueFd client(
+        ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0)
+    );
+    if (!client) {
+        std::perror("socket");
+        return 1;
+    }
+
+    sockaddr_in server_address{};
+    server_address.sin_family = AF_INET;
+    server_address.sin_addr.s_addr = ::htonl(INADDR_LOOPBACK);
+    server_address.sin_port = ::htons(acceptor.port());
+
+    if (::connect(
+            client.get(),
+            reinterpret_cast<const sockaddr*>(&server_address),
+            sizeof(server_address)) == -1) {
+        std::perror("connect");
+        return 1;
+    }
+
+    // This wait should dispatch the listener Channel exactly once.
+    const int ready_records = loop.poll_once(1000);
+
+    if (ready_records != 1 || accepted_connections.size() != 1) {
+        std::cerr << "unexpected result: records="
+                  << ready_records
+                  << ", connections="
+                  << accepted_connections.size() << '\n';
+        return 1;
+    }
+
+    std::cout << "ACCEPTOR_SMOKE_PASS\n";
+    return 0;
+}
+```
+
+先直接编译运行：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -g \
+    -Iinclude/reactor \
+    src/channel.cpp \
+    src/event_loop.cpp \
+    src/acceptor.cpp \
+    tests/acceptor_smoke.cpp \
+    -o acceptor_smoke
+
+./acceptor_smoke
+```
+
+这个 smoke test 不接入 CTest，也不替代后面的完整 probe。它只是 R1 写完后的最短连通性检查：先确认 callback wiring 和一次 ownership handoff 能走通，再用完整 probe 验证 drain、flags 与多个 connections。
+
+预期输出：
+
+```text
+ACCEPTOR_SMOKE_PASS
+```
+
+如果这一步没有通过，先顺着下面五个节点定位，不要立即写完整 probe：
+
+```text
+start 是否完成 listen 和 ADD
+-> client connect 是否成功
+-> poll_once 是否取得 listener EPOLLIN
+-> Channel 是否调用 handle_accept
+-> handle_accept 是否调用 NewConnectionCallback
+```
+
+### 11.2 再做完整的确定性场景
 
 按下面顺序建立状态：
 
@@ -831,7 +1194,7 @@ std::vector<UniqueFd> accepted_connections
 
 这个顺序很关键：三次 blocking `connect` 已经成功后，三个连接都应在 listener 的 accept path 上可取得。若 callback 每次只接受一个，单次 listener dispatch 后只能看到一个 owner；只有 accept-drain 才能在这次 callback 中把三个都交出来。
 
-### 11.2 精确 checks
+### 11.3 完整 probe 的精确 checks
 
 probe 至少自动检查：
 
@@ -854,7 +1217,7 @@ accepted connection count == 3
 
 二者不同。一个 listener readiness record 可以触发一次 callback，而这次 callback 内可以完成多次 `accept4`。
 
-### 11.3 probe 成功输出
+### 11.4 完整 probe 的成功输出
 
 所有 checks 都通过后只输出：
 
