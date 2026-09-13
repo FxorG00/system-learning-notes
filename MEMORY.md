@@ -6220,3 +6220,17 @@ R2 在闸门后串清 client connect、kernel accept queue、epoll readiness、C
 复杂 component 的 R1 可以先提供一条最小 smoke usage，再保留严格 probe：smoke 只建立一个 client，验证 `start -> connect -> poll_once -> internal handler -> upper callback` 与一次 ownership handoff，帮助快速定位 wiring；完整 probe 再承担 drain、flags、多连接和精确计数等高价值证据。必须明确 smoke 不接入 CTest、不替代最终 probe，避免让用户误以为要维护两套完整测试。这个最小样例可以展示 public API 怎样组合，但不能提前给出 private representation、accept loop 或核心实现答案。
 
 本次修改完整保留用户已加入 Day4 的 `std::exchange`、forwarding-reference 等内容；`DAILY_INDEX.md` 已复核，Day4 的标题、核心问题、产出与检索边界没有变化，因此不更新索引。
+
+---
+
+## 2026-09-13：Week10 Day4 Round1 首次检阅，暂未正式通过
+
+用户在 Ubuntu `/home/xgf/code/system-learning/cpp/week10` 完成 `Acceptor` R1。真实实现采用 `UniqueFd listener_ + Channel listener_channel_ + EventLoop& loop_`，成员声明和 constructor initialization order 正确；`start()` 完成 `listen -> EPOLLIN interest -> [this] read callback -> EventLoop ADD -> commit start_flag_`；`handle_accept()` 对 success、`EINTR`、`EAGAIN/EWOULDBLOCK` 和其他 error 分支清楚，并把每个 accepted fd 包进 move-only `UniqueFd` 后移交上层 callback。用户笔记能够解释 Acceptor 的职责、两层 callback、成员函数经 lambda 消除隐含 `this` 参数、port 0 后用 `getsockname` 取回实际端口，以及 `F_GETFD/FD_CLOEXEC` 与 `F_GETFL/O_NONBLOCK` 分属 fd-table entry 和 open-file-description 两层；这些理解均正确。
+
+动态证据：Ubuntu fresh Debug configure/build 成功且 `-Wall -Wextra` 零 warning；CTest `13/13` PASS；单连接 `acceptor_smoke` 输出 `ACCEPTOR_SMOKE_PASS`；三连接 probe 输出 `ACCEPTOR_PASS`；ASan/UBSan build 与 probe 均 PASS 且无报告。`strace` 明确显示一次 listener `epoll_wait` 返回 1 条 record，随后 `accept4` 连续返回三个 fds，再以 `EAGAIN` 结束；三个 accepted sockets 均成功接收字节 `A`。这证明 ready-record count 1 与 accepted-resource count 3 的区分、drain behavior、ownership handoff 和正常资源释放主线成立。
+
+R1 暂不正式通过的两个 contract 缺口：第一，`Acceptor::~Acceptor()` 当前为空。member `listener_` 最终 close 会让 kernel 自动移除 epoll interest，但不会清除 `EventLoop::map_` 中保存的 non-owning `Channel*`；这违反“Acceptor 销毁时先解除 registration，再释放 listener”的 user-space registry invariant。正常析构路径需要在 listening registration 存在时先做 non-throwing remove，再让 members 按逆序销毁，Day6 再处理更复杂的 callback self-destruction。第二，`backlog <= 0` 当前调用 `system_error_helper("Acceptor Constructor")`，会抛 `std::system_error` 并读取与参数错误无关、甚至可能为 0 的 stale `errno`；R1 public contract 明确要求 `std::invalid_argument`。这两处修复后即可短复检，不要求重写主 probe。
+
+次要收口项不阻塞 R1：`system_error_helper(std::string)` 应在 syscall failure 当场保存 errno，避免构造 message 后才读取；`acceptor.cpp` 应直接 include 自己使用的 `<utility>`/`<stdexcept>`，不依赖 transitive includes；probe 的单字节 `send` 最好检查返回值以提供更准确诊断；`count` 与 `accepted_connections.size()`、第二次 size check 当前重复。首次检阅暂评 `91/100`。由于尚未正式通过 R1，本轮没有改写 Day4 R2/R3，也没有更新 `DAILY_INDEX.md`；用户修复两个 contract 缺口并复检后，再以当时真实 source/note 为基线做后半定向润色。
+
+可复用检阅经验：kernel 在最后一个相关 fd close 时自动把文件从 epoll interest list 移除，不等于 user-space registry 也被清理；同时维护 kernel registration 和 `fd -> Channel*` map 的 EventLoop，component teardown 必须检查两边 invariant。错误类型也是 public contract：invalid argument 不应借用 `errno` 包装成 syscall failure；若错误消息出现 `Success`，往往意味着读取了 stale/zero errno。正常 probe 全绿只能证明被执行路径，不能覆盖 destructor registry cleanup 与尚未触发的 input-validation branches。
