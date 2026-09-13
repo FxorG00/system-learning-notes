@@ -1217,6 +1217,160 @@ accepted connection count == 3
 
 二者不同。一个 listener readiness record 可以触发一次 callback，而这次 callback 内可以完成多次 `accept4`。
 
+---
+
+### 11.3.0 check flag 时的问题
+
+`FD_CLOEXEC` 要用 `F_GETFD` 查，不是 `F_GETFL`。
+
+```cpp
+const int descriptor_flags = ::fcntl(accepted_fd, F_GETFD);
+
+if (descriptor_flags == -1) {
+    throw std::system_error(
+        errno,
+        std::generic_category(),
+        "fcntl F_GETFD"
+    );
+}
+
+const bool has_cloexec =
+    (descriptor_flags & FD_CLOEXEC) != 0;
+```
+
+关键区别：
+
+```text
+F_GETFD  -> 查询 descriptor flags
+           例如 FD_CLOEXEC
+
+F_GETFL  -> 查询 open file status flags
+           例如 O_NONBLOCK
+```
+
+所以两个检查应分开写：
+
+```cpp
+const int status_flags = ::fcntl(accepted_fd, F_GETFL);
+const bool nonblocking =
+    status_flags != -1 &&
+    (status_flags & O_NONBLOCK) != 0;
+
+const int descriptor_flags = ::fcntl(accepted_fd, F_GETFD);
+const bool cloexec =
+    descriptor_flags != -1 &&
+    (descriptor_flags & FD_CLOEXEC) != 0;
+```
+
+你说“`&` 一下不太行”，常见原因是没有先检查 `fcntl` 是否返回 `-1`：
+
+```cpp
+::fcntl(fd, F_GETFD) & FD_CLOEXEC
+```
+
+若 `fcntl` 失败，返回 `-1`；而二进制补码里 `-1` 的所有 bit 都是 `1`，`-1 & FD_CLOEXEC` 反而会得到非零，造成“明明查询失败，却误判为有 `FD_CLOEXEC`”。
+
+---
+
+### 11.3.1 FD_CLOEXEC,O_NONBLOCK 所在层级的区别
+
+注释 1
+
+正好对应你已经建立的三层模型：
+
+```text
+fd number
+-> process 的 fd table entry
+-> open file description
+-> socket/file kernel object
+```
+
+`FD_CLOEXEC` 属于第一层：fd table entry。
+
+```text
+fd 7 这一格上，记录一个标记：
+exec 成功后，要不要自动关掉这一个 fd？
+```
+
+所以用：
+
+```cpp
+fcntl(fd, F_GETFD)
+```
+
+读取它。
+
+`O_NONBLOCK` 属于第二层：open file description。
+
+```text
+这个“已打开的 socket/file 访问状态”是否 non-blocking？
+```
+
+所以用：
+
+```cpp
+fcntl(fd, F_GETFL)
+```
+
+读取它。
+
+可以画成：
+
+```text
+process fd table
+
+fd 7 entry
+  FD_CLOEXEC = 1
+        |
+        v
+open file description
+  O_NONBLOCK = 1
+        |
+        v
+socket kernel object
+  TCP connection state
+  receive buffer
+  send buffer
+```
+
+它们最大的行为差异在 `dup`：
+
+```cpp
+int fd2 = ::dup(fd1);
+```
+
+```text
+fd1 与 fd2
+-> 指向同一个 open file description
+-> 因此共享 O_NONBLOCK
+
+但它们是两条不同的 fd table entry
+-> FD_CLOEXEC 各自独立
+```
+
+通常 `dup(fd1)` 得到的 `fd2` 默认没有 `FD_CLOEXEC`，即使 `fd1` 有；但如果你对共享的 open file description 改了 `O_NONBLOCK`，两边都会看到该变化。
+
+所以今天 `accept4` 的两个 flags 分属两层：
+
+```text
+SOCK_CLOEXEC
+-> 设置新 accepted fd 的 fd-table-entry flag
+-> 对应 FD_CLOEXEC
+
+SOCK_NONBLOCK
+-> 设置新 accepted socket 的 open file description status flag
+-> 对应 O_NONBLOCK
+```
+
+压缩记忆：
+
+```text
+FD_CLOEXEC：这个“fd 编号”在 exec 后怎么办
+O_NONBLOCK：这个“打开的 socket/file”如何执行 I/O
+```
+
+---
+
 ### 11.4 完整 probe 的成功输出
 
 所有 checks 都通过后只输出：
@@ -1307,6 +1461,58 @@ R1 完成后让我检阅。我会读取你的真实 source、note、probe 和输
 
 ---
 
+## 13.1 你的 R1 已经采用的设计
+
+你最终没有把 listening fd、Channel 和 accept loop 混在 `main` 中，而是形成了下面这组真实 members：
+
+```text
+EventLoop& loop_
+UniqueFd listener_
+Channel listener_channel_
+bool start_flag_
+uint16_t port_
+int backlog_
+NewConnectionCallback connection_callback_
+```
+
+这里的关系是：
+
+```text
+listener_ owns listening fd
+listener_channel_ non-owningly describes listener_.get()
+loop_ registers listener_channel_
+connection_callback_ transfers each accepted UniqueFd upward
+start_flag_ records whether ADD has committed successfully
+```
+
+R1 检阅中已经修正两个真实 contract 问题：
+
+```text
+backlog <= 0
+-> 抛 invalid_argument，不借用无关 errno
+
+Acceptor teardown
+-> 只有 start_flag_ 为 true 才 remove Channel
+-> remove failure 不逃出 destructor
+-> member destruction 随后 close listener
+```
+
+已经取得的证据：
+
+```text
+fresh Debug build：零 warning
+CTest：13/13 PASS
+single-client smoke：ACCEPTOR_SMOKE_PASS
+three-client probe：ACCEPTOR_PASS
+ASan/UBSan：无报告
+strace：1 个 listener record -> 3 次 accept4 success -> EAGAIN
+strace cleanup：EPOLL_CTL_DEL -> close listener
+```
+
+下面不再列其他 representation 让你重选，而是顺着这套实现解释它为什么成立，以及 Round3 还要收哪几个窄边界。
+
+---
+
 ## 14. Round2：先串起真实执行流程
 
 > 本节是 R1 后的机制对照。第一次学习时必须先通过 §13 的阅读闸门。
@@ -1329,6 +1535,18 @@ client 调用 connect
 -> Acceptor 继续 accept4
 -> EAGAIN 表示本轮已 drain
 -> callback 返回 EventLoop
+```
+
+映射到你的函数和 members，就是：
+
+```text
+EventLoop::poll_once()
+-> map_ 用 listener fd 找到 listener_channel_
+-> listener_channel_.handle_event()
+-> [this] lambda 调 Acceptor::handle_accept()
+-> local UniqueFd connection 接住 accept4 result
+-> connection_callback_(std::move(connection))
+-> probe 的 vector<UniqueFd> 成为新 owner
 ```
 
 用对象关系看：
@@ -1388,6 +1606,8 @@ EventLoop ready records：1
 new connection callbacks：3
 ```
 
+你的 `acceptor_probe.cpp` 已经建立了这个状态：三个 blocking clients 都先完成 `connect + send('A')`，然后才调用一次 `poll_once(1000)`。因此 `ready_records == 1` 与 `accepted_connections.size() == 3` 不是运气结果，而是 probe 主动建立 pending queue 后得到的证据。
+
 这和 Day3 已经区分的“record count 不等于 callback count”继续连在一起：现在还要再区分 accepted-resource count。
 
 ---
@@ -1418,6 +1638,8 @@ queue 当前为空
 
 因此 `EAGAIN` 不是“accept 失败导致 server 坏了”，而是 non-blocking accept-drain 的正常出口。
 
+你的 `handle_accept()` 正是 `while -> accept4 -> success handoff / EINTR retry / EAGAIN break`。这里不需要改成固定循环三次：三只 clients 只是 probe 数据，`EAGAIN` 才是真正的数据无关出口。
+
 ---
 
 ## 17. listening fd 与 accepted fd 的 flags 是两件事
@@ -1433,6 +1655,8 @@ accept4(... SOCK_NONBLOCK | SOCK_CLOEXEC)
 ```
 
 Linux 上不能因为 listener 是 non-blocking，就假定普通 `accept()` 返回的新 socket 自动继承 `O_NONBLOCK`。今天直接使用 `accept4`，让 accepted fd 在创建时就具有两个 flags，避免 `accept + fcntl` 之间的额外状态窗口。
+
+你的 source 在 `socket()` 和 `accept4()` 两处分别传入 `SOCK_NONBLOCK | SOCK_CLOEXEC`；probe 又分别用 `F_GETFL` 与 `F_GETFD` 检查。你补入 §11.3.0/§11.3.1 的层级解释正好说明了为什么这不能合并成一次含糊的 flag check。
 
 ---
 
@@ -1457,6 +1681,8 @@ accept4 returns raw fd
 ```
 
 每次 move 后，旧 object 的 `fd_` 变成 `-1`。任何时刻最多只有一个 `UniqueFd` 负责 close。
+
+在你的实现中，这不是抽象说法：`handle_accept()` 的 local `connection` 先拥有 raw fd；调用 `connection_callback_(std::move(connection))` 后，probe callback 再 `push_back(std::move(connection))`。于是 owner 依次从 local object 移到 callback parameter，再移到 `accepted_connections` 中的元素。
 
 ### 18.1 callback 不保存 fd
 
@@ -1586,7 +1812,15 @@ socket 成功
 
 如果 listening `Channel` constructor 需要 `listen_fd.get()`，拥有 fd 的 member 必须先声明、先初始化。否则就会重现以前见过的 `-Wreorder` 与未初始化依赖问题。
 
-本节只讲 invariant，不替 R1 指定全部 members；R1 通过后会按你的真实 declaration 顺序复检。
+你的 declaration 已经按依赖顺序写成：
+
+```text
+loop_
+-> listener_
+-> listener_channel_
+```
+
+constructor initialization list 再用 `listener_(socket(...))` 和 `listener_channel_(listener_.get())` 建立关系。`listener_{-1}` 与 `listener_channel_{-1}` 只是 in-class default member initializers；当前 constructor 已显式初始化这两个 members，所以实际路径不会先构造一个永久绑定 `-1` 的 Channel 再赋值。
 
 ---
 
@@ -1613,6 +1847,8 @@ Acceptor listening state 变为 true
 ```
 
 不要在 `listen` 调用之前就写 `listening_ = true`。这个原则与 Week8 的 submit/shutdown 线性化思维相同：对外可见状态必须对应已经成立的事实。
+
+你的提交点位于 `loop_.add_channel(listener_channel_)` 成功之后：最后才执行 `start_flag_ = true`。因此 callback 缺失、`listen` 失败或 ADD 失败时，`listening()` 都不会谎报成功；destructor 也能用同一个 flag 判断 user-space registration 是否真的存在。
 
 ---
 
@@ -1651,6 +1887,8 @@ EventLoop 必须活得更久
 
 如何让 remove/close failure 可诊断、callback 中请求销毁又不触发 use-after-free，是 Day6 的专门主题。今天不在 Acceptor 中发明完整 deferred-destruction framework。
 
+你的 R1 最终实现已经落实这条 Day4 规则：只有 `start_flag_` 为 true 才调用 `remove_channel`，并且异常不会离开 destructor。这里的 `catch (...)` 是 teardown policy，不是说 DEL failure 不重要；Day6 会解决“既不能从 destructor 抛出，又怎样保留诊断信息”的更完整设计。
+
 ---
 
 ## 24. errors 按“是否取得资源”分类
@@ -1673,7 +1911,7 @@ accept4 被 signal handler 中断
 
 ### 24.3 其他 accept errors
 
-本日 V1 统一保存 `errno` 并抛 `std::system_error`。例如：
+本日 V1 要在失败发生的那一行保存 `errno`，再抛 `std::system_error`。你的 `system_error_helper(std::string msg)` 目前在 helper 内读取全局 `errno`，正常实验可用，但这是 Round3 要收口的一个窄点：让 helper 接收已经保存的 error code，避免 message 构造或其他调用污染原始错误。例如可能遇到：
 
 ```text
 EMFILE：当前 process 的 fd limit 已达到
@@ -1700,17 +1938,29 @@ UniqueFd 保证当前资源有 owner
 
 ## 25. Round3 的当前任务
 
-Day4 初次生成时还没有你的 R1 source，所以这里不猜你的 members，也不列一排“如果你这样写”。R1 正式检阅后，本节会基于你的真实代码改成唯一、明确的升级路径。
-
-无论 representation 怎样，Day4 最终只需要收口三件事：
+保留你当前的 members、accept loop 和 callback handoff，不重写 Acceptor。Round3 只做下面这条确定路径：
 
 ```text
-1. ownership：listener、listening Channel、accepted fd 各有唯一 owner
-2. behavior：一次 listener dispatch 能 drain 3 个 pending connections
-3. evidence：normal、CTest、ASan/UBSan 都执行真实 probe
+1. error helper
+   -> syscall failure 当场保存 errno
+   -> helper 接收 saved error code，不在内部重新读取 errno
+
+2. source/probe 小收口
+   -> acceptor.cpp 直接 include 自己使用的 utility/stdexcept
+   -> 检查 probe 的单字节 send 返回值
+   -> 删除 count 与 vector.size() 的重复 oracle，只保留一个事实来源
+
+3. ownership failure evidence
+   -> 保留现有三连接 probe
+   -> 由 Codex 补最小 callback-throws case，你负责解释 fd 为什么仍会关闭
+
+4. final run
+   -> fresh normal build + CTest
+   -> Acceptor probe 的 ASan/UBSan
+   -> focused strace 核对 ADD、drain、DEL、close
 ```
 
-不要求今天实现 echo、Connection map 或 callback self-remove。
+已经完成的 `backlog`、conditional unregister、non-throwing destructor、三连接 drain 和 flags checks 不再重做。不要求今天实现 echo、Connection map 或 callback self-remove。
 
 ---
 
@@ -1814,7 +2064,7 @@ socket listener
 
 ## 29. source review invariants
 
-最终检阅会逐项核对：
+按你当前 R1，下面这些已经成立：
 
 ```text
 EventLoop 比 Acceptor 生命周期长
@@ -1833,20 +2083,18 @@ destructor 不抛异常
 普通 probe 通过 add_test 真实进入 CTest
 ```
 
-不是每一项都要重新写一条独立 test；source evidence、focused probe 和 sanitizer 可以共同覆盖。
+Round3 只需要继续补强两项：保存原始 errno，以及 callback failure 的 fd-close evidence。不是每一项都重新写一条独立 test；现有 source、三连接 probe、最小 failure probe、sanitizer 与 strace 共同覆盖即可。
 
 ---
 
 ## 30. Day4 note 建议
 
-笔记不需要抄 API 表，也不需要重写所有 contract。保留你真实思考过的内容：
+你现有 note 已经保留了真实思考过程：Acceptor members、两层 callback、lambda 包装 member function、member initialization order、port 0 与 `getsockname`。§11.3.0/§11.3.1 又补上了 fd flags 的层级。不要重抄 API 表；Round2/Round3 只需再留下：
 
 ```text
-R1：你怎样划分 Acceptor members 和 ownership
-R1：accepted fd 从 accept4 到上层 owner 的状态变化
 R2：为什么一个 listener record 可以产生多个 accepted fds
-R2：listener 与 accepted fd 的 non-blocking flags 分别在哪里设置
-R3：你的 probe 实际证明了什么，以及没有证明什么
+R2：start_flag_ 为什么同时是 public state 与 registration cleanup 的依据
+R3：callback 抛异常时，哪一个 UniqueFd destructor 关闭 accepted fd
 ```
 
 验收时会逐段判断正确与否，并对比你对 `day4.md` 的修改，把有价值的补充转成以后 daily 的编写经验。
