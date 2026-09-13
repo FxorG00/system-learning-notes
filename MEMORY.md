@@ -6194,3 +6194,13 @@ R1 probe 要求先完成 3 次 blocking connect，并让每个 client 发送同�
 R2 在闸门后串清 client connect、kernel accept queue、epoll readiness、Channel dispatch、accept4、UniqueFd move 与 server owner 的完整因果链；解释 listener/accepted fd flags 的独立性、move-only argument 穿过 `std::function`、constructor/member order exception safety、start commit point 与 unregister-before-close。Round3 初版只锁定 ownership、3-connection drain 与 evidence 三个出口，不猜用户 representation；R1 正式通过后必须以用户当前磁盘文件为 edit base，保留用户阅读期间新增内容，并把后半逐节改成针对真实 source 的唯一升级路径。
 
 技术交付前，另写了一份不进入学习目录的 temporary Acceptor reference，直接链接 Ubuntu 当前真实 `src/channel.cpp` 与 `src/event_loop.cpp`。使用 `g++ -std=c++17 -Wall -Wextra -g -pthread` 编译运行输出 `ACCEPTOR_REFERENCE_PASS`；ASan/UBSan build 同样 PASS 且无报告。它验证了 move-only `UniqueFd` 能作为 `std::function<void(UniqueFd)>` argument、一次 listener record 能 drain 三个已 pending connections、accepted fd flags 与 byte transport contract 可执行。临时 source 已从本地删除，用户 Ubuntu 学习目录未被修改。
+
+---
+
+## 2026-09-13：主线 Daily 快速索引与维护规则
+
+已在仓库根目录新建 `DAILY_INDEX.md`，提炼当前全部主线 daily 的主要内容、主要产出/观察和检索关键词。收录范围为 Week1 Day1 至 Week10 Day4 的 67 份 canonical daily；Week1 Day7 backup、Week8 Day7 README、各日 note、week plan 与 AI 理论线 `T*.md` 不作为主线 daily 重复收录。索引包含阶段总览、逐 Week/Day 相对链接以及 C++ ownership、STL、Linux/OS、网络/Reactor、并发/工程工具五组关键词反查。机械检查结果为 67 个 daily links、0 个 missing path、Markdown fences 成对、`git diff --check` 无错误；本次没有修改任何已有 daily 内容。
+
+以后每次新建或修改主线 daily，都必须先读取 `DAILY_INDEX.md` 并判断是否需要同步。出现以下变化时更新索引：daily 路径或标题改变；核心问题、主要产出、技术范围或检索关键词发生实质变化；新增 Week/Day；已列出的后续计划成为真实 daily。若只补充解释措辞、注释、API 小例子、局部图示或不改变检索含义的勘误，可以不改索引，避免目录跟随每个细节膨胀。
+
+`DAILY_INDEX.md` 是从 daily 派生出的 navigation artifact，daily/weekly plan 才是内容事实来源。维护时只能让索引追随真实教程，绝不能为了让目录表述成立而反向改写 daily。生成后应核对 canonical daily 数量、每条相对链接存在、摘要与当前文件主问题一致，并确认 diff 中没有意外改动任何 daily。R1 后对 R2/R3 做定向润色时，也要检查核心产出或技术边界是否已经改变到需要更新索引；若没有实质变化，则保持目录稳定。
