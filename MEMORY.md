@@ -6254,3 +6254,19 @@ R1 暂不正式通过的两个 contract 缺口：第一，`Acceptor::~Acceptor()
 笔记逐段结论：Acceptor class-level 只长期拥有 listening fd/Channel、accepted fd 经 local `UniqueFd` 立即向上移交的描述正确；start wiring 正确；`Channel member(-1)` 的声明语法、in-class initializer 与 constructor initialization-list 的区别正确；member declaration order 决定初始化顺序正确；成员函数需要经捕获 `this` 的 lambda 适配 `void()` callback 正确；port 0 是请求 kernel 选择端口、bind 不反写原 sockaddr、getsockname 取回实际端口正确；析构前先 remove registration 的补充正确。用户没有机械誊写 R2/R3 问题，但源码、主动补充和独立 evidence 已覆盖当天核心，不要求重复文字工作。
 
 用户判断“今天基本没有新的东西，主要是已经踩过的坑”基本准确。Day4 新增知识量确实较窄：Acceptor component boundary、listener readiness 与 accept-queue drain、一个 ready record 可产出多个 accepted resources、`accept4` 的 ownership handoff。其余 RAII、member order、fd vs open-file-description flags、callback/lambda、errno、non-throwing destructor 都是旧知识迁移；能够在新组件中正确组合这些旧机制，本身就是项目主线所需能力，不需要为了制造学习量重复讲解或抄验收题。最终评分 `96/100`，Week10 Day4 正式通过。轻微未扣通行项：probe 单字节 send 未单独检查返回值、重复 size oracle、source direct-includes/formatting 仍可清理，但不影响 Acceptor behavior 或当天掌握。
+
+---
+
+## 2026-09-14：Week10 Day5 教程正式生成
+
+已生成 `week10/day5/day5.md`，主题为 `Connection` 与 Reactor Echo Server V1。教程严格承接正式通过的 Day4：Acceptor 把 accepted `UniqueFd` 移交给上层后，由 `Connection` 接管 connected socket，并在多轮 readiness events 之间保存 input/output Buffer、peer EOF 与 desired interest。Day5 重新获得 Week9 已验证的 newline echo behavior；callback 内 self-destruction、同一 ready batch 的旧 records、stale event 与 fd reuse 的完整加固明确留给 Day6，没有提前吞掉后续主线。
+
+教程继续使用主线 daily 独立的三 Part 与 R1/R2/R3 结构。R1 在阅读闸门前明确给出程序用途、文件名、public API、每个 callback 的安装/触发关系、server owner 职责、CMake target 和可运行的 fragment/coalesce smoke client，但不提供 Connection private members、recv/send loop、parser loop 或可直接翻译的完整伪代码。`MessageCallback(Connection&, Buffer&)` 把 application framing policy 与 socket transport 分开；`CloseCallback(int)` 只提交 cleanup request，owner 在 `poll_once` 返回后 erase，先建立可工作的 V1 lifetime boundary。`send(pointer, length)` 明确在返回前复制 bytes，避免 caller pointer lifetime 含糊；`EPOLLOUT` 只由 pending output 推导；peer EOF 后先 drain output 再请求关闭。
+
+R2 串清 `kernel readiness -> EventLoop -> Channel -> Connection -> input Buffer -> application callback -> output Buffer -> future EPOLLOUT` 的完整主语和因果链，并区分 Buffer 与 parser、Connection lifetime 与 callback lifetime、transport 与 application policy。R3 不让用户重写 test scaffolding，直接复用 Week9 的 `echo_client.py`、`slow_echo_client.py` 与 `half_close_client.py`，分别覆盖 send-call boundary、large response + slow reader 和 basic half-close；更强的 controlled internal path 或 half-close-with-pending-output case 只在真实实现需要时由 Codex 补脚手架。fresh build、现有 CTest 和 ASan/UBSan 作为工程证据。
+
+Day5 生成后的技术复检再次落实 evidence-scope 原则：两次 client `sendall` 不保证对应两次 server `recv`，因此外部 echo client 只能证明 behavior 不依赖 send-call boundary，不能独自证明 user-space Buffer 一定跨两轮 callback 保存 suffix；large payload + slow reader 通常会制造 partial write/backpressure，但 exact response 本身不能确定证明某次运行走过 `send -> EAGAIN -> future EPOLLOUT`；小 response 的 half-close client 能证明 EOF 后 response 与最终关闭，却不保证 EOF 到来时 output 一定 pending。教程必须明确 claim 的强弱；若内部路径本身是当天核心，再补 controlled component probe 或 tracing，不能让 test 文件名、payload 大小或直觉代替状态建立。
+
+生成前另写了一份不进入学习目录的 temporary Connection reference，直接链接 Ubuntu 当前真实 `buffer.cpp`、`channel.cpp` 与 `event_loop.cpp`。使用 `g++ -std=c++17 -Wall -Wextra -g` 构建运行输出 `CONNECTION_REFERENCE_PASS`；ASan/UBSan build 同样 PASS 且无报告。它验证了 incomplete input 跨 event 保存、两条 coalesced lines、output drain、peer `shutdown(SHUT_WR)` 与 close request 的最小 contract。用户 Ubuntu 学习目录未被修改。
+
+`DAILY_INDEX.md` 已同步：收录范围更新为 Week1 Day1 至 Week10 Day5 共 68 份；Week10 当前进度更新为 Day1~Day4 已通过、Day5 正在推进；新增 Connection、input/output Buffer、dynamic EPOLLOUT 与 half-close 检索项。以后 R1 正式检阅时，必须以用户当时磁盘上的 Day5 与真实 Connection source 为 edit base，保留用户阅读期间的修改，并把 R2/R3 从通用初稿收束为针对用户 representation 的唯一升级路径。
