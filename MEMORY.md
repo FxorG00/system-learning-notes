@@ -6242,3 +6242,15 @@ R1 暂不正式通过的两个 contract 缺口：第一，`Acceptor::~Acceptor()
 2026-09-13 Week10 Day4 Round1 正式通过：用户在 conditional unregister 外增加 destructor-local `try/catch (...)`，`remove_channel()` 的 exception 不再逃出隐式 `noexcept` destructor；与已经修好的 `backlog <= 0 -> invalid_argument` 一起关闭全部 R1 blockers。最终 fresh Debug build 零 warning，完整 CTest `13/13` PASS，当前 source 的 ASan/UBSan acceptor probe 输出 `ACCEPTOR_PASS` 且无报告。R1 最终评分 `96/100`。剩余 `system_error_helper` 保存 errno、direct includes、probe send result/redundant oracle 属于 Round3 收口，不倒扣 R1 correctness。
 
 已按正式通过时的真实 source/note 定向润色 `week10/day4/day4.md` R2/R3，并完整保留用户此前加入的 `F_GETFD/FD_CLOEXEC`、`F_GETFL/O_NONBLOCK` 层级解释。后半现在逐节映射 `loop_`、`listener_`、`listener_channel_`、`start_flag_`、`connection_callback_`、`handle_accept()` 与三连接 probe；解释 actual initialization order、start commit point、conditional non-throwing teardown 和 record-count/resource-count evidence。Round3 不再列 representation alternatives，唯一动作是：保存原始 errno、direct-include/probe 小清理、由 Codex 补 callback-throws fd-close evidence，再跑 normal/CTest/ASan/strace。`DAILY_INDEX.md` 的 Day4 核心主题、产出和检索边界未变化，因此无需更新。
+
+---
+
+## 2026-09-14：Week10 Day4 正式通过
+
+用户完成 Day4 `Acceptor` 最终收口。`system_error_helper` 已改为接收 syscall failure 当场保存的 error code；socket、bind、getsockname、listen 与 accept4 failure 均不再在 helper 内重新读取全局 errno，setsockopt 分支则直接把当下 errno 作为 `std::system_error` 构造参数。最终实现继续保持 `UniqueFd listener_ -> Channel listener_channel_` declaration/initialization order、ADD 成功后才提交 `start_flag_`、conditional non-throwing unregister、accept4 drain 与 move-only ownership handoff。
+
+最终动态证据基于 fresh `/tmp` build：g++ 10.5 C++17 Debug build 零 warning，完整 CTest `13/13` PASS；当前 source 的 ASan/UBSan acceptor probe 输出 `ACCEPTOR_PASS` 且无报告；focused strace 显示 socket/setup/listen、EPOLL_CTL_ADD、一次 epoll_wait、三次 accept4 success、EAGAIN、三次 recv、EPOLL_CTL_DEL、listener/accepted/epoll fds 各自 close。Codex 另写隔离的 callback-failure probe：上层 callback 记录参数 fd 后主动抛 `runtime_error`，exception 抵达 poll_once caller，随后 `fcntl(F_GETFD)` 得到 `-1/EBADF`，输出 `ACCEPTOR_CALLBACK_FAILURE_PASS`；临时 source/binary 已清理，未改用户工程。
+
+笔记逐段结论：Acceptor class-level 只长期拥有 listening fd/Channel、accepted fd 经 local `UniqueFd` 立即向上移交的描述正确；start wiring 正确；`Channel member(-1)` 的声明语法、in-class initializer 与 constructor initialization-list 的区别正确；member declaration order 决定初始化顺序正确；成员函数需要经捕获 `this` 的 lambda 适配 `void()` callback 正确；port 0 是请求 kernel 选择端口、bind 不反写原 sockaddr、getsockname 取回实际端口正确；析构前先 remove registration 的补充正确。用户没有机械誊写 R2/R3 问题，但源码、主动补充和独立 evidence 已覆盖当天核心，不要求重复文字工作。
+
+用户判断“今天基本没有新的东西，主要是已经踩过的坑”基本准确。Day4 新增知识量确实较窄：Acceptor component boundary、listener readiness 与 accept-queue drain、一个 ready record 可产出多个 accepted resources、`accept4` 的 ownership handoff。其余 RAII、member order、fd vs open-file-description flags、callback/lambda、errno、non-throwing destructor 都是旧知识迁移；能够在新组件中正确组合这些旧机制，本身就是项目主线所需能力，不需要为了制造学习量重复讲解或抄验收题。最终评分 `96/100`，Week10 Day4 正式通过。轻微未扣通行项：probe 单字节 send 未单独检查返回值、重复 size oracle、source direct-includes/formatting 仍可清理，但不影响 Acceptor behavior 或当天掌握。
