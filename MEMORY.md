@@ -6280,3 +6280,11 @@ Day5 已据此把 trigger 固定为：server owner 在 `start()` 前安装 `Mess
 ### 主线 Python 辅助脚本的注解尺度
 
 用户学过一遍 Python，能够读懂一般 control flow，但 `socket`、进程观察、benchmark 等工程 API 可能尚未使用。主线 daily 中出现 Python client/probe 时，在代码旁增加一个很短的“本例新增 API”小节：只解释首次出现且影响当前机制理解的接口，包括调用作用、关键返回值/exception 与当前语义边界；例如 `sendall` 会持续发送但不保留 TCP message boundary，`recv(n)` 可能少于 `n` 且 `b""` 表示 EOF。若 `bytes(...)`、`!r`、type annotation 等少量 Python 写法会直接影响读懂当前脚本，也各用一句话说明；自定义 helper 要明确不是标准库 API，并用一条短因果链说明用途。不要重讲用户已经掌握的 Python 基础，不逐行翻译代码，不让 Python 注解打断 C++/系统主线；后续重复 API 直接复用已有认知即可。Day5 §13.1 的完整尺度作为后续基准。
+
+### Component public API 必须包含 error contract
+
+用户阅读 Week10 Day5 `Connection` 时发现，初稿给了 method signatures 和成功路径，却没有说明各接口在什么错误下抛什么 exception。这会让 R1 无法独立实现，也无法为 tests 建立 expected behavior。以后生成 component/API contract 时，不能只写输入、正常输出和 lifecycle；必须紧邻 public API 给出 error contract，逐项区分 caller argument error、lifecycle misuse、allocation failure、Linux syscall failure、正常异步状态、user callback exception 与 destructor cleanup failure。
+
+推荐固定口径：argument 本身非法通常用 `std::invalid_argument`；调用顺序或 object state 不允许该操作通常用 `std::logic_error`；syscall failure 保存当下 `errno` 后用 `std::system_error`；allocation failure 允许 `std::bad_alloc` 传播；destructor 必须 non-throwing。对 non-blocking/network component，`EINTR`、`EAGAIN/EWOULDBLOCK`、`recv == 0` 必须明确是 retry/暂停/EOF state，不应误报为 exception。若 fatal error 发生在 callback 内，还必须交代异常离开前是否 request close、异常最终到达哪一层，以及 owner 怎样保证 pending cleanup 仍执行。`EPOLLERR` 只是 event bit，不是 error code；需要 `getsockopt(SO_ERROR)` 时，要区分 `getsockopt` 自身的 `errno` 与返回在 output parameter 中的 pending socket error。
+
+Day5 当前 V1 的选择已经写入 §9.5：empty handle/callback、blocking socket 与 null positive-length data 用 `invalid_argument`；错误调用阶段用 `logic_error`；ADD/MOD 等 infrastructure failure 和 fatal `recv/send` 用保存 error code 的 `system_error`；fatal per-connection I/O 先 request close 再抛；MessageCallback exception 先 request close 再原样重抛；CloseCallback 约定不抛；`~Connection() noexcept` 吞住 cleanup exception。container/callback storage 失败传播真实 exception，不能把所有增长失败都武断写成 `bad_alloc`，还要承认 `length_error` 或 callable 自身 exception。error contract 属于 R1 必须获得的外部行为，不算泄露 private implementation。

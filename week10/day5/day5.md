@@ -505,6 +505,154 @@ callback 只记录请求。真正 erase 在当前 `poll_once` 返回后进行。
 
 Close request 必须是 idempotent：同一个 `Connection` 即使从多个 error/EOF path 到达关闭判断，也只能向 owner 发出一次有效请求。
 
+### 9.5 Connection error contract
+
+这里把“正常异步状态”和“真正错误”分开，否则实现时很容易把 `EAGAIN`、EOF 和 fatal failure 混成一类。
+
+#### 9.5.1 Public API 的 exception
+
+| 调用与条件 | 结果 |
+|---|---|
+| constructor 收到 empty `UniqueFd` | 抛 `std::invalid_argument` |
+| constructor 收到 valid 但没有 `O_NONBLOCK` 的 socket | 抛 `std::invalid_argument` |
+| constructor 使用 `fcntl(F_GETFL)` 检查 flags 时 syscall 失败 | 抛带有保存 `errno` 的 `std::system_error` |
+| 设置 empty `MessageCallback` 或 `CloseCallback` | 抛 `std::invalid_argument` |
+| `start()` 前再次设置 callback | 允许，用新 callback 替换旧 callback |
+| `start()` 后再设置 callback | 抛 `std::logic_error` |
+| callbacks 尚未安装完整就调用 `start()` | 抛 `std::logic_error` |
+| 对同一个 Connection 调用两次 `start()` | 抛 `std::logic_error` |
+| `start()` 注册 Channel 时 `epoll_ctl` 失败 | 保持未启动状态，向调用者传播 `std::system_error` |
+| 已启动后同步 interest 时 `epoll_ctl MOD` 失败 | 先提交 close request，再传播 `std::system_error` |
+| `send(nullptr, length)` 且 `length > 0` | 抛 `std::invalid_argument` |
+| `send(data, 0)`，包括 `data == nullptr` | no-op，不抛异常 |
+| 在 `start()` 前调用 `send` | 抛 `std::logic_error` |
+| Connection 已提交 close request 后调用 `send` | 抛 `std::logic_error` |
+| peer 已 half-close 自己的 write side，但 Connection 尚未请求关闭 | 仍允许 `send`；half-close 不等于本端不能回复 |
+| 保存 callback 或扩展 Buffer 时失败 | 传播原 exception；常见为 `std::bad_alloc`，超出 container 最大尺寸也可能是 `std::length_error` |
+
+这里的类型含义：
+
+```text
+invalid_argument
+    本次传入的 argument 本身不满足接口要求。
+
+logic_error
+    argument 未必有问题，但调用时机违反 Connection lifecycle。
+
+system_error
+    Linux syscall 失败；exception 中携带保存下来的 error code。
+```
+
+今天的 constructor 只需要验证 valid fd 与 `O_NONBLOCK` invariant；它的正常来源是 Day4 `Acceptor` 移交的 connected TCP socket，不要求再用一串 syscalls 重新证明 socket type 和 connected state。`EventLoop&` 的 lifetime 也属于 precondition：它必须比 Connection 活得久，这不是运行时靠 exception 修复的关系。
+
+同样，`send(data, length)` 只能检查 null pointer；当 `length > 0` 时，caller 仍必须保证 `data` 指向至少 `length` 个可读 bytes。C++ 无法从一个非空 raw pointer 自动验证这段 memory 是否真的有效。
+
+需要的标准头文件是：
+
+```cpp
+#include <stdexcept>    // invalid_argument / logic_error
+#include <system_error> // system_error
+```
+
+#### 9.5.2 `recv` / `send` 的 runtime result
+
+下面这些结果不是 public caller 的参数错误，而是在 EventLoop dispatch Connection callback 时发生：
+
+| syscall result | Connection 行为 | 是否抛 C++ exception |
+|---|---|---|
+| `n > 0` | 推进对应 Buffer | 否 |
+| `-1, errno == EINTR` | 重试当前 syscall | 否 |
+| `-1, errno == EAGAIN/EWOULDBLOCK` | 本轮暂时不能继续，保留 state 等下一次 readiness | 否 |
+| `recv == 0` | 记录 peer EOF；output 为空时请求关闭，否则继续 drain output | 否 |
+| 其他 `recv/send == -1` | 保存当下 `errno`，先提交 close request，再抛 `std::system_error` | 是 |
+
+例如 peer reset 导致：
+
+```text
+recv returns -1
+-> errno == ECONNRESET
+-> Connection 保存 ECONNRESET
+-> 调用 CloseCallback，让 owner 记录 pending cleanup
+-> throw std::system_error(saved_errno, std::generic_category(), "recv")
+-> exception 到达 poll_once 的调用边界
+-> server owner 输出诊断并处理 pending cleanup
+```
+
+必须先保存 `errno`，因为 close callback、字符串构造或其他函数都可能改变 thread-local `errno`：
+
+```cpp
+const int saved_errno = errno;
+```
+
+今天不要写成：
+
+```text
+EAGAIN -> system_error
+EOF    -> runtime_error
+```
+
+这两个都是 TCP/non-blocking state machine 的正常输入，不是程序异常。
+
+#### 9.5.3 `EPOLLERR` 怎样得到真正的 socket error
+
+`EPOLLERR` 只是 ready event 中的一个 bit，本身不是具体 error code。可使用：
+
+```cpp
+#include <sys/socket.h>
+
+int socket_error = 0;
+socklen_t length = sizeof(socket_error);
+const int result = ::getsockopt(
+    fd(), SOL_SOCKET, SO_ERROR, &socket_error, &length);
+```
+
+含义：
+
+```text
+getsockopt 返回 -1
+-> 保存 errno
+-> request close
+-> 抛 std::system_error(saved_errno, ...)
+
+getsockopt 返回 0 且 socket_error != 0
+-> socket_error 才是该 socket 的 pending error
+-> request close
+-> 抛 std::system_error(socket_error, ...)
+
+getsockopt 返回 0 且 socket_error == 0
+-> 没有可由 SO_ERROR 报告的 pending error
+-> 不凭空构造 exception，继续按照本轮其他 ready bits 推进
+```
+
+这里构造 `std::system_error` 时应使用 `socket_error`，不能误用此刻可能无关的 `errno`。
+
+#### 9.5.4 User callback 抛异常
+
+`MessageCallback` 是 application 提供的代码。如果它抛出异常，`Connection` 的 contract 是：
+
+```text
+捕获该异常
+-> 提交一次 close request
+-> 原样重新抛出当前异常
+```
+
+`CloseCallback` 是 cleanup 通知路径，今天要求它本身不抛异常。若 owner 提供的 CloseCallback 仍然抛出，视为上层 programming failure，异常可以继续到 event-loop boundary；V1 不承诺从一个失败的 cleanup callback 中恢复。
+
+因此 server 的 `poll_once` 外层必须有 exception boundary：捕获并记录本轮 callback exception，随后仍处理已经记录的 pending cleanup。是否继续下一轮或结束 server，是 composition root 的 policy，不是 `Connection` 偷偷决定。
+
+#### 9.5.5 Destructor
+
+`~Connection() noexcept` 不允许任何异常逃出：
+
+```text
+已注册
+-> 尝试 remove Channel
+-> 即使 remove failure，也在 destructor 内处理
+-> UniqueFd 最终 close connected socket
+```
+
+Destructor 不负责报告普通业务错误；它只保证 cleanup 不因为 exception escaping 而触发 `std::terminate`。
+
 ## 10. Server owner 的外部职责
 
 今天不要求新造一个完整 `TcpServer` framework。`reactor_echo_server.cpp` 作为 composition root，完成这些职责即可：
@@ -541,6 +689,8 @@ for (;;) {
 ```
 
 这段只展示 public APIs 怎样连起来，没有给 Connection members、parser loop、recv loop 或 send loop 的答案。
+
+接入 9.5 的 error contract 后，真实 composition root 还要在 `poll_once` 外建立 exception boundary，并保证无论本轮 callback 是否抛异常，已经记录的 pending cleanup 都会被处理。这里先规定责任，不提前给完整 loop source。
 
 ## 11. Connection 必须满足的 observable behavior
 
@@ -787,6 +937,9 @@ ctest --test-dir build --output-on-failure
 [ ] newline application callback 与 socket transport 分开
 [ ] EPOLLOUT 只在 pending output 时存在
 [ ] close callback 只记录请求，poll_once 返回后才 erase
+[ ] public API 的 invalid_argument / logic_error 边界与 9.5 一致
+[ ] EINTR / EAGAIN / EOF 没有被错误地当作 exception
+[ ] fatal I/O 在 exception 离开 callback 前已经提交 close request
 [ ] reactor_echo_smoke.py 输出 REACTOR ECHO SMOKE PASS
 [ ] fresh build 没有 warning
 ```
