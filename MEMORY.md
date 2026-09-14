@@ -6276,3 +6276,7 @@ Day5 生成后的技术复检再次落实 evidence-scope 原则：两次 client 
 用户阅读 `set_message_callback` 时指出，原稿只解释 callback 收到什么以及 callback 内要做什么，却没有交代 setter 和 stored callback 分别由谁、在什么阶段调用，导致无法从接口推回运行链。这与 Day4 已总结的 callback-driven component 规则属于同一个问题，必须继续严格执行：遇到 `set_xxx_callback` 时，至少分开写清 `(1)` 谁在 setup 阶段调用 setter；`(2)` setter 只保存 callable，还是会立即执行；`(3)` runtime 中谁触发 stored callback；`(4)` 精确触发条件和调用频率；`(5)` callback 参数代表当前对象、当前 batch，还是累计 state；`(6)` callback 被调用后的上层职责。
 
 Day5 已据此把 trigger 固定为：server owner 在 `start()` 前安装 `MessageCallback`；connected socket read-ready 后，Channel 先进入 Connection 的 private read handler；只要该 read-side handling 成功向 input Buffer 追加至少一个 byte，Connection 就在本轮 read-drain 结束后调用一次 stored callback。参数 `Buffer&` 表示当前所有尚未被 application 消费的 bytes，即旧 incomplete suffix 加本轮新 bytes，不是单次 `recv` temporary array，也不是历史总数据。newline parsing、对完整 messages 调用 `send`、retrieve 已消费 bytes 与保留 incomplete suffix 属于 application callback 被触发后的职责，不能和 callback 的触发 contract 混写成一段。
+
+### 主线 Python 辅助脚本的注解尺度
+
+用户学过一遍 Python，能够读懂一般 control flow，但 `socket`、进程观察、benchmark 等工程 API 可能尚未使用。主线 daily 中出现 Python client/probe 时，在代码旁增加一个很短的“本例新增 API”小节：只解释首次出现且影响当前机制理解的接口，包括调用作用、关键返回值/exception 与当前语义边界；例如 `sendall` 会持续发送但不保留 TCP message boundary，`recv(n)` 可能少于 `n` 且 `b""` 表示 EOF。自定义 helper 也要明确不是标准库 API，并用一句因果链说明用途。不要重讲用户已经掌握的 Python 基础，不逐行翻译代码，不让 Python 注解打断 C++/系统主线；后续重复 API 直接复用已有认知即可。

@@ -551,7 +551,7 @@ for (;;) {
 ```text
 继续 recv，直到当前不能再推进
 收到 bytes：append 到 input Buffer
-遇到 EINTR：重试当前操作
+遇到 EINTR：重试当前操作1
 遇到 EAGAIN/EWOULDBLOCK：本轮 read drain 结束
 返回 0：记录 peer write side 已关闭
 其他 failure：请求关闭
@@ -666,6 +666,32 @@ if actual != expected:
 
 print("REACTOR ECHO SMOKE PASS")
 ```
+
+### 13.1 本例新增的 Python/socket API
+
+你已经学过 Python，这里只补本例中容易陌生的网络接口：
+
+```text
+socket.create_connection((host, port), timeout)
+    创建 TCP socket 并完成 connect；失败时抛 exception。
+
+with ... as sock
+    离开 with block 时自动关闭 socket。
+
+sock.settimeout(3.0)
+    后续 blocking socket operation 最多等待 3 秒，防止测试永久卡住。
+
+sock.sendall(data)
+    持续发送到全部 bytes 被接受或发生错误；不为 TCP 保留 message boundary。
+
+sock.recv(n)
+    最多返回 n bytes，可能更少；返回 b"" 表示 EOF。
+
+b"..." / bytearray()
+    前者是 socket 使用的 bytes；后者是方便多次 extend 的可变 byte buffer。
+```
+
+`recv_exact` 不是 Python 内置 socket API，而是本测试自己写的 helper：因为一次 `recv` 不保证拿到完整 response，所以循环接收直到累计到 `expected_size`，提前 EOF 就判失败。
 
 运行：
 
