@@ -1395,7 +1395,22 @@ R1 只需提交真实 source、一次 build 和 smoke 结果。你让我检阅 R
 
 ## 17. Round2：从 callback 到 response 的完整因果链
 
-这一部分在 R1 通过后阅读。现在先用一条主链把今天真正发生的事串起来。
+这一部分在 R1 通过后阅读。你的 R1 baseline 已经明确，不再按假设讨论：
+
+```text
+Connection：UniqueFd + Channel + input/output Buffer
+状态：started、peer-write-closed、close-requested
+行为：handle_recv / handle_send / handle_error
+保护边界：callback exception 和 epoll_ctl MOD failure 都先 request close
+
+server owner：unordered_map<int, unique_ptr<Connection>>
+cleanup request：vector<int> pending_close
+application policy：查找最后一个 newline，echo 并 retrieve 全部完整 prefix
+```
+
+原 `connection_checker` 四段、ASan/UBSan checker、完整 CTest 都已通过。server integration 曾出现“第一次 client PASS、第二次 client reset”，最终通过 deferred `connections.erase(fd)` 修复；同一 server 生命周期下顺序 `10/10`、并发 `8/8` smoke 均通过。
+
+现在用一条主链把真实实现发生的事串起来。
 
 ```mermaid
 flowchart TD
@@ -1472,6 +1487,21 @@ Parser 回答：
 ```
 
 今天 newline parser 用 `\n`；Week11 HTTP parser 会使用 request line、headers、空行和 `Content-Length`。只要边界分对，`Connection` 的 recv/send machinery 可以复用。
+
+你的 R1 callback 没有逐条调用 `send`，而是从 readable range 尾部向前找到最后一个 `\n`：
+
+```text
+最后一个 newline 之前
+-> 全部由完整 lines 组成
+-> 作为一个连续 byte prefix 交给 Connection::send
+-> retrieve 同样长度
+
+最后一个 newline 之后
+-> 仍可能是不完整 line
+-> 留在 input Buffer 等下一轮 bytes
+```
+
+对 byte-for-byte newline echo 来说，这个设计成立：多条 response 连续发送与一次发送它们的拼接结果具有相同 byte-stream 行为。它属于 application policy，`Connection` 本身仍然不知道 newline。Round3 只需把 reverse scan 的索引从 `int` 收紧为 `std::size_t`，避免把 `readable_bytes()` 从 unsigned size 强行缩成 `int`。
 
 ## 20. Output state 为什么不能只放在 write callback 的局部变量里
 
@@ -1560,6 +1590,33 @@ callback 只设置 close-request state 并通知 owner
 
 这能让 Reactor Echo Server V1 工作，但不是 Week10 最终答案。Day6 会专门检查：同一 ready mask 的多个 bits、本轮 event array 后续 records、旧 registration 与 fd integer reuse。
 
+### 23.1 你的 owner cleanup 为什么必须是 `erase`
+
+你的第一次 integration 版本在 `pending_close` 阶段直接调用 `::close(fd)`。它只改变了 kernel fd table，没有销毁 `connections` 中的 C++ owner：
+
+```text
+manual close(fd)
+-> unordered_map 仍保留旧 key 与 unique_ptr<Connection>
+-> EventLoop user-space registry 仍可能保留旧 Channel identity
+-> UniqueFd 仍误以为自己拥有这个整数 fd
+-> kernel 复用相同 fd 后，新 Connection 与旧 map key 冲突
+-> 第一个 smoke PASS，第二个 client 被 reset
+```
+
+现在的正确路径是：
+
+```text
+Connection callback 只把 fd 放入 pending_close
+-> poll_once 完整返回
+-> owner 调用 connections.erase(fd)
+-> unordered_map element 析构
+-> unique_ptr 删除 heap Connection
+-> Connection destructor 解除 Channel registration
+-> UniqueFd destructor 最终 close fd
+```
+
+这里实际使用的是 `std::unordered_map`，查找/删除依赖 hash table，不是红黑树；但“erase element -> unique_ptr 析构 -> owned Connection 析构”的 C++ lifetime 链与 `std::map` 相同。
+
 ## 24. 从 Week9 到 Week10，哪些只是搬家
 
 | Week9 过程式状态/函数 | Week10 去向 |
@@ -1588,7 +1645,16 @@ cleanup request 与 object destruction 开始有明确边界
 
 ## 25. Round3 目标
 
-R3 不重写一套 Reactor，也不要求你手写四份同义 client。它只回答：
+R3 不重写 `Connection`、server owner 或测试脚手架。你的唯一代码收口是：
+
+```text
+1. reactor_echo_server.cpp 直接 include <unordered_map> 和 <utility>
+2. newline reverse scan 使用 std::size_t，不把 readable_bytes() 缩成 int
+3. connection.hpp 删除未使用的 acceptor.hpp，并直接 include <string>
+4. 删除 handle_recv() 尾部永远到不了的 callback 代码
+```
+
+行为验证只回答：
 
 > 把 Week9 behavior 迁入 Connection 后，旧的高价值外部 oracle 是否仍然通过？
 
@@ -1604,7 +1670,7 @@ R3 不重写一套 Reactor，也不要求你手写四份同义 client。它只�
 
 ## 26. 代表性 evidence
 
-### 25.1 Fragment + coalesce
+### 26.1 Fragment + coalesce
 
 ```bash
 python3 ../week9/echo_client.py
@@ -1620,7 +1686,7 @@ exact bytes 与顺序未改变
 
 它不能单独证明 server 实际调用了几次 `recv`：TCP 可以把两次 client `sendall` 合并，也可以把一次 send 拆开。若 R1 的真实 bug 恰好发生在“user-space Buffer 跨两轮 callback 保存 suffix”，验收时再补一条 controlled socketpair/component probe，不靠这个外部 client 过度推断内部路径。
 
-### 25.2 Large response + slow reader
+### 26.2 Large response + slow reader
 
 ```bash
 python3 ../week9/slow_echo_client.py
@@ -1636,7 +1702,7 @@ dynamic EPOLLOUT 能继续推进 pending output
 
 更严格地说，exact 4 MiB response 是确定证据；某一次运行是否真的走到 `send -> EAGAIN -> future EPOLLOUT`，仍要结合受控小 send-buffer probe 或 tracing 判断，不能只由“payload 很大”反推。
 
-### 25.3 Half-close with pending output
+### 26.3 Half-close with pending output
 
 ```bash
 python3 ../week9/half_close_client.py
@@ -1662,8 +1728,12 @@ client 没有无限等待 EOF
 rm -rf build
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j
-ctest --test-dir build --output-on-failure
+cd build
+ctest --output-on-failure
+cd ..
 ```
+
+当前 Ubuntu 的 CTest 是 3.16.3，不使用较新版本才支持的 `ctest --test-dir build` 写法。
 
 Sanitizer 构建：
 

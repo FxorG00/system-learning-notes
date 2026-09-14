@@ -6302,3 +6302,15 @@ Day5 当前 V1 的选择已经写入 §9.5：empty handle/callback、blocking so
 用户阅读 Day5 `Connection::send` 时指出，初稿直接从 pointer lifetime 和 output Buffer 开始，尚未先说“这个 method 是请求当前 Connection 通过 connected socket 向 peer 发送 bytes”，导致 internal mechanism 抢在 API purpose 前面，读者也容易误以为 output Buffer 由 MessageCallback 直接操作。以后讲一个 public method 时，顺序固定为：它替 caller 完成什么；谁在什么场景调用；操作的目标对象是谁；正常返回代表什么；然后才解释为什么需要 internal state、可能跨哪些 callbacks，以及 error contract。
 
 Callback 与 owned state 还要区分“触发修改”和“直接操作”。Day5 中 MessageCallback 直接收到 input `Buffer&`，因此会检查并 retrieve input；它不接收 output Buffer，只通过 `connection.send(pointer, length)` 提交 response。Connection 才拥有并操作 output Buffer、调用 socket `send`、处理 partial write/EAGAIN，并在后续 EPOLLOUT 中继续。Output Buffer 不是完整 application messages 的 queue，而是不理解 protocol boundary 的 pending byte stream，可能是一条完整 response、某条 response 的 suffix，或多条 response 连续拼接的 bytes。教程遇到 input/output queue、buffer 或 cache 时，都要分别说明 owner、直接操作者、通过哪个 public API 间接触发，以及其中保存的是 application objects 还是 transport bytes。
+
+---
+
+## 2026-09-15：Week10 Day5 Round1 正式通过
+
+用户完成 `Connection` 与 Reactor Echo Server V1 的 R1。`Connection` 采用稳定地址、不可复制不可移动的 object identity，拥有 connected `UniqueFd`、`Channel`、input/output `Buffer`、message/close callbacks 与 started/peer-EOF/close-requested state；server owner 使用 `std::unordered_map<int, std::unique_ptr<Connection>>`，移动的是 unique ownership，heap 上 `Connection` 地址不变。application callback 从 input readable range 中找到最后一个 newline，一次提交全部完整 prefix 并 retrieve，保留最后一个 newline 后的不完整 suffix；对 byte-for-byte newline echo 行为正确，同时 transport 层仍不理解 application message boundary。
+
+`Connection` component 经多轮检阅后补齐：non-blocking constructor contract、start 前完整 callbacks、start 后冻结 callbacks、null/zero-length/send lifecycle contract、MSG_NOSIGNAL、read/write drain、dynamic EPOLLOUT、EPOLLERR + SO_ERROR、MessageCallback exception 先 request close 再重抛、epoll_ctl MOD failure cleanup、peer EOF 后 drain pending output、idempotent close request、conditional non-throwing destructor unregister。Codex checker四段与额外 focused scenarios 均 PASS；普通 checker 的 ASan/UBSan build 同样无报告。
+
+首次 server integration 虽然单次 smoke PASS，但 owner 对 `pending_close` 直接 `::close(fd)`，没有 erase `unordered_map` 中的 `unique_ptr<Connection>`。真实结果为同一 server 第一个 client PASS、第二个 client 因 fd integer reuse 与旧 key/owner 冲突而 reset。修复为 poll_once 返回后执行 `connections.erase(fd)`：element 析构触发 unique_ptr 删除 Connection，Connection destructor 先解除 Channel registration，UniqueFd 最终 close fd。修复后完整 Debug build 零 warning、CTest `14/14` PASS，同一 server 生命周期顺序 smoke `10/10`、并发 smoke `8/8`，server 全程存活。R1 评分 `96/100`，正式进入定向 R2/R3；完整 Week10 lifetime hardening 仍留给 Day6。
+
+可复用验收经验：component checker 全绿只能证明 component 在隔离驱动中的 state transitions，不能证明 composition root 正确兑现 ownership。凡是 fd-indexed owner container，至少增加“同一 server process 连续建立并关闭多条 connection”的 integration oracle，让 kernel 真实复用 fd integer；只跑一次 client 会漏掉 stale owner、未 erase key、double ownership 和 fd reuse bug。关闭 RAII-owned resource 时，owner 应删除 owning object，让 destructor chain 完成 unregister + close；不要绕过 owner 直接关闭它内部的 raw handle。R1 通过后的 R2/R3 应记录真实故障链和实际 representation，不再保留抽象的多分支建议。
