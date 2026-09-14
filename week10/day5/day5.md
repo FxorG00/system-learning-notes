@@ -164,6 +164,20 @@ callback 不是“read 或 write 一定全部完成”的承诺。它只是一�
 
 `output Buffer` 保存 application 已经生成、但 kernel 尚未全部接收的 response bytes。
 
+这里有一个重要的不对称关系：
+
+```text
+input Buffer
+    由 Connection 拥有并 append recv 到的 bytes
+    MessageCallback 通过 Buffer& 检查、retrieve 已解析 bytes
+
+output Buffer
+    同样由 Connection 拥有
+    MessageCallback 不直接拿到它，也不直接修改它
+    MessageCallback 只调用 connection.send(...) 提交 response bytes
+    Connection 再负责 socket send、partial write 和 pending suffix
+```
+
 ```text
 kernel receive buffer
 -> recv
@@ -177,6 +191,16 @@ application response
 ```
 
 Buffer 不替 TCP 划分 message。newline parser 才决定一条 message 在哪里结束。
+
+Output Buffer 也不是“完整 message 的容器”。它只是一段按顺序等待发送的 byte stream，可能暂时包含：
+
+```text
+一条完整 response
+一条 response 尚未发送的 suffix
+多条连续 response 拼在一起的 bytes
+```
+
+这些 bytes 属于哪条 application message，Connection transport 不需要知道。
 
 ### 4.6 interest derived from state
 
@@ -477,6 +501,18 @@ callback 找到完整 newline messages
 
 ### 9.3 `send`
 
+`Connection::send` 最直白的功能是：**请求这条 Connection 把一段 bytes 通过自己拥有的 connected socket 发送给 peer。**
+
+它通常由 `MessageCallback` 在生成 response 后调用：
+
+```text
+Connection recv 到 request bytes
+-> MessageCallback 从 input Buffer 解析出完整 message
+-> MessageCallback 生成 response bytes
+-> MessageCallback 调用 connection.send(response, length)
+-> Connection 负责把 response 写入 connected socket
+```
+
 最小使用方式：
 
 ```cpp
@@ -484,9 +520,54 @@ const char response[] = "hello\n";
 connection.send(response, sizeof(response) - 1);
 ```
 
-这里传入的 pointer 只需要在 `send` 调用期间有效。调用返回后，已经交给 kernel 的 prefix 不再需要 caller memory；尚未发送的 suffix 必须复制进 Connection 自己拥有的 output Buffer。不要把 caller 的临时 pointer 保存到未来 callback 再用。
+为什么这里必须提到 output Buffer？因为 connected socket 是 non-blocking 的，一次 Linux `send` 不保证吃下全部 response：
 
-`send` 保证的是把 bytes 纳入这条 connection 的待发送顺序，不保证一次 system call 已把所有 bytes 交给 kernel。
+```text
+全部接受
+-> output Buffer 可以保持为空
+
+只接受一个 prefix
+-> 尚未发送的 suffix 进入 output Buffer
+
+返回 EAGAIN
+-> 当前全部 response bytes 进入 output Buffer
+```
+
+Output Buffer 因此不是 application callback 要亲自操作的对象，而是 `Connection::send` 与后续 write callback 共同使用的 transport state：
+
+```text
+MessageCallback
+    决定“我要回复哪些 bytes”
+    调用 Connection::send
+
+Connection::send / write callback
+    决定“这些 bytes 本轮能写多少”
+    保存尚未写完的 bytes
+    将来在 EPOLLOUT 到来时继续写
+```
+
+例如 callback 可能直接 echo input Buffer 中的一条完整 line：
+
+```cpp
+const char* line = input.peek();
+const std::size_t line_length = /* 包含 '\n' 的完整 line 长度 */;
+
+connection.send(line, line_length);
+input.retrieve(line_length);
+```
+
+`line` 指向 input Buffer。紧接着的 `retrieve` 可能让这段 pointer 不再有效，所以 `Connection::send` 返回以后绝不能继续借用 `line`。已经交给 kernel 的 prefix 不需要再保存；尚未发送的 suffix 必须在返回前复制进 Connection 自己拥有的 output Buffer。
+
+因此这个 public method 的完成语义是：
+
+```text
+send 正常返回
+-> caller 提供的 bytes 已经按顺序交给 kernel，
+   或者已经由 Connection 的 output Buffer 接管
+-> caller 可以销毁或修改原 memory
+```
+
+它不保证一次 syscall 写完，也不保证 peer application 已经收到。Linux `send` 成功只表示相应 prefix 被本机 kernel send buffer 接受；真正经过网络并被 peer 读取还会发生在以后。
 
 ### 9.4 `set_close_callback`
 
@@ -514,7 +595,7 @@ Close request 必须是 idempotent：同一个 `Connection` 即使从多个 erro
 | 调用与条件 | 结果 | 建议英文 message / context |
 |---|---|---|
 | constructor 收到 empty `UniqueFd` | 抛 `std::invalid_argument` | `"Connection requires a valid socket"` |
-| constructor 收到 valid 但没有 `O_NONBLOCK` 的 socket | 抛 `std::invalid_argument` | `"Connection socket must be non-blocking"` |
+| constructor 收到 valid 但没有 `O_NONBLOCK` 的 socket | 抛 `std::invalid_argument` | `"Connection requires a valid socket"` |
 | constructor 使用 `fcntl(F_GETFL)` 检查 flags 时 syscall 失败 | 抛带有保存 `errno` 的 `std::system_error` | `"fcntl(F_GETFL)"` |
 | 设置 empty `MessageCallback` | 抛 `std::invalid_argument` | `"MessageCallback must not be empty"` |
 | 设置 empty `CloseCallback` | 抛 `std::invalid_argument` | `"CloseCallback must not be empty"` |
@@ -1053,6 +1134,8 @@ Parser 回答：
 
 ## 19. Output state 为什么不能只放在 write callback 的局部变量里
 
+先回到接口边界：application callback 只调用 `Connection::send` 提交 response，不直接管理 output Buffer。Output Buffer 是 Connection 为了兑现“caller 返回后可以释放原 memory、剩余 bytes 将来仍能继续发送”而保存的 transport state。
+
 一次 `send(fd, data, length, MSG_NOSIGNAL)` 可能：
 
 ```text
@@ -1062,6 +1145,8 @@ Parser 回答：
 ```
 
 后两种情况下，write callback 会返回，但 response 还没有完成。剩余 suffix 必须由 `Connection` 的 output Buffer 持有，直到未来 writable event 继续推进。
+
+这里的 suffix 是“尚未被 kernel 接受的有序 bytes”，不一定对应一条完整 application message。Connection 不解析 output 中的 newline，也不维护 message list。
 
 ```text
 application 生成 response
