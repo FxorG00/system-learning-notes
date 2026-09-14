@@ -6279,4 +6279,4 @@ Day5 已据此把 trigger 固定为：server owner 在 `start()` 前安装 `Mess
 
 ### 主线 Python 辅助脚本的注解尺度
 
-用户学过一遍 Python，能够读懂一般 control flow，但 `socket`、进程观察、benchmark 等工程 API 可能尚未使用。主线 daily 中出现 Python client/probe 时，在代码旁增加一个很短的“本例新增 API”小节：只解释首次出现且影响当前机制理解的接口，包括调用作用、关键返回值/exception 与当前语义边界；例如 `sendall` 会持续发送但不保留 TCP message boundary，`recv(n)` 可能少于 `n` 且 `b""` 表示 EOF。自定义 helper 也要明确不是标准库 API，并用一句因果链说明用途。不要重讲用户已经掌握的 Python 基础，不逐行翻译代码，不让 Python 注解打断 C++/系统主线；后续重复 API 直接复用已有认知即可。
+用户学过一遍 Python，能够读懂一般 control flow，但 `socket`、进程观察、benchmark 等工程 API 可能尚未使用。主线 daily 中出现 Python client/probe 时，在代码旁增加一个很短的“本例新增 API”小节：只解释首次出现且影响当前机制理解的接口，包括调用作用、关键返回值/exception 与当前语义边界；例如 `sendall` 会持续发送但不保留 TCP message boundary，`recv(n)` 可能少于 `n` 且 `b""` 表示 EOF。若 `bytes(...)`、`!r`、type annotation 等少量 Python 写法会直接影响读懂当前脚本，也各用一句话说明；自定义 helper 要明确不是标准库 API，并用一条短因果链说明用途。不要重讲用户已经掌握的 Python 基础，不逐行翻译代码，不让 Python 注解打断 C++/系统主线；后续重复 API 直接复用已有认知即可。Day5 §13.1 的完整尺度作为后续基准。

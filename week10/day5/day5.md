@@ -669,7 +669,7 @@ print("REACTOR ECHO SMOKE PASS")
 
 ### 13.1 本例新增的 Python/socket API
 
-你已经学过 Python，这里只补本例中容易陌生的网络接口：
+你已经学过 Python，这里只补本例中容易陌生的 socket API，以及几处会直接影响读懂脚本的写法：
 
 ```text
 socket.create_connection((host, port), timeout)
@@ -679,19 +679,38 @@ with ... as sock
     离开 with block 时自动关闭 socket。
 
 sock.settimeout(3.0)
-    后续 blocking socket operation 最多等待 3 秒，防止测试永久卡住。
+    后续 blocking socket operation 最多等待 3 秒。这里再次设置，是为了明确测试不能无限卡住。
+
+b"hello\n"
+    bytes，不是 Python str；socket 发送和接收的是 bytes。
 
 sock.sendall(data)
-    持续发送到全部 bytes 被接受或发生错误；不为 TCP 保留 message boundary。
+    内部持续发送，直到全部 bytes 交给 kernel 或抛 exception；但它不会为 TCP 保留 message boundary。
 
 sock.recv(n)
-    最多返回 n bytes，可能更少；返回 b"" 表示 EOF。
+    最多接收 n bytes，可能少于 n；返回 b"" 表示 EOF。
 
-b"..." / bytearray()
-    前者是 socket 使用的 bytes；后者是方便多次 extend 的可变 byte buffer。
+bytearray()
+    可变 byte buffer，适合多次 extend 累积接收结果。
+
+bytes(received)
+    把可变 bytearray 转成不可变 bytes，方便与 expected 做精确比较。
+
+{actual!r}
+    使用 repr 形式展示；其中的 \n 等特殊字符不会直接变成换行。
+
+sock: socket.socket
+    type annotation，主要给读代码的人和检查工具看，不会自动执行运行时类型检查。
 ```
 
-`recv_exact` 不是 Python 内置 socket API，而是本测试自己写的 helper：因为一次 `recv` 不保证拿到完整 response，所以循环接收直到累计到 `expected_size`，提前 EOF 就判失败。
+`recv_exact` 不是 Python socket 自带 API，而是本测试自己封装的 helper：
+
+```text
+一次 recv 不保证得到完整 response
+-> 循环 recv
+-> 累积到 expected_size
+-> 提前 EOF 就判失败
+```
 
 运行：
 
