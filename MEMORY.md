@@ -6270,3 +6270,9 @@ Day5 生成后的技术复检再次落实 evidence-scope 原则：两次 client 
 生成前另写了一份不进入学习目录的 temporary Connection reference，直接链接 Ubuntu 当前真实 `buffer.cpp`、`channel.cpp` 与 `event_loop.cpp`。使用 `g++ -std=c++17 -Wall -Wextra -g` 构建运行输出 `CONNECTION_REFERENCE_PASS`；ASan/UBSan build 同样 PASS 且无报告。它验证了 incomplete input 跨 event 保存、两条 coalesced lines、output drain、peer `shutdown(SHUT_WR)` 与 close request 的最小 contract。用户 Ubuntu 学习目录未被修改。
 
 `DAILY_INDEX.md` 已同步：收录范围更新为 Week1 Day1 至 Week10 Day5 共 68 份；Week10 当前进度更新为 Day1~Day4 已通过、Day5 正在推进；新增 Connection、input/output Buffer、dynamic EPOLLOUT 与 half-close 检索项。以后 R1 正式检阅时，必须以用户当时磁盘上的 Day5 与真实 Connection source 为 edit base，保留用户阅读期间的修改，并把 R2/R3 从通用初稿收束为针对用户 representation 的唯一升级路径。
+
+### Day5 callback contract 补强
+
+用户阅读 `set_message_callback` 时指出，原稿只解释 callback 收到什么以及 callback 内要做什么，却没有交代 setter 和 stored callback 分别由谁、在什么阶段调用，导致无法从接口推回运行链。这与 Day4 已总结的 callback-driven component 规则属于同一个问题，必须继续严格执行：遇到 `set_xxx_callback` 时，至少分开写清 `(1)` 谁在 setup 阶段调用 setter；`(2)` setter 只保存 callable，还是会立即执行；`(3)` runtime 中谁触发 stored callback；`(4)` 精确触发条件和调用频率；`(5)` callback 参数代表当前对象、当前 batch，还是累计 state；`(6)` callback 被调用后的上层职责。
+
+Day5 已据此把 trigger 固定为：server owner 在 `start()` 前安装 `MessageCallback`；connected socket read-ready 后，Channel 先进入 Connection 的 private read handler；只要该 read-side handling 成功向 input Buffer 追加至少一个 byte，Connection 就在本轮 read-drain 结束后调用一次 stored callback。参数 `Buffer&` 表示当前所有尚未被 application 消费的 bytes，即旧 incomplete suffix 加本轮新 bytes，不是单次 `recv` temporary array，也不是历史总数据。newline parsing、对完整 messages 调用 `send`、retrieve 已消费 bytes 与保留 incomplete suffix 属于 application callback 被触发后的职责，不能和 callback 的触发 contract 混写成一段。

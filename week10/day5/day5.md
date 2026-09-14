@@ -428,7 +428,43 @@ Connection 接管 UniqueFd
 
 ### 9.2 `set_message_callback`
 
-这个 callback 不是“每次 recv 对应一条 message”。它收到的是当前累计的 input Buffer：
+先区分“安装 callback”和“调用 callback”。
+
+Server owner 在创建 `Connection` 时调用 setter：
+
+```cpp
+connection->set_message_callback(
+    [](Connection& connection, Buffer& input) {
+        // 这里放 application protocol：检查并消费完整 messages。
+    });
+```
+
+`set_message_callback(...)` 本身只把 callable 保存进 `Connection`，不会立刻处理数据。今天要求在 `start()` 前安装它。
+
+真正的调用者是 `Connection`。运行期触发链如下：
+
+```text
+connected socket 出现 read-related readiness
+-> Channel 调用 Connection 的 private read handler
+-> read handler 调用 recv
+-> recv 返回 n > 0
+-> Connection 把这 n bytes append 到自己的 input Buffer
+-> 当前 read-drain 结束后，Connection 调用已保存的 MessageCallback
+```
+
+今天把调用时机固定为：**一次 read-side handling 中只要成功追加了至少一个 byte，就在本轮 read-drain 结束后调用一次 `MessageCallback`。** 如果本轮只有 `EAGAIN`、没有追加新 bytes，则不调用它；如果读到一些 bytes 后又读到 EOF，仍要先调用它，让完整 messages 得到处理。
+
+为什么参数不是“本次 `recv` 得到的临时数组”，而是整个 input `Buffer&`？因为 message 可能横跨多次 read：
+
+```text
+调用前 Buffer 中已有 incomplete suffix："hel"
+本轮 recv 新增：                         "lo\nworld\n"
+MessageCallback 实际看到：              "hello\nworld\n"
+```
+
+所以“当前累计的 input Buffer”准确地说是：**这条 Connection 当前所有尚未被 application 消费的 bytes，也就是旧 suffix 加本轮新 bytes。** 它不是历史上收过的全部数据；已经 `retrieve` 的部分不再属于 readable range。
+
+`MessageCallback` 被调用以后，application policy 才负责：
 
 ```text
 callback 找到完整 newline messages
@@ -437,7 +473,7 @@ callback 找到完整 newline messages
 -> 不完整 suffix 保留
 ```
 
-今天 application callback 必须一次处理当前 Buffer 中的所有完整 lines，不能只处理第一条后就等待一个可能不会再来的 readiness event。
+今天 application callback 必须一次处理当前 Buffer 中的所有完整 lines，不能只处理第一条后就等待一个可能不会再来的 readiness event。这里讲的是 callback 被触发后的 application 职责，不是 `Connection` 内部替它解析 newline。
 
 ### 9.3 `send`
 
@@ -453,6 +489,8 @@ connection.send(response, sizeof(response) - 1);
 `send` 保证的是把 bytes 纳入这条 connection 的待发送顺序，不保证一次 system call 已把所有 bytes 交给 kernel。
 
 ### 9.4 `set_close_callback`
+
+同样，`set_close_callback(...)` 只是由 server owner 在 `start()` 前安装上行通知。真正触发它的是 `Connection`：当 peer EOF 后 output 已经 drain，或者 socket 遇到无法继续的 fatal error 时，Connection 发出一次 close request。
 
 最小形态：
 
