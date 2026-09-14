@@ -511,24 +511,25 @@ Close request 必须是 idempotent：同一个 `Connection` 即使从多个 erro
 
 #### 9.5.1 Public API 的 exception
 
-| 调用与条件 | 结果 |
-|---|---|
-| constructor 收到 empty `UniqueFd` | 抛 `std::invalid_argument` |
-| constructor 收到 valid 但没有 `O_NONBLOCK` 的 socket | 抛 `std::invalid_argument` |
-| constructor 使用 `fcntl(F_GETFL)` 检查 flags 时 syscall 失败 | 抛带有保存 `errno` 的 `std::system_error` |
-| 设置 empty `MessageCallback` 或 `CloseCallback` | 抛 `std::invalid_argument` |
-| `start()` 前再次设置 callback | 允许，用新 callback 替换旧 callback |
-| `start()` 后再设置 callback | 抛 `std::logic_error` |
-| callbacks 尚未安装完整就调用 `start()` | 抛 `std::logic_error` |
-| 对同一个 Connection 调用两次 `start()` | 抛 `std::logic_error` |
-| `start()` 注册 Channel 时 `epoll_ctl` 失败 | 保持未启动状态，向调用者传播 `std::system_error` |
-| 已启动后同步 interest 时 `epoll_ctl MOD` 失败 | 先提交 close request，再传播 `std::system_error` |
-| `send(nullptr, length)` 且 `length > 0` | 抛 `std::invalid_argument` |
-| `send(data, 0)`，包括 `data == nullptr` | no-op，不抛异常 |
-| 在 `start()` 前调用 `send` | 抛 `std::logic_error` |
-| Connection 已提交 close request 后调用 `send` | 抛 `std::logic_error` |
-| peer 已 half-close 自己的 write side，但 Connection 尚未请求关闭 | 仍允许 `send`；half-close 不等于本端不能回复 |
-| 保存 callback 或扩展 Buffer 时失败 | 传播原 exception；常见为 `std::bad_alloc`，超出 container 最大尺寸也可能是 `std::length_error` |
+| 调用与条件 | 结果 | 建议英文 message / context |
+|---|---|---|
+| constructor 收到 empty `UniqueFd` | 抛 `std::invalid_argument` | `"Connection requires a valid socket"` |
+| constructor 收到 valid 但没有 `O_NONBLOCK` 的 socket | 抛 `std::invalid_argument` | `"Connection socket must be non-blocking"` |
+| constructor 使用 `fcntl(F_GETFL)` 检查 flags 时 syscall 失败 | 抛带有保存 `errno` 的 `std::system_error` | `"fcntl(F_GETFL)"` |
+| 设置 empty `MessageCallback` | 抛 `std::invalid_argument` | `"MessageCallback must not be empty"` |
+| 设置 empty `CloseCallback` | 抛 `std::invalid_argument` | `"CloseCallback must not be empty"` |
+| `start()` 前再次设置 callback | 允许，用新 callback 替换旧 callback | 不需要 error message |
+| `start()` 后再设置 callback | 抛 `std::logic_error` | `"Connection callbacks cannot be changed after start"` |
+| callbacks 尚未安装完整就调用 `start()` | 抛 `std::logic_error` | `"Connection callbacks must be set before start"` |
+| 对同一个 Connection 调用两次 `start()` | 抛 `std::logic_error` | `"Connection is already started"` |
+| `start()` 注册 Channel 时 `epoll_ctl` 失败 | 保持未启动状态，向调用者传播 `std::system_error` | `"epoll_ctl ADD"`，通常由 `EventLoop` 提供 |
+| 已启动后同步 interest 时 `epoll_ctl MOD` 失败 | 先提交 close request，再传播 `std::system_error` | `"epoll_ctl MOD"`，通常由 `EventLoop` 提供 |
+| `send(nullptr, length)` 且 `length > 0` | 抛 `std::invalid_argument` | `"Connection::send data must not be null when length is positive"` |
+| `send(data, 0)`，包括 `data == nullptr` | no-op，不抛异常 | 不需要 error message |
+| 在 `start()` 前调用 `send` | 抛 `std::logic_error` | `"Connection::send requires a started connection"` |
+| Connection 已提交 close request 后调用 `send` | 抛 `std::logic_error` | `"Connection::send called after close request"` |
+| peer 已 half-close 自己的 write side，但 Connection 尚未请求关闭 | 仍允许 `send`；half-close 不等于本端不能回复 | 不需要 error message |
+| 保存 callback 或扩展 Buffer 时失败 | 传播原 exception；常见为 `std::bad_alloc`，超出 container 最大尺寸也可能是 `std::length_error` | 保留原 exception 的 `what()`，不要改写成不准确的统一 message |
 
 这里的类型含义：
 
@@ -554,17 +555,39 @@ system_error
 #include <system_error> // system_error
 ```
 
+写法参考：
+
+```cpp
+throw std::invalid_argument("Connection requires a valid socket");
+throw std::logic_error("Connection is already started");
+throw std::system_error(
+    saved_errno, std::generic_category(), "fcntl(F_GETFL)");
+```
+
+这里的英文 message 是推荐诊断文本，不要求 tests 逐字比较。Tests 优先验证 exception type 与触发条件；message 主要帮助人定位失败位置。
+
+对于 `std::system_error`，第三个参数只写 operation context 即可。例如：
+
+```text
+context："recv"
+errno：ECONNRESET
+最终 what() 通常类似："recv: Connection reset by peer"
+```
+
+系统会根据 error code 追加具体解释，不需要自己查询并手写每个 errno 的英文翻译。
+
 #### 9.5.2 `recv` / `send` 的 runtime result
 
 下面这些结果不是 public caller 的参数错误，而是在 EventLoop dispatch Connection callback 时发生：
 
-| syscall result | Connection 行为 | 是否抛 C++ exception |
-|---|---|---|
-| `n > 0` | 推进对应 Buffer | 否 |
-| `-1, errno == EINTR` | 重试当前 syscall | 否 |
-| `-1, errno == EAGAIN/EWOULDBLOCK` | 本轮暂时不能继续，保留 state 等下一次 readiness | 否 |
-| `recv == 0` | 记录 peer EOF；output 为空时请求关闭，否则继续 drain output | 否 |
-| 其他 `recv/send == -1` | 保存当下 `errno`，先提交 close request，再抛 `std::system_error` | 是 |
+| syscall result | Connection 行为 | 是否抛 C++ exception | 建议 context |
+|---|---|---|---|
+| `n > 0` | 推进对应 Buffer | 否 | 不需要 |
+| `-1, errno == EINTR` | 重试当前 syscall | 否 | 不需要 |
+| `-1, errno == EAGAIN/EWOULDBLOCK` | 本轮暂时不能继续，保留 state 等下一次 readiness | 否 | 不需要 |
+| `recv == 0` | 记录 peer EOF；output 为空时请求关闭，否则继续 drain output | 否 | 不需要 |
+| 其他 `recv == -1` | 保存当下 `errno`，先提交 close request，再抛 `std::system_error` | 是 | `"recv"` |
+| 其他 `send == -1` | 保存当下 `errno`，先提交 close request，再抛 `std::system_error` | 是 | `"send"` |
 
 例如 peer reset 导致：
 
@@ -612,12 +635,12 @@ const int result = ::getsockopt(
 getsockopt 返回 -1
 -> 保存 errno
 -> request close
--> 抛 std::system_error(saved_errno, ...)
+-> 抛 std::system_error(saved_errno, ..., "getsockopt(SO_ERROR)")
 
 getsockopt 返回 0 且 socket_error != 0
 -> socket_error 才是该 socket 的 pending error
 -> request close
--> 抛 std::system_error(socket_error, ...)
+-> 抛 std::system_error(socket_error, ..., "socket SO_ERROR")
 
 getsockopt 返回 0 且 socket_error == 0
 -> 没有可由 SO_ERROR 报告的 pending error
