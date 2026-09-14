@@ -697,6 +697,47 @@ EOF    -> runtime_error
 
 这两个都是 TCP/non-blocking state machine 的正常输入，不是程序异常。
 
+---
+
+#### 9.5.2.1 MSG_NOSIGNAL
+
+`MSG_NOSIGNAL` 是 `send` 的 flag，作用是：
+
+```text
+对端已经关闭连接时，
+send 失败返回 -1，并设置 errno = EPIPE，
+但不让本进程收到 SIGPIPE。
+```
+
+不用它时，可能发生：
+
+```text
+server 调用 send
+-> peer 已关闭读端或连接已断
+-> kernel 发送 SIGPIPE
+-> 默认行为：整个 server process 直接退出
+```
+
+今天的 Reactor 是一个进程服务多个 client；某一个 client 断开，绝不应该把整个 server 一起带走。
+
+所以通常写：
+
+```cpp
+const ssize_t n = ::send(fd, data, length, MSG_NOSIGNAL);
+```
+
+然后正常检查：
+
+```cpp
+if (n == -1 && errno == EPIPE) {
+    // 当前 Connection 已不能继续写，request close
+}
+```
+
+它只改变“是否发送 `SIGPIPE`”，不改变 `send` 成功、partial write、`EAGAIN`、`EINTR` 这些 I/O 语义。
+
+---
+
 #### 9.5.3 `EPOLLERR` 怎样得到真正的 socket error
 
 `EPOLLERR` 只是 ready event 中的一个 bit，本身不是具体 error code。可使用：
@@ -805,7 +846,7 @@ for (;;) {
 ```text
 继续 recv，直到当前不能再推进
 收到 bytes：append 到 input Buffer
-遇到 EINTR：重试当前操作1
+遇到 EINTR：重试当前操作
 遇到 EAGAIN/EWOULDBLOCK：本轮 read drain 结束
 返回 0：记录 peer write side 已关闭
 其他 failure：请求关闭
@@ -880,7 +921,306 @@ EPOLLIN | EPOLLRDHUP
 
 这不是让 Channel 解析 TCP state；Channel 只 dispatch event，Connection 才解释 socket I/O 结果。
 
-## 13. Round1 最小 smoke test
+## 13. Round1 Connection component checker
+
+先不用写完整 server。这个 checker 使用一对本地 stream sockets，把其中一端交给 `Connection`，另一端模拟 peer：
+
+```text
+socketpair peer endpoint
+<->
+Connection endpoint + Channel + EventLoop
+```
+
+它按顺序检查四段：
+
+```text
+CHECK 1：valid socket 能 construct、安装 callbacks 并 start
+CHECK 2：fragmented input 被累计，MessageCallback 解析并 echo
+CHECK 3：确定性制造 pending output，验证 EPOLLOUT 能继续 drain
+CHECK 4：peer EOF 被记录，并且 close request 只提交一次
+```
+
+它不接 `Acceptor`、不绑定 TCP port，也不代替全部 error-contract tests。目的只是先判断 `Connection` 核心 state machine 是否值得接入 server。测试脚手架不是今天需要你独立设计的产出，可以直接使用。
+
+创建 `tests/connection_checker.cpp`：
+
+```cpp
+#include "connection.hpp"
+
+#include <cerrno>
+#include <cstddef>
+#include <cstring>
+#include <iostream>
+#include <poll.h>
+#include <stdexcept>
+#include <string>
+#include <system_error>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <utility>
+
+// A component-level checker for Connection. It uses a local stream socketpair,
+// so Acceptor and a complete TCP server are not required.
+namespace {
+
+void require(bool condition, const char* message) {
+    if (!condition) {
+        throw std::runtime_error(message);
+    }
+}
+
+void send_all(int fd, const char* data, std::size_t length) {
+    // Feed exact test bytes into the peer side of the socketpair.
+    std::size_t offset = 0;
+    while (offset < length) {
+        const ssize_t count =
+            ::send(fd, data + offset, length - offset, MSG_NOSIGNAL);
+        if (count > 0) {
+            offset += static_cast<std::size_t>(count);
+            continue;
+        }
+        if (count == -1 && errno == EINTR) {
+            continue;
+        }
+        if (count == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            pollfd event{fd, POLLOUT, 0};
+            const int result = ::poll(&event, 1, 1000);
+            require(result == 1 && (event.revents & POLLOUT) != 0,
+                    "peer did not become writable");
+            continue;
+        }
+        throw std::system_error(errno, std::generic_category(), "peer send");
+    }
+}
+
+void drain_available(int fd, std::string& output) {
+    // Drain only the bytes currently available on the non-blocking peer.
+    char buffer[16384];
+    for (;;) {
+        const ssize_t count = ::recv(fd, buffer, sizeof(buffer), 0);
+        if (count > 0) {
+            output.append(buffer, static_cast<std::size_t>(count));
+            continue;
+        }
+        if (count == -1 && errno == EINTR) {
+            continue;
+        }
+        if (count == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            return;
+        }
+        if (count == 0) {
+            throw std::runtime_error("unexpected peer EOF");
+        }
+        throw std::system_error(errno, std::generic_category(), "peer recv");
+    }
+}
+
+std::string receive_exact(int fd, std::size_t expected_size) {
+    // Wait with a deadline instead of allowing a broken checker to hang.
+    std::string received;
+    received.reserve(expected_size);
+
+    while (received.size() < expected_size) {
+        drain_available(fd, received);
+        if (received.size() == expected_size) {
+            break;
+        }
+
+        pollfd event{fd, POLLIN, 0};
+        const int result = ::poll(&event, 1, 1000);
+        require(result == 1 && (event.revents & POLLIN) != 0,
+                "timed out before exact response arrived");
+    }
+
+    require(received.size() == expected_size,
+            "received more bytes than the expected response");
+    return received;
+}
+
+} // namespace
+
+int main() {
+    try {
+        int raw_fds[2] = {-1, -1};
+        if (::socketpair(AF_UNIX,
+                         SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC,
+                         0,
+                         raw_fds) == -1) {
+            throw std::system_error(
+                errno, std::generic_category(), "socketpair");
+        }
+
+        UniqueFd peer(raw_fds[0]);
+        UniqueFd connection_fd(raw_fds[1]);
+
+        // A small kernel send buffer makes partial write/EAGAIN observable.
+        const int small_send_buffer = 4096;
+        if (::setsockopt(connection_fd.get(),
+                         SOL_SOCKET,
+                         SO_SNDBUF,
+                         &small_send_buffer,
+                         sizeof(small_send_buffer)) == -1) {
+            throw std::system_error(
+                errno, std::generic_category(), "setsockopt(SO_SNDBUF)");
+        }
+
+        std::cout << "CHECK 1: construct and start\n";
+        EventLoop loop;
+        Connection connection(loop, std::move(connection_fd));
+
+        int message_calls = 0;
+        int close_calls = 0;
+        int closed_fd = -1;
+
+        connection.set_message_callback(
+            [&message_calls](Connection& current, Buffer& input) {
+                ++message_calls;
+
+                while (!input.empty()) {
+                    const char* begin = input.peek();
+                    const void* found =
+                        std::memchr(begin, '\n', input.readable_bytes());
+                    if (found == nullptr) {
+                        return;
+                    }
+
+                    const char* newline = static_cast<const char*>(found);
+                    const std::size_t line_length =
+                        static_cast<std::size_t>(newline - begin) + 1;
+
+                    current.send(begin, line_length);
+                    input.retrieve(line_length);
+                }
+            });
+        connection.set_close_callback(
+            [&close_calls, &closed_fd](int fd) {
+                ++close_calls;
+                closed_fd = fd;
+            });
+        connection.start();
+        require(connection.started(), "Connection did not enter started state");
+        std::cout << "CHECK 1 PASS\n";
+
+        std::cout << "CHECK 2: fragmented input and MessageCallback\n";
+        send_all(peer.get(), "hel", 3);
+        require(loop.poll_once(1000) == 1,
+                "first input did not produce one ready record");
+        require(message_calls == 1,
+                "MessageCallback should run after the first read drain");
+        require(connection.pending_input_bytes() == 3,
+                "incomplete input suffix was not preserved");
+
+        char unexpected = '\0';
+        const ssize_t early_read = ::recv(peer.get(), &unexpected, 1, 0);
+        require(early_read == -1 &&
+                    (errno == EAGAIN || errno == EWOULDBLOCK),
+                "incomplete line produced an unexpected response");
+
+        send_all(peer.get(), "lo\nworld\n", 9);
+        require(loop.poll_once(1000) == 1,
+                "second input did not produce one ready record");
+        require(message_calls == 2,
+                "MessageCallback count does not match two read drains");
+        require(connection.pending_input_bytes() == 0,
+                "complete lines were not fully consumed");
+        require(receive_exact(peer.get(), 12) == "hello\nworld\n",
+                "fragmented/coalesced echo bytes do not match");
+        std::cout << "CHECK 2 PASS\n";
+
+        std::cout << "CHECK 3: pending output and EPOLLOUT resume\n";
+        const std::string payload(2 * 1024 * 1024, 'x');
+        connection.send(payload.data(), payload.size());
+        require(connection.pending_output_bytes() > 0,
+                "checker failed to establish pending output");
+
+        std::string received;
+        received.reserve(payload.size());
+        int rounds = 0;
+        while (received.size() < payload.size() && rounds < 10000) {
+            drain_available(peer.get(), received);
+            if (received.size() == payload.size()) {
+                break;
+            }
+
+            if (connection.pending_output_bytes() > 0) {
+                require(loop.poll_once(1000) > 0,
+                        "pending output was not resumed by EPOLLOUT");
+            }
+            ++rounds;
+        }
+
+        require(received == payload,
+                "large output was lost, duplicated, or reordered");
+        require(connection.pending_output_bytes() == 0,
+                "output Buffer was not empty after complete delivery");
+        std::cout << "CHECK 3 PASS\n";
+
+        std::cout << "CHECK 4: peer EOF and idempotent close request\n";
+        if (::shutdown(peer.get(), SHUT_WR) == -1) {
+            throw std::system_error(
+                errno, std::generic_category(), "shutdown(SHUT_WR)");
+        }
+        require(loop.poll_once(1000) > 0,
+                "peer EOF did not produce a ready record");
+        require(connection.peer_write_closed(),
+                "Connection did not record peer EOF");
+        require(close_calls == 1 && closed_fd == connection.fd(),
+                "Connection did not submit exactly one close request");
+
+        loop.poll_once(20);
+        require(close_calls == 1,
+                "close request was submitted more than once");
+        std::cout << "CHECK 4 PASS\n";
+
+        std::cout << "CONNECTION_CHECKER_PASS\n";
+        return 0;
+    } catch (const std::exception& error) {
+        std::cerr << "CONNECTION_CHECKER_FAIL: " << error.what() << '\n';
+        return 1;
+    }
+}
+```
+
+把 checker 接入 CMake：
+
+```cmake
+add_executable(connection_checker tests/connection_checker.cpp)
+target_compile_options(connection_checker PRIVATE
+    -Wall
+    -Wextra
+    -g
+)
+target_link_libraries(connection_checker PRIVATE
+    connection
+)
+
+add_test(NAME connection_checker COMMAND connection_checker)
+set_tests_properties(connection_checker PROPERTIES TIMEOUT 15)
+```
+
+运行：
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j
+./build/connection_checker
+```
+
+完整通过时输出：
+
+```text
+CHECK 1 PASS
+CHECK 2 PASS
+CHECK 3 PASS
+CHECK 4 PASS
+CONNECTION_CHECKER_PASS
+```
+
+如果失败，先只看最后打印到哪一个 `CHECK`。不要在 CHECK 1 尚未通过时同时调 server，也不要为了通过 checker 删除它所验证的 contract。
+
+先把 checker 跑通并让我检阅 `Connection`，再继续下面的完整 server smoke；这能把 component bug 与 integration bug 分开。
+
+## 14. Round1 最小 smoke test
 
 这个 client 只负责快速回答：“程序是否正确处理被拆成多次 send call、又可能被 TCP 重新组合的 byte stream？”它不替代 R3 的 large/half-close evidence，也不声称两次 `sendall` 必然对应两次 `recv` 或两轮 readiness event。
 
@@ -921,7 +1261,7 @@ if actual != expected:
 print("REACTOR ECHO SMOKE PASS")
 ```
 
-### 13.1 本例新增的 Python/socket API
+### 14.1 本例新增的 Python/socket API
 
 你已经学过 Python，这里只补本例中容易陌生的 socket API，以及几处会直接影响读懂脚本的写法：
 
@@ -982,7 +1322,7 @@ python3 tests/reactor_echo_smoke.py
 REACTOR ECHO SMOKE PASS
 ```
 
-## 14. 接入当前 CMake project
+## 15. 接入当前 CMake project
 
 沿用 Day4 已有 targets，新增大致关系：
 
@@ -1029,7 +1369,7 @@ ctest --test-dir build --output-on-failure
 -std=c++17 -Wall -Wextra -g
 ```
 
-## 15. Round1 通过闸门
+## 16. Round1 通过闸门
 
 做到这里先停止阅读，独立完成 R1。闸门不是要求你写一整套重复 tests，只检查今天第一条真正主链：
 
@@ -1044,6 +1384,7 @@ ctest --test-dir build --output-on-failure
 [ ] public API 的 invalid_argument / logic_error 边界与 9.5 一致
 [ ] EINTR / EAGAIN / EOF 没有被错误地当作 exception
 [ ] fatal I/O 在 exception 离开 callback 前已经提交 close request
+[ ] connection_checker 依次通过 CHECK 1~4
 [ ] reactor_echo_smoke.py 输出 REACTOR ECHO SMOKE PASS
 [ ] fresh build 没有 warning
 ```
@@ -1052,7 +1393,7 @@ R1 只需提交真实 source、一次 build 和 smoke 结果。你让我检阅 R
 
 ---
 
-## 16. Round2：从 callback 到 response 的完整因果链
+## 17. Round2：从 callback 到 response 的完整因果链
 
 这一部分在 R1 通过后阅读。现在先用一条主链把今天真正发生的事串起来。
 
@@ -1082,7 +1423,7 @@ Buffer 只保存 bytes
 server owner 负责 object lifetime
 ```
 
-## 17. 为什么 Connection 需要跨 event 存活
+## 18. 为什么 Connection 需要跨 event 存活
 
 设第一次只收到：
 
@@ -1110,7 +1451,7 @@ hello\nworld\n
 
 因此 `Connection` 的身份对应“一条 socket connection 的 lifetime”，不是“一次 epoll event 的 lifetime”。
 
-## 18. Buffer 与 parser 的边界
+## 19. Buffer 与 parser 的边界
 
 `Buffer` 回答：
 
@@ -1132,7 +1473,7 @@ Parser 回答：
 
 今天 newline parser 用 `\n`；Week11 HTTP parser 会使用 request line、headers、空行和 `Content-Length`。只要边界分对，`Connection` 的 recv/send machinery 可以复用。
 
-## 19. Output state 为什么不能只放在 write callback 的局部变量里
+## 20. Output state 为什么不能只放在 write callback 的局部变量里
 
 先回到接口边界：application callback 只调用 `Connection::send` 提交 response，不直接管理 output Buffer。Output Buffer 是 Connection 为了兑现“caller 返回后可以释放原 memory、剩余 bytes 将来仍能继续发送”而保存的 transport state。
 
@@ -1159,7 +1500,7 @@ application 生成 response
 
 这里不再需要 Week9 的单独 `write_offset`，因为 Day1 Buffer 的 readable range 已经表达“还没发完的 suffix”。
 
-## 20. Dynamic EPOLLOUT 的状态表
+## 21. Dynamic EPOLLOUT 的状态表
 
 | peer read side | output Buffer | Connection 行为 |
 |---|---:|---|
@@ -1177,7 +1518,7 @@ can_close == peer_write_closed && output_buffer.empty()
 
 这两个式子描述逻辑关系，不要求你的变量必须使用这些名字。
 
-## 21. Half-close 的完整流程
+## 22. Half-close 的完整流程
 
 ```mermaid
 flowchart TD
@@ -1196,7 +1537,7 @@ flowchart TD
 
 这里等待的是本端 output drain，不是在等待 peer 再发送数据。
 
-## 22. Close request 为什么交给 owner
+## 23. Close request 为什么交给 owner
 
 假设 `Connection::handle_read()` 正在执行，而它直接让 server owner `erase(this connection)`：
 
@@ -1219,7 +1560,7 @@ callback 只设置 close-request state 并通知 owner
 
 这能让 Reactor Echo Server V1 工作，但不是 Week10 最终答案。Day6 会专门检查：同一 ready mask 的多个 bits、本轮 event array 后续 records、旧 registration 与 fd integer reuse。
 
-## 23. 从 Week9 到 Week10，哪些只是搬家
+## 24. 从 Week9 到 Week10，哪些只是搬家
 
 | Week9 过程式状态/函数 | Week10 去向 |
 |---|---|
@@ -1245,7 +1586,7 @@ cleanup request 与 object destruction 开始有明确边界
 
 # Part 3：Round3 打磨、证据与收尾
 
-## 24. Round3 目标
+## 25. Round3 目标
 
 R3 不重写一套 Reactor，也不要求你手写四份同义 client。它只回答：
 
@@ -1261,7 +1602,7 @@ R3 不重写一套 Reactor，也不要求你手写四份同义 client。它只�
 
 它们默认连接 `127.0.0.1:9091`，所以今天 server 使用同一端口即可。
 
-## 25. 代表性 evidence
+## 26. 代表性 evidence
 
 ### 25.1 Fragment + coalesce
 
@@ -1313,7 +1654,7 @@ client 没有无限等待 EOF
 
 这些 clients 是 executable oracles：成功字符串只是结果提示，真正的判断来自程序内部的 exact byte comparison、timeout 和 EOF check。
 
-## 26. Fresh build 与 sanitizer
+## 27. Fresh build 与 sanitizer
 
 普通构建：
 
@@ -1342,7 +1683,7 @@ UBSan：当前覆盖路径是否触发已检测的 undefined behavior
 
 没有 report 只说明本次运行覆盖到的路径没有被它们发现问题，不等于 Reactor lifetime 已被完整证明；Day6 会建立更尖锐的确定性场景。
 
-## 27. 今天的验收标准
+## 28. 今天的验收标准
 
 代码与证据：
 
@@ -1369,7 +1710,7 @@ UBSan：当前覆盖路径是否触发已检测的 undefined behavior
 
 如果代码、因果链和真实输出已经足以证明这些问题，你不必把答案机械抄进 note。验收时我会逐项查看 source、你修改的教程内容和现有 evidence；重复 test scaffolding 可以由我补，但核心 state transition 与 oracle 不能只靠口头说“应该没问题”。
 
-## 28. Note 建议只记录真实增量
+## 29. Note 建议只记录真实增量
 
 `day5_note.md` 不需要重复教程。建议只留下：
 
@@ -1382,7 +1723,7 @@ UBSan：当前覆盖路径是否触发已检测的 undefined behavior
 6. 当前仍留给 Day6 的 lifetime limitation
 ```
 
-## 29. 今日压缩记忆
+## 30. 今日压缩记忆
 
 ```text
 Acceptor 建立 connected socket，Connection 接管它。

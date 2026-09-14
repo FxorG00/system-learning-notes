@@ -6279,7 +6279,13 @@ Day5 已据此把 trigger 固定为：server owner 在 `start()` 前安装 `Mess
 
 ### 主线 Python 辅助脚本的注解尺度
 
-用户学过一遍 Python，能够读懂一般 control flow，但 `socket`、进程观察、benchmark 等工程 API 可能尚未使用。主线 daily 中出现 Python client/probe 时，在代码旁增加一个很短的“本例新增 API”小节：只解释首次出现且影响当前机制理解的接口，包括调用作用、关键返回值/exception 与当前语义边界；例如 `sendall` 会持续发送但不保留 TCP message boundary，`recv(n)` 可能少于 `n` 且 `b""` 表示 EOF。若 `bytes(...)`、`!r`、type annotation 等少量 Python 写法会直接影响读懂当前脚本，也各用一句话说明；自定义 helper 要明确不是标准库 API，并用一条短因果链说明用途。不要重讲用户已经掌握的 Python 基础，不逐行翻译代码，不让 Python 注解打断 C++/系统主线；后续重复 API 直接复用已有认知即可。Day5 §13.1 的完整尺度作为后续基准。
+用户学过一遍 Python，能够读懂一般 control flow，但 `socket`、进程观察、benchmark 等工程 API 可能尚未使用。主线 daily 中出现 Python client/probe 时，在代码旁增加一个很短的“本例新增 API”小节：只解释首次出现且影响当前机制理解的接口，包括调用作用、关键返回值/exception 与当前语义边界；例如 `sendall` 会持续发送但不保留 TCP message boundary，`recv(n)` 可能少于 `n` 且 `b""` 表示 EOF。若 `bytes(...)`、`!r`、type annotation 等少量 Python 写法会直接影响读懂当前脚本，也各用一句话说明；自定义 helper 要明确不是标准库 API，并用一条短因果链说明用途。不要重讲用户已经掌握的 Python 基础，不逐行翻译代码，不让 Python 注解打断 C++/系统主线；后续重复 API 直接复用已有认知即可。Day5 §14.1 的完整尺度作为后续基准。
+
+### Complex component 先提供独立 checker，再接完整程序
+
+用户独立实现 Week10 Day5 `Connection` 后已经明显疲劳，同时还不知道 component 是否正确；若此时要求继续手写完整 server，会把 Connection state-machine bug、Acceptor wiring 与 server ownership 问题叠在一起，定位成本很高。以后一个 component 能通过 socketpair、fake dependency 或 direct callable 独立驱动时，应在接入完整程序前提供一个 focused checker。测试脚手架可以由 Codex完整给出，用户不需要把重复 boilerplate 当作学习产出；checker 应分阶段打印清楚的 PASS/FAIL，使失败能定位到 setup、核心 callback、backpressure 或 lifecycle，而不是只给总失败。
+
+Day5 新增 `connection_checker.cpp`，不依赖 Acceptor/TCP port，直接使用 `socketpair + EventLoop + Connection`。四段 evidence 分别是 construct/start、fragmented input + MessageCallback、small `SO_SNDBUF` 确定性制造 pending output并由 EPOLLOUT resume、peer EOF + idempotent close request。它不替代完整 server、全部 error-contract tests 或 Day6 lifetime hardening；只有 component checker 通过后，才进入 `reactor_echo_server` integration。可复用原则是 checker 必须覆盖该 component 最核心的新状态转换，不能只做“能构造、能调用”smoke，也不要把下一天才处理的组合风险无限塞进当前 checker。
 
 ### Component public API 必须包含 error contract
 
