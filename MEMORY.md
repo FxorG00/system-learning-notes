@@ -6314,3 +6314,13 @@ Callback 与 owned state 还要区分“触发修改”和“直接操作”。D
 首次 server integration 虽然单次 smoke PASS，但 owner 对 `pending_close` 直接 `::close(fd)`，没有 erase `unordered_map` 中的 `unique_ptr<Connection>`。真实结果为同一 server 第一个 client PASS、第二个 client 因 fd integer reuse 与旧 key/owner 冲突而 reset。修复为 poll_once 返回后执行 `connections.erase(fd)`：element 析构触发 unique_ptr 删除 Connection，Connection destructor 先解除 Channel registration，UniqueFd 最终 close fd。修复后完整 Debug build 零 warning、CTest `14/14` PASS，同一 server 生命周期顺序 smoke `10/10`、并发 smoke `8/8`，server 全程存活。R1 评分 `96/100`，正式进入定向 R2/R3；完整 Week10 lifetime hardening 仍留给 Day6。
 
 可复用验收经验：component checker 全绿只能证明 component 在隔离驱动中的 state transitions，不能证明 composition root 正确兑现 ownership。凡是 fd-indexed owner container，至少增加“同一 server process 连续建立并关闭多条 connection”的 integration oracle，让 kernel 真实复用 fd integer；只跑一次 client 会漏掉 stale owner、未 erase key、double ownership 和 fd reuse bug。关闭 RAII-owned resource 时，owner 应删除 owning object，让 destructor chain 完成 unregister + close；不要绕过 owner 直接关闭它内部的 raw handle。R1 通过后的 R2/R3 应记录真实故障链和实际 representation，不再保留抽象的多分支建议。
+
+## 2026-09-15：Week10 Day5 正式通过
+
+用户完成 R2/R3 收口并正式通过 Week10 Day5，最终评分 `97/100`。newline application callback 已把 reverse scan 全程改为 `std::size_t`：`pos=0` 表示当前没有完整 line，找到最后一个 newline 时记录完整 prefix length `i`，随后 `send(peek(), pos)` 与 `retrieve(pos)`，不再把 `readable_bytes()` 或 index 缩窄为 `int`。fresh Debug build 零 warning，CTest `14/14` PASS。
+
+最终 evidence：此前同一 server process 顺序 smoke `10/10`、并发 smoke `8/8`；本次 sanitizer build 的 CTest `14/14` PASS，普通 client PASS，slow client 完整 echo `4,194,305` bytes，half-close client PASS，全部 clients 结束后 server 仍存活，ASan/UBSan 日志无报告。由此同时覆盖 component state transitions、composition-root ownership、fd reuse、large pending output、half-close drain 与进程存活。
+
+用户说明 Day5 教程里的 sanitizer shell commands 会按步骤逐条复制，行间注释用于学习，因此本次不把注释排布作为学习通过阻塞项。以后生成可复制 shell command 时，仍应把说明放在完整 command 之前或之后，避免把注释插进反斜杠续行中；“用户知道怎样分步执行”和“文档代码块可整段执行”是两个不同的质量维度。
+
+Day5 笔记整体正确：transport/application 分层、input/output Buffer、dynamic EPOLLOUT、peer EOF 后 drain、close request、stable object identity、`unique_ptr` ownership transfer，以及 `connections.erase(fd) -> Connection destructor -> unregister -> UniqueFd close` 的 lifetime chain 均已掌握。`Acceptor` 与 `Connection` 只能说采用相似的 Reactor component 组织模式，不能说职责本质相同；当前 owner 实际使用 `unordered_map`，红黑树查找描述只适用于笔记中假设的 `std::map`，但元素 erase 后的 RAII destructor chain 相同。下一步进入 Week10 Day6 callback lifetime 与 stale-event hardening。
