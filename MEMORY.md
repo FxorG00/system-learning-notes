@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-10）：Week1~Week9 已完成；Week9 Day4 最终 `92/100`，Day5 最终 `96/100`，Day6 最终 `95/100`，Day7 最终 `94/100`。Week9 的 non-blocking/epoll 主线已经以 canonical echo server、真实流程图和 claim-to-evidence archive 收口；Week10 Day1 `Buffer` 已正式完成并以 `96/100` 通过，下一步进入 Day2 `Channel`。AI Theory T1 已通过，T2 尚未开始；Week10 出口前应推进到 T3，提前生成教材不计为已学习。
+最新进度快照（2026-09-16）：Week1~Week9 已完成；Week10 Day1~Day6 已正式通过，Day6 最终 `96/100`。当前 Reactor 已完成 Buffer、Channel、EventLoop、Acceptor、Connection、Echo Server 以及 callback lifetime / deferred cleanup / stale-event hardening；下一步进入 Week10 Day7 收口。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
 
 ### Week1：已完成
 
@@ -6342,3 +6342,11 @@ R3 初始唯一升级路线基于当前实现：close-requested Connection handl
 用户新增 Ubuntu `tests/reactor_lifetime_probe.cpp`，复用真实 `Channel`，人工设置 `EPOLLIN | EPOLLOUT`。Scenario A 无 close request 时 read/write work counters 各为 1；Scenario B read callback 设置 `close_requested` 后，write callback 仍被调用一次，打印 `WRITE AFTER CLOSE`。`day6_note.md` 运行前预测与实际行为一致。第一次检阅发现 Scenario B 仅打印、不证明 read/request/write 实际发生，暂评 90；用户随后补 `read_work_count==1`、`write_work_count==1` 与 `close_requested` assertions，fresh Debug build 零 warning、probe exit 0、CTest `15/15` PASS。R1 最终评分 `96/100`，正式进入 R2；这不是整个 Day6 已通过。
 
 R1 后已以当前磁盘上的 Day6 教程为 edit base 定向润色 R2/R3，保留用户原有内容。核心技术校准：synthetic Channel probe 测的是 **post-close write callback invocation**，不使用真实 Connection，也不证明新的 `send` transport work。升级 `Connection` close-state guard 后，R1 的 `WRITE AFTER CLOSE` 仍是正确输出；不能要求改写 Channel/Probe 让它消失。R3 只在真实 Connection handlers 中停止 close-requested state 的 recv/send/getsockopt，并由一条 focused component scenario 覆盖 transport-work oracle，可由 Codex 提供测试脚手架。`assert` 在当前 Debug build 有效，若以后用 `NDEBUG` Release build，需换显式 failure return 才能保持 probe 的跨 build-type 可执行 oracle。`DAILY_INDEX.md` 的核心主题、产出与检索关键词未变化，不需要同步。
+
+## 2026-09-16：Week10 Day6 正式通过
+
+用户完成 callback lifetime 与 stale-event hardening，最终评分 `96/100`。`Connection::handle_recv`、`handle_send`、`handle_error` 在 close-requested state 下停止新的 transport work，同时 public `Connection::send` 继续兑现原 contract：close request 后抛 `std::logic_error`，而不是静默成功；`peer_write_closed_flag_` 仍允许 pending output drain。server 保持整轮 `poll_once` 返回后才处理 `pending_close`，没有在正在执行的 callback stack 中销毁 `Connection`。
+
+`EventLoop::remove_channel` 已增加 pointer identity check，只删除 registry 中仍与 `&channel` 匹配的 entry，并在 `epoll_ctl DEL` 失败路径上也不遗留 dangling `Channel*`。`poll_once` 对 missing fd 先 `find` 并跳过；在当前单线程且两次访问间无 registry mutation 的实现里，随后使用 `map_[fd]` 不会实际插入，因此不作为 correctness bug。保存 iterator/Channel pointer 仍是更直接、少一次 hash/tree lookup 的表达改进，但不阻塞本日通过。
+
+最终 evidence：fresh Debug build 零 warning，CTest `15/15` PASS；同一 server process repeated connections `20/20` PASS；ASan/UBSan build 的 CTest `15/15` PASS；sanitizer server 下普通 client、`4,194,305` bytes slow client、half-close client 全部 PASS，server 全程存活且日志无 sanitizer report。`day6_note.md` 对 same-record callback order、close request 与 object lifetime 的区分正确；笔记中“先 find 再用 map[]”在当前实现可运行，但长期推荐直接复用 iterator。下一步进入 Week10 Day7 收口。
