@@ -6360,3 +6360,9 @@ R2 在闸门后以当前真实 class/function names 串起三条完整主线：`
 R3 将总规划的 C++ 定向补缺挂回真实代码：`[this]` 和 reference capture 不延长 lifetime，当前安全性来自 owner + deferred cleanup；`std::function` callable dispatch 不等于 virtual dispatch；当前 concrete components 使用 composition，不需要 inheritance/virtual destructor；template instantiation 与 type erasure 分属 compile-time concrete type 和 runtime callable wrapper；single-thread Reactor 使用普通 state 即可，atomic/mutex/volatile 不能混为一谈；release/acquire 只作为未来跨线程 publication 的第一层模型，cache-line padding 不在没有 concurrent writers/evidence 时进入代码。
 
 Day7 复用 Day6 已取得的 zero-warning、CTest、repeated clients、slow/half-close 与 ASan/UBSan evidence，只新增一次由教程提供脚手架的 100 次连接前后 `/proc/<pid>/fd` count 观察。`DAILY_INDEX.md` 已新增 Week10 Day7 入口和关键词。教程完成不等于用户已经学习或 Week10 已正式通过；必须等待 R1 与最终验收。
+
+## 2026-09-16：AI Theory T1-T13 改版完整性复核
+
+已结合 Git 历史和当前文件全量复核 `ai_theory/T1` 至 `T13`。理论线的连续讲义改版并非只完成一部分：T1 首先独立改版，T2-T3 与 T4-T10 随后分批对齐；T11-T13 则是在新规则确定后直接生成。T1、T2、T5、T10 没有硬阅读闸门是基于认知难度作出的有意选择，不是漏改；T3、T4、T6-T9、T11-T13 已在真实认知墙前保留单一闸门或等价的先做后读结构。以后不能仅凭篇幅、标题形式或缺少 Round 字样判断某份 T 教程未完成迁移。
+
+本次发现上一轮 LaTeX 批量勘误确有残留：`T3.md` 两个 display math 中的 `\qquad` 丢失反斜杠，Typora 会把它显示成字面 `qquad`，现已修复。随后对 T1-T13 的非代码数学环境扫描未再发现未转义的常见 LaTeX command；代码围栏与 `$$` delimiter 也应继续作为理论教程交付前的静态检查项。此次只修理论线与记忆，不修改任何主线 `daily.md`；理论线的编排规则仍不得反向影响系统主线教程。
