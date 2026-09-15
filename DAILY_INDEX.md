@@ -1,8 +1,8 @@
 # Daily 教程总目录
 
-> 更新日期：2026-09-14
+> 更新日期：2026-09-15
 >
-> 收录范围：主线 Week1 Day1 至 Week10 Day5，共 68 份正式 daily 教程。
+> 收录范围：主线 Week1 Day1 至 Week10 Day6，共 69 份正式 daily 教程。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week9 已通过
-Week10 Day1 到 Day5 已通过，下一步进入 Day6
+Week10 Day1 到 Day5 已通过，Day6 教程已生成并开始推进
 ```
 
 ---
@@ -179,11 +179,11 @@ Week10 Day1 到 Day5 已通过，下一步进入 Day6
 | [Day3：EventLoop component](week10/day3/day3.md) | EventLoop 拥有 epoll fd；ADD/MOD/DEL registration；`data.fd + map` stable identity；single-batch `poll_once`、EINTR 与 `timeout=-1` | `event_loop.hpp/.cpp` + delayed-readiness probe | EventLoop, registration, epoll fd, poll_once, maxevents, EINTR, infinite timeout |
 | [Day4：Acceptor component](week10/day4/day4.md) | 把 listening path 从 main 抽出；Acceptor 拥有 listener 与 listening Channel；accept-drain；accepted fd 通过 move-only `UniqueFd` 移交给 server owner | `acceptor.hpp/.cpp` + 3-pending-connections probe | Acceptor, listening socket, accept4, drain, handoff, UniqueFd, backlog |
 | [Day5：Connection component](week10/day5/day5.md) | Connection 接管 connected socket，在多轮 readiness events 间保存 input/output Buffer、EOF 与 desired interest；newline policy 与 transport 分离 | `connection.hpp/.cpp` + Reactor Echo Server V1 | Connection, input Buffer, output Buffer, dynamic EPOLLOUT, half-close, application policy |
+| [Day6：callback lifetime hardening](week10/day6/day6.md) | 区分 close request、same-record dispatch、整个 epoll batch 与 object destruction；deferred cleanup、stale record、fd reuse 和 identity | deterministic lifetime probe + Reactor V1 lifetime hardening | callback lifetime, self-destruction, deferred cleanup, stale event, fd reuse, generation token |
 
 Week10 后续按 [week10.md](week10/week10.md) 继续：
 
 ```text
-Day6：callback 中 close/remove、self-destruction、stale event 与 fd reuse
 Day7：Reactor Echo Server integrated evidence 与 Week10 出口
 ```
 
@@ -252,6 +252,8 @@ Reactor Buffer / Channel / EventLoop      -> Week10 Day1~Day3
 Acceptor / accepted fd ownership          -> Week10 Day4
 Connection / input-output Buffer          -> Week10 Day5
 dynamic EPOLLOUT / half-close             -> Week9 Day5~Day6, Week10 Day5
+callback lifetime / deferred cleanup      -> Week10 Day6
+stale event / fd reuse / generation       -> Week9 Day6, Week10 Day6
 ```
 
 ## 并发与工程工具
