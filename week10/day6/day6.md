@@ -607,7 +607,22 @@ CMake target
 
 ## 13. Round2：为什么 immediate erase 会变成 self-destruction
 
-这一部分在 R1 正式通过后阅读。
+R1 已正式通过。你的 `reactor_lifetime_probe.cpp` 用两个独立 `Channel` 场景做了准确对照：
+
+```text
+ScenarioA: EPOLLIN | EPOLLOUT
+-> read_work_count = 1
+-> write_work_count = 1
+
+ScenarioB: EPOLLIN | EPOLLOUT
+-> read callback sets close_requested = true
+-> write callback still runs once
+-> WRITE AFTER CLOSE
+```
+
+`day6_note.md` 在运行前就预测到这个结果；fresh Debug build 零 warning，CTest `15/15` PASS。第一次检阅时 Scenario B 只打印 trace，缺少自动证明 read/request/write 三步都发生；你随后补了两个 work counters 与 `assert(close_requested)`，现在这条 evidence 闭合。`assert` 在当前 Debug build 有效，但未来若用定义了 `NDEBUG` 的 Release build，它会被移除；要把 probe 当跨 build-type 的 regression test 时，再改成显式失败返回。
+
+这条 trace 的精确含义是：**Channel 继续调用 write callback**。它没有执行真实 `Connection::handle_send`，所以不能推断 close 后真的调用了 `send`。R2/R3 要分别处理 callback invocation 和 transport work；不把 Channel 的正常 combined-bits dispatch 改成“read 后一律跳过 write”。
 
 先看危险版本的完整调用栈。假设 CloseCallback 直接执行 `connections.erase(fd)`：
 
@@ -771,6 +786,18 @@ close request 之后
 对当前 `Connection`，最小 guard 位置是 read、write、error handlers 的入口。
 
 这里不要求 Channel 理解 Connection 的 `close_flag_`。Channel 仍然只负责 event-mask dispatch；Connection 自己负责自己的 lifecycle state。
+
+把你的 R1 trace 接到真实代码：
+
+```text
+R1: read callback -> close_requested = true -> write callback still invoked
+
+production: Connection read handler -> close_helper sets close_flag_
+            -> Channel may still invoke write callback
+            -> Connection write handler sees close_flag_ and returns without send
+```
+
+因此目标不是让 R1 的 `WRITE AFTER CLOSE` 消失，而是让这个被调用的 handler 不再进行新的 transport work。`Channel::handle_event` 本身不应该知道 `close_flag_`，否则 transport-specific lifecycle 会渗进通用 Channel。
 
 注意一个重要边界：
 
@@ -1061,7 +1088,7 @@ Day6 要收敛到一套 policy，不实现所有备选方案：
 
 ## 24. Round3：根据 Day5 最终代码做什么
 
-R1 通过后，这一节会再次按你的真实 probe 定向润色。以当前 Day5 baseline，Round3 只做四件事。
+以你已经通过的 Scenario A/B、Day5 的 `Connection` 和 `pending_close` 为基线，Round3 不重新设计 dispatch。只升级真实生产路径并给升级后的行为留下对应证据：
 
 ### 24.1 在 Connection handlers 入口兑现 close-state policy
 
@@ -1076,6 +1103,8 @@ handle_error
 当 close request 已经发生时，这些 handlers 不再开始新的 recv/send/getsockopt work。
 
 不要把 `peer_write_closed_flag_` 当作同一个 guard；EOF 后仍可能需要 drain output。
+
+你的 R1 probe **仍应输出 `WRITE AFTER CLOSE`**：它只模拟 Channel 的 callback 调用，不读取 Connection 的 `close_flag_`。不要为迎合教程改写 probe 或让 Channel 条件性跳过正常 write callback。
 
 ### 24.2 EventLoop dispatch 改为非插入式查找
 
@@ -1125,7 +1154,7 @@ poll_once dispatch throws
 
 ### 24.5 用 evidence 收口，不再重写 Day5 tests
 
-新增 probe 只覆盖 lifetime policy；Day5 已经通过的 Buffer、Channel、Connection 和 clients 直接复用。
+已保存的 R1 probe 覆盖 **same-record callback invocation**，不覆盖生产 `Connection::handle_send` 是否在 close request 后再次执行。Day5 已经通过的 Buffer、Channel、Connection 和 clients 直接复用；针对 close-state guard 的真实 Connection 路径，只需一条 focused component scenario。测试脚手架可以由 Codex 补，不要求你手写第二套 socketpair boilerplate。
 
 ---
 
@@ -1133,15 +1162,14 @@ poll_once dispatch throws
 
 ### 25.1 必做：deterministic lifetime probe
 
-完成 hardening 后，重新运行 R1 probe。
-
-你必须能够解释：
+完成 hardening 后，重新运行已保存的 R1 probe。预期输出仍是：
 
 ```text
-正常 combined event 为什么仍完成 read 和 write work
-close request 后为什么不再发生新的 write transport work
-为什么对象仍活到 handle_event 和整个 batch 安全返回
+ScenarioA: read_work_count=1, write_work_count=1
+ScenarioB: WRITE AFTER CLOSE
 ```
+
+这证明通用 Channel 的 combined-bits dispatch 没被误伤。它**不能**证明 Connection 的 post-close guard。后者要由上一节的 focused Connection scenario 检查：close request 后同 record 的 write callback 可以被调用，但不得产生新的 `send` transport work。两个 oracle 观察不同层次，不要把其中一个结果当成另一个的证据。
 
 ### 25.2 必做：当前全部 CTest
 
