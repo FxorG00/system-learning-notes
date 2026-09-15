@@ -180,12 +180,7 @@ Week10 Day1 到 Day5 已通过，Day6 教程已生成并开始推进
 | [Day4：Acceptor component](week10/day4/day4.md) | 把 listening path 从 main 抽出；Acceptor 拥有 listener 与 listening Channel；accept-drain；accepted fd 通过 move-only `UniqueFd` 移交给 server owner | `acceptor.hpp/.cpp` + 3-pending-connections probe | Acceptor, listening socket, accept4, drain, handoff, UniqueFd, backlog |
 | [Day5：Connection component](week10/day5/day5.md) | Connection 接管 connected socket，在多轮 readiness events 间保存 input/output Buffer、EOF 与 desired interest；newline policy 与 transport 分离 | `connection.hpp/.cpp` + Reactor Echo Server V1 | Connection, input Buffer, output Buffer, dynamic EPOLLOUT, half-close, application policy |
 | [Day6：callback lifetime hardening](week10/day6/day6.md) | 区分 close request、same-record dispatch、整个 epoll batch 与 object destruction；deferred cleanup、stale record、fd reuse 和 identity | deterministic lifetime probe + Reactor V1 lifetime hardening | callback lifetime, self-destruction, deferred cleanup, stale event, fd reuse, generation token |
-
-Week10 后续按 [week10.md](week10/week10.md) 继续：
-
-```text
-Day7：Reactor Echo Server integrated evidence 与 Week10 出口
-```
+| [Day7：Reactor V1 出口](week10/day7/day7.md) | 用真实函数画 runtime flow 与 ownership graph；区分 callback dispatch 和 object lifetime；把 lambda capture、composition/virtual、template/type erasure、atomic/mutex/volatile 与 happens-before 挂回现有代码 | architecture flow + ownership table + fd-count observation | Reactor architecture, composition root, ownership graph, lambda capture, virtual destructor, happens-before |
 
 ---
 
@@ -254,6 +249,7 @@ Connection / input-output Buffer          -> Week10 Day5
 dynamic EPOLLOUT / half-close             -> Week9 Day5~Day6, Week10 Day5
 callback lifetime / deferred cleanup      -> Week10 Day6
 stale event / fd reuse / generation       -> Week9 Day6, Week10 Day6
+Reactor architecture / composition root   -> Week10 Day7
 ```
 
 ## 并发与工程工具
@@ -269,6 +265,7 @@ ThreadPool / future / packaged_task       -> Week8 Day1~Day3
 GoogleTest / CMake / CTest / TSan         -> Week8 Day4
 AsyncLogger / benchmark                   -> Week8 Day5~Day6
 component integration / shutdown order    -> Week8 Day7
+lambda capture / virtual / happens-before -> Week10 Day7
 ```
 
 ---

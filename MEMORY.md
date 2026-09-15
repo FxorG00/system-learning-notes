@@ -6350,3 +6350,13 @@ R1 后已以当前磁盘上的 Day6 教程为 edit base 定向润色 R2/R3，保
 `EventLoop::remove_channel` 已增加 pointer identity check，只删除 registry 中仍与 `&channel` 匹配的 entry，并在 `epoll_ctl DEL` 失败路径上也不遗留 dangling `Channel*`。`poll_once` 对 missing fd 先 `find` 并跳过；在当前单线程且两次访问间无 registry mutation 的实现里，随后使用 `map_[fd]` 不会实际插入，因此不作为 correctness bug。保存 iterator/Channel pointer 仍是更直接、少一次 hash/tree lookup 的表达改进，但不阻塞本日通过。
 
 最终 evidence：fresh Debug build 零 warning，CTest `15/15` PASS；同一 server process repeated connections `20/20` PASS；ASan/UBSan build 的 CTest `15/15` PASS；sanitizer server 下普通 client、`4,194,305` bytes slow client、half-close client 全部 PASS，server 全程存活且日志无 sanitizer report。`day6_note.md` 对 same-record callback order、close request 与 object lifetime 的区分正确；笔记中“先 find 再用 map[]”在当前实现可运行，但长期推荐直接复用 iterator。下一步进入 Week10 Day7 收口。
+
+## 2026-09-16：Week10 Day7 教程生成
+
+已生成 `week10/day7/day7.md`。Day7 是 Week10 Reactor V1 出口日，不新造 component、不重写 client/test、不要求 README/interview 包装。R1 唯一产出是 `day7_note.md` 中的真实 runtime flowchart 与 ownership table：用户必须从当前 Ubuntu 的 `reactor_echo_server.cpp`、EventLoop、Channel、Acceptor、Connection source 独立梳理 listener ready、connected socket ready、echo 和 deferred cleanup 路径；教程在阅读闸门前只给 required nodes，不排列完整答案。
+
+R2 在闸门后以当前真实 class/function names 串起三条完整主线：`epoll_wait -> EventLoop::poll_once -> Channel::handle_event -> Acceptor/Connection callback`；accepted fd 经 local `UniqueFd -> callback parameter -> Connection member` 完成 ownership transfer；close request 经 `pending_close -> poll_once batch end -> connections.erase -> Connection destructor -> remove_channel -> UniqueFd close` 才完成 object/fd teardown。教程明确把 ownership graph 与 runtime call flow 分开，并说明当前 `main()` 已是 composition root，不强制为了框架外观增加 `TcpServer` class。
+
+R3 将总规划的 C++ 定向补缺挂回真实代码：`[this]` 和 reference capture 不延长 lifetime，当前安全性来自 owner + deferred cleanup；`std::function` callable dispatch 不等于 virtual dispatch；当前 concrete components 使用 composition，不需要 inheritance/virtual destructor；template instantiation 与 type erasure 分属 compile-time concrete type 和 runtime callable wrapper；single-thread Reactor 使用普通 state 即可，atomic/mutex/volatile 不能混为一谈；release/acquire 只作为未来跨线程 publication 的第一层模型，cache-line padding 不在没有 concurrent writers/evidence 时进入代码。
+
+Day7 复用 Day6 已取得的 zero-warning、CTest、repeated clients、slow/half-close 与 ASan/UBSan evidence，只新增一次由教程提供脚手架的 100 次连接前后 `/proc/<pid>/fd` count 观察。`DAILY_INDEX.md` 已新增 Week10 Day7 入口和关键词。教程完成不等于用户已经学习或 Week10 已正式通过；必须等待 R1 与最终验收。
