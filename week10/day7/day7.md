@@ -281,6 +281,24 @@ Round1 不需要：
 
 ---
 
+### R1 验收后的真实阅读基线
+
+你已经按当前 Ubuntu source 独立画出五段流程：listener ready、new-connection callback、connected socket ready、MessageCallback echo 和 deferred cleanup；ownership table 也已把 input/output Buffer 分开，并修正 EventLoop、Acceptor 与 Connection 的观察关系。R2 不要求重画这些内容，只核对下面三个精确名称：
+
+```text
+Acceptor 调用的是 server composition root 安装的 NewConnectionCallback
+-> 它负责创建并配置 Connection
+
+Connection::try_message_callback 在 recv_flag 为 true 时
+-> 调用 message_callback_(*this, input_)
+-> 不是再次递归调用 try_message_callback
+
+MessageCallback 解释 newline protocol 并调用 Connection::send
+-> output Buffer 仍由 Connection 独占并直接操作
+```
+
+其余已经正确的 ownership 与 cleanup 主线不重复抄写，直接拿你的 R1 图和下面完整流程逐段对照。
+
 ## 8. Round2：先把 ownership graph 和 runtime flow 分开
 
 ### 8.1 当前真实 ownership graph
@@ -510,6 +528,8 @@ Week9 和 Week10 的外部 echo behavior 相同，但内部责任从一组过程
 ## 14. Round3：把 C++ 补缺挂回真实代码
 
 Round3 不再加 Reactor feature。它只把总规划要求的 C++ 第一层知识，映射到你已经写出的代码。
+
+基于你的 R1，Round3 不再要求重新解释 accepted-fd handoff 或 deferred cleanup。只需借当前真实 callbacks 分清两件事：`[this]`、`[&pending_close]` 为什么不延长被引用对象 lifetime，以及 EventLoop 持有 `Channel*` 为什么不等于它观察或拥有整个 `Connection`。
 
 ## 15. lambda capture 与 callback lifetime
 

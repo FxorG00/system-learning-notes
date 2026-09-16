@@ -6366,3 +6366,9 @@ Day7 复用 Day6 已取得的 zero-warning、CTest、repeated clients、slow/hal
 已结合 Git 历史和当前文件全量复核 `ai_theory/T1` 至 `T13`。理论线的连续讲义改版并非只完成一部分：T1 首先独立改版，T2-T3 与 T4-T10 随后分批对齐；T11-T13 则是在新规则确定后直接生成。T1、T2、T5、T10 没有硬阅读闸门是基于认知难度作出的有意选择，不是漏改；T3、T4、T6-T9、T11-T13 已在真实认知墙前保留单一闸门或等价的先做后读结构。以后不能仅凭篇幅、标题形式或缺少 Round 字样判断某份 T 教程未完成迁移。
 
 本次发现上一轮 LaTeX 批量勘误确有残留：`T3.md` 两个 display math 中的 `\qquad` 丢失反斜杠，Typora 会把它显示成字面 `qquad`，现已修复。随后对 T1-T13 的非代码数学环境扫描未再发现未转义的常见 LaTeX command；代码围栏与 `$$` delimiter 也应继续作为理论教程交付前的静态检查项。此次只修理论线与记忆，不修改任何主线 `daily.md`；理论线的编排规则仍不得反向影响系统主线教程。
+
+## 2026-09-16：Week10 Day7 Round1 正式通过
+
+用户完成 `day7_note.md` 的手绘图、Mermaid runtime flows 与 ownership table，并在首次检阅后修正三项核心问题：补全 `MessageCallback -> Connection::send -> output Buffer -> handle_send -> dynamic EPOLLOUT` 的完整 echo 路径；把 `handle_recv` 改为先按 `n/errno` 分类、再在 EOF/EAGAIN 分支调用 `try_message_callback`；修正 epoll fd、Connection 及 input/output Buffer 的 owner/non-owning users。listener、new connection、connected socket、echo 与 deferred cleanup 五段已经能由当前 Ubuntu source 推导，`close request -> pending_close -> poll_once batch end -> connections.erase -> Connection destructor -> remove_channel -> UniqueFd close` 主线正确。R1 最终评分 `96/100`，正式进入 R2。
+
+R1 中剩余一个不阻塞的小标签：`Connection::try_message_callback` 图的第二个节点应写真实调用 `message_callback_(*this, input_)`，不能再次标成 `try_message_callback`，否则视觉上像递归；new-connection callback 由 composition root 安装，用于创建 Connection，不能与 application protocol 的 MessageCallback 混名。`day7.md` 已以当前磁盘内容为基线补入 R1 后的定向阅读说明，并把 Round3 缩到 callback capture lifetime 与 EventLoop/Channel/Connection ownership boundary，不要求重复已经证明的 handoff 和 cleanup。
