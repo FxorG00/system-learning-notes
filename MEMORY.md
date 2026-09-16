@@ -6380,3 +6380,11 @@ R1 中剩余一个不阻塞的小标签：`Connection::try_message_callback` 图
 Codex 在 Ubuntu 当前仍运行的同一个 `reactor_echo_server` 上独立复核：连续 `100/100` clients 成功，`fd_before=6`、`fd_after=6`，输出 `FD COUNT PASS`。它支持“当前顺序重复连接与 cleanup 路径没有留下持续增长的 fd entries”，不外推到所有异常路径或 heap lifetime。Day7 后唯一晚于原 binary 的 source 变动是 `acceptor.cpp` 一行缩进调整，无行为变化，因此继续复用 Day6 的 zero-warning、CTest `15/15`、repeated clients、slow/half-close 与 ASan/UBSan evidence，不制造重复测试体力活。
 
 至此 Week10 Reactor V1 系统主线正式通过：EventLoop/Channel/Acceptor/Connection/Buffer 的职责、accepted-fd ownership transfer、dynamic EPOLLOUT、half-close drain、deferred cleanup、callback lifetime 与 fd reuse 边界均已有实现或证据。`day7_note.md` 中 `try_message_callback`/`message_callback_` 与 new-connection/application MessageCallback 的两个命名标签仍是非阻塞表述瑕疵，不影响实际模型。AI Theory 的 Week10 checkpoint 仍是独立进度债：当前 T1 已通过，T2/T3 尚未学习验收；这不撤销 Reactor 主线通过，但后续排期不能把伴随线状态误记为已完成。
+
+## 2026-09-16：Week11 HTTP Server V1 周规划生成
+
+已生成 `week11/week11.md`。Week11 严格承接已通过的 Reactor V1，不复制或推倒 EventLoop/Channel/Acceptor/Connection/Buffer；Ubuntu 继续维护 `~/code/system-learning/cpp/week10` 这一份 canonical implementation，Week12 进入 Mini Redis 时再决定长期目录名。主目标是受限 HTTP/1.1：incremental request-line/header/Content-Length parser、明确 size/framing errors、response encoder、固定 routes、per-connection HTTP session、close-after-flush、keep-alive、Connection close、coalesced/pipelined requests，以及 curl/raw-client/CTest/ASan-UBSan evidence。该 V1 只处理简单 origin-form 且明确拒绝 Transfer-Encoding/chunked，因此是教学子集，不能宣传为完整 RFC-compliant HTTP/1.1 server。
+
+七天顺序为：Day1 request line；Day2 headers/Host/limits；Day3 Content-Length/body/complete framing；Day4 response encoder/routes；Day5 接入 Reactor 并先采用 one-response-then-close；Day6 升级 HTTP/1.1 persistence、pipelining 与 malformed close；Day7 用 flow/ownership/evidence ledger 收口并串 DNS->TCP->TLS->HTTP。V1 明确不做 chunked、static-file directory server、TLS、HTTP/2/3、generic router、multi-thread Reactor、TimerQueue 或 QPS 宣传。HTTP fields 不能进入通用 Connection；每连接 parser/session state 位于 application 层；application 选择关闭时必须等 pending output flush 后再 deferred cleanup。
+
+本周 AI Theory 按真实进度校准：T1 已通过，必达目标是 T2/T3，T4 仅为余力项，不为追总表假装冲到 T6；未完成的 T4~T6 作为显式 schedule debt，但不延迟 Week12 Mini Redis。Week11 daily 继续使用系统主线三 Part + R1/R2/R3 规则；R1 必须写清程序用途、接口调用场景和最小 smoke，却不能泄露 parser algorithm；R1 正式通过后必须从磁盘当前版本和 Git diff 出发，保留用户增补，再根据真实 representation 定向润色 R2/R3。
