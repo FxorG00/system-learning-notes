@@ -6372,3 +6372,11 @@ Day7 复用 Day6 已取得的 zero-warning、CTest、repeated clients、slow/hal
 用户完成 `day7_note.md` 的手绘图、Mermaid runtime flows 与 ownership table，并在首次检阅后修正三项核心问题：补全 `MessageCallback -> Connection::send -> output Buffer -> handle_send -> dynamic EPOLLOUT` 的完整 echo 路径；把 `handle_recv` 改为先按 `n/errno` 分类、再在 EOF/EAGAIN 分支调用 `try_message_callback`；修正 epoll fd、Connection 及 input/output Buffer 的 owner/non-owning users。listener、new connection、connected socket、echo 与 deferred cleanup 五段已经能由当前 Ubuntu source 推导，`close request -> pending_close -> poll_once batch end -> connections.erase -> Connection destructor -> remove_channel -> UniqueFd close` 主线正确。R1 最终评分 `96/100`，正式进入 R2。
 
 R1 中剩余一个不阻塞的小标签：`Connection::try_message_callback` 图的第二个节点应写真实调用 `message_callback_(*this, input_)`，不能再次标成 `try_message_callback`，否则视觉上像递归；new-connection callback 由 composition root 安装，用于创建 Connection，不能与 application protocol 的 MessageCallback 混名。`day7.md` 已以当前磁盘内容为基线补入 R1 后的定向阅读说明，并把 Round3 缩到 callback capture lifetime 与 EventLoop/Channel/Connection ownership boundary，不要求重复已经证明的 handoff 和 cleanup。
+
+## 2026-09-16：Week10 Day7 与 Reactor V1 主线正式通过
+
+用户完成 Day7 最终收口，评分 `97/100`。R2/R3 主要是对前六天 architecture、callback lifetime 与 C++ 第一层概念的总结和后续预告；本次不要求机械抄写六个短答案，因为 `[this]`/reference capture、`std::function` type erasure、composition、single-thread state 与 Week7 acquire-release/false-sharing 已分别由此前实现、笔记和验收覆盖。Day7 的新增高价值证据只有 process fd count，符合教程原定范围。
+
+Codex 在 Ubuntu 当前仍运行的同一个 `reactor_echo_server` 上独立复核：连续 `100/100` clients 成功，`fd_before=6`、`fd_after=6`，输出 `FD COUNT PASS`。它支持“当前顺序重复连接与 cleanup 路径没有留下持续增长的 fd entries”，不外推到所有异常路径或 heap lifetime。Day7 后唯一晚于原 binary 的 source 变动是 `acceptor.cpp` 一行缩进调整，无行为变化，因此继续复用 Day6 的 zero-warning、CTest `15/15`、repeated clients、slow/half-close 与 ASan/UBSan evidence，不制造重复测试体力活。
+
+至此 Week10 Reactor V1 系统主线正式通过：EventLoop/Channel/Acceptor/Connection/Buffer 的职责、accepted-fd ownership transfer、dynamic EPOLLOUT、half-close drain、deferred cleanup、callback lifetime 与 fd reuse 边界均已有实现或证据。`day7_note.md` 中 `try_message_callback`/`message_callback_` 与 new-connection/application MessageCallback 的两个命名标签仍是非阻塞表述瑕疵，不影响实际模型。AI Theory 的 Week10 checkpoint 仍是独立进度债：当前 T1 已通过，T2/T3 尚未学习验收；这不撤销 Reactor 主线通过，但后续排期不能把伴随线状态误记为已完成。
