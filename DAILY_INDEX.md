@@ -1,8 +1,8 @@
 # Daily 教程总目录
 
-> 更新日期：2026-09-15
+> 更新日期：2026-09-16
 >
-> 收录范围：主线 Week1 Day1 至 Week10 Day6，共 69 份正式 daily 教程。
+> 收录范围：主线 Week1 Day1 至 Week11 Day1，共 71 份正式 daily 教程。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -21,8 +21,8 @@ MEMORY.md：长期规则、进度与历次检阅结论
 ```text
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
-Week1 到 Week9 已通过
-Week10 Day1 到 Day5 已通过，Day6 教程已生成并开始推进
+Week1 到 Week10 已通过
+Week11 Day1 教程已生成，等待 Round1 实作与检阅
 ```
 
 ---
@@ -41,6 +41,7 @@ Week10 Day1 到 Day5 已通过，Day6 教程已生成并开始推进
 | ThreadPool 工程化 | [Week8](#week8threadpoolasynclogger-与工程证据) | task/future、ThreadPool、GoogleTest、CMake、AsyncLogger、benchmark |
 | non-blocking 与 epoll | [Week9](#week9non-blocking-ioepoll-与事件驱动-server) | EAGAIN、epoll、per-connection state、dynamic EPOLLOUT、LT/ET |
 | Reactor V1 | [Week10](#week10reactor-v1) | Buffer、Channel、EventLoop、Acceptor、Connection，继续加固 callback lifetime |
+| HTTP Server V1 | [Week11](#week11http-server-v1) | incremental request parser、response encoder、Reactor integration、keep-alive |
 
 ---
 
@@ -184,6 +185,14 @@ Week10 Day1 到 Day5 已通过，Day6 教程已生成并开始推进
 
 ---
 
+# Week11：HTTP Server V1
+
+| Day | 主要内容 | 主要产出 / 观察 | 检索关键词 |
+|---|---|---|---|
+| [Day1：HTTP request line](week11/day1/day1.md) | 在 TCP arbitrary fragmentation/coalescing 下，从累计 byte range 增量识别 method、origin-form target 与 HTTP/1.1；区分 NeedMore/Complete/Error，并用 consumed bytes 保留 suffix | `HttpRequest` + request-line parser + split-point tests | HTTP, request line, incremental parser, CRLF, NeedMore, consumed bytes, fragmentation |
+
+---
+
 # 按关键词反查
 
 ## C++ 对象与所有权
@@ -250,6 +259,7 @@ dynamic EPOLLOUT / half-close             -> Week9 Day5~Day6, Week10 Day5
 callback lifetime / deferred cleanup      -> Week10 Day6
 stale event / fd reuse / generation       -> Week9 Day6, Week10 Day6
 Reactor architecture / composition root   -> Week10 Day7
+HTTP request line / incremental parser    -> Week11 Day1
 ```
 
 ## 并发与工程工具
