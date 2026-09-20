@@ -831,16 +831,16 @@ gtest_discover_tests(http_request_parser_test)
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j
-ctest --test-dir build --output-on-failure
+cmake -E chdir build ctest --output-on-failure
 ```
 
 若只运行今天的 tests：
 
 ```bash
-ctest --test-dir build -R HttpRequestParser --output-on-failure
+cmake -E chdir build ctest -R HttpRequestParser --output-on-failure
 ```
 
-`gtest_discover_tests` 默认使用 suite/test name 注册测试；`-R` 是 regular-expression filter，因此实际匹配名称以 `ctest --test-dir build -N` 输出为准。
+`gtest_discover_tests` 默认使用 suite/test name 注册测试；`-R` 是 regular-expression filter，因此实际匹配名称以 `cmake -E chdir build ctest -N` 输出为准。
 
 ---
 
@@ -897,7 +897,9 @@ R1 正式通过后，我会先读取你当时真实代码、note 与 day1.md 修
 
 ---
 
-# Round 2：把 request line 放回 TCP byte stream 中理解
+# Round 2：沿你的 R1 实现复盘 request line
+
+下面每一节都以你当前的 `parse_request_line / check_complete / check_needmore` 为基线。通用 HTTP 规则只保留到解释真实代码所需的程度；出现“当前实现”时，指的是本次 R1 验收过的 Ubuntu source，而不是教程预设版本。
 
 ## 19. HTTP message 的第一层结构
 
@@ -937,6 +939,8 @@ GET /hello HTTP/1.1\r\nHost: x\r\n\r\n
 - [RFC 9112 Section 3：Request Line](https://www.rfc-editor.org/rfc/rfc9112.html#section-3)
 
 正文已经包含今天需要的规则；链接用于查证，不要求从头通读 RFC。
+
+映射到你的 R1：`HttpRequest` 目前恰好只拥有 `method / target / version`，`check_complete` 也只解析第一行。它没有保存 `Host`、其他 field-lines 或 body，这与 Day1 边界一致；不要因为已经能在 suffix 中看见 `Host: x` 就提前把 header parsing 塞进这三个字段。
 
 ---
 
@@ -982,6 +986,8 @@ parser 从 readable prefix 判断协议进度
 
 一次 `recv` 的返回长度是 transport observation，不是 HTTP framing evidence。
 
+你的 parser 本身是 stateless 的：每次只接收 `data + length + output`，不保存上一次 scan position。真正跨 callback 保存 bytes 的是 `Buffer`。R1 的 partial test 已经按这个关系运行：先把结尾为 `\r` 的 prefix append 到同一个 Buffer，第一次 parse 返回 NeedMore；再 append `\n`，第二次把完整 readable range 重新交给 parser。不是只把新到的一个 `\n` 传给 `check_needmore`。
+
 ---
 
 ## 21. 三种结果不是三个随意的返回值
@@ -996,6 +1002,19 @@ GET /hello HTTP/1.1\r
 
 当前还不能证明完整，也不能证明 malformed。caller 必须保留全部 bytes；如果提前 retrieve，下一次只剩 `\n`，上下文就丢了。
 
+在你的实现中，这条路径是：
+
+```text
+parse_request_line 没有得到 Complete
+-> check_needmore 统计 CR / LF / SP
+-> 根据当前位于 method、target 还是 version prefix 做验证
+-> 能证明“仍可能补成合法 request line”时返回 NeedMore
+```
+
+你把 `output` 从 `check_needmore` 的参数中删掉了，因此这一分支在结构上就没有机会修改 caller output；R1 sentinel test 已验证这一点。
+
+但当前 `space_count == 1` 分支还存在具体偏移错误：`GET /hel` 本应 NeedMore，却被判为 Malformed。原因不是三态模型错误，而是交给 `check_target` 的 range 从 separator 开始了。R2 要修的是这个 range，不是推翻 `check_needmore` 的整体结构。
+
 ### 21.2 Complete：边界已被证明
 
 ```text
@@ -1004,18 +1023,38 @@ GET /hello HTTP/1.1\r\nHost: x\r\n
 
 `\r\n` 给出了 request-line boundary。parser 同时证明三个 fields 满足本日 contract，caller 才能消费到该 boundary。
 
+你的 `parse_request_line` 没有要求 CRLF 位于整个 Buffer 末尾，而是先找到第一组相邻的 `\r\n`，再调用：
+
+```text
+check_complete(data, first_lf_pos + 1, output)
+```
+
+因此 `check_complete` 看到的 `length` 已经只是第一条 request line 的 prefix 长度。它检查两个 SP、method、target、version 与 line limit，先构造局部 `HttpRequest result`，最后才 `output = std::move(result)`。这一点正是 suffix test 能通过的原因。
+
 ### 21.3 Error：继续等待也无济于事
 
 ```text
 GET  /hello HTTP/1.1\r\n
 ```
 
-完整 terminator 已经出现，而 line 中有两个 SP。继续 append headers 不会改变已经结束的 request line，因此应是 Error，不是 NeedMore。
+完整 terminator 已经出现，而 line 中有两个相邻 SP。继续 append headers 不会改变已经结束的 request line，因此应是 Error，不是 NeedMore。
+
+在你的实现里，Error 有两条实际路径：
+
+```text
+check_version 识别出 HTTP/digit.digit，但不是 HTTP/1.1
+-> 直接返回 UnsupportedHttpVersion
+
+check_complete / check_needmore 都无法证明当前 prefix 仍可能合法
+-> parse_request_line 最后返回 MalformedRequestLine
+```
+
+R1 tests 已分别用 `HTTP/1.0` 和“双 SP / bare LF”覆盖这两条路径。`RequestLineTooLong` 目前只在已有完整 CRLF 的 `check_complete` 中生效；没有 terminator 的超长 prefix 仍是待修边界。
 
 压缩成一句：
 
 ```text
-NeedMore 是 incomplete；Error 是 invalid。
+NeedMore 是“你的 helper 还能证明它是合法前缀”；Error 是“当前 bytes 已不可能补成合法 request line”。
 ```
 
 ---
@@ -1028,7 +1067,7 @@ NeedMore 是 incomplete；Error 是 invalid。
 GET /hello HTTP/1.1\r\nHost: x\r\n
 ```
 
-parser 返回：
+你的 `parse_request_line` 找到第一组 CRLF 后，让 `check_complete` 只观察这一段，因此返回：
 
 ```text
 Complete
@@ -1057,7 +1096,9 @@ Buffer：拥有 bytes，并执行 logical consume
 caller/session：决定 Complete 后何时 retrieve
 ```
 
-parser 不应该偷偷保存 `peek()` pointer。根据现有 Buffer contract，任何后续 non-const operation 都可能使旧 pointer 失效。
+这正是 R1 的 `ReportsOnlyRequestLineBytesAndPreservesSuffix` test 做的事：它把整段 `wire_bytes` 放进现有 `Buffer`，parser 返回 `request_line.size()`，test 再调用 `input.retrieve(result.consumed_bytes)`，最后 exact 比较剩余内容是否为 `Host: x\r\n`。
+
+你的 parser 当前没有成员变量，也不保存 `peek()` pointer；所有 helper 都只在一次调用期间使用 `data + length`。这个 ownership 边界是正确的。将来即使为了减少重复扫描而保存 progress，也只能保存 offset/state，不能保存可能被 Buffer compact/grow 使其失效的旧 pointer。
 
 ---
 
@@ -1081,6 +1122,8 @@ route policy：这个 server 是否实现该 method
 ```
 
 Day4 才会把 unsupported method 映射为 `501 Not Implemented`。Day1 不要提前把 syntax 和 server capability 混在一起。
+
+你的 `check_in_method_token_byte_helper` 已经按 contract 接受字母、数字和规定的 punctuation bytes，没有把 parser 写成只认识 GET/POST 的 route checker；这一点做对了。Round3 只需补一个非 GET/POST 的合法 token case，例如 `PATCH`，证明这条分层，而不是重写 helper。
 
 ---
 
@@ -1106,6 +1149,8 @@ Week11 V1 选择：
 ```
 
 本周只建立第一层意识，不展开 proxy/request-smuggling 攻防。
+
+你的严格策略已经落在具体代码上：`check_complete` 要求恰好两个 SP；`check_needmore` 拒绝多余 SP；`parse_request_line` 只把相邻 `\r\n` 当 terminator；target helper 拒绝 whitespace、control byte、`#` 和 non-ASCII。R2 不需要改成宽松 parser，只需用边界 matrix 证明这些实际分支。
 
 ---
 
@@ -1134,6 +1179,8 @@ content length > 8192  -> RequestLineTooLong
 ```
 
 如果完整 CRLF 已经出现，也要检查它前面的 content length；不能先构造超长 strings 再事后决定拒绝。
+
+当前实现只完成了一半：`check_complete` 使用 `bytes = length - 2` 检查完整行，所以“已有 CRLF 的超长 line”会得到 `RequestLineTooLong`；但没有 CRLF 时，`parse_request_line` 会继续进入 `check_needmore`，那里没有统一的长度 guard。独立 probe 用 8193 个合法 method token bytes 得到 `NeedMore`。R2 应先修这个真实缺口，再写 8192/8193 两侧的 exact tests。
 
 ---
 
@@ -1171,6 +1218,16 @@ parse_request_line
 
 R1 的 partial case 只试了一个 split point。Round3 的核心升级是：对同一条合法 request line，枚举每个 byte boundary。
 
+这不是泛泛加覆盖率。它会直接经过你当前 `check_needmore` 的三组分支：
+
+```text
+split 在第一个 SP 前   -> method prefix
+split 在两个 SP 之间   -> target prefix
+split 在第二个 SP 后   -> version prefix / trailing CR
+```
+
+其中 target prefix 已被独立 probe 证明有 off-by-one range bug，所以这条 split-point test 是修复后的回归证据，不是重复体力活。
+
 原始 bytes：
 
 ```text
@@ -1207,22 +1264,23 @@ suffix = bytes[split, end)
 
 在 split-point test 之外，只补能区分 contract 的 cases：
 
-| 输入类别 | expected result |
-|---|---|
-| empty range | NeedMore |
-| only `\r` at end | NeedMore |
-| bare LF | MalformedRequestLine |
-| bare CR 后已有非 LF byte | MalformedRequestLine |
-| missing SP | MalformedRequestLine |
-| extra SP / tab separator | MalformedRequestLine |
-| empty target | MalformedRequestLine |
-| target 不以 `/` 开始 | MalformedRequestLine |
-| `HTTP/1.0` | UnsupportedHttpVersion |
-| `http/1.1` | MalformedRequestLine |
-| content 恰好 8192 bytes 再接 CRLF | 不因长度被拒；仍按 fields 判断 |
-| content 8193 bytes | RequestLineTooLong |
-| complete line + arbitrary suffix | Complete，只消费第一行 |
-| positive length + null data | 抛 `std::invalid_argument` |
+| 输入类别 | expected result | 你的 R1 当前状态 |
+|---|---|---|
+| empty range | NeedMore | source 已有分支，补 executable evidence |
+| only `\r` at end | NeedMore | R1 partial test 已覆盖 |
+| target prefix `GET /hel` | NeedMore | 已证实错误返回 Malformed，R2 修复 |
+| bare LF | MalformedRequestLine | R1 test 已覆盖 |
+| bare CR 后已有非 LF byte | MalformedRequestLine | 尚未覆盖 |
+| missing SP | MalformedRequestLine | 尚未覆盖 |
+| extra SP / tab separator | MalformedRequestLine | 双 SP 已覆盖，tab 尚未覆盖 |
+| empty target | MalformedRequestLine | 尚未覆盖 |
+| target 不以 `/` 开始 | MalformedRequestLine | 尚未覆盖 |
+| `HTTP/1.0` | UnsupportedHttpVersion | R1 test 已覆盖 |
+| `http/1.1` | MalformedRequestLine | 尚未覆盖 |
+| content 恰好 8192 bytes 再接 CRLF | 不因长度被拒；仍按 fields 判断 | 尚未覆盖 |
+| 无 CRLF 且 content 8193 bytes | RequestLineTooLong | 已证实错误返回 NeedMore，R2 修复 |
+| complete line + arbitrary suffix | Complete，只消费第一行 | R1 test 已覆盖 |
+| positive length + null data | 抛 `std::invalid_argument` | source 已有分支，补 executable evidence |
 
 不用为每一行手写独立 boilerplate。可以使用 table-driven 或 parameterized test，但 expected status/error/consumed 必须 exact。
 
@@ -1242,7 +1300,7 @@ version = "sentinel-version"
 
 再触发 NeedMore 或 Error，最后核对三个 fields 仍然 exact 相等。
 
-这验证的是 commit discipline：
+你的 R1 已经使用了明确的 commit discipline：
 
 ```text
 先在 temporary values 中完成识别和验证
@@ -1250,13 +1308,13 @@ version = "sentinel-version"
 -> 再更新 caller output
 ```
 
-它不要求你必须使用某一种 temporary type，只要求 observable strong behavior 成立。
+具体来说，`check_complete` 先构造局部 `HttpRequest result`，三个 fields 全部完成后才移动给 `output`；`check_needmore` 根本不接收 output。现有 sentinel tests 已验证 partial、malformed 和 unsupported version。Round3 不需要换 representation，只需让新增 table cases 继续复用同一个 sentinel helper。
 
 ---
 
 ## 30. sanitizer 与本日 evidence 边界
 
-parser 处理 peer-controlled byte ranges，越界风险值得使用 ASan/UBSan 复检。
+你的 parser 对 peer-controlled byte range 做了多次 pointer offset 与长度减法，例如 `first_space_pos + 1`、`second_space_pos - first_space_pos - 1`、`length - 2`。这些正是 ASan/UBSan 值得复检的真实位置，而不是因为“parser 一般很危险”就机械跑 sanitizer。
 
 在独立 build directory：
 
@@ -1266,7 +1324,7 @@ cmake -S . -B build-asan \
     -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
 
 cmake --build build-asan -j
-ctest --test-dir build-asan -R HttpRequestParser --output-on-failure
+cmake -E chdir build-asan ctest -R HttpRequestParser --output-on-failure
 ```
 
 本日证据能支持：
@@ -1293,12 +1351,12 @@ socket、curl 与 server integration 从 Day5 开始。
 
 这些问题优先用于定位理解缺口，不要求在代码已经给出同等证据时机械抄长答案。
 
-1. 为什么一次 `recv` 返回不能作为 request-line boundary？
-2. `NeedMore` 与 `Error` 的根本区别是什么？
-3. 为什么 `consumed_bytes` 必须只覆盖第一条 request line，而不是整个 input Buffer？
-4. `HTTP/1.0` 为什么属于 unsupported version，而 `http/1.1` 属于 malformed version？
-5. parser、Buffer 与 caller/session 分别拥有或决定什么？
-6. split-point test 证明了什么，又没有证明什么？
+1. 你的 `parse_request_line` 为什么把 `first_lf_pos + 1` 作为 `check_complete` 的 length，而不是直接传整个 Buffer length？
+2. `GET /hel` 为什么应该进入 NeedMore？当前 one-space branch 的 range 从哪里偏了一位？
+3. 为什么 `check_complete` 的局部 `HttpRequest result` 能保证 Error 后 sentinel output 不变？
+4. 你的 `check_version` 为什么把 `HTTP/1.0` 分类为 Unsupported，而把 `http/1.1` 分类为 Malformed？
+5. 为什么 complete-line limit check 不能替代 no-terminator path 的 length guard？
+6. 你的实现多次扫描累计 prefix；为什么在 8 KiB contract 下暂时接受它，而不立即保存 Buffer pointer？
 
 ---
 
@@ -1317,9 +1375,11 @@ Debug build 零 warning
 ### R1 通过后完成
 
 ```text
-对照 R2 修正真实 representation 中的一个核心问题（若存在）
+修正 one-space target-prefix range
+让无 CRLF 的超长 prefix 返回 RequestLineTooLong
+定义 request_line_error_message，并清理 direct includes / NEEDMORE macro
 所有 byte split points test
-limit 与 malformed boundary matrix
+按第 28 节“当前状态”列补 limit 与 malformed boundary evidence
 ASan/UBSan 跑过 parser tests
 ```
 
@@ -1343,17 +1403,17 @@ benchmark
 ```text
 TCP 给 HTTP 的是 ordered byte stream，不是 request records。
 
-Connection input Buffer 拥有累计 bytes；
-parser 只观察最前面的 readable range；
-NeedMore 不消费，Complete 报告 exact consumed prefix，Error 拒绝当前 request line。
+你的 Buffer test 负责累计 bytes；
+parse_request_line 找第一组 CRLF，并只把该 prefix 交给 check_complete；
+check_needmore 证明合法 prefix，check_complete 验证后一次性 commit output；
+Complete 返回 first request-line 的 exact consumed length，caller 再 retrieve，suffix 保留。
 
 request line：method SP target SP HTTP-version CRLF。
 
 正确性核心：
-不要依赖 recv boundary，
-不要丢掉 complete line 后面的 suffix，
-不要把 incomplete 当 malformed，
-也不要让无终止符输入无限增长。
+当前 R1 已做到：不依赖 recv boundary、不丢 suffix、失败不污染 output。
+R2 要修：target prefix 的 off-by-one、无终止符超长输入和 diagnostics helper definition。
+Round3 再用 all-split test、boundary matrix 与 sanitizer 证明这些修复。
 ```
 
 下一步：Week11 Day2 在同一 parser 上增加 header fields、`Host` 与 header-section limit。

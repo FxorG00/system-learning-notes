@@ -6537,3 +6537,11 @@ T4 保留一道真实认知闸门。闸门前已经给清程序用途、`numeric
 逐段检阅 note：ASCII visible range 先转 `unsigned char` 的说明正确；NeedMore 按 method/target/version prefix 分类的总体模型正确；`HTTP/2.` 在尚无 terminator 时先返回 NeedMore、等 version 形状完整后再区分 Unsupported 与 Malformed 的解释正确。note 的 Complete 部分仍保留“CRLF 必须位于整个 input 末尾”的早期模型，而最终实现已经改为识别第一条 CRLF prefix；target 开头写成了反斜杠，最终 source 已正确使用 `/`。以后点评必须同时说明 note 的概念是否正确以及它是否与最终 source 一致，不能因为代码通过就忽略文字偏差。
 
 独立窄 probe 证实三个 R2 工作项：`GET /hel` 当前因 one-space branch 把 separator 交给 `check_target` 而错误返回 Malformed；8193 个合法 method token bytes 且没有 CRLF 时仍返回 NeedMore，没有执行 pre-terminator length guard；`request_line_error_message` 只有 declaration、library 中没有 definition。`day1.md` 第 26 节已从通用问题改为这版实现的明确升级路线，并保留用户新增的 `enum class` 解释及其余当前磁盘内容。Round3 再用 all-byte split points、limit matrix 与 ASan/UBSan 形成完整 evidence，不要求用户重写 Codex 已提供的五个 R1 tests。
+
+## 2026-09-20：R1 后定向润色必须覆盖整个后半教程
+
+用户指出只把一个“R1 实际复盘”小节换成真实实现，而让其他 R2/R3 小节继续使用通用例子，不算真正的定向润色。该反馈成立。以后 R1 正式验收后，必须逐节复盘阅读闸门后的全部内容，而不是只追加一个 baseline 段落：每个机制解释、流程、边界表、测试任务、验收题、完成标准和压缩记忆，只要能映射到用户当前 source/note，就要明确写出真实函数、members、representation、调用路径、已覆盖 evidence、已知错误和下一步修改；只有确实与实现无直接映射的背景知识才保留通用表述。
+
+定向不等于重复粘贴源码，也不等于每段机械加“你的实现”。判断标准是：用户读到该节时，能立即知道它对应自己代码的哪条路径、当前已经做对什么、哪里与 note 不一致、哪个测试能让错误显现，以及本轮究竟要改什么。必须从用户当前磁盘版本继续编辑，保留其新增内容；还要全量搜索同类问题，例如旧 CMake/CTest 命令、通用“若存在”分支、与实际 representation 不符的伪代码、已经由 R1 证实却仍写成未来任务的内容。
+
+本次已据此复盘 Week11 Day1 阅读闸门后的第 19~33 节：把三态结果映射到 `parse_request_line / check_complete / check_needmore`，把 consumed ownership 映射到现有 Buffer suffix test，把 method/strict parsing/limit 映射到真实 helpers 和已知缺口，把 Round3 matrix 增加“当前 R1 状态”列，把验收问题、完成标准和压缩记忆改为当前实现专属内容。随后又全文件检索同类遗留，把 R1 构建段和 sanitizer 段中的 `ctest --test-dir ...` 全部修正为适配 Ubuntu CMake/CTest 3.16 的 `cmake -E chdir <build-dir> ctest ...`，并修复 method-token punctuation 中会破坏 Markdown 行内代码的反引号写法。主线教程仍保持原有 R1 闸门与独立实现原则；本次只提高闸门后的针对性和整篇一致性。
