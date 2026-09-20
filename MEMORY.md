@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-20）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 HTTP Server V1 正在推进。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
+最新进度快照（2026-09-21）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser 已正式通过，下一步为 Week11 Day2。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
 
 ### Week1：已完成
 
@@ -6545,3 +6545,9 @@ T4 保留一道真实认知闸门。闸门前已经给清程序用途、`numeric
 定向不等于重复粘贴源码，也不等于每段机械加“你的实现”。判断标准是：用户读到该节时，能立即知道它对应自己代码的哪条路径、当前已经做对什么、哪里与 note 不一致、哪个测试能让错误显现，以及本轮究竟要改什么。必须从用户当前磁盘版本继续编辑，保留其新增内容；还要全量搜索同类问题，例如旧 CMake/CTest 命令、通用“若存在”分支、与实际 representation 不符的伪代码、已经由 R1 证实却仍写成未来任务的内容。
 
 本次已据此复盘 Week11 Day1 阅读闸门后的第 19~33 节：把三态结果映射到 `parse_request_line / check_complete / check_needmore`，把 consumed ownership 映射到现有 Buffer suffix test，把 method/strict parsing/limit 映射到真实 helpers 和已知缺口，把 Round3 matrix 增加“当前 R1 状态”列，把验收问题、完成标准和压缩记忆改为当前实现专属内容。随后又全文件检索同类遗留，把 R1 构建段和 sanitizer 段中的 `ctest --test-dir ...` 全部修正为适配 Ubuntu CMake/CTest 3.16 的 `cmake -E chdir <build-dir> ctest ...`，并修复 method-token punctuation 中会破坏 Markdown 行内代码的反引号写法。主线教程仍保持原有 R1 闸门与独立实现原则；本次只提高闸门后的针对性和整篇一致性。
+
+## 2026-09-21：Week11 Day1 正式通过
+
+用户完成 R2/R3 收口：修正 one-space target prefix 的 range，`GET /hel` 现在返回 NeedMore；补上无 terminator 路径的 8192-byte guard，独立 probe 证明未终止 8192 bytes 为 NeedMore、8193 bytes 为 RequestLineTooLong，完整 request line 的 8192/8193 content boundary 也正确；`request_line_error_message` 已移到 `.cpp` 单一定义并返回 public contract 约定的四个固定英文 message，fresh sanitizer build 不再出现 non-void fallthrough warning。all-split test、suffix preservation、failure output unchanged 和 unsupported-version evidence 均保留。
+
+最终验证：全项目 CTest `21/21` PASS，parser focused CTest `6/6` PASS，ASan/UBSan parser tests `6/6` PASS 且无 sanitizer report；额外窄 probe 覆盖 target prefix、bare CR、empty target、tab separator、lowercase version、length boundary 与 diagnostics messages。Day1 最终评分 `97/100`，正式通过，下一步进入 Week11 Day2。非阻塞整理项：source-local `NEEDMORE/REQUESTLINETOOLONG` 宏仍可改为普通 C++ helper/值，parser header 的 `<cstring>` 仍是多余 include，`day1_note.md` 第 15 行 target 起始字符仍误写为反斜杠；这些不影响当前 parser correctness，但以后触碰相关文件时应顺手清理。

@@ -114,3 +114,73 @@ HTTP/2.
 -> 再判断是否等于 HTTP/1.1
 -> 不等于则 UnsupportedHttpVersion
 ```
+
+## R3 重复定义
+
+你在源码里只写了一次，但你把“函数定义”写在了头文件里；这个头文件被两个 `.cpp` 分别包含了。
+
+报错已经把两个定义来源列出来了：
+
+```text
+libhttp_request_parser.a(http_request_parser.cpp.o)
+-> http_request.hpp:31 定义了一份
+
+http_request_parser_test.cpp.o
+-> http_request.hpp:31 又定义了一份
+```
+
+`#pragma once` 只表示“同一个 `.cpp` 编译时，这个头文件最多包含一次”；它不代表整个项目只会出现一次。
+
+编译过程是：
+
+```text
+因为预处理会展开 .hpp，形成 translation unit
+
+http_request_parser.cpp + http_request.hpp
+-> http_request_parser.cpp.o  // 含一份函数定义
+
+http_request_parser_test.cpp + http_request.hpp
+-> http_request_parser_test.cpp.o  // 又含一份函数定义
+
+link
+-> 发现两个同名全局函数
+-> multiple definition
+```
+
+通常的修法是：
+
+```cpp
+// http_request.hpp：只保留声明
+const char* request_line_error_message(RequestLineError error) noexcept;
+```
+
+```cpp
+// http_request_parser.cpp：只在这里放定义
+const char* request_line_error_message(RequestLineError error) noexcept {
+    // switch ...
+}
+```
+
+因为这个函数属于 parser 组件的实现，放进 `.cpp` 最自然。
+
+这样再代入上面的；
+
+```text
+因为预处理会展开 .hpp，形成 translation unit
+
+http_request_parser.cpp + http_request.hpp
+-> http_request_parser.cpp.o  // 含一份函数定义
+
+http_request_parser_test.cpp + http_request.hpp
+-> http_request_parser_test.cpp.o  // 不含 definition
+```
+
+另一种是把头文件中的定义加 `inline`：
+
+```cpp
+inline const char* request_line_error_message(RequestLineError error) noexcept {
+    // ...
+}
+```
+
+这适合刻意写成 header-only 的小函数。但你现在有 `http_request_parser.cpp` 和静态库，第一种“头文件声明、一个 `.cpp` 定义”更符合目前项目结构。
