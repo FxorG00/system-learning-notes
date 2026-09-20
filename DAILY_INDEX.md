@@ -2,7 +2,7 @@
 
 > 更新日期：2026-09-21
 >
-> 收录范围：主线 Week1 Day1 至 Week11 Day1，共 71 份正式 daily 教程。
+> 收录范围：主线 Week1 Day1 至 Week11 Day2，共 72 份正式 daily 教程。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week10 已通过
-Week11 Day1 已正式通过；下一步为 Week11 Day2
+Week11 Day1 已正式通过；Week11 Day2 教程已生成，等待 Round1 实作与检阅
 ```
 
 ---
@@ -190,6 +190,7 @@ Week11 Day1 已正式通过；下一步为 Week11 Day2
 | Day | 主要内容 | 主要产出 / 观察 | 检索关键词 |
 |---|---|---|---|
 | [Day1：HTTP request line](week11/day1/day1.md) | 在 TCP arbitrary fragmentation/coalescing 下，从累计 byte range 增量识别 method、origin-form target 与 HTTP/1.1；区分 NeedMore/Complete/Error，并用 consumed bytes 保留 suffix | `HttpRequest` + request-line parser + split-point tests | HTTP, request line, incremental parser, CRLF, NeedMore, consumed bytes, fragmentation |
+| [Day2：HTTP headers](week11/day2/day2.md) | 从 request line 后继续增量识别 header section；处理 field-name 大小写、OWS、Host、duplicates 与 section limit | `parse_header_section` contract + Host/header policy + fragmentation/limit evidence | header field, Host, OWS, case-insensitive, CRLF CRLF, section limit |
 
 ---
 
