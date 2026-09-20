@@ -1,0 +1,6 @@
+# Third-party reference material kept locally, not vendored into this repository.
+/AI-Infra-Book.pdf
+/reference_materials/ai_infra/InfraTech/
+/reference_materials/ai_infra/serving_sources/mini-sglang/
+/reference_materials/ai_infra/serving_sources/FlashMLA/
+/reference_materials/numerical_linear_algebra/NLA-en.pdf

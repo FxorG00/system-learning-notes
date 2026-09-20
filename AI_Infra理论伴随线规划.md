@@ -1,7 +1,7 @@
 # AI Infra 理论伴随线规划
 
-> 版本：2026-08-27，数学基础、逐周视频与系统主线时间轴对齐版
-> 适用对象：FxorG，中山大学计算机科学与技术专业，系统主线已进入 Week9
+> 版本：2026-09-20，T3 进度同步与 serving 生态校准版
+> 适用对象：FxorG，中山大学计算机科学与技术专业；系统主线已完成 Week10、正在 Week11，理论线 T1~T3 已通过、下一模块为 T4
 > 职业目标：本科就业，主攻 LLM inference systems / serving 与 CUDA/Triton kernel optimization
 > 本文件定位：`plan_strengthened.md` 的 AI Infra 理论伴随线，不替代 C++ / Linux / OS / 网络 / Reactor / Mini Redis 主线
 
@@ -153,9 +153,9 @@ AI Theory T module：负责把已学数学映射到 NumPy/PyTorch、Tensor shape
 当前系统主线位置：
 
 ```text
-Week1 ~ Week8 已完成
-当前：Week9 non-blocking I/O / epoll
-后续：Reactor -> HTTP Server -> Mini Redis
+Week1 ~ Week10 已完成
+当前：Week11 HTTP Server V1
+后续：Mini Redis -> 项目证据与投递
 ```
 
 理论线从 `T1` 开始。文件继续使用 `T1~T24` 编号，但从现在起：
@@ -1506,6 +1506,8 @@ training batch
 inference batch
 inference_mode
 mixed precision 第一层
+persistent / per-request / transient state
+HBM / host memory / external storage tiers 第一层
 ```
 
 ### 固定估算
@@ -1526,7 +1528,11 @@ KV Cache
 allocator fragmentation
 framework workspace
 CUDA context
+request metadata 与 scheduler state
+跨 tier 搬运时的 staging / transfer buffer
 ```
+
+T20 只建立对象分类与容量账，不提前实现 offload。估算时必须写清 model、batch、sequence length、dtype、并行方式与是否包含 KV Cache，不能把某个框架的 `allocated` 数字当成全部设备占用。
 
 ### 对应视频
 
@@ -1564,6 +1570,11 @@ KV Cache shape
 sequence length growth
 memory cost
 compute-memory trade-off
+block / page based KV layout
+block table 与 logical token position
+prefix reuse / prefix cache
+reference count、eviction 与 free-block lifecycle 第一层
+prefill/decode 间 KV transfer contract 第一层
 ```
 
 ### 代码产出
@@ -1585,13 +1596,13 @@ kv_cache_reference.py
 两条基准课程没有 KV Cache / prefill / decode 的直接对应章节，本周无强制视频。
 ```
 
-T21 必须由教程、shape 推导和 `kv_cache_reference.py` 建立机制，不能用普通 Transformer forward 视频冒充 KV Cache 教学。
+T21 必须由教程、shape 推导和 `kv_cache_reference.py` 建立机制，不能用普通 Transformer forward 视频冒充 KV Cache 教学。连续 Tensor reference 先证明数值正确，再用 block table simulation 理解 production system 为什么把 KV cache 分块；不在本阶段照抄 vLLM/SGLang allocator。
 
 只比较 correctness 和 operation shape；性能 benchmark 后续再严谨设计。
 
 ### 通过标准
 
-能画出 prefill 与单步 decode 的不同数据流，并估算 KV Cache 随 batch/sequence/layers/heads/head_dim 的增长关系。
+能画出 prefill 与单步 decode 的不同数据流，估算 KV Cache 随 batch/sequence/layers/heads/head_dim 的增长关系，并解释 prefix reuse 为什么依赖 block identity、lifetime 与 eviction contract。
 
 ---
 
@@ -1608,6 +1619,10 @@ sequence length difference
 continuous batching
 finished request removal
 backpressure 与 scheduler
+token budget 与 running/waiting requests
+prefill/decode work 的不同成本
+chunked prefill 第一层
+prefill/decode disaggregation（PD）与 encode/prefill/decode（EPD）只作边界认识
 ```
 
 ### 和当前系统主线连接
@@ -1633,7 +1648,7 @@ Reactor
 batch_scheduler_sim.py
 ```
 
-只做 CPU 上的离散 simulation：不同 arrival time、prompt length、generation length，比较 static batching 与简单 continuous batching 的 idle/padding 情况。
+只做 CPU 上的离散 simulation：不同 arrival time、prompt length、generation length，比较 static batching 与简单 continuous batching 的 idle/padding 情况；再加入 token budget，观察 long prefill 对 decode latency 的影响。不实现真正的 distributed PD/EPD。
 
 ### 对应视频
 
@@ -1645,7 +1660,7 @@ batch_scheduler_sim.py
 
 ### 通过标准
 
-能解释 continuous batching 解决什么问题，以及 scheduler 为什么不只是普通 FIFO queue。
+能解释 continuous batching 解决什么问题、scheduler 为什么不只是普通 FIFO queue，以及 token budget 怎样把吞吐与单请求延迟联系起来。
 
 ---
 
@@ -1658,11 +1673,15 @@ reference output
 absolute / relative tolerance
 floating-point accumulation order
 latency / throughput
+TTFT / TPOT（或 ITL）
 warmup / repetition / synchronization
 FLOPs 直觉
 memory bandwidth
 compute-bound / memory-bound 第一层
 arithmetic intensity 直觉
+KV cache usage / prefix-cache hit rate
+fixed replay workload 与 cache warm/cold state
+version / commit / model / hardware / precision / concurrency
 ```
 
 ### 代码产出
@@ -1687,6 +1706,9 @@ tolerance
 warmup
 repetitions
 median/min/max
+p50/p95/p99（服务延迟）
+cache state
+software/hardware version
 ```
 
 ### 对应视频
@@ -1697,7 +1719,9 @@ median/min/max
 
 ### 通过标准
 
-不能只写“快了 30%”；必须说明基线、输入、正确性和测量边界。
+不能只写“快了 30%”；必须说明基线、输入、正确性和测量边界。operator benchmark 与 serving benchmark 分开：前者关注 shape/dtype/kernel time，后者至少区分 TTFT、TPOT/ITL、throughput、并发、prefix hit 与 cache state。
+
+从 T23 起允许 agent 协助生成 benchmark skeleton、搜索 profiler clue 或提出优化 patch，但不得共享被测实现的错误逻辑来充当 oracle。学习者必须亲自定义 workload、baseline、tolerance、同步点和统计口径，并审查生成代码是否改变语义。agent 加速的是实验迭代，不替代实验设计。
 
 ---
 
@@ -1733,6 +1757,7 @@ logits
 greedy 或 top-k sampling
 prefill/decode 第一层
 KV Cache 第一层
+固定 request replay 与 serving metrics 计算第一层
 ```
 
 ### README 必须回答
@@ -1744,6 +1769,7 @@ prefill 与 decode 怎样不同？
 KV Cache 保存什么？
 正确性怎样验证？
 benchmark 测了什么，不能证明什么？
+model/version/hardware/precision/workload/cache state 是否固定？
 下一步怎样接 CPU operator implementation？
 ```
 
@@ -1770,6 +1796,7 @@ sampling 可运行
 [ ] 能区分 parameter / activation / KV Cache
 [ ] 能区分 prefill / decode
 [ ] 能估算 weights 和 KV Cache 的主要内存项
+[ ] 能解释 block/page KV cache、prefix reuse 与 token-budget scheduler 的第一层 contract
 [ ] 能使用 tolerance 检查 operator correctness
 [ ] tiny Transformer reference 有 tests 与 README
 [ ] 主线至少完成 Reactor / Mini Redis 中一个完整项目
@@ -2122,6 +2149,18 @@ Theory Gate 3 通过后：
 第二伴随：PyTorch reference / Transformer inference
 ```
 
+同时开始第一轮 serving source reading，但只读固定版本的小型实现：
+
+```text
+mini-sglang（固定 snapshot）
+-> 先读 docs/structures.md 与 docs/features.md
+-> 沿 request/sequence -> scheduler -> batch -> model runner 追一条主路径
+-> 再看 radix cache / block table / chunked prefill / overlap scheduling
+-> 用自己的 T21/T22 reference 和 simulation 作对照
+```
+
+这一轮的产出是对象图、调用流程和一个可验证问题，不是“读完整仓库”。vLLM V1 与完整 SGLang 只在随后 production comparison 中各选一个窄路径；框架 release 快，进入时必须重新核对官方文档和 commit。
+
 当总规划 Gate C 满足后：
 
 ```text
@@ -2142,7 +2181,8 @@ Triton
 mini LLM inference
 KV Cache optimization
 continuous batching
-vLLM / nano-vLLM
+mini-sglang source path
+vLLM V1 或 SGLang production path（二选一）
 NCCL multi-GPU
 ```
 

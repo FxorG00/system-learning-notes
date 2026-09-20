@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-16）：Week1~Week9 已完成；Week10 Day1~Day6 已正式通过，Day6 最终 `96/100`。当前 Reactor 已完成 Buffer、Channel、EventLoop、Acceptor、Connection、Echo Server 以及 callback lifetime / deferred cleanup / stale-event hardening；下一步进入 Week10 Day7 收口。AI Theory T1 已通过，T2 尚未开始；提前生成教材不计为已学习。
+最新进度快照（2026-09-20）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 HTTP Server V1 正在推进。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
 
 ### Week1：已完成
 
@@ -4464,7 +4464,7 @@ T1 原先根据 Ubuntu 20.04 的 Python 3.8.10，把 NumPy pin 到 1.24.4。兼�
 日常 python/python3 使用直接安装到 /usr/local 的 Python 3.12.x
 /usr/bin/python3 保留 Ubuntu 20.04 自带的 3.8.10，不替换
 AI Theory 不使用 uv，package installation 统一走 python -m pip
-每个项目建立独立 .venv
+每个项目建立独立 .venv（历史规则；已被 2026-09-17 的统一 user-level theory environment 取代）
 当前 NumPy reproducible baseline 为 2.5.2
 统一环境记录位于 ai_theory/ENVIRONMENT.md
 Tn.md 只保留本课环境门和验证，不永久嵌入某次机器检查结果
@@ -6394,3 +6394,146 @@ Codex 在 Ubuntu 当前仍运行的同一个 `reactor_echo_server` 上独立复�
 已生成 `week11/day1/day1.md`，主题为从累计 TCP byte range 增量识别 HTTP request line。教程严格复用 Week10 当前 Ubuntu canonical project 与真实 `Buffer::peek/readable_bytes/retrieve` 接口，不修改 Reactor、Connection 或 Buffer；新增层次为 `HttpRequest` data model、`HttpRequestParser`、`NeedMore/Complete/Error` result 与 exact `consumed_bytes` contract。Day1 只解析严格的 `method SP origin-form-target SP HTTP/1.1 CRLF`，采用 8192-byte pre-CRLF limit；支持完整 line 后保留 suffix，protocol errors 用 enum result，null positive-length pointer 等 caller misuse 才使用 exception。该 V1 明确是受限教学子集，不接受 absolute/authority/asterisk request-target forms，也不宣称完整 RFC compliance。
 
 R1 在阅读闸门前已经写清 component 用途、四个文件、public types、每个接口的调用场景、成功/错误/exception contract、Buffer 最小调用样例、五组 observable scenarios 与现有 CMake/GTest 接法，但不提供 delimiter-search algorithm、private members 或完整 tests。R2 才沿 `recv -> cumulative Buffer -> parser` 因果链解释 request-line grammar、incremental parsing、strict CRLF/SP policy、method syntax 与 route capability 分层、limit 和 consumed ownership；R3 用 all-byte split-point parameterized test、limit/malformed matrix、sentinel output 与 ASan/UBSan 形成高价值 parser evidence。R1 正式通过后必须先读取用户当时 source、note、day1.md 与 Git diff，保留其修改，再把 R2/R3 从通用初稿收束成针对真实 representation 的明确升级路线。
+
+## 2026-09-17：AI Infra 书籍与 InfraTech 教程参考规则
+
+用户提供两份新的 AI Infra 参考来源：根目录的 `AI-Infra-Book.pdf`（李博杰《深入理解 AI Infra：量化分析与系统设计》）以及 GitHub `CalvinXKY/InfraTech`。已检查 PDF 的完整目录并抽读 workload/资源估算、operator/runtime 和 inference/KV Cache 等代表章节；已检查 InfraTech 的主题结构与 `mini_dl_framework`、sampling、RoPE、nano-vLLM、scheduler、memory snapshot、quantization、parallel strategies、collective operations 等 notebook。结论是两者需要选择性参考，但不能成为第三条并行课程，也不能改变 `Reactor -> HTTP -> Mini Redis` 的近期主线。
+
+PDF 主要升级以后 AI Infra 教程的解释方法。相关教程应尽量按以下因果链组织：
+
+```text
+明确 workload、输入与 assumptions
+-> 画清对象、数据和 dependency flow
+-> 分开计算 capacity、computation 和 communication
+-> 说明谁必须等待谁
+-> 给出带单位的理论 lower bound
+-> 设计单变量 measurement
+-> 用实测解释模型遗漏与 implementation overhead
+```
+
+讲性能时必须主动区分 capacity、bandwidth、latency 与 throughput；讲内存时区分 shared、per-request 与 transient state；讲 data movement 时优先回答“搬什么、搬多少、搬几次、经过哪里、谁必须等它”。这种量化解释从 T15 以后逐渐加强，尤其用于 T20 memory、T21 KV Cache、T22 batching/scheduling、T23 benchmark 与后续 CUDA/vLLM。它不能反向把当前 T2/T3 数学映射课或 Week11 HTTP 教程膨胀成 AI Infra 大系统课。
+
+InfraTech 主要用作第二解释源和 runnable experiment reference，不作为规范或要照抄的答案：
+
+```text
+T7~T12：mini_dl_framework，辅助观察计算图与 training flow
+T15~T18：RoPE，进入 Transformer 后再使用
+T19：LLM_sampling；T5/T6 仍只完成概率与 stable softmax 基础
+T20~T21：AI-Infra-Book 内存模型 + vllm_mem_snapshot
+T21~T23：nano_vllm、vllm_basic_scheduler，先做自己的 reference/simulation 再对照
+T24 后：quantization
+单 GPU serving 稳定后：parallel_strategies、collective_operations
+```
+
+本地索引为 `reference_materials/ai_infra/README.md`。InfraTech 精选镜像固定在 commit `b55ed0b7bcadcc1b203d98af5d2b9d83bb2b9299`，位于 `reference_materials/ai_infra/InfraTech`；PDF 位于仓库根目录。上游当前没有明确 `LICENSE` 文件，因此 notebook 原件与 PDF 都作为个人本地只读资料，由 `.gitignore` 排除，不随公开学习仓库重新分发；索引、来源、适用阶段和核验规则可以纳入 Git。
+
+以后生成涉及这些阶段的 `Tn.md` 或 AI Infra 教程前，必须先读取 `AI_Infra理论伴随线规划.md`、本索引和真正相关的资料，不因为本地存在整本书或多个 notebook 就机械全部阅读、全部引用。书和 notebook 用于建立解释与实验线索；会变化的 API、硬件规格、框架行为仍要用官方文档或 source 核验，并标注 assumptions、版本或 commit；性能主张必须由当前 workload 的 measurement 支持。当前 Week11 HTTP、Week12 RESP/Mini Redis 不因本次资料整理改变范围。
+
+## 2026-09-17：AI Theory T2 正式通过
+
+用户完成 T2《向量、矩阵与线性变换的计算映射》，本次学习重点是用已有学校线代基础快速复习线性组合、basis image、matrix representation、linear transformation 与 affine transformation，再把这些对象映射到 NumPy；不重新做完整线代课程。Ubuntu 实际代码位于 `~/code/system-learning/ai-theory/t02_vector_matrix/vector_matrix.py`，实现 `apply_transform` 与 `verify_linearity`。`apply_transform` 使用 `matrix @ vector`；`verify_linearity` 分别计算 $A(\alpha u+\beta v)$ 与 $\alpha Au+\beta Av$ 并使用 `np.testing.assert_allclose` 比较，固定样例 $A[3,-2]^T=[8,-3]^T$ 正确。
+
+在理论线 Python 3.12.14 / NumPy 2.5.2 环境中，`py_compile` 通过，用户程序输出 `[ 8. -3.]`、`ndim=1` 并以 exit 0 结束。Codex 另从外部调用用户真实函数，检查 `A @ e1/e2` 等于两列、`A @ x` 等于 columns 的 coordinate-weighted sum、`(2,)` 与 `(2,1)` 的 result shape、1-D `x.T` shape、nonzero bias 的 affine 边界以及 linearity property，全部通过。用户主文件只固定保存了 `A @ x` 与 linearity 两类 assertion，证据覆盖面比教程清单薄，但其余项目都是对同一正确函数的简单 NumPy 观察，且独立复检已通过；结合用户已有线代基础，不要求为了凑数量重复抄写五组 assertions，T2 最终评分 `93/100`，正式通过，下一步进入 T3。
+
+T2 文档中用户补充的 type annotation 与 `ndarray = N-dimensional array` 解释均正确：annotation 默认不执行 runtime type enforcement，`ndarray` 可表示 0-D、1-D、2-D 与更高维对象。当前仍有一个纯文档收口项：`### 7.1 atol,` 是未完成标题，应删除或补全；它不影响代码和核心理解，但不能长期保留成断句。新 SSH shell 直接运行系统 `/usr/bin/python3` 会因没有 NumPy 而失败，使用 T1 建立的 Python 3.12 `.venv` 后全部通过；以后理论线验收必须先核对 interpreter/venv，不能把环境入口错误误判为代码错误。若继续跨 T module 共用一个 venv，应在环境文档中明确，而不是依赖某个旧 shell 恰好仍处于 activated state。
+
+## 2026-09-17：Ubuntu AI Theory 统一 Python 3.12 环境
+
+用户明确要求日常全局 `python3` 与理论线 `.venv` 使用同一 Python 版本，并一次配置后续理论学习所需 packages。实际检查发现 `/usr/local/bin/python`、`/usr/local/bin/python3` 已是 CPython 3.12.14，`/usr/bin/python3` 是 Ubuntu 20.04 依赖的 3.8.10；此前失败来自 non-interactive SSH 没有把 `/usr/local/bin` 放在 `/usr/bin` 前，而不是 3.12 未安装。为保护 `apt` 和系统脚本，本次没有覆盖、删除或重新链接 `/usr/bin/python3`。
+
+已备份 `/home/xgf/.bashrc` 为 `/home/xgf/.bashrc.before-python312-20260917`，并在 interactive early-return 之前加入：
+
+```bash
+export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+```
+
+因此普通 terminal 与 `ssh host "command"` 两种入口现在都把 `python3` 解析为 `/usr/local/bin/python3`，版本为 3.12.14。理论线第三方 packages 使用 `python3.12 -m pip install --user` 安装在 `/home/xgf/.local/lib/python3.12/site-packages`，不污染 `/usr/lib`：NumPy 2.5.2、CPU PyTorch 2.14.0+cpu、Matplotlib 3.11.2。`ai_theory/requirements.txt` 保存统一 pin；T1~T24 默认共享这套 user-level environment，不再每个 T module 机械创建 venv。若未来实验需要冲突版本，可单独创建 venv，但它是 exception。
+
+最终验证同时覆盖 interactive 与新的 non-interactive SSH：`command -v python3` 均为 `/usr/local/bin/python3`；三包 import 成功；NumPy 与 PyTorch matrix multiplication exact checks 通过；Matplotlib `Agg` backend 能创建并关闭 figure；`torch.cuda.is_available()` 为 `False`，符合 CPU-only 安装；T2 在不激活 venv 时直接 `python3 vector_matrix.py` 输出 `[ 8. -3.]`、exit 0。以后 AI Theory 教程和验收先读取 `ai_theory/ENVIRONMENT.md` 与 `requirements.txt`，不再要求重复激活 T1 `.venv`，同时仍必须把“用户统一环境”和“Ubuntu system Python”区分开。
+
+## 2026-09-17：T3 Typora 数学公式修复
+
+用户在 Typora 中发现 `ai_theory/T3/T3.md` 的二维 shape 公式把 `\longrightarrow` 损坏成裸文本 `longrightarrow`，因此页面直接显示 command name；同一错误同时存在于开篇和压缩记忆。进一步全文件复核还发现 N-D shape 公式两处误写为 `@+`，并且 `batch\ldots` 缺少分隔逗号。现已统一修成 `[M,K]\ @\ [K,N]\longrightarrow[M,N]`，N-D 公式改为 `batch,\ldots` 与普通 `@`，不改变教程机制或学习范围。
+
+这说明 2026-09-16 的 T1~T13 LaTeX 静态审计仍有漏检：只查部分 command 或只核对 delimiter 成对不足以证明 Typora 渲染正确。以后数学教程交付前至少同时检查 display/inline delimiters、裸露的常见 LaTeX command names、异常操作符字符（如 `@+`），并对开篇核心公式和压缩记忆中的重复公式做一致性比较；能预览时还应抽查 Typora 实际渲染，不能把静态扫描写成“已证明全部公式正常”。
+
+## 2026-09-18：Applied/Numerical Linear Algebra 参考资料
+
+用户提供 `NLA-en.pdf`，标题为 *Applied/numerical linear algebra*，作者 Tiansong Cheng，共 88 页。已抽查正文与实际页面渲染；内容覆盖基础线代、LU/Cholesky、least squares、QR 与数值稳定性、eigenvalue/SVD/PCA、condition number、iterative methods、gradient descent、convolution、DFT/FFT。结论是它有长期参考价值，尤其能把学校线代继续连接到 operation count、conditioning、stable algorithms、iterative convergence 与低秩近似，但不适合成为当前必须整本通关的新课程。
+
+本地文件放在 `reference_materials/numerical_linear_algebra/NLA-en.pdf`，定向索引为 `reference_materials/numerical_linear_algebra/README.md`。PDF 没有随文件提供明确的再分发许可信息，因此只作个人本地资料，由 `.gitignore` 排除；索引与使用规则可以进入 Git。以后使用范围如下：
+
+```text
+T2/T3：1~4 页仅作可选查证，不重复教授用户已掌握的学校线代
+T7/T8：18~29 页用于 regression、least squares、regularization
+T14 或后续 compression：44~65 页用于 SVD、low-rank、PCA
+T23：30~43、66~80 页用于数值稳定性、condition number、迭代收敛
+后续 operator/kernel：81~88 页用于 convolution、DFT、FFT
+```
+
+生成相关理论教程时，先按 `AI_Infra理论伴随线规划.md` 确认学习边界，再只读取真正相关的页段。该讲义是高密度英文课堂笔记，且部分使用 MATLAB 记法，因此只能作为解释与实验线索，不能原样搬成教程，也不能取代 NumPy/PyTorch 官方文档、正式 specification 或 source 对会变化事实的核验。当前 T3 的主线和 Week11 HTTP 系统主线均不因这份资料而扩张；不新增“完整数值线性代数”并行线。
+
+## 2026-09-19：vLLM / SGLang / DeepSeek serving 生态校准
+
+已按 2026-09-19 的官方资料重新核对 vLLM、SGLang 与 DeepSeek kernel 生态，并把完整核对记录放在 `reference_materials/ai_infra/2026-09-serving-ecosystem-snapshot.md`，结论同步到 `plan_strengthened.md`、`AI_Infra理论伴随线规划.md` 与资料索引。总路线不变：Week10 Reactor V1 已正式通过，当前先完成 Week11 HTTP 和后续 Mini Redis；AI Theory 真实进度为 T1/T2 已通过、T3 下一步。不能因为最新 serving 项目很强就提前跳过协议、存储、Transformer reference、CPU inference 或 CUDA gate。
+
+本轮资料显示：vLLM 已以 V1 architecture 为主，核心边界为 frontend/API server、Engine Core、scheduler、KV cache manager 与 GPU workers；SGLang 的近期重点包含 hierarchical KV cache、PD/EPD disaggregation、Rust serving frontend、overlap scheduling 与多硬件后端；DeepSeek FlashMLA 在 2026-09 已把 V4.1 prefill/decode、FP8/FP4 KV cache format、fused operators 和特定 GPU architecture 一起发布。后半程教学据此加强：
+
+```text
+T20：persistent / per-request / transient memory；HBM / host / external tiers
+T21：block/page KV cache、block table、prefix reuse、refcount/eviction、transfer contract
+T22：token-budget scheduling、chunked prefill、PD/EPD boundary
+T23：TTFT、TPOT/ITL、throughput、KV usage/hit rate、cache state 与 fixed replay
+Theory Gate 3 后：先读固定版本 mini-sglang，再对照一个 vLLM V1 或 SGLang production path
+Gate C 后：FlashMLA 只作为 kernel/layout/co-design reference
+```
+
+刘胜与《我不得不把才华埋葬在昨天》必须记为 DeepSeek 工程师的个人文章，不写成“DeepSeek 研究院官方博客/论文/roadmap”。可吸收的经验是 AI agent 能协助检索、读源码、分析 profiler、生成 patch candidate；不能据此推出基础不再重要。以后 AI-assisted engineering 使用固定分工：人定义 workload、assumptions、contract、independent oracle、baseline 和统计口径；agent 可加速搜索与实现；人必须审查 diff、lifetime、synchronization、numerical error、profiler evidence 与 reproducibility。个人文章中的时间预测不进入硬性规划。
+
+已下载两个官方 GitHub snapshot 到 `reference_materials/ai_infra/serving_sources/`：`mini-sglang`（页面核对 commit `9a91cfa`）和 `FlashMLA`（页面核对 commit `ba89a34`）。两者均为 MIT，但源码目录只作本地参考并由 `.gitignore` 排除；提交的 `serving_sources/README.md` 只记录来源、版本、进入时机与使用边界。当前不下载完整 vLLM/SGLang、DeepEP、模型 weights 或完整 kernel dependency graph；这些项目变化快，应在真正提出窄问题时按当时官方 release/commit 获取。任何官方 benchmark 数字都只能作为上游结果，未在匹配硬件、版本和 workload 上复现前不能写成自己的证据。
+
+## 2026-09-19：AI Theory T14 教程提前生成
+
+已生成 `ai_theory/T14/T14.md`。这只是提前准备教程，不表示 T14 已开始或通过；真实理论进度仍是 T1/T2 已通过、下一模块为 T3。T14 继续按总规划标记为可延期模块：若求职锚点受压，优先完成 T15~T18 的 token、mask、attention 与 decoder 主线，T14 不得挤占它们。
+
+教程用一个 teaching `ResidualBlock` 串起 NCHW layout、Conv2d output shape、channel accumulation、pooling、parameter/buffer/activation 分账和 checkpoint schema。T14 存在一堵适合先独立处理的真实认知墙，因此保留单一 Round1：用户在已经学会卷积 shape 和同 shape residual 后，让同一个 class 同时支持 identity case 与 channel/spatial shape-changing case；闸门前写清 public contract、main branch、输入边界和最小 executable evidence，但不泄露 shortcut representation，闸门后才解释 1x1 projection、torchvision BasicBlock、BatchNorm state 与 forward hooks。
+
+T14 的 memory 统计只允许表述为 selected Tensor payload、parameter bytes 与 buffer bytes 的粗算，不能冒充 process/GPU peak memory；当前不要求完整 convolution backward、CNN training、ResNet-18 复刻、CUDA kernel 或大批 tests。公式已使用 Typora 兼容 `$...$` / `$$...$$`，Mermaid labels 使用兼容旧版 Typora 的 quoted text。主线 `daily.md` 的编写规则未作任何修改。
+
+## 2026-09-20：AI Theory T3 Round1 正式通过
+
+用户完成 T3 Round1。Ubuntu `matmul_broadcast.py` 中的 `matmul_2d_reference()` 使用三层 Python loop，未调用 `@`、`np.matmul` 或 `np.dot`；固定二维 case 与 NumPy `matmul` 通过 `assert_allclose` 对齐。六组 1-D/N-D cases 的 observed shapes 或 `ValueError` 均与 predictions 一致，`py_compile` 和程序运行 exit 0。用户已修正 Case 6：其 core `(2,3) @ (3,4)` 合法，真正失败的是 batch shapes `(2,)` 与 `(3,)` 无法 broadcasting。Case 2 的口语“是一个值”对应精确 result shape `()`，即 0-D result；这是表述精度，不阻塞 R1。
+
+用户选择不在 R1 立即补 batch-slice/reference 与 all-ones broadcasting 两组 value evidence，因为它们会在 R2/R3 继续完成。该取舍被接受：R1 的目标收束为二维 independent reference、先 prediction 后 observation，以及 1-D/N-D shape semantics；两组 value checks 明确延期而非删除。R1 最终评分 `92/100`，正式进入 R2。
+
+`T3.md` 已从用户当前磁盘版本继续修改，保留其 L1/L2、shape API 与 NumPy `array_like` 补充。为恢复认知闸门，用户补写的完整 N-D matmul rule 从 R1 前移动到 Part2；R2 记录真实 baseline。R3 根据当前实现只要求三类新证据：batch slices 对照已有 2-D reference、全 ones broadcasting shape/value、N-D transpose 与两层 batch prediction；删除已经由 T2/学校线代覆盖的 transformation composition 和 norm assertions，不制造重复体力活。主线 `daily.md` 规则未改变。
+
+## 2026-09-20：AI Theory T3 正式通过
+
+用户完成 T3《矩阵乘、batch 与 broadcasting》，最终评分 `95/100`。Ubuntu 最终 `matmul_broadcast.py` 保留三层 loop 的 `matmul_2d_reference()`，并增加三类高价值 executable evidence：用 nonzero `(2,2,3) @ (2,3,4)` 的两个 batch slices 分别对照 2-D reference；用全 `1.0` 的 `(1,2,3) @ (7,3,4)` 验证 result shape `(7,2,4)` 且所有 values 为 `3.0`；验证 `(2,3,4)` 的 `.T` 为 `(4,3,2)`、`swapaxes(-1,-2)` 为 `(2,4,3)`，并独立推导两层 batch `(2,1,2,3) @ (1,5,3,4) -> (2,5,2,4)`。`py_compile`、普通运行与 `python3 -O` 均 exit 0。
+
+Codex 另以三个不同的 random float64 matrix shapes 调用用户真实 `matmul_2d_reference()`，全部与 NumPy `@` 在 `rtol=atol=1e-12` 下对齐。最终 source 把 R1 的六组 shape/error observations 替换成 R3 checks，但这些 R1 evidence 已在前一轮从真实代码和输出验收并记录，因此不要求为了让单文件包含全部历史实验而重复抄回；当前 artifact 能证明 2-D reference、N-D batch values、broadcast values、transpose semantics 与 multi-level batch shape。其边界是没有统一打印 `T3 PASS`，且 `T3_note.md` 只保留 R1 predictions、Case 2 仍用“一个值”而非精确 shape `()`；两项均不影响机制通过。
+
+进度更新为 AI Theory T1~T3 正式通过，下一模块为 T4 gradient / chain rule / finite difference。`AI_Infra理论伴随线规划.md` 与 `plan_strengthened.md` 的当前状态已同步；系统主线 `daily.md` 未修改。
+
+## 2026-09-20：提前生成教程必须在相邻进度通过后再次润色
+
+提前生成的下一课只能视为 initial draft，不能因为文件已经存在就直接当作最终教程。无论是系统主线 `dayN.md` 还是 AI Theory `TN.md`，当前一课正式验收通过时，都要重新读取用户刚完成的真实 source、note、教程增补、Git diff、提问、理解偏差与学习节奏，再检查相邻下一课是否需要定向润色。
+
+例如提前生成了 `day5.md`，用户完成并正式通过 Day4 后，应立即用 Day4 的真实结果重新核对 Day5：删除已经掌握或重复的内容，补足暴露出的 prerequisite、术语或 API，调整 R1 的 contract 与认知墙，并确认任务量没有变成 dirty work。对理论线同理：T3 正式通过后，开始 T4 前必须重新核对 T4。润色必须从当前磁盘版本继续，保留用户已经加入的内容，不得从旧 Git 版本覆盖；这条规则不改变系统主线与理论线各自独立的教程编写标准。
+
+## 2026-09-20：AI Theory T4 按 T3 真实结果定向润色
+
+已结合 T1~T3 的实际学习表现重写 `ai_theory/T4/T4.md`。用户学校微积分基础扎实，T3 已证明可以独立实现 reference、用紧凑 NumPy evidence 验证 shape/value，并倾向跳过重复数学与低价值测试；因此 T4 不再扩写基础求导课程，也不要求 pytest、README、benchmark 或长篇验收问答。教程主线收束为 computation graph、local derivative、upstream gradient、multi-path accumulation、independent finite-difference oracle 与 training/inference state 边界。
+
+T4 保留一道真实认知闸门。闸门前已经给清程序用途、`numerical_gradient(function, parameters, epsilon)` public contract、两个 fixed objectives、最小调用样例、错误/input-mutation contract 和 executable evidence，但不泄露 coordinate perturbation 的 state-isolation implementation；闸门后才解释 per-coordinate copies、epsilon 双向误差、fixed answers 与 failure localization。Round1 正式检阅后，必须从用户当时磁盘上的 source、note 和 T4.md 继续定向润色后半部分，不覆盖其修改。
+
+本次修复了旧 T4 的技术性教学问题：原有两个 fixed objectives 都是 quadratic functions，central difference 对 quadratic 在 exact arithmetic 下没有 truncation error，不能独立承担“epsilon 太大时 truncation error 明显”的观察。新版保留 quadratic cases 验证 gradient correctness，另用 $g(t)=\sin(t)$、$t=1$ 和 `1e-1` 到 `1e-11` 的 float64 epsilon sweep 观察 error 先下降、后受 cancellation/rounding 主导的趋势。公式继续使用 Typora math delimiters，Mermaid labels 使用 quoted text；系统主线 `daily.md` 未修改。
+
+## 2026-09-20：Week11 Day1 Round1 正式通过
+
+用户独立完成 request-line parser R1 的核心设计与实现，Codex 代写五组机械性 GoogleTest。最终实现先寻找第一组相邻 CRLF，只把该 prefix 交给 `check_complete`，因此完整 request line 后的 header suffix 能被保留；method、target、version 分 helper 验证，成功时先构造局部 `HttpRequest` 再一次性 commit，NeedMore/Error 不修改 sentinel output。clean build 零 warning；使用当前 Ubuntu CMake/CTest 3.16 的固定入口 `cmake -E chdir build ctest --output-on-failure`，全项目 20/20 PASS，五个 parser R1 tests 全部通过。R1 评分 `91/100`，正式进入 R2；这不表示 Day1 最终通过。
+
+逐段检阅 note：ASCII visible range 先转 `unsigned char` 的说明正确；NeedMore 按 method/target/version prefix 分类的总体模型正确；`HTTP/2.` 在尚无 terminator 时先返回 NeedMore、等 version 形状完整后再区分 Unsupported 与 Malformed 的解释正确。note 的 Complete 部分仍保留“CRLF 必须位于整个 input 末尾”的早期模型，而最终实现已经改为识别第一条 CRLF prefix；target 开头写成了反斜杠，最终 source 已正确使用 `/`。以后点评必须同时说明 note 的概念是否正确以及它是否与最终 source 一致，不能因为代码通过就忽略文字偏差。
+
+独立窄 probe 证实三个 R2 工作项：`GET /hel` 当前因 one-space branch 把 separator 交给 `check_target` 而错误返回 Malformed；8193 个合法 method token bytes 且没有 CRLF 时仍返回 NeedMore，没有执行 pre-terminator length guard；`request_line_error_message` 只有 declaration、library 中没有 definition。`day1.md` 第 26 节已从通用问题改为这版实现的明确升级路线，并保留用户新增的 `enum class` 解释及其余当前磁盘内容。Round3 再用 all-byte split points、limit matrix 与 ASan/UBSan 形成完整 evidence，不要求用户重写 Codex 已提供的五个 R1 tests。

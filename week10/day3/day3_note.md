@@ -102,3 +102,11 @@ const int elapsed_ms = static_cast<int>(
 );
 ```
 
+## R3
+
+```text
+在 poll_once 中需要加一个判断，就是 remained_ms<0 就直接结束了。
+
+底层 EventLoop 只保存原始 error code 并抛异常，由最外层 probe 统一输出 `error.what()`。也就是把 perror 去掉。底层不输出报错信息。
+```
+

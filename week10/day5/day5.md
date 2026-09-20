@@ -1753,6 +1753,146 @@ UBSan：当前覆盖路径是否触发已检测的 undefined behavior
 
 没有 report 只说明本次运行覆盖到的路径没有被它们发现问题，不等于 Reactor lifetime 已被完整证明；Day6 会建立更尖锐的确定性场景。
 
+---
+
+好的。下面完整保留上一版内容；只额外加了 `#` 注释，原有命令本身不改。
+
+在 `week10` 目录执行。先确认 `9091` 没有旧 server 占用：
+
+```bash
+# 进入 Week10 项目根目录。
+cd ~/code/system-learning/cpp/week10
+
+# 查看是否有进程正在监听 TCP 9091。
+ss -lntp 'sport = :9091'
+```
+
+没有输出再继续。创建 sanitizer build：
+
+```bash
+# -S .：当前目录是 CMake source directory。
+# -B build-sanitize：生成一个独立的 sanitizer build 目录。
+# Debug：保留调试信息，报错时能定位源码行。
+# CMAKE_CXX_FLAGS：编译每个 C++ 文件时启用 ASan/UBSan。
+# CMAKE_EXE_LINKER_FLAGS：链接最终 executable 时带上 sanitizer runtime。
+cmake -S . -B build-sanitize \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+
+# 编译 build-sanitize 中所有 target；-j 表示并行编译。
+cmake --build build-sanitize -j
+```
+
+先跑现有 CTest：
+
+```bash
+# 进入 sanitizer 的 build directory。
+cd build-sanitize
+
+# 运行 CTest 中登记的 tests；失败时显示测试输出。
+ctest --output-on-failure
+
+# 回到 Week10 根目录，方便后面按相对路径启动 server/client。
+cd ..
+```
+
+然后启动带 sanitizer 的 server：
+
+```bash
+# ASAN_OPTIONS 只作用于紧随其后的 server 进程：
+# halt_on_error=1：第一个 ASan 错误出现时立即停止。
+# detect_leaks=1：若进程正常退出，则检查 leak。
+ASAN_OPTIONS=halt_on_error=1:detect_leaks=1 \
+# UBSAN_OPTIONS 同样只作用于紧随其后的 server：
+# halt_on_error=1：检测到 UB 后停止。
+# print_stacktrace=1：打印调用栈。
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+# 启动 sanitizer build 的 server。
+./build-sanitize/reactor_echo_server \
+  # 标准输出和标准错误都写进该日志；& 让 server 在后台运行。
+  > /tmp/reactor-sanitize.log 2>&1 &
+
+# $! 是刚刚启动的后台 server 的 PID，保存起来供后面 kill/wait 使用。
+server_pid=$!
+```
+
+---
+
+`2>&1` 是把 **标准错误输出**（`stderr`，文件描述符 `2`）重定向到 **标准输出**（`stdout`，文件描述符 `1`）当前去往的位置。
+
+例如：
+
+```bash
+./server > /tmp/server.log 2>&1
+```
+
+执行顺序是：
+
+```text
+> /tmp/server.log   -> stdout（1）写进日志
+2>&1                -> stderr（2）也跟随 stdout，写进同一份日志
+```
+
+所以正常 `std::cout`、`printf` 的输出，以及 sanitizer 的报错、`std::cerr`、系统错误信息，都会进入 `/tmp/server.log`。
+
+顺序很重要：
+
+```bash
+./server 2>&1 > /tmp/server.log
+```
+
+这里 `stderr` 会先跟随当时的 `stdout`（终端），之后才把 `stdout` 改去日志；结果是普通输出进日志，但错误仍打印在终端。
+
+---
+
+在同一个终端依次运行三条 client：
+
+```bash
+# 验证 fragment + coalesce：两次 client send 不应决定 server 的 message 边界。
+python3 ../week9/echo_client.py
+
+# 验证 slow reader、large response、partial send 与 EPOLLOUT 续写。
+python3 ../week9/slow_echo_client.py
+
+# 验证 peer shutdown(SHUT_WR) 后，server 会先 drain output 再关闭。
+python3 ../week9/half_close_client.py
+```
+
+结束 server，并查看 sanitizer 输出：
+
+```bash
+# 向后台 server 发送默认 SIGTERM，请求它结束。
+kill "$server_pid"
+
+# 等待 server 真正退出，避免端口或日志仍被占用。
+wait "$server_pid"
+
+# 打印 server 的 stdout/stderr 日志；sanitizer 报错会出现在这里。
+cat /tmp/reactor-sanitize.log
+```
+
+正常情况 log 应为空。若发现问题，常见形式是：
+
+```text
+ERROR: AddressSanitizer: heap-use-after-free
+ERROR: AddressSanitizer: heap-buffer-overflow
+runtime error: ...
+```
+
+有一点要严谨：你当前 server 是无限 `for (;;) { poll_once... }`，普通 `kill` 会直接终止进程，**不能可靠证明 LeakSanitizer 没发现 leak**，因为它没有正常从 `main` 返回。这里的 server sanitizer 证据主要覆盖本次运行中的 UAF、越界、double free 和 UBSan 检测到的未定义行为。
+
+要验证 leak，当前更可信的是能正常结束的 `connection_checker`：
+
+```bash
+# 运行可正常结束的 component checker。
+# 因此 detect_leaks=1 在这里比无限循环 server 更有意义。
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+./build-sanitize/connection_checker
+```
+
+等后面补了 graceful shutdown，让 server 能正常退出，才可以把 server 的 “无 leak report” 写成正式证据。
+
 ## 28. 今天的验收标准
 
 代码与证据：

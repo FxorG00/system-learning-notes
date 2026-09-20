@@ -470,6 +470,83 @@ const char* request_line_error_message(RequestLineError error) noexcept;
 
 ---
 
+### 12.1 enum class
+
+这个是 C++ 的“枚举类型”，用来限制一个变量只能取几种预先定义好的状态。
+
+```cpp
+enum class RequestLineError {
+    None,
+    MalformedRequestLine,
+    UnsupportedHttpVersion,
+    RequestLineTooLong
+};
+```
+
+它定义了一个新类型，名字叫 `RequestLineError`。这个类型的变量只能表示这四种 request-line 解析结果：
+
+```cpp
+RequestLineError error = RequestLineError::None;
+```
+
+含义是“当前没有错误”。
+
+```cpp
+error = RequestLineError::MalformedRequestLine;
+```
+
+含义是“请求行格式错误”。
+
+这里的 `None` 不等于指针的 `nullptr`，只是这个错误类型里的一个普通状态，表示“无错误”。
+
+在 HTTP parser 中，它很适合表达这种情况：
+
+```cpp
+if (error == RequestLineError::None) {
+    // request line 目前合法
+} else {
+    // 根据具体错误决定返回 400、505，或关闭连接
+}
+```
+
+为什么不用 `bool`？
+
+```cpp
+bool ok;
+```
+
+只能表达“成功 / 失败”，但失败后不知道具体为什么失败。这个 enum 可以保留原因：
+
+```text
+MalformedRequestLine      -> 格式错误
+UnsupportedHttpVersion    -> 版本不支持
+RequestLineTooLong        -> 行过长
+```
+
+`enum class` 里的 `class` 容易让人误会：它不是你之前学的那种带成员函数、构造函数的普通 class。这里它主要表示“作用域枚举、类型更安全”。
+
+所以必须这样写：
+
+```cpp
+RequestLineError::None
+```
+
+不能只写：
+
+```cpp
+None
+```
+
+它还不会偷偷和整数混用：
+
+```cpp
+RequestLineError error = 1;  // 不允许
+```
+
+这正适合 parser：错误状态是有限集合，写错状态名、把整数误当错误码，编译器都更容易帮你拦住。
+
+---
+
 ## 13. `HttpRequestParser` public contract
 
 ```cpp
@@ -1060,20 +1137,31 @@ content length > 8192  -> RequestLineTooLong
 
 ---
 
-## 26. R1 后复盘你的实际 representation
+## 26. R1 后复盘你的实际实现
 
-R1 通过后，本节应根据你的真实实现收束，而不是保留一堆假设分支。复盘时只回答：
+你的 R1 已经形成一版真实 parser，而不是教程预设的 skeleton：
 
 ```text
-你怎样定位 request-line terminator
-你怎样保证扫描不越过 length
-你何时区分 incomplete 与 malformed
-你怎样先验证全部 fields，再一次性 commit output
-你怎样计算 consumed_bytes
-你是否重复扫描累计 prefix；当前复杂度是否值得升级
+parse_request_line
+-> 用 find_char_position 找第一组相邻 CRLF
+-> 若找到，只把 [0, first_lf + 1) 交给 check_complete
+-> 若尚未 Complete，再由 check_needmore 判断当前 prefix
+-> 两者都不能证明合法时，返回 MalformedRequestLine
 ```
 
-Day1 数据量上限只有 8 KiB，简单线性扫描通常足够。不要为了避免一次重复扫描提前引入复杂 parser state；但如果你的实现已经保存 scan progress，也必须能解释它在 Buffer compact/grow 后没有保存失效 pointer。
+`check_complete` 再用两个 SP 划分 method、target 与 version，分别调用 helper 验证；只有全部验证成功后，才先构造局部 `HttpRequest result`，最后一次性移动给 `output`。因此 R1 的 sentinel tests 能证明 NeedMore/Error 不会留下半更新 output。
+
+当前实现会多次线性扫描同一段 bytes，例如分别统计 SP、CR、LF，再寻找 separator position。由于 request-line 被限制在 8 KiB，这个复杂度目前可以接受；R2 不要求为了减少几次扫描引入持久 parser state，也不要保存指向 Buffer 内部的 pointer。
+
+### 26.1 R2 必须修正的三个真实边界
+
+这三项来自当前 source 和独立 probe，不是假设分支：
+
+1. **一个 SP 后的 target prefix 被误判为 Error。** 当前 `check_needmore` 的 `space_count == 1` 分支把 separator 本身交给了 `check_target`。例如 `GET /hel` 当前得到 `MalformedRequestLine`，但它是合法 request line 的 incomplete prefix，应返回 NeedMore。修正时要明确第二段从 `first_space_pos + 1` 开始，并用这个位置判断 target 是否仍为空。
+2. **没有 terminator 时，长度上限尚未生效。** 由 8193 个合法 method token bytes 组成的未终止 prefix 当前仍返回 NeedMore。R2 要在返回 NeedMore 前执行统一的 content-length guard：一旦 CRLF 前的 bytes 已经大于 `kMaxRequestLineBytes`，返回 `RequestLineTooLong`，不能继续让 Buffer 增长。
+3. **diagnostics helper 只有 declaration。** `request_line_error_message` 已写进 public contract，但当前 object/library 中没有 definition。R2 要补齐四个 enum 到固定英文 message 的映射；control flow 仍比较 enum，不比较字符串。
+
+顺手做一次窄清理：source 直接 include 自己实际使用的 `<cctype>`、`<stdexcept>`、`<utility>`，移除未使用的 `<iostream>` / `<system_error>`；把全局 `NEEDMORE` macro 收回普通 C++ helper 或直接返回表达式。清理不改变 parser 行为，也不要求重写现有 helper 结构。
 
 ---
 

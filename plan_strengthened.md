@@ -1,8 +1,8 @@
 # C++ 系统工程 / AI Infra 求职总规划
 
-> 版本：2026-08-27，Week9 / 腾讯实习目标与 AI 理论时间轴校准版
+> 版本：2026-09-20，Week11 / T3 / serving 生态与真实进度校准版
 > 学习者：FxorG，中山大学计算机科学与技术专业，按当前学制为 2029 届
-> 当前进度：Week1 ~ Week8 已完成，下一站是 non-blocking I/O、epoll 与 Reactor
+> 当前进度：Week1 ~ Week10 已完成，Reactor V1 已闭环；Week11 HTTP Server V1 正在推进。AI Theory T1~T3 已通过，下一模块为 T4
 > 近期目标：2026 年 12 月形成第一版简历，2027 年 1 月开始投递后台开发、C++ Infra 与 AI 业务基础设施相关实习
 > 长期目标：本科就业进入 AI Infra，重点发展 LLM inference systems / serving 与 CUDA kernel optimization
 
@@ -51,7 +51,7 @@ C++
 
 ## 2. 当前真实能力基线
 
-### 2.1 已完成的 Week1 ~ Week8
+### 2.1 已完成的 Week1 ~ Week10
 
 | 阶段 | 已完成内容 | 已形成的证据 |
 |---|---|---|
@@ -63,8 +63,10 @@ C++
 | Week6 | IP、TCP、socket、client/server、协议与状态观察 | blocking TCP server/client、抓包与状态解释 |
 | Week7 | 并发抽象、condition variable、BlockingQueue | bounded MPMC queue、close contract、TSan |
 | Week8 | ThreadPool、future、AsyncLogger、GoogleTest、CMake | 组件代码、CTest、TSan、benchmark、integration harness |
+| Week9 | non-blocking I/O、epoll、LT/ET、partial I/O | Epoll Echo Server、`ss` / `strace`、LT/ET 与 half-close 实验 |
+| Week10 | Buffer、Channel、EventLoop、Acceptor、Connection | Reactor Echo Server、CTest、ASan/UBSan、100 clients 与 fd-count evidence |
 
-Week1 ~ Week8 已正式通过。以后只在项目需要或面试复盘时回查，不再把这些周的完整 daily 复制进总规划。
+Week1 ~ Week10 已正式通过。以后只在项目需要或面试复盘时回查，不再把这些周的完整 daily 复制进总规划。Week11 已生成周规划与 Day1 教程，但仍按真实学习和验收推进，不能把“教程存在”记成“HTTP 已完成”。
 
 ### 2.2 当前优势
 
@@ -83,18 +85,18 @@ NOIP / CSP-S / CSP-J 奖项
 ### 2.3 当前短板
 
 ```text
-还没有 non-blocking I/O / epoll / Reactor 的完整实现
-还没有一个真实协议驱动、可对外演示的主项目
+HTTP protocol parser 与 HTTP Server V1 尚未闭环
+Mini Redis 的 RESP、KV、TTL、AOF 与完整项目证据尚未形成
 数据库与 Redis 使用、持久化语义还未形成工程证据
 项目还缺稳定的性能数据、故障案例和简历表达
 已学 C++ / OS / 并发内容尚未形成稳定的面试口述闭环
 C++ object model、atomic/CAS、memory order 仍需定向补强
-Python / NumPy / PyTorch 尚未形成可投递证据
+Python / NumPy 已有 T1~T3 的 ndarray、线性变换、matmul/broadcasting 小型证据，PyTorch 与 Transformer inference 证据尚未形成
 CUDA、推理框架、算子优化尚未开始正式 gate
 缺少真实团队协作、代码评审和线上环境经验
 ```
 
-epoll、主项目、数据库第一层、性能证据、口述闭环和 memory model 由 Week9 ~ Week16 的项目与 milestone exit review 解决；Python/PyTorch 走低强度 AI 伴随线；CUDA 继续等待正式 gate；真实协作只能由实习、实验室、开源协作或多人项目补齐。
+HTTP/Mini Redis、数据库第一层、性能证据、口述闭环和 memory model 由 Week11 ~ Week16 的项目与 milestone exit review 解决；Python/PyTorch 继续走 AI 伴随线；CUDA 和 serving framework 继续等待正式 gate；真实协作只能由实习、实验室、开源协作或多人项目补齐。
 
 ---
 
@@ -372,7 +374,7 @@ single_head_attention.py
 
 自然周只是标签，是否进入下一阶段由 exit evidence 决定。
 
-### Milestone A / Week9：non-blocking I/O 与 epoll
+### Milestone A / Week9：non-blocking I/O 与 epoll（已通过）
 
 核心问题：
 
@@ -405,7 +407,7 @@ Epoll Echo Server
 能画出 event -> handler -> state change 流程
 ```
 
-### Milestone B / Week10：Reactor V1
+### Milestone B / Week10：Reactor V1（已通过）
 
 核心问题：
 
@@ -444,7 +446,7 @@ alignment、cache line、false sharing 第一层
 atomic 与 mutex/volatile 的边界、CAS、acquire/release、happens-before 第一层
 ```
 
-### Milestone C / Week11：HTTP Server V1
+### Milestone C / Week11：HTTP Server V1（进行中）
 
 核心问题：
 
@@ -579,10 +581,12 @@ atomic/CAS、acquire/release、happens-before 第一层
 
 ## 6. 2026-08 到 2027-03 双线时间表
 
+截至 2026-09-20 的真实状态：系统主线已完成 Week10，正在 Week11；AI Theory 已通过 T1~T3，T4 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
+
 | 时间 | 系统主线 | AI 理论伴随线 | 必须形成的结果 |
 |---|---|---|---|
 | 2026.08 下旬 | Week9 | 启动 T1 | Epoll Echo Server；能解释 ndarray/shape/dtype |
-| 2026.09 | Week10~11 | T2~T6 | Reactor、HTTP；matmul/gradient/stable softmax reference |
+| 2026.09 | Week10~11 | T2~T3 已达；T4~T6 为当月后续目标 | Reactor 已通过、HTTP 进行中；matmul/broadcast reference 已形成 |
 | 2026.10 上半 | Week12 | T7~T8，Theory Gate 1 | Mini Redis RESP/KV；NumPy ML 小闭环 |
 | 2026.10 下半~11 月 | Week13~14 | T9~T12 | TTL/AOF；PyTorch Tensor/Module/autograd/MLP |
 | 2026.11 下半~12 月上半 | Week15 | T13、T15~T16；T14 可延期 | 测试/性能；single-head attention reference |
@@ -851,6 +855,45 @@ AI_Infra理论伴随线规划.md
 
 系统主线不变，AI 线按 readiness gate 开启。
 
+### 9.1 2026-09 serving 生态快照
+
+这次校准只吸收会影响学习顺序和证据标准的变化，不追逐每个 release note：
+
+```text
+vLLM：V1 已成为主架构，核心对象收敛到 API/frontend、Engine Core、scheduler、
+      KV cache manager 与 GPU workers；prefix caching、chunked prefill、
+      speculative decoding、disaggregated serving 都建立在这些边界上。
+
+SGLang：近期演进集中在 hierarchical KV cache、prefill/decode 或 encode/prefill/decode
+        disaggregation、Rust serving frontend、overlap scheduling 与硬件后端。
+
+DeepSeek：FlashMLA 的 2026-09 更新把新模型 attention、FP8/FP4 KV cache、
+          fused operators 与特定 GPU architecture 一起交付，说明模型、runtime、
+          kernel、memory layout 和 hardware 正在协同演进。
+```
+
+这些变化不会把当前路线改成“立刻读完整 vLLM/SGLang 源码”。它们只把后半程要求说得更具体：
+
+```text
+T20：区分 persistent / per-request / transient memory，并认识 HBM、host、external tiers
+T21：从连续 Tensor 扩展到 block/page KV cache、prefix reuse、eviction/refcount 与 transfer contract
+T22：从普通 FIFO 扩展到 token-budget scheduling、continuous batching 与 PD/EPD boundary
+T23：除 correctness 外记录 TTFT、TPOT/ITL、throughput、KV usage/hit rate 与 cache state
+Gate D：先读 mini-sglang 的小型实现，再对照 vLLM V1 与 SGLang 的一个真实 path
+```
+
+“我不得不把才华埋葬在昨天”是 DeepSeek 工程师刘胜与的个人文章，不是 DeepSeek 官方研究院 roadmap。它反映的有效信号是：agent 已经能协助读 CUDA/PTX/SASS、分析 profiler 和生成优化候选；但“人不再需要基础”不是可据此推出的结论。规划只增加下面的 AI-native engineering loop：
+
+```text
+人定义 workload / assumptions / contract
+-> 人准备 independent correctness oracle 与 reproducible baseline
+-> agent 协助检索、读代码、提出 patch 或 profiling hypothesis
+-> 人审查 diff、lifetime、synchronization、numerical error 与 profiler evidence
+-> 固定 version / commit / model / hardware / precision / workload 后再写结论
+```
+
+换句话说，agent 可以加快实现和搜索，但不能替代对错误目标、错误 benchmark 或错误 kernel 的判断。
+
 ### Gate A：AI workload literacy
 
 前置：Reactor/Mini Redis 主线稳定推进，不因伴随线停工。
@@ -907,17 +950,30 @@ Nsight Systems / Compute
 
 ### Gate D：Triton / vLLM serving
 
-前置：CUDA 证据 + Transformer/KV Cache 理解。
+分阶段前置：源码结构阅读需要 Theory Gate 3；Triton/kernel 与 production optimization 需要 CUDA 证据 + Transformer/KV Cache 理解。
 
 ```text
-Triton kernel
-continuous batching
-PagedAttention / KV Cache management
-request scheduling
-prefill / decode
-latency / throughput / memory trade-off
-vLLM 或 SGLang 源码级小贡献
+阶段 1：在 Theory Gate 3 后阅读固定版本 mini-sglang
+-> request/sequence lifecycle
+-> token-budget scheduler
+-> radix/prefix cache 与 block table
+-> chunked prefill / overlap scheduling 的对象边界
+
+阶段 2：在 CUDA Gate 后做一个可运行 Triton/CUDA operator
+-> correctness reference
+-> profiler
+-> baseline 与固定 workload
+
+阶段 3：只选一个 production path 对照
+-> vLLM V1：Engine Core / scheduler / KV cache manager / worker
+或
+-> SGLang：scheduler / radix cache / hierarchical cache / disaggregation
+
+阶段 4：提交一个小而可验证的贡献
+-> docs / test / bug reproduction / profiler evidence / focused patch
 ```
+
+Gate D 不要求“从头读完整框架”，也不把能运行官方 demo 当作源码能力。第一份贡献可以是高质量 reproducer、test 或文档勘误；核心是能说明问题、版本、证据和边界。
 
 ### Gate E：multi-GPU / distributed inference
 
@@ -1053,15 +1109,15 @@ CUDA kernel correctness + profiler + benchmark
 ## 13. 当前下一步
 
 ```text
-1. 生成并完成 Week9 Day1
-2. 同期启动 AI Theory T1，每天 30~60 分钟
-3. 从 blocking server 的问题进入 O_NONBLOCK / EAGAIN
-4. 完成 Epoll Echo Server
-5. 用真实代码和实验验收 Week9，并确认 T1 出口
-6. 进入 Reactor V1；其出口前把 AI Theory 推进到 T3
+1. 继续完成 Week11 HTTP Server V1，不推倒 Week10 Reactor
+2. AI Theory 进入 T4，把已有微积分映射到 gradient / chain rule / finite difference
+3. Week11 出口后进入 Week12 RESP parser 与 Mini Redis V1
+4. T20~T24 到达前只维护 serving 资料索引，不启动完整 vLLM/SGLang 源码主线
+5. 每个系统 milestone 继续保留 correctness、sanitizer、failure case 与可复现实验
+6. 到 Theory Gate 3 后先读 mini-sglang，再决定 production framework 的一个窄路径
 ```
 
-当前不要为了腾讯岗位临时插入 Go、Kafka、Kubernetes、完整 MySQL 课程或 CUDA。先把最接近岗位硬要求、也最接近简历项目闭环的 epoll -> Reactor -> Mini Redis 做穿。
+当前不要因为 2026 年 serving 生态更新临时插入 Go、Kafka、Kubernetes、完整 vLLM/SGLang、DeepEP 或 CUDA。先把最接近岗位硬要求、也最接近简历项目闭环的 HTTP -> Mini Redis 做穿，同时保持 AI Theory 的稳定推进。
 
 ---
 

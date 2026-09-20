@@ -731,7 +731,7 @@ pending_close.clear();
 完整链为：
 
 ```text
-epoll_wait fills user-space event array
+epoll_wait fills user space event array
     |
     v
 EventLoop begins batch dispatch
@@ -1129,6 +1129,200 @@ find fd
 ```
 
 这样即使 Connection destructor 吞掉 exception，EventLoop 里也不会留下已经析构的 `Channel*`。
+
+#### 24.3.1 怎么修复这个 bug
+
+> 把 map_.erase 提前
+
+你抓住了核心，但要把“谁会访问谁”分开：
+
+```text
+kernel epoll 不认识你的 Connection / Channel C++ 对象。
+它只知道：某个 socket/file descriptor 的内核注册。
+```
+
+真正可能访问已销毁对象的，是你自己的 `EventLoop::map_`：
+
+```text
+fd
+-> map_ 找到 Channel*
+-> 调用 channel->handle_event(...)
+```
+
+原来的坏路径是：
+
+```text
+map_[7] = old_channel_ptr
+
+Connection 析构
+-> remove_channel(old_channel)
+-> epoll_ctl(DEL, 7) 失败
+-> remove_channel 直接 throw
+-> 析构函数吞掉异常
+-> old_channel_ptr 指向的对象被销毁
+-> map_[7] 仍是 old_channel_ptr
+
+之后 epoll_wait 返回一个 fd=7 的 event
+-> map_.find(7) 找到 old_channel_ptr
+-> 调用它
+-> use-after-free / dangling pointer
+```
+
+所以问题不是“epoll 后面直接访问已经销毁的 Connection”，而是：
+
+```text
+epoll_wait 给出 fd
+-> EventLoop 根据 fd 从 map_ 取出悬空 Channel*
+-> user space 自己解引用了悬空指针
+```
+
+你说“把 `map_.erase` 提前就好”，**对 dangling pointer 这个核心问题来说，基本是对的**。更准确的顺序是：
+
+```text
+尝试 epoll_ctl DEL
+-> 记住是否失败、记住 errno
+-> 无论 DEL 成败，都移除 map_ 中与当前 Channel 匹配的 entry
+-> 若 DEL 失败，再抛保存好的 system_error
+```
+
+这样析构函数即便吞掉异常，后续也会变成：
+
+```text
+epoll_wait 返回 fd=7
+-> map_.find(7) 找不到
+-> 忽略本轮 stale/unmanaged event
+```
+
+不会再拿到已销毁的 `Channel*`。
+
+至于 fd 被新连接复用，例如旧连接也是 `7`、新连接后来也拿到 `7`：
+
+```text
+old connection: fd=7, Channel=A
+A 被销毁，map_[7] 被清除
+
+new connection: fd=7, Channel=B
+add_channel(B)
+-> map_[7] = B
+```
+
+在你当前的单线程 Reactor 模型中，这本身不要求立刻引入 token。因为关闭旧 socket 后，新的 `fd=7` 对应的是新的内核 file object；kernel epoll 不是仅凭“数字 7”把旧连接和新连接混为一谈。
+
+但 `erase` 时确实要做 identity 检查：
+
+```text
+map_[fd] 当前保存的指针必须仍然等于 &channel
+-> 才允许 erase
+```
+
+它防的是这种逻辑错误：
+
+```text
+旧 Channel A 正在 remove(fd=7)
+-> 某处已经把 fd=7 注册给了新 Channel B
+-> A 不加判断地 map_.erase(7)
+-> 把 B 的正确注册也删掉
+```
+
+更强的 generation token 通常用于更复杂的场景：
+
+```text
+多个线程同时修改/dispatch EventLoop
+或 event 已经排队、fd 被复用后仍可能处理旧 event
+```
+
+那时只靠 `fd` 不够，要识别 `(fd, generation)` 是否仍是同一个注册实例。但对你现在“所有 `epoll_ctl`、map_ 修改和 callback dispatch 都在同一个 loop thread”的设计，先保证：
+
+```text
+remove 无论 syscall 成败都不遗留匹配的 Channel*
+```
+
+就是当前最重要、也足够合理的修复。
+
+#### 24.3.2 修复完后可能遇到反例？
+
+> 我们的架构: close request + poll_once 后再去析构 connection。其实已经把这个反例给避免了；
+>
+> 因为你的 fd=7 其实还没被 close，在同一次 poll_once 都不会；而是要等到一次 poll_once 结束后再析构。自然也不会有其他 connection 来占领了。
+
+你这个反例成立；我上一条只讨论了“`epoll_wait` 之后才产生的新 event”，漏掉了**本轮 `epoll_wait` 已经返回到 user space 的旧 event record**。注释 1
+
+可能发生：
+
+```text
+epoll_wait 本轮已经返回：
+[fd=5 的 event, fd=7 的 event]
+
+fd=7 当时属于 Channel A。
+
+开始 dispatch fd=5
+-> application logic 决定关闭 A
+-> DEL A、map_.erase(7)、close(7)
+
+随后 accept 新连接
+-> OS 恰好复用数字 fd=7
+-> add_channel(B)
+-> map_[7] = Channel B
+
+继续处理本轮 events 数组中早已拿到的旧 fd=7 record
+-> map_.find(7)
+-> 找到的是 B
+-> 却拿 A 的旧 readiness 去调用 B
+```
+
+这不是 dangling pointer 了，而是更隐蔽的 **stale event 被错投递给 fd 复用后的新 Channel**。
+
+`epoll_ctl(DEL)` 即使成功，也无法修改已经由 `epoll_wait` 拷贝到本轮 `events` 数组里的旧 record。因此，单靠：
+
+```cpp
+map_.erase(fd);
+```
+
+只能消灭悬空指针，**不能单独证明旧 event 不会误命中新连接**。
+
+当前有两种合理保护策略。
+
+```text
+策略 A：本轮 batch barrier
+```
+
+单线程 Reactor 里，收到关闭请求时先标记 `A` 为 closing，但不立刻析构、不立刻 `close(fd)`；等这一整轮 `epoll_wait` 返回的 records 都 dispatch 完，再统一销毁 A。
+
+这样旧的 `fd=7` 在本轮结束前一直未被内核回收，新连接拿不到同一个数字 `7`。这是你现在 `pending_close` 这种延迟清理设计的重要意义之一。
+
+```text
+策略 B：registration token / generation
+```
+
+给每次 `add_channel` 分配单调递增的 registration id：
+
+```text
+A: fd=7, token=101
+B: fd=7, token=102
+```
+
+注册 epoll 时，把 `token` 放进 `epoll_event.data.u64`。`epoll_wait` 返回后，按 token 查找 Channel：
+
+```text
+旧 event: token=101
+-> A 已删，找不到
+-> 忽略
+
+新 B: token=102
+-> 只会接收它自己的 event
+```
+
+这比只存 `fd` 更强，因为它识别的是“第几次注册”，不是“当前哪个对象碰巧拿到了同一个 fd 数字”。
+
+所以结论是：
+
+```text
+map erase：解决 dangling pointer，必须做。
+延迟 close 到 batch 结束：当前单线程 Reactor 可避免 fd 本轮复用。
+generation token：更通用、更稳健地拒绝 stale event。
+```
+
+如果你的当前架构严格保证“`poll_once` dispatch 期间不析构 Connection、不 close fd，只把它放进 `pending_close`，等本轮结束后再处理”，那它已经用策略 A 避开了你描述的情况；token 可以作为后续强化，而不是此刻必须立刻上。
 
 ### 24.4 保留 batch-end owner cleanup
 

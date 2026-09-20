@@ -820,6 +820,80 @@ if (ordered.find(target) != ordered.end()) {
 
 `adapter`：适配器。它限制底层容器暴露出来的操作。
 
+### 10.0 adapter 到底是啥意思？这些的底层都是啥
+
+`container adapter` 的意思是：它不是一种全新的“存储结构”，而是把一个已有底层容器包起来，只开放符合某种使用规则的接口。
+
+比如 `queue` 的底层实际上默认是 `std::deque`，但你不能随便访问中间元素、不能拿迭代器、不能 `erase` 任意位置。它只让你按 FIFO 使用：
+
+```text
+底层 deque：可以前后操作，也能随机访问
+        |
+        v
+queue：只暴露 push / front / back / pop
+```
+
+这样你写 `queue` 时，代码语义就很明确：这是“排队”，不是“随便操作一个 deque”。
+
+三者默认底层分别是：
+
+| 适配器 | 默认底层 | 为什么 |
+|---|---|---|
+| `std::stack<T>` | `std::deque<T>` | 只需尾部 `push_back/pop_back` |
+| `std::queue<T>` | `std::deque<T>` | 需要尾部加入、头部删除 |
+| `std::priority_queue<T>` | `std::vector<T>` | `vector` 连续存储，适合维护 heap |
+
+它们的接口可以理解成对底层操作的翻译：
+
+```text
+stack.top()       -> 底层 c.back()
+stack.push(x)     -> 底层 c.push_back(x)
+stack.pop()       -> 底层 c.pop_back()
+
+queue.front()     -> 底层 c.front()
+queue.back()      -> 底层 c.back()
+queue.push(x)     -> 底层 c.push_back(x)
+queue.pop()       -> 底层 c.pop_front()
+```
+
+`priority_queue` 稍微特殊：底层是一个 `vector`，但它会用 heap 算法把 `vector` 内部维持成堆结构。因此：
+
+```cpp
+std::priority_queue<int> heap;
+```
+
+不是说底层元素真的按 `10, 5, 3` 这样完全排序；它只保证：
+
+```text
+heap.top() 一定是优先级最高的元素
+```
+
+你也可以指定底层容器，例如：
+
+```cpp
+std::stack<int, std::vector<int>> stack_on_vector;
+
+std::queue<int, std::list<int>> queue_on_list;
+
+std::priority_queue<
+    int,
+    std::deque<int>,
+    std::greater<int>
+> min_heap_on_deque;
+```
+
+但要满足对应适配器需要的操作：
+
+```text
+stack：需要 back / push_back / pop_back
+queue：需要 front / back / push_back / pop_front
+priority_queue：需要随机访问能力，所以不能用 list
+```
+
+所以“adapter”最核心的理解是：
+
+> 它保留底层容器负责存数据，但故意限制你只能按 stack、queue 或 heap 的规则操作数据。
+
 ### 10.1 `std::stack`
 
 LIFO：last in, first out，后进先出。
@@ -1390,3 +1464,51 @@ Space arr(A, Plane(B, Row(C)));
 ```
 
 读法永远从最里面开始：先创建 C 个元素的一行，再创建 B 行的平面，最后创建 A 个平面。
+
+## 18. data()
+
+`begin()` 返回的是 iterator，不一定就是裸指针，所以不能通用地把它直接强转成地址。
+
+你要的通常是“它当前指向的元素的地址”：
+
+```cpp
+std::vector<int> values{10, 20, 30};
+
+auto it = values.begin();
+int* address = &*it;  // 指向第一个元素 10
+```
+
+这里分两步：
+
+```text
+it   ：迭代器，表示“当前位置”
+*it  ：当前位置的元素，也就是 10
+&*it ：元素 10 的地址
+```
+
+对 `vector`，更直接、更推荐的是：
+
+```cpp
+int* address = values.data();
+```
+
+因为 `vector` 保证元素连续存储，`data()` 就是第一个元素的地址。
+
+注意空 `vector`：
+
+```cpp
+std::vector<int> values;
+auto it = values.begin();
+
+// &*it;  // 错：begin() == end()，不能解引用
+```
+
+所以需要先判断：
+
+```cpp
+if (!values.empty()) {
+    int* address = &*values.begin();
+}
+```
+
+对于 `list` 也能写 `&*it`，得到当前节点中那个元素对象的地址；但它不是连续数组的地址，不能做 `address + 1` 来找下一个元素。iterator 的核心含义始终是“能定位和访问元素”，不是“它本身一定保存一个内存地址”。

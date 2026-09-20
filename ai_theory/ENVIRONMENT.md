@@ -1,6 +1,6 @@
 # AI Theory 开发环境
 
-> 环境基线日期：2026-09-02
+> 环境基线日期：2026-09-17
 > 作用：集中记录 AI Theory 的 Python 版本、package 版本和安装方式
 > 原则：Ubuntu 的日常 Python 使用 3.12；发行版自带解释器仍留给系统脚本
 
@@ -16,7 +16,13 @@ Ubuntu 20.04 已直接安装 CPython 3.12.14：
 /usr/bin/python3           -> Python 3.8.10
 ```
 
-正常打开 terminal 后，`/usr/local/bin` 位于 `/usr/bin` 前面，因此：
+`xgf` 的 `~/.bashrc` 在 interactive check 之前统一设置：
+
+```bash
+export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+```
+
+因此普通 terminal 和 `ssh host "command"` 这种 non-interactive shell 都会得到：
 
 ```bash
 python --version
@@ -34,15 +40,15 @@ Ubuntu 系统内部 Python：3.8.10
 
 这已经满足理论线直接使用 Python 3.12，同时保留系统边界。
 
-AI Theory 不使用 `uv`。每个学习项目使用 Python 标准库自带的 `venv` 隔离 packages：
+AI Theory 不使用 `uv`。从 2026-09-17 起，T1~T24 默认共用 `xgf` 的 Python 3.12 user-level packages：
 
 ```text
-Python 3.12.14
-    |
-    +--> python -m venv .venv
-            |
-            +--> 当前项目自己的 pip 和 packages
+interpreter：/usr/local/bin/python3
+packages：/home/xgf/.local/lib/python3.12/site-packages
+dependency declaration：ai_theory/requirements.txt
 ```
+
+这里的“全局”指 `xgf` 用户的统一理论学习环境，不是覆盖 Ubuntu 的 system Python，也不是给所有 Linux users 安装 packages。`/usr/bin/python3` 继续保持 3.8.10。
 
 选择 Python 3.12 的原因：
 
@@ -52,7 +58,15 @@ NumPy 2.5 支持 Python 3.12~3.14
 Python 3.12 与当前 scientific Python package 兼容成熟
 ```
 
-当前 NumPy reproducible baseline 是 2.5.2。精确 pin 是为了复现实验，不是为了迁就旧 Python。
+当前可复现 baseline 为：
+
+```text
+NumPy 2.5.2
+CPU PyTorch 2.14.0+cpu
+Matplotlib 3.11.2
+```
+
+精确 pin 是为了复现实验，不是为了迁就旧 Python。当前不安装 CUDA wheel；真正进入 CUDA gate 时再根据 driver、toolkit 与 PyTorch compatibility 选择环境。
 
 ## 2. 宿主机快照
 
@@ -65,6 +79,7 @@ system /usr/bin/python3：3.8.10
 pip：25.0.1 for Python 3.12
 stdlib extension build：0 missing，0 failed on import
 verified modules：ssl、sqlite3、bz2、lzma、ctypes、venv
+AI packages：NumPy 2.5.2、CPU PyTorch 2.14.0+cpu、Matplotlib 3.11.2
 ```
 
 Python 3.12.14 使用 Python 官方 source tarball 构建，并通过 `make altinstall` 安装到 `/usr/local`。`altinstall` 的目的正是并存安装，避免覆盖发行版的 `python3` 文件。
@@ -90,57 +105,55 @@ python -m pip -> Python 3.12 的 pip
 
 教程统一写 `python -m pip`，不单独写 `pip`。这样能明确表示“由当前这个 Python 解释器运行它对应的 pip”，避免 Python 和 pip 指向不同版本。
 
-## 4. 每个项目建立独立 venv
+## 4. 理论线统一环境
 
-不使用 `uv` 不等于把所有第三方 packages 装进全局 Python。`venv` 是 Python 自带功能，不是额外的 Python version manager。
-
-以 T1 为例：
+T1~T24 的小型脚本共享同一套 NumPy/PyTorch/Matplotlib baseline，不再为每个 T module 重复建立 `.venv`。进入任意理论目录后可以直接运行：
 
 ```bash
-cd ~/code/system-learning/ai-theory/t01_numpy_basics
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install "numpy==2.5.2"
+python3 script_name.py
 ```
 
-验证当前 shell 使用项目环境：
+统一安装或恢复环境：
 
 ```bash
-which python
-python --version
-python -c "import numpy as np; print(np.__version__)"
+cd ~/code/system-learning
+python3 -m pip install --user -r ai_theory/requirements.txt
 ```
 
-预期关系：
+`--user` 把 packages 安装到 `xgf` 的 user site，不写入 `/usr/lib`，也不改变 Ubuntu system Python。命令统一写成 `python3 -m pip`，避免裸 `pip` 指向错误 interpreter。
+
+验证当前环境：
+
+```bash
+command -v python3
+python3 --version
+python3 -c "import numpy, torch, matplotlib; print(numpy.__version__, torch.__version__, matplotlib.__version__)"
+```
+
+当前预期：
 
 ```text
-which python -> 当前项目的 .venv/bin/python
-python --version -> Python 3.12.14
-NumPy -> 2.5.2
+/usr/local/bin/python3
+Python 3.12.14
+2.5.2 2.14.0+cpu 3.11.2
 ```
 
-重新打开 terminal 后需要再次激活：
+如果后续某个实验需要冲突版本，仍可以为该实验单独建立 venv：
 
 ```bash
-cd ~/code/system-learning/ai-theory/t01_numpy_basics
+python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install ...
 ```
 
-`.venv/` 不提交到 Git。需要长期复现时提交 dependency declaration 或 lock file，而不是提交整个 virtual environment。
+这是 exception，不再是每个 T module 的默认动作。`.venv/` 仍不提交到 Git。
 
 ## 5. 安装 packages 的统一写法
 
-NumPy：
+恢复当前统一环境：
 
 ```bash
-python -m pip install "numpy==2.5.2"
-```
-
-CPU-only PyTorch：
-
-```bash
-python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python3 -m pip install --user -r ai_theory/requirements.txt
 ```
 
 若以后使用 CUDA，必须根据 PyTorch Start Locally 与实际 driver/CUDA compatibility 重新选择命令，不能照抄 CPU 或旧 CUDA 安装命令。
@@ -149,12 +162,14 @@ python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 ```text
 ENVIRONMENT.md
--> 记录当前 Python/package baseline、宿主机快照和 setup
+-> 记录当前 Python/package baseline、shell resolution、宿主机快照和 setup
 
 Tn.md
 -> 只说明本课需要什么环境、怎样验证环境门
 -> 不重复 Python 的系统安装过程
 ```
+
+T1 中逐步建立 `.venv` 的内容保留为已经完成的 Python environment 教学记录；从 T2 以后按本文件的新统一环境执行，不要求机械重复 setup。
 
 Python 3.12 当前处于 security-fixes-only 阶段，官方计划支持到 2028 年 10 月。以后升级 patch version 时，更新本文件并重新运行已有 assertions；除非 API 或行为真的变化，不因 patch version 改动重写教学主线。
 
