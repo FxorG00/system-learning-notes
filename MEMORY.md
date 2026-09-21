@@ -6557,3 +6557,9 @@ T4 保留一道真实认知闸门。闸门前已经给清程序用途、`numeric
 已生成 `week11/day2/day2.md`，严格承接已通过的 Day1 request-line parser，继续维护 Ubuntu `~/code/system-learning/cpp/week10` canonical project，不创建 parser V2。Day2 只增加 header section：`HttpHeaderField` ordered representation、case-insensitive field-name normalization、OWS trim、严格 CRLF、obs-fold rejection、Host 恰好一条且非空、non-Host duplicates 原序保留，以及 32768-byte section limit；不提前进入 Content-Length/body、Transfer-Encoding、response 或 Reactor integration。
 
 R1 已明确程序用途、四个修改文件、public types、`parse_header_section(pointer,length,output)` 调用场景、固定 error/messages、output commit contract、最小调用例子与五组 observable scenarios，但没有泄露 empty-line search、line iteration、temporary fields 或 helper organization。R1 后的 R2/R3 当前仅作为协议机制与 evidence 框架；用户 R1 正式通过后，必须从当时磁盘 source/tests/note/day2.md 继续逐节定向润色，保留用户增补并把通用叙述改成真实函数、representation、错误和升级动作。技术 contract 已对照 RFC 9110/9112：field-name 大小写不敏感、name 与 colon 间不得有 whitespace、提取 value 时排除两端 OWS、危险 control bytes/obs-fold 由 V1 严格拒绝、缺失或重复 Host 拒绝。教程使用兼容 CMake/CTest 3.16 的 `cmake -E chdir`，Mermaid 使用 Typora 8.8.3 可接受的简单 quoted labels。
+
+## 2026-09-21：AI 时代下“大模拟”任务的学习边界
+
+用户指出近期 HTTP parser 学习很像算法竞赛的大模拟：按 byte 扫描、分类状态、维护下标并实现大量规则。双方共识是，这类训练在学习阶段仍有价值，但价值不在于长期手写每条规则，而在于亲自完成一两次从 specification 到 contract、state machine、ownership、failure semantics 和 executable evidence 的完整转换；这样才能在 AI 生成实现后发现 offset、limit、suffix、lifetime 与错误分类问题，而不是只判断代码能否编译。
+
+以后 parser/protocol 类 daily 采用明确分工：用户负责核心 data model、public contract、状态推进、关键边界和第一版实现；Codex 可以承担 parameterized-test scaffold、批量近似 cases、CMake glue、机械重构与资料核对，但用户必须能解释 oracle 建立了什么状态、失败说明哪条 contract 被破坏。HTTP 与 RESP 各完整经历一次后，不再反复安排同类型的全量“大模拟”；后续优先复用已形成的 parsing discipline，把学习增量转向 integration、ownership、性能、并发和系统 trade-off。不能因“AI 能写”删掉首次核心实现，也不能因“学习扎实”让用户无限手写低价值 boilerplate。
