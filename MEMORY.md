@@ -6563,3 +6563,9 @@ R1 已明确程序用途、四个修改文件、public types、`parse_header_sec
 用户指出近期 HTTP parser 学习很像算法竞赛的大模拟：按 byte 扫描、分类状态、维护下标并实现大量规则。双方共识是，这类训练在学习阶段仍有价值，但价值不在于长期手写每条规则，而在于亲自完成一两次从 specification 到 contract、state machine、ownership、failure semantics 和 executable evidence 的完整转换；这样才能在 AI 生成实现后发现 offset、limit、suffix、lifetime 与错误分类问题，而不是只判断代码能否编译。
 
 以后 parser/protocol 类 daily 采用明确分工：用户负责核心 data model、public contract、状态推进、关键边界和第一版实现；Codex 可以承担 parameterized-test scaffold、批量近似 cases、CMake glue、机械重构与资料核对，但用户必须能解释 oracle 建立了什么状态、失败说明哪条 contract 被破坏。HTTP 与 RESP 各完整经历一次后，不再反复安排同类型的全量“大模拟”；后续优先复用已形成的 parsing discipline，把学习增量转向 integration、ownership、性能、并发和系统 trade-off。不能因“AI 能写”删掉首次核心实现，也不能因“学习扎实”让用户无限手写低价值 boilerplate。
+
+## 2026-09-21：第三份阶段性小结
+
+已新增 `阶段性小结/20260921 小结.md`。时间线按 2026-07-04 正式启动计算，到 2026-09-21 约 79 天；真实进度为系统主线 Week1~Week10 与 Week11 Day1 正式通过、Day2 已生成待做，AI Theory T1~T3 正式通过、下一模块 T4。小结重点不是重复 daily 清单，而是对比 8 月中旬后的能力跃迁：BlockingQueue/ThreadPool/AsyncLogger -> epoll -> Reactor V1 -> incremental HTTP parser，并区分“数周内跑起 Mini Redis V1”与“Week12~16 形成简历项目”的不同距离。
+
+当前总判断：算法与系统基础已经明显领先于项目完成度，接下来不再扩张课程面；优先完成 Week11 HTTP、Week12~16 Mini Redis/TTL/AOF/performance/README，同时稳定推进 T4~T6。2027 年 1 月投递仍以 C++/Linux 后台与系统基础设施为主投、AI 业务基础设施与推理服务后端为冲刺、核心 CUDA/推理引擎为长期目标。阶段小结还记录了用户当前学习方式的成熟变化：主动审查 contract/教程结构、区分核心训练与 dirty work，并需要继续警惕疲劳时把关键 evidence 一并省掉以及 note/source 漂移。
