@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-21）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser 已正式通过，下一步为 Week11 Day2。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
+最新进度快照（2026-09-22）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser 与 Day2 header-section parser 均已正式通过，下一步进入 Day3 Content-Length/body framing。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
 
 ### Week1：已完成
 
@@ -2996,6 +2996,8 @@ Round 3：补 deterministic tests、TSan/stress/benchmark、README 与最终证�
 
 ## 11. 代码、review 和测试规则
 
+- 无论用户当轮是否再次写出“按照 MEMORY”，回答问题、生成/润色教程、检阅代码与笔记、评分和更新规划之前，都必须先按本文件第 1 节的顺序读取并执行相关长期规则；不能把 MEMORY 当成只有被点名时才启用的可选上下文。
+- 学习验收、Round 验收和 Day 最终验收统一使用百分制 `xx/100`。复检沿用同一百分制并根据实际修正调整，不能临时改成十分制或其他量表。
 - C++ 默认：`g++ -std=c++17 -Wall -Wextra -g`。
 - 每个 demo 都要能编译运行；涉及内存错误时按需使用 ASan/UBSan。
 - 发现错误时先解释原因和运行机制，再给修改方法。
@@ -3119,9 +3121,9 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-09-03 当前学习状态：Week9 Day2 整天正式通过，最终 94/100。Week9 Day3 教程已生成，当前进入 epoll_read_server.cpp 的独立 R1；用户尚未提交或通过 Day3。下一次按真实实现检阅，R1 正式通过时再定向润色 Day3 R2/R3。
+2026-09-22 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1 与 Day2 均已正式通过。下一步生成并进入 Day3 Content-Length/body framing，把 request-line 与 header-section 结果组合成完整 request boundary。AI Theory T1~T3 已正式通过，下一模块为 T4。
 
-当前位置：Week5、Week6、Week7、Week8 均已正式完成，系统主线 Week9 Day2 已通过，Day3 non-blocking TCP accept/read loop 教程已生成，进入尚未验收的 R1；随后按 gate 推进 Reactor -> HTTP Server -> Mini Redis。Week8 最终产出按用户真实判断定位为“BlockingQueue + ThreadPool + AsyncLogger 组件实现、测试、benchmark 与 integration harness”，不是有真实业务输入的完整小项目；README/interview 包装被用户主动省略，不作为 Week8 通过阻塞项。Day7 fresh normal CTest 18/18、fresh TSan CTest 18/18 通过，component_demo_smoke 已进入 CMake/CTest/TSan target graph，Day7 最终评分 95。用户选择不机械抄写验收题，并允许把测试体力活委托给 Codex，由代码、daily 主动补充和实测证据替代；某一天的核心若正是测试设计，则不能把所有核心 scenarios 都降级为 dirty work。AI Infra 理论伴随线 T1 已于 2026-09-03 正式通过，最终 90/100，代码、实机观察和综合 shape/value 手推共同覆盖核心；下一步 T2 尚未开始。理论线不能替代或阻塞系统主线。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 首次正式验收通过后，仍须在同一轮依据真实产出定向修改 R2/R3。
+用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
 总规划已在 2026-08-26 完成 Week9 校准：
 
@@ -6569,3 +6571,23 @@ R1 已明确程序用途、四个修改文件、public types、`parse_header_sec
 已新增 `阶段性小结/20260921 小结.md`。时间线按 2026-07-04 正式启动计算，到 2026-09-21 约 79 天；真实进度为系统主线 Week1~Week10 与 Week11 Day1 正式通过、Day2 已生成待做，AI Theory T1~T3 正式通过、下一模块 T4。小结重点不是重复 daily 清单，而是对比 8 月中旬后的能力跃迁：BlockingQueue/ThreadPool/AsyncLogger -> epoll -> Reactor V1 -> incremental HTTP parser，并区分“数周内跑起 Mini Redis V1”与“Week12~16 形成简历项目”的不同距离。
 
 当前总判断：算法与系统基础已经明显领先于项目完成度，接下来不再扩张课程面；优先完成 Week11 HTTP、Week12~16 Mini Redis/TTL/AOF/performance/README，同时稳定推进 T4~T6。2027 年 1 月投递仍以 C++/Linux 后台与系统基础设施为主投、AI 业务基础设施与推理服务后端为冲刺、核心 CUDA/推理引擎为长期目标。阶段小结还记录了用户当前学习方式的成熟变化：主动审查 contract/教程结构、区分核心训练与 dirty work，并需要继续警惕疲劳时把关键 evidence 一并省掉以及 note/source 漂移。
+
+## 2026-09-22：Week11 Day2 Round1 正式通过
+
+用户独立完成 header-section parser R1 的核心状态分类与实现，Codex 负责补充机械性 GoogleTest。真实实现以 `parse_header_section -> check_header_section_complete / check_header_section_needmore` 分流：complete path 找第一组 `\r\n\r\n` 并把 candidate length 缩到 boundary，通过 CR/LF/CRLF 数量、line positions 与 `check_legal_field` 验证 grammar，再由 `parse_field` lowercase name、trim OWS、保留 value 大小写和内部 bytes；Host counting 和全部验证完成后才清空并提交 `output.headers`。ordered vector 保留 non-Host duplicates 与 wire order，suffix 不进入 consumed prefix。
+
+首次复检发现两个 R1 grammar blocker：实现把整行 colon 数量限制为 1，错误拒绝 `Host: example.com:8080` 与普通 value 中的 colon；`check_legal_field_name` 接受 length 0，使 `:value` 被错误接受。用户随后按根因修正 complete 与 prefix 路径，并确认单字符 field name 加 empty value 合法。Codex 新增三个永久 GoogleTest；修正后 fresh Debug build 零 warning，HTTP focused CTest `16/16` PASS，fresh ASan/UBSan focused CTest `16/16` PASS 且无 report。R1 最终评分 `93/100`，正式进入 R2；这不表示整个 Day2 已完成。
+
+`day2_note.md` 的 complete/NeedMore/Error 总体设计、第一组 section boundary、line positions、OWS、最后 commit 与 lowercase name 思路正确，但仍保留两条早期判断：“field line 至少 5 bytes”和“colon 数量必须等于 1”。最终 source 已允许 `X:\r\n` 的空 non-Host value并只把第一个 colon 作为 delimiter；后续 note 只需纠正这两句，不要求重写整篇。
+
+R1 后已从用户当前磁盘版本继续定向重写 Day2 第 23~36 节。下一轮只有两个核心 correctness 工作项：`Host: x\r\n\r` 当前把 terminating empty line 的半个 CR 当成 field 并落到 Error，正确结果应为 NeedMore；`kMaxHeaderSectionBytes` 与 `HeaderSectionTooLong` 当前尚未进入 parse logic，必须按 first section consumed prefix 实现 32768/32769 边界，不能用整个 Buffer length 误伤合法 section 后的大 suffix。随后用 all-byte split loop、limit matrix、fresh Debug 与 ASan/UBSan 完成 Day2 最终验收；不重写已经通过的 16 个 R1 tests。
+
+## 2026-09-22：Week11 Day2 正式通过
+
+用户完成 header-section parser 的 R2/R3 收口，最终评分 `96/100`。终止空行只收到最终 `\r` 时现在返回 NeedMore，追加 `\n` 后对累计 range 返回 Complete；all-byte split loop 覆盖固定合法 section 的每一个 split point，并验证 prefix 不消费、不修改 output，累计完整 range 的 fields 与 `consumed_bytes` 精确。
+
+section limit 已按 first candidate section boundary 落实：完整 section 恰好 `32768` bytes 可完成，`32769` bytes 返回 `HeaderSectionTooLong`，未完成且已达 `32768` bytes 立即返回 TooLong；短合法 section 后跟巨大 suffix 仍按短 section 完成并保留 suffix。找到完整 boundary 后，malformed grammar 直接返回 `MalformedHeaderLine`，不再以 `nullopt` 回退到对整个 Buffer 的 length 判断，因此短 malformed section 加巨大 suffix 不会误报 TooLong。
+
+Codex 将临时 probe 固化为三组永久 GoogleTest：exact limit boundaries、first boundary with large suffix、malformed first section with large suffix。fresh Debug build 零 warning，request-line + header-section focused CTest `21/21` PASS；fresh ASan/UBSan focused CTest `21/21` PASS 且无 report。Day2 的四个收口问题中，first-colon delimiter、terminating-CR NeedMore、first-boundary limit 和 validate-before-commit 均已有 source/tests 等价证据，不要求机械补写长答案。
+
+非阻塞整理项：`day2_note.md` 主要记录 R1 设计，没有补写最终 limit decision；`find_desired_str_position(...)` 的 prvalue 不需要用 `std::move` 接收；source-local result macros、未使用 include、残留 debug comments 和部分 `int` index 可在以后触碰 parser 时顺手整理。它们不影响本日 correctness。下一步进入 Week11 Day3 Content-Length、binary body、coalesced requests 与 complete request framing；Day3 尚未提前生成，不存在需要即时定向润色的下一份 daily。

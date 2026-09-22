@@ -273,7 +273,7 @@ CRLF
 零个 fields：\r\n
 ```
 
-不要机械规定“函数输入里一定要找到四个 bytes `\r\n\r\n`”；零个 fields 时，header section 的输入只有最终 empty line。
+**不要机械规定“函数输入里一定要找到四个 bytes `\r\n\r\n`”**；零个 fields 时，header section 的输入只有最终 empty line。
 
 参考：[RFC 9112 Section 2.1 Message Format](https://www.rfc-editor.org/rfc/rfc9112.html#section-2.1)。
 
@@ -736,8 +736,14 @@ length > 0 且 data == nullptr：抛 std::invalid_argument
 Week11 V1 只接受：
 
 ```text
-HTAB
-SP 到 '~'，即 ASCII 0x20 到 0x7E
+HTAB 是 Horizontal Tab，水平制表符，也就是 C/C++ 里的：
+'\t'
+它的 ASCII 值是 0x09。文本里通常显示为“跳到下一个制表位”的空白。
+
+HTAB：\t，0x09
+SP：普通空格，0x20
+~：可打印 ASCII 的最后一个字符，0x7E
+即 ASCII 0x09, 0x20 到 0x7E
 ```
 
 拒绝：
@@ -951,6 +957,40 @@ R1 提交检阅时给出：
 
 ---
 
+### 20.1 -R 啥意思
+
+`-R` 是 CTest 的 `--tests-regex`，即“只运行测试名匹配这个正则表达式的测试”。
+
+```bash
+cmake -E chdir build ctest -R HttpRequestParser --output-on-failure
+```
+
+意思是：进入 `build` 后，只跑名称中含 `HttpRequestParser` 的测试；`--output-on-failure` 则是只有失败时才打印该测试的输出。
+
+但你现在新增的 suite 名是 `HttpHeaderSectionR1Test`，它不含 `HttpRequestParser`，所以这个命令可能不会跑到你新加的 header tests。
+
+Day2 目前更合适写成：
+
+```bash
+cmake -E chdir build ctest -R "Http(RequestParser|HeaderSectionR1)Test" --output-on-failure
+```
+
+或者想把所有 HTTP 相关测试都跑掉：
+
+```bash
+cmake -E chdir build ctest -R "Http.*Test" --output-on-failure
+```
+
+另外第一条命令正常输入应是：
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+```
+
+你消息里的 `\_` 是 Markdown 转义效果，终端里不要输入反斜杠。
+
+---
+
 ## 21. Round1 成功标准
 
 ```text
@@ -995,326 +1035,240 @@ R1 正式通过后，我会先读取你当时真实 source、tests、note、day2
 
 ---
 
-# Round 2：完成 R1 后再读的机制复盘
+# Round 2：按你的 R1 实现复盘
 
-## 23. 为什么不能只调用一次 `find("\r\n\r\n")`
+## 23. 你的实际调用链
 
-对至少一条 field 的常见输入：
+R1 当前不是先把 input split 成一组 `std::string`，而是始终在 caller 提供的 byte range 上工作：
 
-```text
-Host: x\r\n\r\n
+```mermaid
+flowchart TD
+    A["parse_header_section"] --> B["check_header_section_complete"]
+    B --> C["Complete / Host policy error"]
+    B --> D["no complete boundary"]
+    D --> E["check_header_section_needmore"]
+    E --> F["NeedMore"]
+    E --> G["MalformedHeaderLine"]
 ```
 
-搜索四 bytes 可以找到结束位置。
+`check_header_section_complete()` 找第一组 `\r\n\r\n`，把 local `length` 缩到该 boundary 后再验证 lines；所以合法 section 后的 body/suffix 不进入 fields，也不计入 `consumed_bytes`。R1 的 suffix test 已经证明这条路径。
 
-但 `parse_header_section()` 的输入起点允许零个 fields：
-
-```text
-\r\n
-```
-
-它已经是完整 header section，只是随后会因缺失 Host 触发 policy error。
-
-更重要的是，找到最后边界不代表中间每一行都合法：
-
-```text
-Host : x\r\n\r\n
-```
-
-也含 `\r\n\r\n`，但 field-name 与 colon 之间出现了 SP。
-
-因此 parser 需要分别回答：
-
-```text
-boundary 是否完整？
-boundary 前的每一条 line 是否符合 grammar？
-完整 fields 是否满足 Host policy？
-```
-
-R1 通过后，本节会改成你的实际 boundary strategy。
+输入以单独 `\r\n` 开始时，你单独返回 `MissingHost`。这正好覆盖零个 fields 的 section，不会错误地要求输入中一定存在四个 bytes 的 `\r\n\r\n`。
 
 ---
 
-## 24. NeedMore 不是“还没找到四字节字符串”
+## 24. 你的 complete path 怎样证明一个 section
 
-NeedMore 的完整含义是：
-
-```text
-当前 bytes 尚未形成完整 header section
-并且当前 prefix 仍可能补成合法 section
-并且仍在 size limit 内
-```
-
-下面并不都是 NeedMore：
+当前实现依次做四层证明：
 
 ```text
-"Host: examp"  -> NeedMore
-"Host : x\r"   -> 已能证明 malformed，不应继续等
-32768 bytes 且仍无法在 limit 内结束 -> HeaderSectionTooLong
+找到第一组 section boundary
+-> 统计 CR / LF / CRLF，拒绝 bare CR/LF
+-> find_desired_str_position 得到每条 line 的边界
+-> check_legal_field 验证每条非空 line
+-> parse_field 规范化 fields，并执行 Host policy
+-> 所有检查通过后才 commit output.headers
 ```
 
-这与 Day1 的三态模型完全一致，但判定对象从三个 request-line tokens 变成了多条 field lines。
+这是 R1 做得好的地方：boundary、generic grammar、Host policy 与 output commit 没混成一个大循环。代价是 fields 目前会被 `parse_field()` 扫两次，一次统计 Host、一次写入 output；对 32 KiB 上限下的教学 V1 可以接受，不需要为了少一次扫描重写。
 
 ---
 
-## 25. field-name normalization 为什么只做 ASCII
+## 25. R1 真实暴露并修正的 grammar 错误
 
-HTTP field-name grammar 是 ASCII token bytes。这里不需要 locale-aware Unicode lowercase。
-
-概念上的规则是：
+你的第一版把“整行冒号数必须等于 1”当作合法条件，因此会拒绝：
 
 ```text
-'A' 到 'Z' -> 加上 ASCII 大小写差值
-其他合法 token byte -> 原样保留
+Host: example.com:8080
+X-Trace: left:right
 ```
 
-不要对可能为负数的 plain `char` 直接调用字符分类函数；若使用 `<cctype>`，先转换为 `unsigned char`。Day1 已经在 target validation 中建立了同一条 byte-level 纪律。
+这不是特殊 Host 规则，而是 delimiter 与 value 的边界：只有第一个 `:` 分隔 name/value，后续 `:` 属于合法 field value。当前 `check_legal_field()` 已改为只要求至少存在一个 colon，`parse_field()` 仍取第一个 colon；`check_legal_field_prefix()` 也同步修正。
 
-R1 通过后，本节会对应你的 normalization helper 或 comparator 选择。
+另一个第一版问题是 `check_legal_field_name()` 对 length 0 返回 true，使 `:value` 被接受。当前 helper 已显式拒绝 empty name。新增的三个 GoogleTest 已证明：
+
+```text
+value 中含 colon             -> Complete
+单字符 name + empty value    -> Complete
+empty field name             -> MalformedHeaderLine
+```
+
+你的 note 仍保留“冒号数量必须等于 1”和“至少 5 bytes”的早期判断。它们与最终 source 不一致：`X:\r\n` 只有 4 bytes，且 value 可以为空；note 只需改这两句，不需要重写整份设计过程。
 
 ---
 
-## 26. OWS trim 的边界
+## 26. 你的 NeedMore path 与下一处真实边界
 
-只 trim field value 两端：
-
-```text
-colon 后：跳过 leading SP / HTAB
-line ending 前：去掉 trailing SP / HTAB
-中间 bytes：原样保留
-```
-
-例如：
+`check_header_section_needmore()` 当前用三组数量描述 prefix：
 
 ```text
-X-Text:\t hello   world \t\r\n
+crlf_count == lf_count
+cr_count == crlf_count
+    -> 已完成 lines + 当前 field prefix
+
+cr_count == crlf_count + 1
+    -> input 最后可能多出一个尚未配对的 CR
 ```
 
-结果是：
+这能正确处理 R1 已测的 `Host: examp`，也能处理普通 field line 末尾只到 `\r` 的情况。
+
+但下一轮需要专门检查：
 
 ```text
-"hello   world"
+Host: x\r\n\r
 ```
 
-中间三个 spaces 没有被压缩。
+这里最后一个 `\r` 不是另一条 field，而是 terminating empty line 的一半。当前第二个分支会把它交给 `check_legal_field()`；helper 去掉 `\r` 后得到 empty range，于是整次解析落到 Error。它实际上仍可追加 `\n` 形成合法 section，因此应为 NeedMore。
 
-OWS trim 与 field-value validation 是两件事：先确定 value byte range，再验证其中是否包含本日禁止 bytes；具体顺序等 R1 后按你的实现讨论。
+Round2 的第一个明确修改就是让这条 prefix 返回 NeedMore，同时不能把任意位置的 bare CR 放宽成合法输入。
 
 ---
 
-## 27. 为什么保留 non-Host duplicates
+## 27. normalization 与 OWS 对应你的 helpers
 
-今天不知道每一个 field 的语义，因此 generic parser 不应该假设所有重复 fields 都能安全合并。
+你的实现分工已经清楚：
 
-保留：
+```text
+check_field_name_byte_helper
+-> 复用 token byte 集合
+
+check_ws_helper
+-> 只认 SP / HTAB
+
+check_filed_value_byte_helper
+-> 只认 HTAB 与 0x20..0x7E
+
+parse_field
+-> ASCII uppercase name 转 lowercase
+-> 跳过 value leading OWS
+-> 从末端回退 trailing OWS
+-> 保留内部 spaces、大小写和 colon
+```
+
+这里不需要 Unicode lowercase，也不能把整个 value 转小写。`check_filed_value_byte_helper` 中 `filed` 是拼写问题，后续触碰 header 时可顺手改成 `field`，不作为机制阻塞项。
+
+---
+
+## 28. 你的 output commit 边界
+
+当前 complete path 先完成全部 line validation 和 Host counting，最后才：
+
+```cpp
+output.headers.clear();
+// parse and push all validated fields
+```
+
+因此协议层的 NeedMore/Error 不会留下 half-committed headers，已有 sentinel tests 已证明这一点。已有的 `method/target/version` 也不会被 Day2 覆盖。
+
+这里不要求把整个 `HttpRequest` 重新复制一份；你现在的“两遍扫描，最后 commit headers”已经满足本日 observable contract。
+
+---
+
+## 29. Host 与 duplicates 对应当前 representation
+
+`HttpRequest::headers` 使用 ordered `std::vector<HttpHeaderField>`，所以重复 non-Host fields 不会被 map 覆盖。你先将 name lowercase，再用 `field.name == "host"` 统计 Host，能够识别 `Host/host/hOsT` 为同一字段。
+
+这为 Day3 保留了：
 
 ```text
 Content-Length: 5
 Content-Length: 6
 ```
 
-Day3 才能明确看到冲突并拒绝。
+两条独立 evidence。Day2 不合并它们，也不提前判断 body framing。
 
-若 Day2 直接放进：
+---
+
+## 30. `kMaxHeaderSectionBytes` 目前只是常量
+
+当前 header 声明了：
 
 ```cpp
-std::map<std::string, std::string>
+static constexpr std::size_t kMaxHeaderSectionBytes = 32768;
 ```
 
-并用后值覆盖前值，就会丢失 framing evidence。
+但 `src/http_request_parser.cpp` 尚未读取这个常量，也没有返回 `HeaderSectionTooLong`。因此现在不能说 size limit 已实现。
 
-这不代表 `vector` 永远是最终最优 representation；它只是保证 Day2 不在尚未理解字段语义时丢信息。
+Round3 要按当前 boundary strategy 增加两条判断：
+
+```text
+已经找到 boundary：比较 candidate consumed prefix，而不是整个 Buffer length
+尚未找到 boundary：length >= 32768 时，已经不可能在上限内再补出 terminator
+```
+
+精确边界：
+
+```text
+complete consumed == 32768 -> 允许
+complete consumed == 32769 -> HeaderSectionTooLong
+未 complete 且 length == 32768 -> HeaderSectionTooLong
+合法短 section + 巨大 suffix -> 仍然 Complete
+```
 
 ---
 
-## 28. output commit 与整条 request 的事务边界
+## 31. R1 证据与非阻塞整理项
 
-Day1 完成后，`output.method/target/version` 已经存在。
-
-Day2 的 strong observable behavior 是：
+Codex 针对你修正后的当前 source 做了 fresh 验证：
 
 ```text
-NeedMore / Error
--> 不改变 output.headers
--> 也不改变已有 request-line fields
-
-Complete
--> 一次性提交完整 headers
+Debug fresh build：零 warning
+HTTP focused CTest：16/16 PASS
+ASan/UBSan fresh build：16/16 PASS，无 sanitizer report
 ```
 
-这不是说“整个 HTTP request 已经原子完成”。若 headers 最终 Error，caller 会丢弃当前 request；Day1 已经写入的 request-line fields 不需要回滚到更早 request。
+R1 已证明 complete、partial、suffix、normalization、OWS、duplicates、Host policy、malformed、pointer contract 与 diagnostics。Round3 不重写这 16 个 tests。
 
-真正需要避免的是 half-committed headers：
+非阻塞整理项：
 
 ```text
-前两行已经 push
-第三行 malformed
-output 却残留前两行
+删除未使用的 <iostream> 与残留 debug comments
+prvalue vector 不需要 std::move 接收
+field_value_end 后续可统一使用 size_t 边界表达
+修正 check_filed_value_byte_helper 拼写
 ```
 
-R1 后会根据你的 temporary representation 把这条链写具体。
-
----
-
-## 29. section limit 必须优先针对当前 message prefix
-
-当前 Buffer 可能是：
-
-```text
-[complete header section][body or next request]
-```
-
-哪怕整个 Buffer 已经超过 32768 bytes，只要第一个 header section 在 limit 内结束，就不应因为 suffix 大而误报 HeaderSectionTooLong。
-
-正确计量对象是：
-
-```text
-当前 header section 的 candidate consumed prefix
-```
-
-不是：
-
-```text
-整个 Buffer 当前 readable_bytes
-```
-
-反过来，如果一直没有合法终止边界，parser 必须在仍可控的上限处停止等待。
-
----
-
-## 30. parser 与 policy 的边界
-
-generic field parser 负责：
-
-```text
-field line syntax
-name normalization
-value trimming
-保留 fields
-section boundary / limit
-```
-
-Day2 额外加入一条 HTTP/1.1 request policy：
-
-```text
-Host 恰好一条且非空
-```
-
-Day3 再加入 framing policy：
-
-```text
-Content-Length
-Transfer-Encoding
-body length
-```
-
-不要在 Day2 提前根据 `Content-Length` 去等待 body；否则 header parser 与 body framing 会黏成一个难以验证的分支团。
-
----
-
-## 31. 与 RFC 的关系
-
-本日不是实现完整 RFC parser。Week11 V1 明确收窄：
-
-```text
-严格 CRLF
-拒绝 obs-fold
-field value 只接受 HTAB 与可见 ASCII/SP
-Host value 只做非空检查，不做完整 URI authority validation
-不合并重复 fields
-```
-
-但这些关键点与 RFC 对齐：
-
-```text
-field name 大小写不敏感
-field-name 与 colon 之间不得有 whitespace
-提取 value 时排除两端 OWS
-CR/LF/NUL 等危险 value bytes 必须拒绝或替换；V1 选择拒绝
-HTTP/1.1 request 缺失或重复 Host 必须拒绝
-```
-
-正文已经给出本日所需规则；RFC 链接用于查证，不要求从头通读。
+这些不影响 R1 通过，也不应抢占两个真实 correctness 工作项。
 
 ---
 
 # Part 3：Round3、验收与收尾
 
-## 32. Round3：只补高价值 executable evidence
+## 32. Round3：只完成两个实现升级和对应证据
 
-R1 通过后，根据真实实现从下面选择能击中分支的 tests，不要求你手写重复 fixture。
+### 32.1 修复 terminating empty line 的 split
 
-### 32.1 每个 byte split point
-
-固定合法 section：
+先增加最小 test：
 
 ```text
-Host: example.com\r\n
-X-Trace: AbC123\r\n
-\r\n
+Host: x\r\n\r
 ```
 
-对每个 split：
+要求：
 
 ```text
-只给 prefix -> NeedMore，output 不变
-累计 suffix 后给完整 readable range -> Complete
-fields / consumed exact
+NeedMore
+consumed_bytes = 0
+output 不变
 ```
 
-这里必须是累计完整 range，不是第二次只把 suffix 交给 stateless parser。
+随后追加 `\n`，把累计完整 range 再交给 parser，要求 Complete。不要把任意 bare CR 都改成 NeedMore；修改必须只对应“已完成合法 fields 后，terminating empty line 尚缺 LF”的状态。
 
-### 32.2 suffix preservation
+### 32.2 实现真实 section limit
+
+把第 30 节四个边界变成 executable tests。大字符串构造和重复 fixture 可以由 Codex 补，你负责把 limit 放到正确的 boundary decision 上，并能解释为什么不能直接比较整个 Buffer length。
+
+### 32.3 最后运行 all-split test
+
+在前两项修好后，对固定合法 section 的每个 byte split point 验证：
 
 ```text
-Host: example.com\r\n\r\nBODY
+prefix -> NeedMore 且 output 不变
+累计完整 range -> Complete
+fields 与 consumed_bytes exact
 ```
 
-Complete 后 retrieve `consumed_bytes`，Buffer 剩余内容必须 exact 等于 `BODY`。
-
-### 32.3 normalization matrix
-
-```text
-Host / host / hOsT
-colon 后零个、一个、多个 SP/HTAB
-trailing OWS
-value 内部多个 spaces
-重复 non-Host fields
-```
-
-### 32.4 malformed matrix
-
-```text
-empty field name
-field name 含非法 byte
-field name 与 colon 之间有 SP / HTAB
-缺少 colon
-bare LF / bare CR
-value 含 NUL / control byte
-obs-fold
-```
-
-### 32.5 Host matrix
-
-```text
-missing
-duplicate with different case
-empty after OWS trim
-valid host:port text
-```
-
-### 32.6 limit matrix
-
-至少证明：
-
-```text
-complete section consumed_bytes == 32768 -> 可按 grammar 完成
-complete section consumed_bytes == 32769 -> HeaderSectionTooLong
-没有 terminator 且已不可能在 limit 内结束 -> HeaderSectionTooLong
-合法 section 在 limit 内，后面 suffix 很大 -> 仍 Complete
-```
-
-机械构造大字符串和 parameterized scaffold 可以由 Codex 补；你需要能解释计数对象和 expected boundary。
+这不是让你再手写几十个 cases；一个 loop 即可。它主要证明 `\r`、`\r\n` 与最终 empty-line split 没有遗漏。
 
 ---
 
@@ -1329,7 +1283,7 @@ cmake -S . -B build-day2-sanitize \
 
 cmake --build build-day2-sanitize -j2 --target http_request_parser_test
 cmake -E chdir build-day2-sanitize ctest \
-    -R HttpRequestParser --output-on-failure
+    -R "Http(RequestParser|HeaderSectionR1)Test" --output-on-failure
 ```
 
 它能支持：
@@ -1351,23 +1305,22 @@ consumed_bytes 一定停在正确位置
 
 ---
 
-## 34. 今日验收问题
+## 34. 按当前实现收口的问题
 
 代码和 tests 已经给出同等证据时，不要求机械写长答案。
 
-1. 为什么 field name 可以 lowercase，而 field value 不能全部 lowercase？
-2. 为什么 `Host : x` 不能当作带 OWS 的合法 header？
-3. `Host: x\r\n\r\nBODY` 的 consumed bytes 应停在哪里？
-4. 为什么 generic parser 不应把所有重复 fields 放进单值 map 并覆盖？
-5. 为什么没找到结束边界时不能永远返回 NeedMore？
-6. NeedMore/Error 后为什么不能留下已经 push 的部分 headers？
-7. 为什么 Day2 不应该开始解释 `Content-Length` 对 body 的作用？
+1. 为什么 `check_legal_field()` 只能把第一个 colon 当 delimiter？
+2. 为什么 `Host: x\r\n\r` 应是 NeedMore，而任意位置的 bare CR 仍应 Error？
+3. 为什么 size limit 比较的是 first section boundary，而不是整个 readable Buffer？
+4. 你当前为什么先完成 validation/Host counting，最后才清空并提交 `output.headers`？
+
+不要求另写长答案；最终 code、tests 和简短 note 能证明即可。
 
 ---
 
 ## 35. 今日完成标准
 
-### Round1 必须完成
+### Round1：已正式通过
 
 ```text
 扩展 HttpRequest headers data model
@@ -1376,16 +1329,18 @@ parse_header_section public API
 五组最小 observable scenarios
 Day1 request-line tests 继续 PASS
 Debug build 零 warning
+HTTP focused CTest 16/16 PASS
+ASan/UBSan focused CTest 16/16 PASS
 ```
 
-### R1 通过后完成
+### Round2/Round3 仍需完成
 
 ```text
-按真实实现定向复盘 R2
-每个 byte split point
-suffix preservation
-normalization / malformed / Host / limit 高价值 matrix
-ASan/UBSan focused tests 无 report
+修复 terminating empty-line 只到 CR 的 prefix
+实现 kMaxHeaderSectionBytes，而不误算 suffix
+all-byte split loop
+32768 / 32769 / large suffix limit matrix
+fresh Debug 与 ASan/UBSan focused tests
 ```
 
 ### 今天明确不做
@@ -1414,11 +1369,13 @@ field line = field-name ":" OWS field-value OWS CRLF。
 field name：case-insensitive，保存为 lowercase；
 field value：保留大小写，只 trim 两端 OWS。
 
-Day2 V1：
+Day2 最终 V1 要做到：
 严格 CRLF，拒绝 obs-fold；
 恰好一条非空 Host；
 其他 duplicate fields 保留，不合并；
 section consumed prefix 最多 32768 bytes。
+
+当前 R1 已完成前五项；terminating CR split 与真实 section limit 留给 R2/R3。
 
 NeedMore 不消费、不修改 output；
 Complete 一次性提交 headers 并报告 exact consumed bytes；
@@ -1427,4 +1384,4 @@ Error 给出明确 enum，output 保持不变。
 Day3 再根据 Content-Length / Transfer-Encoding 决定 body framing。
 ```
 
-下一步：完成 Round1 后先检阅真实实现，再定向润色 Round2/Round3；Day2 正式通过后进入 Week11 Day3 body framing。
+下一步：按第 32 节修复 terminating CR split 和 section limit，再完成 Day2 正式验收；随后进入 Week11 Day3 body framing。

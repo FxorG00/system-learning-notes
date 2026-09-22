@@ -1,6 +1,6 @@
 # Daily 教程总目录
 
-> 更新日期：2026-09-21
+> 更新日期：2026-09-22
 >
 > 收录范围：主线 Week1 Day1 至 Week11 Day2，共 72 份正式 daily 教程。
 >
@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week10 已通过
-Week11 Day1 已正式通过；Week11 Day2 教程已生成，等待 Round1 实作与检阅
+Week11 Day1 已正式通过；Week11 Day2 Round1 已通过，当前进入 terminating-CR split 与 section-limit 收口
 ```
 
 ---
@@ -261,6 +261,7 @@ callback lifetime / deferred cleanup      -> Week10 Day6
 stale event / fd reuse / generation       -> Week9 Day6, Week10 Day6
 Reactor architecture / composition root   -> Week10 Day7
 HTTP request line / incremental parser    -> Week11 Day1
+HTTP headers / Host / OWS / section limit -> Week11 Day2
 ```
 
 ## 并发与工程工具
