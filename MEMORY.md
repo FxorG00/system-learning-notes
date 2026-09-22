@@ -6599,3 +6599,45 @@ Codex 将临时 probe 固化为三组永久 GoogleTest：exact limit boundaries�
 本日根据用户“连续大模拟很累”的反馈主动缩减手工工作。R1 只要求无 CL/TE 的 zero-body request、恰好一条合法 Content-Length、fragmented body NeedMore、body 到齐 Complete 和 suffix preservation；用户只写两个核心 tests。invalid/overflow Content-Length、duplicate CL、TE+CL、TE-only、binary NUL、body split loop、coalesced requests 和 1 MiB boundary 的 table-driven GoogleTest scaffold 可在 R1 通过后由 Codex 补，用户负责理解 state/oracle，不手抄重复 fixture。request-line/header split 已在 Day1/Day2 证明，不做三层 split 笛卡尔积。
 
 教程保留单一 R1 阅读闸门，闸门前写清组件用途、四个修改文件、public types/API、pointer/length、NeedMore/Complete/Error output contract、最终 framing policy、最小 Buffer 调用样例、两个 R1 scenarios 和固定 CMake/CTest 命令，但不泄露 coordinator control flow。闸门后才讲 `candidate request -> three stages -> final commit`、`L + H + B` boundary、overflow-safe available-body calculation、`from_chars`、binary body、coalesced suffix 和重复扫描的 V1 性能边界。R1 正式检阅后必须读取真实 source/note/tests，再从当前磁盘版本定向润色第 15 节以后，不能用初始通用讲义覆盖用户修改。
+
+## 2026-09-22：腾讯资深后台工程师转向大模型推理的路线参考
+
+用户提供微信公众号文章《腾讯15年资深后台工程师，转战大模型推理的抉择》。微信页面无法由检索工具直接读取，已核对作者于 2026-09-13 发布的同文版本《从后台架构专家到大模型推理“新人”：AI 时代 Infra 工程师的进化之路》：<https://www.cnblogs.com/cswuyg/p/22956008>。文章来自个人经历与判断，不视为腾讯官方培养路线或岗位承诺，但可作为当前规划的重要行业参考。
+
+文章进一步验证当前双线设计，而不是要求改道：
+
+```text
+C++ / Linux / OS / network / concurrency / Reactor / storage
+-> traditional systems foundation
+-> Transformer / inference fundamentals
+-> KV Cache / batching / scheduling
+-> fixed-version nano-vLLM or mini-sglang source study
+-> one measurable serving or scheduling optimization
+```
+
+当前 Reactor、HTTP 与 Mini Redis 不是偏离 AI Infra 的旧技术。推理服务仍依赖网络、并发、存储、RPC、调度、稳定性、可观测性和工程化；PagedAttention 等机制也会迁移操作系统分页、资源映射与生命周期管理思想。近期继续完成 Week11 HTTP 和 Week12~16 Mini Redis，不因文章提到 SGLang、PD 分离或 CUDA 而提前跳线。
+
+AI Theory 伴随线同样必须保留。以后进入推理系统前，应能解释 Transformer 的 Embedding、Attention、FFN、Normalization、Residual、LM Head，以及 Prefill/Decode、KV Cache、Continuous Batch、Prefix Cache 等核心对象和成本来源。进入源码仍遵守 readiness gate：先完成 reference implementation 与量化基础，再读固定 commit 的 nano-vLLM / mini-sglang，最后才对照 production vLLM/SGLang path；不直接从完整框架堆参数或抄部署命令开始。
+
+就业定位据此进一步明确。对 2027 年初实习投递，现实且有区分度的叙事是：
+
+```text
+扎实的 C++ backend / systems ability
++ 可运行、可测试、可测量的高并发服务项目
++ Transformer 与推理核心机制理解
++ 小型 KV Cache / batching / scheduling / serving experiment
+```
+
+第一阶段不把自己包装成 CUDA operator expert 或 production inference-engine expert。主投仍可覆盖 C++ 后台、中间件、存储、网络和系统基础设施，AI serving/backend 作为高匹配冲刺方向。文章提出的行业分层也作为岗位选择提醒：operator 与通用 engine core 的价值高但岗位相对集中；业务侧 inference serving、平台稳定性和 Agent Infra 的差异化需求更广，传统后台能力在这里更容易形成可迁移优势。
+
+文章中的同批次共享前缀优化、Beam Search 工程实现、PD 分离、分布式 KV Cache、推测解码和 Overlap Scheduler 进入后期 topic pool，不插入当前 Week11。后续简历项目阶梯优先保持：
+
+```text
+Reactor HTTP Server
+-> Mini Redis
+-> inference gateway / request scheduler or CPU reference runtime
+-> nano-vLLM / mini-sglang mechanism study
+-> one independently benchmarked KV Cache, batching or scheduling optimization
+```
+
+吸收文章的方法论是“先总后分、用指标定义问题、用可运行 Demo 验证微观机制”，而不是机械复制资深工程师的学习清单。作者拥有十五年后台经验，其起点、团队资源和工作场景与本科生不同；因此只吸收知识结构与迁移逻辑，不照搬学习速度、源码深度或高级练习。
