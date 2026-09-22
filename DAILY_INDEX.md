@@ -191,6 +191,7 @@ Week11 Day1 已正式通过；Week11 Day2 Round1 已通过，当前进入 termin
 |---|---|---|---|
 | [Day1：HTTP request line](week11/day1/day1.md) | 在 TCP arbitrary fragmentation/coalescing 下，从累计 byte range 增量识别 method、origin-form target 与 HTTP/1.1；区分 NeedMore/Complete/Error，并用 consumed bytes 保留 suffix | `HttpRequest` + request-line parser + split-point tests | HTTP, request line, incremental parser, CRLF, NeedMore, consumed bytes, fragmentation |
 | [Day2：HTTP headers](week11/day2/day2.md) | 从 request line 后继续增量识别 header section；处理 field-name 大小写、OWS、Host、duplicates 与 section limit | `parse_header_section` contract + Host/header policy + fragmentation/limit evidence | header field, Host, OWS, case-insensitive, CRLF CRLF, section limit |
+| [Day3：HTTP body framing](week11/day3/day3.md) | 组合 request-line 与 header parser；用 Content-Length 决定 binary body boundary；区分 incomplete body、当前 request 与下一条 request suffix | `parse_request` + binary body/coalesced request/framing error tests | Content-Length, message body, framing, octet, binary body, coalesced request, request smuggling |
 
 ---
 
@@ -262,6 +263,7 @@ stale event / fd reuse / generation       -> Week9 Day6, Week10 Day6
 Reactor architecture / composition root   -> Week10 Day7
 HTTP request line / incremental parser    -> Week11 Day1
 HTTP headers / Host / OWS / section limit -> Week11 Day2
+HTTP body / Content-Length / request boundary -> Week11 Day3
 ```
 
 ## 并发与工程工具

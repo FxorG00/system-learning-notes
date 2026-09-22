@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-22）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser 与 Day2 header-section parser 均已正式通过，下一步进入 Day3 Content-Length/body framing。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
+最新进度快照（2026-09-22）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser 与 Day2 header-section parser 均已正式通过，Day3 Content-Length/body framing 教程已生成并进入 R1。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
 
 ### Week1：已完成
 
@@ -3121,7 +3121,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-09-22 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1 与 Day2 均已正式通过。下一步生成并进入 Day3 Content-Length/body framing，把 request-line 与 header-section 结果组合成完整 request boundary。AI Theory T1~T3 已正式通过，下一模块为 T4。
+2026-09-22 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1 与 Day2 均已正式通过；Day3 教程已生成，当前进入 Content-Length/body framing R1，把 request-line 与 header-section 结果组合成完整 request boundary。AI Theory T1~T3 已正式通过，下一模块为 T4。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -6591,3 +6591,11 @@ section limit 已按 first candidate section boundary 落实：完整 section �
 Codex 将临时 probe 固化为三组永久 GoogleTest：exact limit boundaries、first boundary with large suffix、malformed first section with large suffix。fresh Debug build 零 warning，request-line + header-section focused CTest `21/21` PASS；fresh ASan/UBSan focused CTest `21/21` PASS 且无 report。Day2 的四个收口问题中，first-colon delimiter、terminating-CR NeedMore、first-boundary limit 和 validate-before-commit 均已有 source/tests 等价证据，不要求机械补写长答案。
 
 非阻塞整理项：`day2_note.md` 主要记录 R1 设计，没有补写最终 limit decision；`find_desired_str_position(...)` 的 prvalue 不需要用 `std::move` 接收；source-local result macros、未使用 include、残留 debug comments 和部分 `int` index 可在以后触碰 parser 时顺手整理。它们不影响本日 correctness。下一步进入 Week11 Day3 Content-Length、binary body、coalesced requests 与 complete request framing；Day3 尚未提前生成，不存在需要即时定向润色的下一份 daily。
+
+## 2026-09-22：Week11 Day3 教程生成
+
+已生成 `week11/day3/day3.md`。Day3 严格复用正式通过的 request-line/header-section parser，不创建 parser V3、不接 socket、不修改 Reactor；新增 public path 是完整 `parse_request(pointer,length,output)`，把 existing stages、Content-Length framing、binary-safe body 和 exact whole-request `consumed_bytes` 串成纯内存闭环。`HttpRequest` 增加可包含 NUL 的 `std::string body`；完整 result 使用 `ParseStatus + consumed_bytes + HttpRequestError`，并提前固定 Day4 所需的 400/413/501/505 error categories 与英文 messages。
+
+本日根据用户“连续大模拟很累”的反馈主动缩减手工工作。R1 只要求无 CL/TE 的 zero-body request、恰好一条合法 Content-Length、fragmented body NeedMore、body 到齐 Complete 和 suffix preservation；用户只写两个核心 tests。invalid/overflow Content-Length、duplicate CL、TE+CL、TE-only、binary NUL、body split loop、coalesced requests 和 1 MiB boundary 的 table-driven GoogleTest scaffold 可在 R1 通过后由 Codex 补，用户负责理解 state/oracle，不手抄重复 fixture。request-line/header split 已在 Day1/Day2 证明，不做三层 split 笛卡尔积。
+
+教程保留单一 R1 阅读闸门，闸门前写清组件用途、四个修改文件、public types/API、pointer/length、NeedMore/Complete/Error output contract、最终 framing policy、最小 Buffer 调用样例、两个 R1 scenarios 和固定 CMake/CTest 命令，但不泄露 coordinator control flow。闸门后才讲 `candidate request -> three stages -> final commit`、`L + H + B` boundary、overflow-safe available-body calculation、`from_chars`、binary body、coalesced suffix 和重复扫描的 V1 性能边界。R1 正式检阅后必须读取真实 source/note/tests，再从当前磁盘版本定向润色第 15 节以后，不能用初始通用讲义覆盖用户修改。
