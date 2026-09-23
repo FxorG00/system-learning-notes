@@ -1704,12 +1704,14 @@ CMU 10-414/714 或 ML systems：由 AI 理论 Gate 接管；Theory Gate 前不�
 讲解时优先使用：
 
 ```text
-问题或现象
-→ 对象 / 资源关系图
-→ 状态属于谁
-→ 生命周期和边界
-→ 最小代码验证
-→ 工程意义
+第一句话给今天的目标和最终动作
+-> 一个最小具体例子，让用户先看见输入、输出和正确结果
+-> 3~5 个今日主问题，作为后文逐项核销的学习坐标
+-> 再命名必要术语
+-> 组件的 input / responsibilities / output / caller relationship
+-> 完整因果链、状态、生命周期和边界
+-> 最小 executable evidence
+-> 工程意义和明确停止点
 ```
 
 ---
@@ -1751,7 +1753,7 @@ predicate：读取受保护 shared state 后得到的布尔条件，不是 condi
 - Linux/POSIX 接口优先查 man page。
 - 课程内容优先查课程官网、讲义或指定翻译资料。
 - 如果权威资料没有给缩写展开或词源存在争议，明确说“正式文档未展开”或“历史命名”，不能为了好记而编造。
-- 原词解释放在教程前的术语部分；正文再次出现时用一句话唤起，不让用户来回猜名字。
+- 原词在第一次真正需要它的位置解释。Part 1 应先用目标和具体例子建立直觉，再告诉用户“这个对象/动作叫 xxx”；不强制在用户还不知道问题是什么时先读完整术语表。正文再次出现时用一句话唤起，不让用户来回猜名字。
 
 ---
 
@@ -1769,15 +1771,17 @@ Part 3：收尾、验证与验收
 
 ### Part 1：前情提要与必要术语
 
-- 说明昨天学到哪里、今天为什么接这里。
-- 列出今天真正需要的英文术语、缩写和最小前置知识。
-- 术语与教程主体有明确分界。
-- 不把术语表写成一份脱离主线的小百科。
+- 第一屏直接写清今天只解决什么问题，以及最终要得到什么可观察结果或产出。
+- 用一个最小、具体、带真实数值/bytes/state 的例子建立直觉，不能先铺多层背景。
+- 给出 3~5 个“今日主问题”作为认知锚点；后文的 contract、机制和 tests 应能逐项核销这些问题。
+- 例子之后再命名今天真正需要的英文术语、缩写和最小前置知识；使用加粗的正向定义和处理规则。
+- Part 1 仍与教程主体有明确分界，但不能退化成脱离任务的小百科或速查表。
 
 ### Part 2：教程主体
 
 - 必须明确标出“教程开始”。
-- 从一个具体问题、错误现象或设计需求出发。
+- R1 开头先给完整组件图景：input 是什么、组件内部负责哪些阶段、返回什么、caller 接手什么；不能直接从 types 或 API declarations 开始。
+- Public data model、API、observable contract 与 R1 子集要分层：先说明最终目标，再明确本轮只实现哪条主链路。
 - 先建立机制，再给必要接口和代码。
 - 每个 demo 必须可编译运行。
 - 不直接堆大段高级代码。
@@ -1874,7 +1878,10 @@ daily 的长度由当天新增机制决定，不追求固定行数，也不以�
 推荐：
 
 ```text
-一个核心问题
+第一屏的一句目标
+一个最小具体例子
+3~5 个今日主问题
+一张 input / responsibilities / output 组件图景
 一条主机制链
 一张主要关系图或状态表
 一个最小验证证据
@@ -2793,7 +2800,7 @@ note 要求：
 
 ```text
 Week2 Day2：
-    “前情提要 -> 教程 -> 收尾”的顺序比先抛正文再补术语更自然。
+    三 Part 顺序保持“前情提要 -> 教程 -> 收尾”；Part 1 内部采用“目标 -> 具体例子 -> 今日主问题 -> 必要术语”，而不是先抛抽象正文或先背术语。
 
 Week3 Day6：
     独立练习日前置代码过多会削弱设计训练，需求和验收应先于参考实现。
@@ -5035,7 +5042,7 @@ R1 不包含 save/load、Dropout、`eval()`、loss、`backward()` 或 optimizer�
 ### 资料与编写核对
 
 - 视频对齐：李沐《动手学深度学习》课程 16 中的模型构造、参数管理、自定义层和读写；吴恩达机器学习课程 P45–P49 仅用于复习 inference/forward 概念，不拿它替代 PyTorch API 教学。
-- 术语保持“英文来源/中文含义/当前作用/不是什么”的展开，不退化成只有一张术语表。
+- 术语保持“英文来源/中文含义/当前作用/加粗的正向定义”的展开；只有会影响实现的高概率混淆才补一句边界，不退化成术语速查表，也不堆叠“它不是什么”。
 - T10 生成后做了截断审计：只保留 Part 1 与 R1 时，学生仍能独立开始实现，但看不到 mode matrix 和 checkpoint round-trip 的组合答案。
 - 全文约 35 KB、1,438 行；29 个 Python fenced blocks 均通过 Python syntax compilation。
 - 已检查 Markdown fence、Typora 数学定界符和控制字符：围栏成对、display math 成对、无控制字符。
@@ -6693,3 +6700,32 @@ Reactor HTTP Server
 吸收示例中的教学组织方式，不照搬其中可能失真的技术表达。后续必须主动校准：固定小学习率通常导致收敛缓慢，但不能无条件写成“迭代次数呈几何级增长”；向量化把显式 Python/C++ scalar loop 交给优化后的 vectorized kernels、SIMD、多核或 GPU 并行执行，但不能写成“所有乘法几乎一个时钟周期完成”；“负梯度是最速下降方向”需要限定在当前坐标与 Euclidean metric 下。语言可以直观，技术结论不能为生动让路。
 
 这是一条“新理论首次讲解”的表达规则，不改变系统主线 `daily.md` 的三 Part、R1 progressive disclosure、用户独立设计空间、R1 后定向润色和 executable evidence，也不改变 AI Theory 自己的连续讲义与按需闸门规则。
+
+## 2026-09-23：Week11 Day3 成为后续主线教程的语言与结构标杆
+
+用户审阅润色后的 `week11/day3/day3.md`，确认这份版本适合作为以后教程的标杆。旧稿已原样保存在 `week11/day3/archive/day3_20260922_original.md`，SHA-256 为 `834AF3755A7A63AF0E7D86DF319142C32D69297C1E4F2C0CE8F62B687C989253`；正式 Day3 保留原有技术 contract、R1 阅读闸门、R2/R3 和 evidence，仅重构讲解顺序与信息密度。
+
+这份标杆的核心不是“越短越好”，而是每一层承担明确任务：
+
+```text
+第一屏：一句话说明今天只干什么，以及完成后的三态结果
+Part 1：最小具体例子 -> 今日新增问题 -> 四问清单 -> 术语命名 -> 工作量和停止边界
+Part 2 R1：组件 input -> 四步 responsibilities -> output -> caller/Buffer ownership
+          -> public data model -> observable contract -> 最终 policy -> R1 subset
+          -> 最小调用 -> 两个核心 tests -> build -> reading gate
+Part 2 R2：完整因果链 -> candidate/commit -> boundary arithmetic
+          -> conversion/binary/suffix/performance
+Part 3：高价值 evidence -> tests 的证明边界 -> sanitizer -> exit criteria
+```
+
+“今日四问”属于学习框架，不能为了流畅而删除。它们应覆盖当天最关键的 correctness axes，并能被后文逐项核销。Day3 的四问是：body 不足不污染 output、body 到齐只消费当前 request、NUL 按 explicit length 保存、malformed framing 稳定返回 Error。以后教程的主问题数量按内容调整，通常 3~5 个；不能为了套模板制造无价值问题。
+
+Part 2 不能一上来只给 class members、types 或 API。第一次看到组件时，用户必须先知道：输入 range/state 是什么，组件内部编排哪些已有能力，返回结果代表什么，caller 在成功后接手什么动作，谁拥有底层 bytes/resource。这个组件图景不是实现泄露；它定义 public responsibility。真正需要留给 R1 的是 internal representation、helper organization、control-flow arrangement 和状态存储方式。
+
+压缩教程时使用“保框架、删重复”的准则：
+
+- 保留目标、具体例子、主问题、组件职责、完整因果链、contract、R1 独立空间和 executable evidence。
+- 删除多层背景、空起手式、同义反复、焦虑式 warning、连续“它不是什么”和已由主链表达清楚的重复注解。
+- 文件明显缩短后必须逐项审计主问题和组件图景是否仍在；不能只用关键词存在或 fence 配对证明教学信息没有丢失。
+
+以后生成新的主线 daily 时，应在发布前拿 Week11 Day3 做结构对照，但不能机械复制 HTTP 的四问、标题数量或篇幅。标杆约束的是认知顺序和信息职责，不是固定格式。AI Theory 同样吸收“目标 -> 例子 -> 本质 -> 公式 -> 术语”的首次讲解方法，但继续使用自己的连续讲义与按需闸门规则。
