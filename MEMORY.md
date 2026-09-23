@@ -6776,3 +6776,5 @@ Part 2 不能一上来只给 class members、types 或 API。第一次看到组�
 这两条首先适用于 `ML/ML.md`，也适用于以后含图片或大量新英文词的理论讲义。主线 daily 原有术语首次解释规则不变；新增要求只是把解释位置和图片责任说得更明确。
 
 本次已经把原 `ML.md` 归档为 `ML/archive/ML_20260923_original.md`，重写后的主文件对齐 Andrew Ng 2014 课程 19 个模块，并使用原中文笔记中与当前推导直接相关的本地图片。以后扩写或勘误这份讲义时，必须从当前主文件继续，不从归档旧稿覆盖。
+
+2026-09-23：传统机器学习练习独立维护在 `ML/ML_配套练习.md`。每个知识章节保留一个能够验证核心理解的练习，并标明当前官方 Machine Learning Specialization lab 或经典课 ex1~ex8 的来源映射；原始 Octave 作业只吸收问题与数据，统一使用 Python/NumPy，不复制 solution。练习按“核心 / 官方改编 / 进阶选做”分层，优先复用 T1~T24 已有 evidence，不因补传统 ML 练习而推迟 HTTP Server、Mini Redis 或投递时间线。章节练习应交付一个最小而明确的 oracle；没有独立作业的系统设计、大规模训练和 OCR 章节，使用 threshold、benchmark、ceiling analysis 等主线方法补足，不为了形式制造大型项目。

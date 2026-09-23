@@ -369,7 +369,7 @@ AI Theory Tn.md
 - 吴恩达：[机器学习课程合集 `BV1owrpYKEtP`](https://www.bilibili.com/video/BV1owrpYKEtP)
 - 李沐：[“跟李沐学AI”账号内搜索《动手学深度学习》](https://space.bilibili.com/1567748478/search?keyword=%E5%8A%A8%E6%89%8B)
 
-吴恩达 2014 传统机器学习课程另有一份本地连续自学讲义：[ML/ML.md](ML/ML.md)。它对齐原课 19 个模块，补足直觉、公式、课程配图和 AI Infra 映射，用于建立完整机器学习地图。它不新增一条必须逐周打卡的主线，也不替代 `Tn.md` 的 NumPy/PyTorch code gate；进入 T4~T13 时可按当前概念定向阅读对应章节，不要求暂停系统主线一次通读十周。
+吴恩达 2014 传统机器学习课程另有一份本地连续自学讲义：[ML/ML.md](ML/ML.md)，以及按章组织的 [ML/ML_配套练习.md](ML/ML_配套练习.md)。讲义对齐原课 19 个模块，补足直觉、公式、课程配图和 AI Infra 映射；练习吸收当前官方 specialization labs 与经典课 ex1~ex8 的目标，统一改为 Python/NumPy，并按主线价值区分核心与选做。它们不新增一条必须逐周打卡的主线，也不替代 `Tn.md` 的 NumPy/PyTorch code gate；进入 T4~T13 时可按当前概念定向阅读和练习，不要求暂停系统主线一次通读十周。
 
 映射规则：
 

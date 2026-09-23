@@ -6,6 +6,8 @@
 >
 > 原始笔记与配图：[Coursera-ML-AndrewNg-Notes](https://github.com/fengdu78/Coursera-ML-AndrewNg-Notes)
 >
+> 配套练习：[ML_配套练习.md](ML_配套练习.md)
+>
 > 这份讲义保留原 `ML.md` 的直觉式语言，但补齐课程、公式、图片和 AI Infra 连接。旧稿保存在 [archive/ML_20260923_original.md](archive/ML_20260923_original.md)。
 
 ---
