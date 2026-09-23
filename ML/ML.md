@@ -29,7 +29,7 @@
 -> 根据误差证据决定下一步
 ```
 
-以后进入神经网络、Transformer（以注意力机制为核心的序列模型架构）、训练系统和推理系统，这条主线都不会消失。模型会变复杂，参数会变多，底层计算会从 NumPy 转向 GPU kernel（运行在 GPU 上的一段并行计算程序），但问题仍然是这些问题。
+以后进入神经网络、Transformer（以注意力机制为核心的序列模型架构）、训练系统和推理系统，这条主线都不会消失。模型会变复杂，参数会变多，底层计算会从 NumPy 转向 GPU kernel（运行在 GPU，也就是图形处理器上的一段并行计算程序），但问题仍然是这些问题。
 
 ---
 
@@ -42,14 +42,14 @@
 传统程序通常由人直接写出规则：
 
 ```text
-input + hand-written rules -> output
+输入 + 人工编写的规则 -> 输出
 ```
 
 机器学习换了一种方式。我们给它训练样本（examples）和目标，让算法自己找到一组能够解释数据的参数（parameters）：
 
 ```text
-examples + learning algorithm -> model parameters
-model + new input -> prediction
+训练样本 + 学习算法 -> 模型参数
+模型 + 新输入 -> 预测结果
 ```
 
 所以机器学习中的“学习”，并不是程序突然拥有了意识，而是**通过数据自动确定模型（model）里的参数**。模型就是一套从输入计算输出的规则，参数则控制这套规则的具体形状。
@@ -133,7 +133,7 @@ $$
 别急着背公式，我们把它按物理动作拆开：
 
 1. 模型先对第 $i$ 个样本做出预测 $f_{w,b}(x^{(i)})$。
-2. prediction 减去真实答案 $y^{(i)}$，得到 error。
+2. prediction 减去真实答案 $y^{(i)}$，得到误差（error，也就是预测值与真实值之差）。
 3. 把 error 平方，让正负误差不会互相抵消，同时让大误差受到更重惩罚。
 4. 对所有 $m$ 个样本求和并取平均。
 5. 分母多出的 $2$ 是为了后面求导时和平方产生的 $2$ 抵消。
@@ -250,7 +250,7 @@ $$
 
 ### 2.7 学习率为什么重要
 
-实际 update 的大小并不只有 $\alpha$，而是：
+实际更新（update）的大小并不只有 $\alpha$，而是：
 
 $$
 \text{step}=\alpha\cdot\nabla J
@@ -340,7 +340,7 @@ $$
 (A^T)_{ij}=A_{ji}
 $$
 
-矩阵 inverse 满足：
+矩阵的逆（inverse，和原矩阵相乘得到单位矩阵的矩阵）满足：
 
 $$
 A^{-1}A=I
@@ -431,7 +431,7 @@ $\mu_j$ 是第 $j$ 个特征的均值（mean），$\sigma_j$ 是标准差（stan
 训练时画出 $J$ 随迭代次数（iteration）变化的曲线：
 
 - 持续下降：至少说明当前 learning rate 能工作。
-- 上升或剧烈震荡：learning rate 可能太大，也可能实现存在 bug。
+- 上升或剧烈震荡：learning rate 可能太大，也可能实现存在 bug（程序错误）。
 - 下降非常缓慢：learning rate 可能太小，或 features 的 scale 差异太大。
 
 ![学习率与收敛](assets/week2-learning-rate.jpg)
@@ -548,7 +548,7 @@ learning rate 有没有导致震荡？
 批量矩阵乘法 -> GEMM（通用矩阵乘法）与 GPU 计算内核
 特征 / 激活值尺度 -> 数值稳定性与 dtype（数据类型，例如 float32）
 损失曲线 -> 训练过程的可观测性
-normal equation 在大规模下不可行 -> algorithm 必须尊重 complexity
+正规方程（normal equation）在大规模下不可行 -> 算法必须尊重计算复杂度（complexity）
 ```
 
 以后你面对 Transformer 的投影层（projection，把表示映射到另一组特征）、注意力（attention，根据相关性混合上下文信息）和 MLP（Multi-Layer Perceptron，多层感知机），看到的仍然是更大规模的矩阵乘法、归一化、归约和参数更新。
@@ -569,7 +569,7 @@ $$
 y\in\{0,1\}
 $$
 
-如果直接使用 $f(x)=\mathbf w^T\mathbf x+b$，输出可能是 $-3.7$ 或 $8.2$。这些数可以作为 score，却不能直接解释为 probability。
+如果直接使用 $f(x)=\mathbf w^T\mathbf x+b$，输出可能是 $-3.7$ 或 $8.2$。这些数可以作为原始分数（score，分类器在转成概率前给出的数值），却不能直接解释为概率（probability，类别成立的可能性）。
 
 我们需要一个函数，把任意实数压到 $(0,1)$ 之间。这就是 sigmoid（S 形压缩函数）：
 
@@ -591,7 +591,7 @@ $$
 f_{\mathbf w,b}(\mathbf x)=g(z)
 $$
 
-输出可以理解为条件概率（probability，给定当前输入时类别成立的可能性）：
+输出可以理解为条件概率：
 
 $$
 f_{\mathbf w,b}(\mathbf x)=P(y=1\mid\mathbf x)
@@ -619,11 +619,11 @@ $$
 
 如果输入特征只是 $x_1,x_2$，边界是直线。如果加入 $x_1^2$、$x_1x_2$ 等多项式特征，边界就可以变成圆或更复杂的曲线。
 
-sigmoid 负责把 score 映射成 probability；boundary 的形状仍由 score function 使用了哪些 features 决定。
+sigmoid 负责把 score 映射成 probability；判定边界的形状仍由评分函数使用了哪些特征决定。
 
 ### 6.3 为什么不能继续使用平方误差
 
-把 sigmoid 与 squared error 组合后，cost surface 可能不再保持简单 convex shape，optimization 会更困难。
+把 sigmoid 与平方误差组合后，成本曲面可能不再保持简单的凸形状，优化会更困难。
 
 逻辑回归使用二元交叉熵（binary cross-entropy，专门衡量二分类概率预测的损失）：
 
@@ -685,7 +685,7 @@ $$
 给定同一组 parameters -> 返回 gradient
 ```
 
-如果 cost 与 gradient 对不上，再高级的 optimizer 也只会更快地走向错误结果。这正是 gradient checking 之后还会出现的原因。
+如果 cost 与 gradient 对不上，再高级的 optimizer 也只会更快地走向错误结果。这正是后面还要引入梯度检查（gradient checking，用数值近似独立验证解析梯度）的原因。
 
 ### 6.6 多类别分类
 
@@ -733,7 +733,7 @@ $\lambda$ 控制惩罚强度。
 
 ### 7.4 与现代深度学习的连接
 
-后面会见到权重衰减（weight decay，持续压小权重）、dropout（训练时随机屏蔽部分神经元）、数据增强（data augmentation，对已有样本做保持语义的变换）和提前停止（early stopping，在验证表现恶化前结束训练）。它们形式不同，但都在处理同一个问题：训练集上的拟合能力很强，不代表模型对未见数据也能泛化。
+后面会见到权重衰减（weight decay，持续压小权重）、随机失活（dropout，训练时随机屏蔽部分神经元）、数据增强（data augmentation，对已有样本做保持语义的变换）和提前停止（early stopping，在验证表现恶化前结束训练）。它们形式不同，但都在处理同一个问题：训练集上的拟合能力很强，不代表模型对未见数据也能泛化。
 
 ---
 
@@ -769,7 +769,7 @@ $$
 
 这里的 $a$ 叫激活值（activation）。它既是当前神经元的输出，也是下一层的输入。
 
-如果没有 activation，连续叠加多个 linear layers 仍然等价于一个 linear transformation：
+如果没有 activation，连续叠加多个线性层（linear layers）仍然等价于一个线性变换（linear transformation，保持加法与数乘关系的映射）：
 
 $$
 W_2(W_1x+b_1)+b_2=W'x+b'
@@ -808,13 +808,13 @@ bias 通过 broadcasting 加到 batch 中每条 example。
 
 ### 8.4 隐藏层（hidden layer）学到了什么
 
-hidden unit 不需要被人工命名成“边缘检测器”或“某种房屋组合特征”。训练只要求最终 loss 下降，网络会自动找到对任务有帮助的 intermediate representation。
+hidden unit 不需要被人工命名成“边缘检测器”或“某种房屋组合特征”。训练只要求最终 loss 下降，网络会自动找到对任务有帮助的中间表示（intermediate representation，模型内部逐层提取出的特征表示）。
 
 这就是表示学习（representation learning，让模型自己学习中间特征）。
 
-在图像中，早期 layers 可能对边缘和纹理敏感；在语言模型中，token representations 会逐层混合上下文信息。它们都不是手工写出的 feature formula。
+在图像中，早期网络层（layers）可能对边缘和纹理敏感；在语言模型中，词元表示（token representations，把文本基本单位编码成向量）会逐层混合上下文信息。它们都不是手工写出的特征公式。
 
-原课程还用 AND、OR、NOT 和 XNOR 展示 network 怎样组合简单 decision boundaries。重点不是让神经网络去替代数字电路，而是看见：
+原课程还用 AND、OR、NOT 和 XNOR 逻辑运算展示网络怎样组合简单判定边界。重点不是让神经网络去替代数字电路，而是看见：
 
 ```text
 一个 hidden unit 可以表示一个简单条件
@@ -822,7 +822,7 @@ hidden unit 不需要被人工命名成“边缘检测器”或“某种房屋�
 下一层可以把这些条件重新组合成更复杂的 boundary
 ```
 
-这就是 depth 的第一层直觉。每一层都在前一层表示的基础上继续组合，而不是让 output layer 一次完成所有 feature engineering。
+这就是深度（depth，也就是网络连续堆叠的层数）的第一层直觉。每一层都在前一层表示的基础上继续组合，而不是让输出层一次完成所有特征工程。
 
 ### 8.5 多类别输出
 
@@ -850,7 +850,7 @@ $$
 p_k=\frac{e^{z_k-z_{max}}}{\sum_j e^{z_j-z_{max}}}
 $$
 
-这个变换不改变结果，却能减少 exponential overflow。这里开始，数值稳定性正式进入模型实现。
+这个变换不改变结果，却能减少指数上溢（exponential overflow，指数结果超过浮点数可表示范围）。这里开始，数值稳定性正式进入模型实现。
 
 ### 8.6 前向传播的完整数据流
 
@@ -867,10 +867,10 @@ Forward 的职责是根据当前 parameters 产生 prediction 和 loss。它还�
 
 ### 8.7 与 AI Infra 的连接
 
-从系统角度看，一个 neural network forward 是一张 operator graph：
+从系统角度看，一次神经网络前向传播是一张算子图（operator graph，用节点表示算子、用边表示数据依赖）：
 
 ```text
-tensor allocation
+张量内存分配（tensor allocation）
 -> GEMM
 -> bias broadcast
 -> activation kernel
@@ -989,7 +989,7 @@ Forward 从 input 向 loss 流动；backward 从 loss 沿相反方向传播 grad
 
 现代框架会替你维护参数张量（parameter tensors），但本质相同：优化器需要遍历一组参数，并用形状相同的梯度更新它们。
 
-无论是否 flatten，都必须保存 shape、offset、dtype 与 parameter identity，否则 gradient 无法准确写回原对象。
+无论是否展平（flatten，把多维参数排成一维序列），都必须保存 shape、偏移位置（offset）、dtype 与参数身份（parameter identity，用来确认梯度属于哪个原参数），否则 gradient 无法准确写回原对象。
 
 ### 9.6 梯度检查（Gradient checking）：给反向传播找一个独立法官
 
@@ -1012,7 +1012,7 @@ $$
 - 太大：Taylor approximation（泰勒近似）的截断误差（truncation error，忽略高阶项产生的误差）增大。
 - 太小：浮点消减误差（cancellation，两个接近的数相减会损失有效数字）与舍入误差增大。
 
-Gradient check 很慢，因为每个 coordinate 至少需要额外两次 forward。它适合小模型、抽样 parameter 或 reference implementation，不适合每一步大规模训练。
+Gradient check 很慢，因为每个坐标（coordinate，也就是被单独扰动的某一个参数位置）至少需要额外两次 forward。它适合小模型、抽样 parameter 或参考实现（reference implementation，以清楚和正确为首要目标的对照版本），不适合每一步大规模训练。
 
 ### 9.7 为什么不能把所有权重初始化成相同值
 
@@ -1043,7 +1043,7 @@ training：forward + backward + optimizer，还要保存 activations、gradients
 -> 在新道路图像上执行 forward
 ```
 
-真正的自动驾驶系统当然还需要感知、预测、规划、控制、冗余与安全验证。一个 supervised network 只是 pipeline 中的一部分，不能把 demo accuracy 等同于系统安全。
+真正的自动驾驶系统当然还需要感知、预测、规划、控制、冗余与安全验证。一个监督学习网络只是系统流水线（pipeline，把多个处理阶段串成完整输入输出路径）中的一部分，不能把演示准确率（demo accuracy，演示样例上的正确率）等同于系统安全。
 
 ---
 
@@ -1065,7 +1065,7 @@ training：forward + backward + optimizer，还要保存 activations、gradients
 
 这些动作都有可能有效，也都有可能完全浪费时间。
 
-第六周真正教的是一套工程判断方法：**先用 evidence 判断问题属于哪里，再决定把时间花在哪里。**
+第六周真正教的是一套工程判断方法：**先用证据（evidence，可观察并支持结论的结果）判断问题属于哪里，再决定把时间花在哪里。**
 
 ### 10.2 训练集、验证集与测试集为什么必须分开
 
@@ -1121,7 +1121,7 @@ $\lambda$ 太大，model 被限制得太死，容易 high bias。
 
 $\lambda$ 太小，model 自由度太高，容易 high variance。
 
-因此 $\lambda$ 不能用 test set 选择，而应该在 validation set 上比较多个 candidates。
+因此 $\lambda$ 不能用 test set 选择，而应该在 validation set 上比较多个候选配置（candidates）。
 
 ---
 
@@ -1139,7 +1139,7 @@ text
 -> 评估指标（metric）
 ```
 
-让流水线跑起来后，再根据真实错误决定下一步。这和系统工程里的 V1 思路相同：先建立可观察的端到端路径（end-to-end path，从输入一直贯通到最终输出），再针对瓶颈迭代。
+让流水线跑起来后，再根据真实错误决定下一步。这和系统工程里的第一版（V1）思路相同：先建立可观察的端到端路径（end-to-end path，从输入一直贯通到最终输出），再针对瓶颈迭代。
 
 ### 11.2 错误分析（Error analysis）
 
@@ -1205,7 +1205,7 @@ $$
 这一周和 AI Infra 的关系比某个具体算法更直接：
 
 ```text
-train/dev/test separation -> benchmark 不能边看 test 边调参数
+train/dev/test separation -> 性能评测（benchmark）不能边看 test 边调参数
 error analysis            -> 优化前先定位瓶颈
 precision/recall          -> 系统指标必须对应业务代价
 learning curve            -> 用证据决定增加 data 还是 compute/model
@@ -1221,7 +1221,7 @@ learning curve            -> 用证据决定增加 data 还是 compute/model
 
 ### 12.1 从逻辑回归走到大间隔分类
 
-逻辑回归只要求把 classes 分开。支持向量机进一步希望 decision boundary 离两边最近的 training examples 都尽可能远。
+逻辑回归只要求把类别分开。支持向量机进一步希望 decision boundary 离两边最近的 training examples 都尽可能远。
 
 这个距离叫间隔（margin，也就是边界到最近训练样本的距离）。
 
@@ -1265,7 +1265,7 @@ $\sigma$ 控制影响范围：
 
 显式构造高维特征可能非常昂贵。核方法（Kernel method）可以直接计算两个样本在隐式特征空间中的内积（inner product，两个向量对应元素乘积之和），而不必真的构造那个巨大向量。
 
-这是一个非常漂亮的 algorithmic idea：只计算优化真正需要的相似度，而不是 materialize 完整表示。
+这是一个非常漂亮的算法思想：只计算优化真正需要的相似度，而不是物化（materialize，也就是在内存中真正构造）完整表示。
 
 ### 12.5 今天学到什么程度
 
@@ -1278,7 +1278,7 @@ kernel 是一种相似度与隐式 feature mapping
 algorithm choice 会受 dataset size 和 compute complexity 限制
 ```
 
-不需要现在完整推导对偶优化（dual optimization，把原优化问题转换到另一组变量上求解），也不需要手写生产级 SVM。现代 LLM 工作负载的核心计算不在这里。
+不需要现在完整推导对偶优化（dual optimization，把原优化问题转换到另一组变量上求解），也不需要手写生产级 SVM。现代大型语言模型（LLM，Large Language Model）工作负载的核心计算不在这里。
 
 ---
 
@@ -1288,7 +1288,7 @@ algorithm choice 会受 dataset size 和 compute complexity 限制
 
 ### 13.1 没有标签时，怎样寻找分组
 
-K-means 的目标是把 examples 分到 $K$ 个 clusters，使每个 example 离自己 cluster center 尽可能近。
+K-means 的目标是把样本分到 $K$ 个簇（clusters，也就是若干数据分组），使每个样本离自己的簇中心（cluster center）尽可能近。
 
 它反复执行两个步骤：
 
@@ -1318,13 +1318,13 @@ assignment step 在固定 centroids 时减小 $J$；update step 在固定 assign
 
 不同初始中心点可能收敛到不同结果。因此通常进行多次随机初始化（random initialization，从不同起点重复运行），选择最终成本最低的一次。
 
-如果 $K$ 小于等于 examples 数，可以从 training examples 中随机选择 $K$ 个不同 points 作为初始 centroids，避免所有 centers 从同一点开始。
+如果 $K$ 小于等于样本数，可以从训练样本中随机选择 $K$ 个不同数据点作为初始 centroids，避免所有 centers 从同一点开始。
 
 ### 13.4 怎样选择 $K$
 
 肘部法（Elbow method）会观察成本随 $K$ 增加的变化。如果某个位置后收益明显变缓，它可能是合理选择。
 
-但真实数据不一定存在清晰 elbow。很多时候 $K$ 最终由 downstream purpose 决定，例如压缩图片允许多少 colors，或业务希望划分多少用户 groups。
+但真实数据不一定存在清晰的 elbow。很多时候 $K$ 最终由下游用途（downstream purpose，也就是聚类结果接下来要服务的任务）决定，例如压缩图片允许多少种颜色，或业务希望划分多少用户组。
 
 ---
 
@@ -1334,7 +1334,7 @@ assignment step 在固定 centroids 时减小 $J$；update step 在固定 assign
 
 高维数据中，不同特征可能高度相关。PCA（Principal Component Analysis，主成分分析）希望找到一组新的正交方向（orthogonal directions，彼此垂直、信息不重复的方向），让前几个方向尽可能保留数据方差（variance，数据沿某个方向的变化程度）。
 
-如果从二维压到一维，就是寻找一条线，让所有 points 投影到这条线后的 reconstruction error 尽可能小。
+如果从二维压到一维，就是寻找一条线，让所有数据点投影到这条线后的重建误差（reconstruction error，从低维表示还原后与原数据的差异）尽可能小。
 
 ![PCA 的投影直觉](assets/week8-pca.jpg)
 
@@ -1342,7 +1342,7 @@ assignment step 在固定 centroids 时减小 $J$；update step 在固定 assign
 
 ### 14.2 PCA 不是线性回归
 
-线性回归最小化的是 prediction 与 label $y$ 的 vertical error。
+线性回归最小化的是预测值与标签 $y$ 的竖直误差（vertical error，也就是沿输出轴方向计算的差值）。
 
 PCA 没有标签。它最小化的是输入点到低维子空间（subspace，由少数方向张成的空间）的正交投影距离（orthogonal projection distance）。
 
@@ -1350,7 +1350,7 @@ PCA 没有标签。它最小化的是输入点到低维子空间（subspace，�
 
 ### 14.3 算法步骤
 
-先进行 mean normalization，必要时做 feature scaling。以下公式中的 $X$ 指已经 centered 的数据，然后计算 covariance-like matrix：
+先进行均值归一化，必要时做特征缩放。以下公式中的 $X$ 指已经中心化（centered，也就是每个特征都减去自身均值）的数据，然后计算类似协方差的矩阵（covariance-like matrix）：
 
 $$
 \Sigma=\frac{1}{m}X^TX
@@ -1387,20 +1387,20 @@ $$
 
 ### 14.5 PCA 的正确用途
 
-PCA 可用于 visualization、compression 和去除高度相关 dimensions。但不要为了“防止 overfitting”而默认先做 PCA。
+PCA 可用于可视化（visualization）、压缩（compression）和去除高度相关维度。但不要为了“防止 overfitting”而默认先做 PCA。
 
-PCA 会丢失 information，而且它不知道 labels。若 supervised model 过拟合，应先用 regularization、更多数据和正确 validation 诊断。
+PCA 会丢失信息，而且它不知道标签。若监督学习模型过拟合，应先用 regularization、更多数据和正确的 validation 诊断。
 
 ### 14.6 与 AI Infra 的连接
 
-K-means 与 PCA 不直接等于现代 embedding system，但它们建立了两个重要直觉：
+K-means 与 PCA 不直接等于现代嵌入系统（embedding system，用稠密向量表示并检索对象的系统），但它们建立了两个重要直觉：
 
 ```text
 相似 examples 可以在 vector space 中按 distance 组织
 高维 representation 可能存在更低维的主要结构
 ```
 
-以后接触 embedding、vector retrieval、quantization 和 representation compression 时，这些直觉会再次出现。系统侧则要进一步考虑 index、memory footprint、batch query 与 distance kernel。
+以后接触嵌入（embedding）、向量检索（vector retrieval，按向量距离寻找相似对象）、量化（quantization，用更低精度表示数值）和表示压缩（representation compression）时，这些直觉会再次出现。系统侧则要进一步考虑索引（index，加速查找的数据结构）、内存占用（memory footprint）、批量查询（batch query）与距离计算内核（distance kernel）。
 
 ---
 
@@ -1528,9 +1528,9 @@ $$
 \hat y^{(i,j)}=(\theta^{(j)})^Tx^{(i)}
 $$
 
-这相当于为每个用户训练一个 linear model。
+这相当于为每个用户训练一个线性模型。
 
-问题是：现实中 item features 往往也不知道，手工标注成本很高。
+问题是：现实中物品特征往往也不知道，手工标注成本很高。
 
 ### 16.3 协同过滤（Collaborative filtering）
 
@@ -1538,10 +1538,10 @@ $$
 
 ```text
 每个物品的隐含特征向量（latent feature vector，模型自动学习而非人工标注的特征）x(i)
-每个 user 的 preference vector theta(j)
+每个用户的 preference vector theta(j)
 ```
 
-预测仍然是 inner product：
+预测仍然是内积：
 
 $$
 \hat y^{(i,j)}=(\theta^{(j)})^Tx^{(i)}
@@ -1551,7 +1551,7 @@ $$
 
 ### 16.4 低秩矩阵分解（Low-rank matrix factorization）
 
-把所有 item vectors 组成 $X$，所有 user vectors 组成 $\Theta$，完整预测矩阵是：
+把所有物品向量组成 $X$，所有用户向量组成 $\Theta$，完整预测矩阵是：
 
 $$
 \hat Y=X\Theta^T
@@ -1561,27 +1561,27 @@ $$
 
 > **读图：** 巨大的用户—物品矩阵被拆成“物品向量矩阵 × 用户向量矩阵”。中间较窄的维度保存 latent features，也就是模型自动学习出的隐含兴趣坐标。
 
-原本巨大的 user-item matrix，被表示成两个较窄 matrices 的乘积。这就是 low-rank factorization。
+原本巨大的用户—物品矩阵，被表示成两个较窄矩阵的乘积。这就是 low-rank factorization。
 
 这里的隐向量已经非常接近嵌入（embedding，把离散 ID 映射成可学习的稠密向量）的直觉：一个离散 ID 被映射成 dense vector（大多数位置都有有效数值的稠密向量），向量之间的几何关系编码了相似性与偏好。
 
 ### 16.5 均值归一化（Mean normalization）与冷启动（cold start）
 
-如果一个新 user 没有任何 ratings，未经处理的 model 可能预测得很差。对每个 item 的 ratings 先减去 mean，模型只学习相对偏好，最终再把 mean 加回去，会得到更合理的 baseline。
+如果一个新用户没有任何评分，未经处理的模型可能预测得很差。对每个物品的评分先减去均值，模型只学习相对偏好，最终再把均值加回去，会得到更合理的基线结果（baseline，用来作为默认参考的预测）。
 
-但真正的 cold-start problem 不会因此完全消失。新 user 和新 item 缺少 interaction evidence，常需要 content features、热门推荐或探索策略。
+但真正的冷启动问题不会因此完全消失。新用户和新物品缺少交互证据（interaction evidence），常需要内容特征、热门推荐或探索策略。
 
 ### 16.6 与 LLM / AI Infra 的连接
 
 推荐系统把几件事提前摆在了你面前：
 
 ```text
-embedding table
+嵌入表（embedding table）
 sparse IDs（离散且取值空间很大的编号）-> dense vectors（稠密向量）
-large matrix multiplication
+大型矩阵乘法
 top-k retrieval（检索分数最高的 k 个结果）
-online updates
-memory capacity 与 sharding（把大表切分到多个设备或节点）
+在线更新
+内存容量与分片（sharding，把大表切分到多个设备或节点）
 ```
 
 这些都是机器学习基础设施中的真实问题。课程只讲优化目标；工程上还要解决亿级嵌入向量的存储、更新、一致性、缓存和分布式服务（distributed serving，让多个节点共同承载在线推理）。
@@ -1802,7 +1802,7 @@ C++ 系统主线
 + 能写 correctness reference
 + 能把系统做正确
 + 能用 benchmark 找出真正瓶颈
-+ 能说清楚 trade-off
++ 能说清楚权衡（trade-off，为得到某项收益而接受另一项代价）
 ```
 
 这才是机器学习理论真正开始为 AI Infra 服务的地方。
