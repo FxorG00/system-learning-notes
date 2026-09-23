@@ -6777,4 +6777,18 @@ Part 2 不能一上来只给 class members、types 或 API。第一次看到组�
 
 本次已经把原 `ML.md` 归档为 `ML/archive/ML_20260923_original.md`，重写后的主文件对齐 Andrew Ng 2014 课程 19 个模块，并使用原中文笔记中与当前推导直接相关的本地图片。以后扩写或勘误这份讲义时，必须从当前主文件继续，不从归档旧稿覆盖。
 
-2026-09-23：传统机器学习练习独立维护在 `ML/ML_配套练习.md`。每个知识章节保留一个能够验证核心理解的练习，并标明当前官方 Machine Learning Specialization lab 或经典课 ex1~ex8 的来源映射；原始 Octave 作业只吸收问题与数据，统一使用 Python/NumPy，不复制 solution。练习按“核心 / 官方改编 / 进阶选做”分层，优先复用 T1~T24 已有 evidence，不因补传统 ML 练习而推迟 HTTP Server、Mini Redis 或投递时间线。章节练习应交付一个最小而明确的 oracle；没有独立作业的系统设计、大规模训练和 OCR 章节，使用 threshold、benchmark、ceiling analysis 等主线方法补足，不为了形式制造大型项目。
+2026-09-23：传统机器学习实践独立维护在 `ML/ML_配套练习.md`。用户明确否定“每章一句抽象要求 + 验收”的知识清单形式，因为它没有回答要做成什么程序、数据从哪里来、第一步怎样开始、每一步产生什么结果。以后传统 ML 作业必须以经典课程真正的 `ex1~ex8` 为骨架，写成可以从头顺着做的中文实验教程：
+
+```text
+先讲这套作业要解决的真实问题和最终成品
+-> 指出本地确切数据路径、文件格式、字段/变量含义
+-> 给出最小加载动作，让学习者确认数据真的可读
+-> 按原作业的数据流组织实现阶段和函数责任
+-> 在关键局部给出原题检查值，避免到最终训练才发现基础错误
+-> 说明应生成的图、预测和终端 evidence
+-> 最后映射到 T module 与系统主线，不抢占 HTTP Server / Mini Redis
+```
+
+经典 Python starter notebooks、Data、Figures 与原始 `ex1.pdf~ex8.pdf` 已下载到 `ML/official_assignments/`；第三方材料只作本地参考，由 `.gitignore` 排除，不提交到用户仓库。仓库提交自己的中文教程与来源说明。starter notebook 保留英文题面、空实现位置和旧 grader 代码，但当前统一使用 Python 3.12，不安装其旧 Python 3.6 环境，也不依赖下线 grader。
+
+编排时可以搜索知乎、GitHub、博客园、CSDN 等中文 lab notes，目的是发现学习者常见断点并改善“题意 -> 数据 -> 实现 -> 结果”的衔接；技术定义、数据含义和 numerical checkpoints 必须回到原始题面、starter notebook 或当前官方课程核对。不要从博客复制完整 solution，也不要让教程退化成函数/接口清单或技术手册。
