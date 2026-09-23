@@ -8,6 +8,8 @@
 >
 > 配套实践教程：[ML_配套练习.md](ML_配套练习.md)（按经典 `ex1~ex8` 提供数据、任务流程和检查值）
 >
+> 端到端工作流练习：[Kaggle入门实践.md](Kaggle入门实践.md)（T13 后必做 Titanic；T12 后可选 Digit Recognizer；不刷榜）
+>
 > 这份讲义保留原 `ML.md` 的直觉式语言，但补齐课程、公式、图片和 AI Infra 连接。旧稿保存在 [archive/ML_20260923_original.md](archive/ML_20260923_original.md)。
 
 ---

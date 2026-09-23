@@ -898,6 +898,15 @@ gradient-check 结果
 
 Ex3 的 one-vs-all、Ex6、Ex7、Ex8 不需要为了“课程完整率”抢在系统项目之前。真正的完成标准不是八个目录都出现绿色勾，而是到相应理论模块时，你能把公式、数据、代码和 evidence 接成一条完整链。
 
+经典作业解决“算法与机制怎样亲手实现”，但不会完整覆盖隐藏 test、submission schema 和线上评分流程。到 T12/T13 后，使用 [Kaggle入门实践.md](Kaggle入门实践.md) 再走一次端到端 workflow：
+
+| 到达位置 | Kaggle 实践 | 要求 |
+|---|---|---|
+| T12 + Ex3/Ex4 通过后 | Digit Recognizer | 选做；只做 MLP、batch inference 和一次 submission，最多 6 小时 |
+| T13 + Ex5 通过后 | Titanic | 必做；验证集、无 leakage 的 preprocessing、一次受控改进和一次有效 submission，最多 6 小时 |
+
+Kaggle 不新增刷榜线。完成规定 evidence 后立即回到 HTTP Server、Mini Redis 和后续 AI Infra 主线。
+
 ---
 
 # 46. 卡住时应该先看哪里

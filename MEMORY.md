@@ -6792,3 +6792,35 @@ Part 2 不能一上来只给 class members、types 或 API。第一次看到组�
 经典 Python starter notebooks、Data、Figures 与原始 `ex1.pdf~ex8.pdf` 已下载到 `ML/official_assignments/`；第三方材料只作本地参考，由 `.gitignore` 排除，不提交到用户仓库。仓库提交自己的中文教程与来源说明。starter notebook 保留英文题面、空实现位置和旧 grader 代码，但当前统一使用 Python 3.12，不安装其旧 Python 3.6 环境，也不依赖下线 grader。
 
 编排时可以搜索知乎、GitHub、博客园、CSDN 等中文 lab notes，目的是发现学习者常见断点并改善“题意 -> 数据 -> 实现 -> 结果”的衔接；技术定义、数据含义和 numerical checkpoints 必须回到原始题面、starter notebook 或当前官方课程核对。不要从博客复制完整 solution，也不要让教程退化成函数/接口清单或技术手册。
+
+## 2026-09-24：Kaggle 只作为受控的 ML 端到端工作流练习
+
+用户提出可否把 Kaggle 简单比赛作为 `ML.md` 阅读和经典作业之后的实践。结论是可以，但它不是新的竞赛主线，也不是简历核心项目。当前固定编排为：
+
+```text
+T12 + Ex3/Ex4 通过后
+-> Digit Recognizer 选做，最多 4~6 小时
+-> 小型 MLP、checkpoint reload、batch inference、一次 submission
+
+T13 + Ex5 通过后
+-> Titanic 必做，最多 4~6 小时
+-> 固定 validation、无 leakage preprocessing、baseline、一次受控改进、一次有效 submission
+```
+
+不安排月度 Playground 连刷，也不把 House Prices、Spaceship Titanic 或高分 notebook 作为当前必做；避免把时间吸进 tabular feature engineering、ensemble 和 leaderboard tuning。Kaggle 的作用是让用户经历一次：
+
+```text
+真实 train/test schema
+-> local validation
+-> preprocessing fit/transform 边界
+-> model/checkpoint artifact
+-> batch inference
+-> submission contract
+-> hidden-test external score
+```
+
+以后编写 Kaggle 类作业，必须像完整实验教程一样说明：比赛为什么现在做、数据从哪里获取、文件和字段是什么、最终程序做什么、本地 metric 是什么、submission schema 是什么、完成 evidence 与停止条件是什么，以及它怎样连接 AI Infra。不能只写“参加某比赛”或“做到某分”。
+
+固定纪律：只允许一个 baseline、一次有理由且保持 validation 条件不变的改进、最多一至两次 submission；榜单名次和任意高分阈值不作为通过条件。账号 token、`kaggle.json`、competition data 不进入 Git。每次真正开始比赛前重新核对 Kaggle 官方页面、rules、metric、data files 与 CLI，因为这些属于可变化的外部状态。
+
+主线仍是 HTTP Server -> Mini Redis -> inference serving。Kaggle 练习不得抢占系统主线每天 3 小时以上的优先级，也不能替代 Tn code gate、经典 Ex1~Ex8 或后续系统项目。独立教程保存在 `ML/Kaggle入门实践.md`，`ML/ML.md`、`ML/ML_配套练习.md` 和 `AI_Infra理论伴随线规划.md` 只保留入口与时间锚点。

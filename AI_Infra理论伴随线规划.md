@@ -371,6 +371,8 @@ AI Theory Tn.md
 
 吴恩达 2014 传统机器学习课程另有一份本地连续自学讲义：[ML/ML.md](ML/ML.md)，以及按经典 `ex1~ex8` 组织的中文实践教程 [ML/ML_配套练习.md](ML/ML_配套练习.md)。练习不再按知识章节散列成抽象题目，而是逐套交付真实问题、最终程序、本地数据路径、数据字段、实现阶段、原题检查值和图像 evidence。Python starter notebooks、Data、Figures 与原始题面保存在本机 `ML/official_assignments/`，第三方材料不进入仓库提交。它们不新增一条必须逐周打卡的主线，也不替代 `Tn.md` 的 NumPy/PyTorch code gate；进入 T4~T13 时按当前概念调用相应作业，不要求暂停系统主线连续做完八套。
 
+Kaggle 只作为传统 ML 阅读与经典作业之后的端到端 workflow lab，具体任务见 [ML/Kaggle入门实践.md](ML/Kaggle入门实践.md)。当前固定为：T12 + Ex3/Ex4 通过后可选做 Digit Recognizer，T13 + Ex5 通过后必做 Titanic。每项最多 4~6 小时，只允许 baseline、一次有依据的改进和最多一至两次 submission；达到 schema、validation、artifact 和外部 score 的证据后立即停止。它不新增刷榜、特征工程或月赛支线，也不能挤占 HTTP Server、Mini Redis 和后续 inference project。
+
 映射规则：
 
 ```text
@@ -1186,6 +1188,10 @@ inference_mode 下执行
 
 能完整串出 training flow 与 inference flow，并指出 inference 少了哪些对象和步骤。
 
+### 可选外部 workflow lab
+
+T12 与 Ex3/Ex4 都通过、且系统主线没有 correctness blocker 时，可以按 [ML/Kaggle入门实践.md](ML/Kaggle入门实践.md) 完成 Digit Recognizer。只使用本节已经掌握的小型 MLP，重点观察 `[N, 784] -> [B, 784] -> [B, 10]`、checkpoint reload 和不同 batch size 的 inference throughput；不临时扩展 CNN、augmentation 或 leaderboard 调参。最多 6 小时，不作为 T12 通过前置。
+
 ---
 
 ## T13：generalization、regularization 与实验纪律
@@ -1219,6 +1225,10 @@ overfit_observation.py
 ### 通过标准
 
 不能只写“加 dropout 防止过拟合”；要能说明实验中观察到了什么，以及结果不能推广到哪里。
+
+### 必做外部 workflow lab
+
+T13 与 Ex5 都通过后，按 [ML/Kaggle入门实践.md](ML/Kaggle入门实践.md) 完成 Titanic。目标是独立建立固定 train/validation split、无 leakage 的 preprocessing pipeline、一个 baseline、一次受控改进和一个被 Kaggle 接受的 submission。时间上限 6 小时，分数高低和 leaderboard 名次不作为验收标准；完成后立即回到系统主线。
 
 ---
 
