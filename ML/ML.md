@@ -1,4 +1,4 @@
-# 吴恩达 2014 机器学习：面向 AI Infra 的完整自学讲义
+# 吴恩达 2014 机器学习：面向 AI Infra（人工智能基础设施）的完整自学讲义
 
 > 版本：2026-09-23
 >
@@ -14,7 +14,9 @@
 
 这不是一份需要你从头抄到尾的考试笔记。
 
-你已经学过微积分、线性代数，也正在用 NumPy 做 AI Theory。这里真正要完成的是另一件事：把散落的数学知识串成机器学习的完整计算流程。
+阅读约定：新的英文术语第一次出现时，会立刻用括号说明中文含义和它在当前问题中的作用；后文不再机械重复。每张图下面的“读图”会指出图里有什么，以及它为什么出现在这里。
+
+你已经学过微积分、线性代数，也正在用 NumPy（面向多维数组的 Python 数值计算库）推进 AI Theory（AI 理论伴随线）。这里真正要完成的是另一件事：把散落的数学知识串成机器学习的完整计算流程。
 
 这条流程是：
 
@@ -27,7 +29,7 @@
 -> 根据误差证据决定下一步
 ```
 
-以后进入神经网络、Transformer、训练系统和推理系统，这条主线都不会消失。模型会变复杂，参数会变多，底层计算会从 NumPy 转向 GPU kernel，但问题仍然是这些问题。
+以后进入神经网络、Transformer（以注意力机制为核心的序列模型架构）、训练系统和推理系统，这条主线都不会消失。模型会变复杂，参数会变多，底层计算会从 NumPy 转向 GPU kernel（运行在 GPU 上的一段并行计算程序），但问题仍然是这些问题。
 
 ---
 
@@ -43,18 +45,18 @@
 input + hand-written rules -> output
 ```
 
-机器学习换了一种方式。我们给它 examples 和目标，让算法自己找到一组能够解释数据的 parameters：
+机器学习换了一种方式。我们给它训练样本（examples）和目标，让算法自己找到一组能够解释数据的参数（parameters）：
 
 ```text
 examples + learning algorithm -> model parameters
 model + new input -> prediction
 ```
 
-所以机器学习中的“学习”，并不是程序突然拥有了意识，而是**通过数据自动确定模型里的参数**。
+所以机器学习中的“学习”，并不是程序突然拥有了意识，而是**通过数据自动确定模型（model）里的参数**。模型就是一套从输入计算输出的规则，参数则控制这套规则的具体形状。
 
 ### 1.2 监督学习
 
-如果每一条训练数据都带着正确答案，我们就把它叫做**监督学习（Supervised Learning）**。
+如果每一条训练数据都带着正确答案，我们就把它叫做**监督学习（Supervised Learning）**。这里的“监督”指训练时每个输入都有标签（label，也就是正确答案）可供比较。
 
 一条训练样本通常写成：
 
@@ -71,13 +73,15 @@ $x^{(i)}$ 是第 $i$ 个输入，$y^{(i)}$ 是它对应的正确答案。
 
 ![监督学习示例](assets/week1-supervised.png)
 
+> **读图：** 图中每个训练样本都同时给出输入与正确答案，模型要从这些已标注的点中学出输入到输出的关系。这正对应上文“监督”的含义：训练阶段有人把答案一起交给算法。
+
 它们的共同点是训练时都有答案；区别只在于需要预测的结果是什么形式。
 
 ### 1.3 无监督学习
 
 如果数据只有 $x$，没有提前给出的 $y$，算法只能从数据本身寻找结构，这就叫**无监督学习（Unsupervised Learning）**。
 
-例如我们拿到大量用户行为，却没有“这是谁一类用户”的标签。算法可以根据相似性自动把用户分成若干组。这个过程叫 clustering，后面会在 K-means 中完整展开。
+例如我们拿到大量用户行为，却没有“这是谁一类用户”的标签。算法可以根据相似性自动把用户分成若干组。这个过程叫聚类（clustering），后面会在 K-means（K 均值聚类算法）中完整展开。
 
 现在先记住最核心的区别：
 
@@ -102,12 +106,14 @@ $$
 
 ![线性模型](assets/week1-linear-model.png)
 
+> **读图：** 散点是历史房屋数据，直线是某组 $w,b$ 产生的预测函数。改变 $w$ 会改变直线的倾斜程度，改变 $b$ 会让整条直线上下平移。
+
 这里：
 
-- $x$ 是输入特征（feature）。
-- $w$ 是权重（weight），也就是直线斜率。
-- $b$ 是偏差（bias），也就是纵轴截距。
-- $f_{w,b}(x)$ 是模型的预测值，也常写成 $\hat y$。
+- $x$ 是输入特征（feature），也就是模型用来做判断的一项已知信息。
+- $w$ 是权重（weight），也就是直线斜率，表示该特征对输出的影响强度。
+- $b$ 是偏差（bias），也就是纵轴截距，负责整体平移预测结果。
+- $f_{w,b}(x)$ 是模型的预测值（prediction），也常写成 $\hat y$。
 
 机器真正要学的不是每套房子的答案，而是 $w$ 和 $b$。
 
@@ -117,7 +123,7 @@ $$
 
 只有模型还不够。你可以随便给 $w$ 和 $b$ 赋值，每一组参数都会画出一条直线。机器需要一把统一的尺子，判断哪条线更好。
 
-单个 example 上的错误度量通常叫 **loss**；把所有 examples 的 losses 聚合起来，得到训练时优化的 **cost function**。在线性回归中，我们使用平均平方误差：
+单个样本上的错误度量叫损失（loss）；把所有样本的损失聚合起来，得到训练时优化的成本函数（cost function）。在线性回归中，我们使用平均平方误差：
 
 $$
 J(w,b)=\frac{1}{2m}\sum_{i=1}^{m}
@@ -133,6 +139,8 @@ $$
 5. 分母多出的 $2$ 是为了后面求导时和平方产生的 $2$ 抵消。
 
 ![成本函数](assets/week1-cost-function.png)
+
+> **读图：** 图把一组模型参数映射成一个成本值。预测线离真实数据越远，平方误差累积得越大；训练要找的是成本曲面最低的位置，而不是让直线机械穿过每一个点。
 
 现在整个训练目标变得非常明确：
 
@@ -154,7 +162,7 @@ $$
 
 ### 2.4 梯度下降：怎样自动走向谷底
 
-梯度下降（Gradient Descent）的核心动作只有一个：计算当前位置最陡的上升方向，然后反向走一步。
+梯度下降（Gradient Descent）是一种反复调整参数的优化算法。它的核心动作只有一个：计算当前位置最陡的上升方向，然后反向走一步。
 
 参数更新公式是：
 
@@ -166,17 +174,19 @@ $$
 b\leftarrow b-\alpha\frac{\partial J(w,b)}{\partial b}
 $$
 
-$\alpha$ 是学习率（Learning Rate），控制每一步走多远。
+$\alpha$ 是学习率（Learning Rate），也就是控制每次参数更新幅度的数字。
 
 ![梯度下降](assets/week1-gradient-descent.jpg)
 
+> **读图：** 横向位置代表当前参数，纵向高度代表成本。每次更新都根据当前位置的斜率向下移动；学习率控制一步跨多远，梯度控制应该往哪个方向走。
+
 为什么是减号？
 
-在当前参数坐标与 Euclidean distance 下，gradient 指向函数上升最快的方向，negative gradient 才是局部下降最快的方向。
+在当前参数坐标与欧几里得距离（Euclidean distance，也就是通常的直线距离）下，梯度（gradient，由各参数偏导数组成的向量）指向函数上升最快的方向，负梯度（negative gradient）才是局部下降最快的方向。
 
 为什么两个参数必须同步更新？
 
-因为这一轮的两个 derivatives 都是在同一个旧位置 $(w,b)$ 上计算的。如果先修改 $w$，再用新 $w$ 计算 $b$，两次更新就不再属于同一步。
+因为这一轮的两个导数（derivatives，描述输出对参数局部变化有多敏感）都在同一个旧位置 $(w,b)$ 上计算。如果先修改 $w$，再用新 $w$ 计算 $b$，两次更新就不再属于同一步。
 
 ### 2.5 把线性回归的偏导数推出来
 
@@ -202,7 +212,7 @@ $$
 \left(f_{w,b}(x^{(i)})-y^{(i)}\right)
 $$
 
-两者唯一的区别是，$w$ 控制了 $x$ 对 prediction 的影响，因此 chain rule 还会多乘一个 $x^{(i)}$；$b$ 前面的系数是 $1$，所以不需要。
+两者唯一的区别是，$w$ 控制了 $x$ 对预测值的影响，因此链式法则（chain rule，用局部导数相乘求复合函数导数）还会多乘一个 $x^{(i)}$；$b$ 前面的系数是 $1$，所以不需要。
 
 ### 2.6 手算一次参数更新
 
@@ -250,7 +260,7 @@ $$
 - $\alpha$ 太大：一步跨过谷底，来回震荡，甚至越走越高。
 - 接近谷底时，gradient 自己会变小，所以即使 $\alpha$ 固定，实际步长也会自然缩小。
 
-线性回归的平方误差是 convex function，因此不存在比 global minimum 更差的 local minimum。设计矩阵满列秩时最优参数唯一；features 线性相关时可能存在多组等价的 global solutions，但 gradient descent 仍不会被错误的局部谷底困住。
+线性回归的平方误差是凸函数（convex function，任意局部最低点也属于全局最低点），因此不存在更差的局部极小值（local minimum）。设计矩阵满列秩时最优参数唯一；特征线性相关时可能存在多组等价的全局最优解（global solutions），但梯度下降仍不会被错误的局部谷底困住。
 
 ---
 
@@ -258,7 +268,7 @@ $$
 
 ### 3.1 为什么这里突然出现矩阵
 
-一套房子不可能只有面积一个特征。加入卧室数、楼层和房龄后，一个样本就不再是 scalar，而是 vector：
+一套房子不可能只有面积一个特征。加入卧室数、楼层和房龄后，一个样本就不再是标量（scalar，单个数），而是向量（vector，按顺序组织的一组数）：
 
 $$
 \mathbf x=
@@ -267,7 +277,7 @@ x_1\\x_2\\\vdots\\x_n
 \end{bmatrix}
 $$
 
-相应地，每个 feature 都需要一个 weight：
+相应地，每个特征都需要一个权重：
 
 $$
 \mathbf w=
@@ -282,31 +292,31 @@ $$
 f_{\mathbf w,b}(\mathbf x)=\mathbf w^T\mathbf x+b
 $$
 
-这不是单纯为了让公式好看。它明确告诉实现者：哪些 dimensions 必须相等，哪个 dimension 会被 reduction，以及哪些计算可以批量执行。
+这不是单纯为了让公式好看。它明确告诉实现者：哪些维度（dimensions，也就是各轴的长度）必须相等，哪个维度会被归约（reduction，通过求和等操作消掉一个轴），以及哪些计算可以批量执行。
 
-### 3.2 Matrix shape 是计算契约
+### 3.2 矩阵形状（Matrix shape）是计算契约
 
-如果一共有 $m$ 个 examples、每个 example 有 $n$ 个 features，可以把数据组成：
+如果一共有 $m$ 个样本、每个样本有 $n$ 个特征，可以把数据组成：
 
 $$
 X\in\mathbb R^{m\times n}
 $$
 
-每一行是一条 example，每一列是一种 feature。
+每一行是一条样本，每一列是一种特征。
 
-批量 prediction 是：
+批量预测是：
 
 $$
 \hat{\mathbf y}=X\mathbf w+b
 $$
 
-shape 关系为：
+形状关系为：
 
 $$
 [m,n]@[n]\longrightarrow[m]
 $$
 
-被消掉的 $n$ 表示每个 example 内部完成一次 dot product；保留下来的 $m$ 表示每条 example 都得到一个 prediction。
+被消掉的 $n$ 表示每个样本内部完成一次点积（dot product，对应位置相乘后求和）；保留下来的 $m$ 表示每条样本都得到一个预测值。
 
 ### 3.3 矩阵乘法不是逐元素乘法
 
@@ -316,11 +326,11 @@ $$
 C_{ij}=\sum_k A_{ik}B_{kj}
 $$
 
-这里的 $k$ dimension 被求和消掉。
+这里的 $k$ 维度被求和消掉。
 
-逐元素乘法则要求两个 operands 能按 broadcasting rules 对齐，并保留对齐后的 shape。两者产生的 values 和 shape 都不同。
+逐元素乘法则要求两个操作数（operands，也就是参与运算的数组）能按广播规则（broadcasting rules，在兼容维度上自动扩展数组）对齐，并保留对齐后的形状。两者产生的数值和形状都不同。
 
-这正是你在 T2、T3 里练习 shape 推导的原因：AI 模型中的线性层、attention score 和 projection，本质上都在反复组合 matrix multiplication、elementwise operation 与 reduction。
+这正是你在 T2、T3 里练习形状推导的原因：AI 模型中的线性层、注意力分数（attention score，用来衡量两个位置之间相关程度的数值）和投影（projection，把表示映射到另一组坐标或维度），本质上都在反复组合矩阵乘法、逐元素运算（elementwise operation）与归约。
 
 ### 3.4 转置与逆
 
@@ -336,15 +346,15 @@ $$
 A^{-1}A=I
 $$
 
-但不是每个 matrix 都可逆。即使理论上可逆，直接显式计算 inverse 也常常不是数值计算中的最佳实现。实际代码更倾向调用经过验证的 solver、QR decomposition 或 SVD。
+但不是每个矩阵都可逆。即使理论上可逆，直接显式计算逆矩阵也常常不是数值计算中的最佳实现。实际代码更倾向调用经过验证的求解器、QR decomposition（QR 分解，把矩阵拆成正交矩阵与上三角矩阵）或 SVD（Singular Value Decomposition，奇异值分解）。
 
 ### 3.5 向量化为什么更快
 
-用 Python loop 一个元素一个元素计算，会反复支付 interpreter、dynamic dispatch 和边界检查成本。
+用 Python 循环（loop）一个元素一个元素计算，会反复支付解释器（interpreter，逐条执行 Python 代码的运行时）、动态分派和边界检查成本。
 
-把操作写成 NumPy matrix expression 后，实际循环进入经过优化的 C/C++、BLAS、SIMD 或多线程 library。GPU 上还可以把大量独立的 multiply-add 分配给不同计算单元。
+把操作写成 NumPy 矩阵表达式后，实际循环进入经过优化的 C/C++、BLAS（Basic Linear Algebra Subprograms，基础线性代数例程库）、SIMD（Single Instruction Multiple Data，单条指令同时处理多份数据）或多线程库。GPU 上还可以把大量独立的乘加运算分配给不同计算单元。
 
-所以 vectorization 的准确含义是：**把规则相同的数据计算交给底层批量 kernel**。
+所以向量化（vectorization）的准确含义是：**把规则相同的数据计算交给底层批量计算内核（kernel）**。
 
 它通常能显著提速，但不等于“一万次乘法真的只需要一个时钟周期”。硬件仍然要执行运算、搬运数据、同步并写回结果。
 
@@ -366,31 +376,33 @@ $$
 
 ![多特征表示](assets/week2-multiple-features.png)
 
-从几何上说，两个 features 对应一个平面，更多 features 对应高维空间中的 hyperplane。但训练逻辑没有改变：模型先预测，cost 衡量错误，gradient 更新 parameters。
+> **读图：** 同一套房子现在由面积、卧室数、楼层等多个数共同描述，因此一个样本从单个数变成了向量。每个特征都对应一个权重，所有“特征 × 权重”相加后形成预测。
+
+从几何上说，两个特征对应一个平面，更多特征对应高维空间中的超平面（hyperplane，高维空间里由线性方程描述的边界）。但训练逻辑没有改变：模型先预测，成本函数衡量错误，梯度更新参数。
 
 ### 4.2 多变量梯度下降
 
-把 batch predictions 写成：
+把一个批次（batch，一次共同处理的一组样本）的预测写成：
 
 $$
 \hat{\mathbf y}=X\mathbf w+b
 $$
 
-那么 weight gradient 可以一次计算：
+那么权重梯度可以一次计算：
 
 $$
 \nabla_{\mathbf w}J
 =\frac{1}{m}X^T(\hat{\mathbf y}-\mathbf y)
 $$
 
-bias gradient 是：
+偏差梯度是：
 
 $$
 \frac{\partial J}{\partial b}
 =\frac{1}{m}\sum_{i=1}^{m}(\hat y^{(i)}-y^{(i)})
 $$
 
-这里已经出现了现代训练系统的最小雏形：forward 产生 predictions，reduction 得到 scalar loss，backward 产生 gradients，optimizer 更新 parameter tensors。
+这里已经出现了现代训练系统的最小雏形：前向传播（forward，根据当前参数计算预测）产生预测值，归约得到一个标量损失；反向传播（backward，从损失反推各参数梯度）产生梯度；优化器（optimizer，根据梯度更新参数的算法）再修改参数张量（parameter tensor，也就是保存可学习参数的多维数组）。
 
 ### 4.3 特征缩放：为什么数值范围会改变下山路线
 
@@ -400,21 +412,23 @@ $$
 
 ![特征缩放](assets/week2-feature-scaling.jpg)
 
+> **读图：** 缩放前，不同特征的数值范围差距很大，成本函数等高线被拉成长椭圆，梯度下降容易左右震荡；缩放后等高线更接近圆形，更新方向能更直接地靠近最低点。
+
 特征缩放的本质，是把不同 features 的典型尺度拉到接近范围，让同一个 learning rate 能合理地更新所有 dimensions。
 
-常见的 Z-score normalization 是：
+常见的 Z-score normalization（Z 分数标准化，用均值和标准差统一数值尺度）是：
 
 $$
 x_j'=\frac{x_j-\mu_j}{\sigma_j}
 $$
 
-$\mu_j$ 是第 $j$ 个 feature 的 mean，$\sigma_j$ 是 standard deviation。
+$\mu_j$ 是第 $j$ 个特征的均值（mean），$\sigma_j$ 是标准差（standard deviation，用来衡量数据围绕均值的离散程度）。
 
-注意：normalization parameters 必须只从 training set 估计，再应用到 validation、test 和线上输入。否则 test data 的信息会泄漏进训练流程。
+注意：标准化参数必须只从训练集（training set，用来学习模型参数的数据）估计，再应用到验证集（validation set，用来选择模型和超参数的数据）、测试集（test set，只用于最终评估的数据）和线上输入。否则测试数据的信息会提前进入训练流程，这叫数据泄漏（data leakage）。
 
-### 4.4 怎样从 loss curve 判断学习率
+### 4.4 怎样从损失曲线（loss curve）判断学习率
 
-训练时画出 $J$ 随 iteration 的变化：
+训练时画出 $J$ 随迭代次数（iteration）变化的曲线：
 
 - 持续下降：至少说明当前 learning rate 能工作。
 - 上升或剧烈震荡：learning rate 可能太大，也可能实现存在 bug。
@@ -422,7 +436,9 @@ $\mu_j$ 是第 $j$ 个 feature 的 mean，$\sigma_j$ 是 standard deviation。
 
 ![学习率与收敛](assets/week2-learning-rate.jpg)
 
-loss curve 是训练系统最便宜的 observability。后面做 PyTorch 和分布式训练时，第一件事仍然是检查 loss、gradient norm、learning rate 与 throughput，而不是盲目增加算力。
+> **读图：** 横轴是迭代次数，纵轴是成本。平稳下降说明当前步长可用；上下振荡甚至持续升高，说明步长可能过大。图的作用是让“是否收敛”变成可以观察的证据。
+
+损失曲线是训练系统最便宜的可观测性证据（observability，也就是能从外部看见系统内部状态）。后面使用 PyTorch（深度学习张量与自动微分框架）和分布式训练时，第一件事仍然是检查损失、梯度范数（gradient norm，梯度向量的整体大小）、学习率与吞吐量（throughput，单位时间完成的样本数），而不是盲目增加算力。
 
 ### 4.5 多项式回归
 
@@ -434,11 +450,11 @@ $$
 
 它仍然叫 linear model，因为 parameters $w_1,w_2,w_3$ 仍然只做线性组合。
 
-但是 $x$ 与 $x^3$ 的数值范围可能相差巨大，因此 polynomial features 更依赖 feature scaling，也更容易在高阶时 overfit。
+但是 $x$ 与 $x^3$ 的数值范围可能相差巨大，因此多项式特征更依赖特征缩放，也更容易在高阶时过拟合（overfit，把训练数据里的噪声也当成规律）。
 
 ### 4.6 正规方程：直接求最小二乘解
 
-如果把 bias 合并进 parameter，并在 $X$ 前增加一列 $1$，least-squares solution 可以写成：
+如果把偏差合并进参数，并在 $X$ 前增加一列 $1$，最小二乘解（least-squares solution，使平方误差最小的参数）可以写成：
 
 $$
 \theta=(X^TX)^{-1}X^T\mathbf y
@@ -446,22 +462,24 @@ $$
 
 ![正规方程](assets/week2-normal-equation.png)
 
+> **读图：** 这张图把训练数据矩阵 $X$、目标值 $y$ 与参数 $\theta$ 放进同一个闭式解。它说明最小二乘问题可以直接求解，但矩阵分解的成本会随特征数量增大。
+
 它不需要选择 learning rate，也不需要反复 iteration。但是随着 feature 数 $n$ 增大，构造和分解 $X^TX$ 的成本会迅速增加。
 
-实际数值库也不会鼓励你手写 `inverse @ vector`。更稳定的做法是使用 QR、SVD 或 `lstsq` solver。
+实际数值库也不会鼓励你手写 `inverse @ vector`。更稳定的做法是使用 QR 分解、SVD（Singular Value Decomposition，奇异值分解）或 `lstsq` 求解器（solver，负责数值求解方程的库函数）。
 
 如果 $X^TX$ 不可逆，常见原因是：
 
 1. 两个 features 线性相关，包含重复信息。
 2. feature 数量大于 examples，问题欠定。
 
-此时 pseudo-inverse 仍可给出 least-squares solution，但你需要理解问题本身为什么没有唯一解。
+此时伪逆（pseudo-inverse，在矩阵不可逆时推广逆矩阵概念的工具）仍可给出最小二乘解，但你需要理解问题本身为什么没有唯一解。
 
 ---
 
-## 5. 从 Octave 迁移到 Python / NumPy
+## 5. 从 Octave（课程原先使用的数值计算语言）迁移到 Python / NumPy
 
-原课程用 Octave 教 matrix-first programming。今天不需要重新学一套旧工具，但它想训练的能力必须保留：**不要用标量 loop 描述本来可以批量计算的 matrix operation。**
+原课程用 Octave 教矩阵优先编程（matrix-first programming，先把问题组织成矩阵运算）。今天不需要重新学一套旧工具，但它想训练的能力必须保留：**不要用标量循环描述本来可以批量完成的矩阵运算。**
 
 ### 5.1 基本对象
 
@@ -485,7 +503,7 @@ x @ w:      [2]
 prediction: [2]
 ```
 
-### 5.2 向量化的 MSE 与 gradient
+### 5.2 向量化的均方误差（MSE，Mean Squared Error）与梯度
 
 ```python
 def mse(prediction: np.ndarray, target: np.ndarray) -> float:
@@ -513,7 +531,7 @@ x.T @ error         -> 每个 feature 对所有 errors 的加权贡献
 
 ### 5.3 画图与读取训练状态
 
-NumPy 负责计算，Matplotlib 负责把数据和 loss curve 画出来。图不是装饰，它帮助你回答：
+NumPy 负责计算，Matplotlib（Python 绘图库）负责把数据和损失曲线画出来。图不是装饰，它帮助你回答：
 
 ```text
 模型是不是明显欠拟合？
@@ -527,13 +545,13 @@ learning rate 有没有导致震荡？
 这一周最重要的不是会写线性回归，而是看见同一份数学如何变成系统负载：
 
 ```text
-batch matrix multiply -> GEMM 与 GPU kernel
-feature / activation scale -> numerical stability 与 dtype
-loss curve -> training observability
+批量矩阵乘法 -> GEMM（通用矩阵乘法）与 GPU 计算内核
+特征 / 激活值尺度 -> 数值稳定性与 dtype（数据类型，例如 float32）
+损失曲线 -> 训练过程的可观测性
 normal equation 在大规模下不可行 -> algorithm 必须尊重 complexity
 ```
 
-以后你面对 Transformer 的 projection、attention 和 MLP，看到的仍然是更大规模的 matrix multiply、normalization、reduction 和 parameter update。
+以后你面对 Transformer 的投影层（projection，把表示映射到另一组特征）、注意力（attention，根据相关性混合上下文信息）和 MLP（Multi-Layer Perceptron，多层感知机），看到的仍然是更大规模的矩阵乘法、归一化、归约和参数更新。
 
 ---
 
@@ -553,7 +571,7 @@ $$
 
 如果直接使用 $f(x)=\mathbf w^T\mathbf x+b$，输出可能是 $-3.7$ 或 $8.2$。这些数可以作为 score，却不能直接解释为 probability。
 
-我们需要一个函数，把任意实数压到 $(0,1)$ 之间。这就是 sigmoid：
+我们需要一个函数，把任意实数压到 $(0,1)$ 之间。这就是 sigmoid（S 形压缩函数）：
 
 $$
 g(z)=\frac{1}{1+e^{-z}}
@@ -561,7 +579,9 @@ $$
 
 ![Sigmoid](assets/week3-sigmoid.jpg)
 
-逻辑回归模型于是变成：
+> **读图：** 横轴是线性模型给出的任意实数 $z$，纵轴是压缩后的数值。$z=0$ 时输出为 $0.5$；$z$ 越大越靠近 $1$，越小越靠近 $0$，因此它能把分数转换成概率形式。
+
+逻辑回归（Logistic Regression，用概率完成二分类的模型）于是写成：
 
 $$
 z=\mathbf w^T\mathbf x+b
@@ -571,7 +591,7 @@ $$
 f_{\mathbf w,b}(\mathbf x)=g(z)
 $$
 
-输出可以理解为：
+输出可以理解为条件概率（probability，给定当前输入时类别成立的可能性）：
 
 $$
 f_{\mathbf w,b}(\mathbf x)=P(y=1\mid\mathbf x)
@@ -587,7 +607,7 @@ $$
 g(z)\ge0.5\iff z\ge0
 $$
 
-所以真正的 decision boundary 由下面这条式子决定：
+所以真正的判定边界（decision boundary，模型从一类切换到另一类的位置）由下面这条式子决定：
 
 $$
 \mathbf w^T\mathbf x+b=0
@@ -595,7 +615,9 @@ $$
 
 ![判定边界](assets/week3-decision-boundary.png)
 
-如果 features 只是 $x_1,x_2$，boundary 是直线。如果加入 $x_1^2$、$x_1x_2$ 等 polynomial features，boundary 就可以变成圆或更复杂的曲线。
+> **读图：** 两类样本分布在边界两侧。边界上的点满足 $\mathbf w^T\mathbf x+b=0$，也就是模型输出概率恰好为 $0.5$；真正决定边界形状的是输入特征和线性分数，而不是 sigmoid 曲线本身。
+
+如果输入特征只是 $x_1,x_2$，边界是直线。如果加入 $x_1^2$、$x_1x_2$ 等多项式特征，边界就可以变成圆或更复杂的曲线。
 
 sigmoid 负责把 score 映射成 probability；boundary 的形状仍由 score function 使用了哪些 features 决定。
 
@@ -603,7 +625,7 @@ sigmoid 负责把 score 映射成 probability；boundary 的形状仍由 score f
 
 把 sigmoid 与 squared error 组合后，cost surface 可能不再保持简单 convex shape，optimization 会更困难。
 
-逻辑回归使用 binary cross-entropy：
+逻辑回归使用二元交叉熵（binary cross-entropy，专门衡量二分类概率预测的损失）：
 
 $$
 L(\hat y,y)
@@ -654,7 +676,7 @@ $$
 
 ### 6.5 高级优化算法需要我们提供什么
 
-Gradient descent 每一步只使用当前 gradient。Conjugate Gradient、BFGS、L-BFGS 等算法会利用更多历史或曲率信息，通常能用更少 iterations 找到较好参数。
+梯度下降每一步只使用当前梯度。共轭梯度（Conjugate Gradient）以及 BFGS、L-BFGS（利用梯度历史近似曲率的优化方法）会利用更多历史或曲率信息，通常能用更少迭代找到较好参数。
 
 在工程上，你不需要自己重写这些 optimizers。你需要向数值库提供两个一致的接口：
 
@@ -667,9 +689,9 @@ Gradient descent 每一步只使用当前 gradient。Conjugate Gradient、BFGS�
 
 ### 6.6 多类别分类
 
-如果标签不止两类，可以先用 one-vs-rest：对每一个 class 训练一个二分类器，最后选择 score 最大的 class。
+如果标签不止两类，可以先用一对其余（one-vs-rest）：对每一个类别（class）训练一个二分类器，最后选择分数最高的类别。
 
-现代神经网络更常用 softmax，一次产生所有 classes 的 probability distribution。one-vs-rest 在这里的意义，是让你先看见“多个类别”可以从多个二分类问题构造出来。
+现代神经网络更常用 softmax（把多个任意分数转换成总和为 $1$ 的类别概率），一次产生所有类别的概率分布（probability distribution）。one-vs-rest 在这里的意义，是让你先看见“多个类别”可以从多个二分类问题构造出来。
 
 ---
 
@@ -677,17 +699,19 @@ Gradient descent 每一步只使用当前 gradient。Conjugate Gradient、BFGS�
 
 ### 7.1 模型为什么会过拟合
 
-低阶模型可能太简单，连 training data 的趋势都抓不住，这叫 underfitting，也叫 high bias。
+低阶模型可能太简单，连训练数据的趋势都抓不住，这叫欠拟合（underfitting），也叫高偏差（high bias，模型能力不足导致的系统性误差）。
 
-高阶模型可以穿过几乎每个 training point，却在新数据上表现很差，这叫 overfitting，也叫 high variance。
+高阶模型可以穿过几乎每个训练点，却在新数据上表现很差，这叫过拟合（overfitting），也叫高方差（high variance，模型对训练数据变化过于敏感）。
 
 ![欠拟合、合适与过拟合](assets/week3-overfitting.jpg)
+
+> **读图：** 左图的模型太简单，连总体趋势都没学到；中图抓住主要规律；右图为了贴合训练点而剧烈弯曲。右图训练误差可能最低，却最容易在新数据上失败。
 
 overfitting 的根本问题不是“训练误差太低”，而是模型把 training set 中偶然出现的噪声也当成了稳定规律。
 
 ### 7.2 正则化到底在惩罚什么
 
-一个常用办法是在 cost 中加入 parameter penalty：
+一个常用办法是在成本函数中加入参数惩罚项（parameter penalty，用额外成本限制参数过度增大）：
 
 $$
 J_{reg}(\mathbf w,b)
@@ -696,7 +720,7 @@ $$
 
 $\lambda$ 控制惩罚强度。
 
-这项 penalty 会压制过大的 weights，让模型不容易用极端参数追逐训练数据中的细小波动。
+这项惩罚会压制过大的权重，让模型不容易用极端参数追逐训练数据中的细小波动。
 
 通常不正则化 bias $b$，因为单个 bias 对模型复杂度的贡献很小。
 
@@ -705,35 +729,35 @@ $\lambda$ 控制惩罚强度。
 - $\lambda$ 太小：regularization 几乎不起作用，仍可能 overfit。
 - $\lambda$ 太大：weights 被压得接近 $0$，模型失去表达能力，变成 underfit。
 
-所以 regularization 并不是“越强越安全”。它仍然是一个需要由 validation evidence 选择的 hyperparameter。
+所以正则化（regularization，通过限制参数复杂度改善泛化）并不是“越强越安全”。$\lambda$ 是超参数（hyperparameter，训练前由开发者选择而不是直接从梯度学出的配置），需要用验证集证据来确定。
 
 ### 7.4 与现代深度学习的连接
 
-后面会见到 weight decay、dropout、data augmentation 和 early stopping。它们形式不同，但都在处理同一个问题：训练集上的拟合能力很强，不代表模型对未见数据也能泛化。
+后面会见到权重衰减（weight decay，持续压小权重）、dropout（训练时随机屏蔽部分神经元）、数据增强（data augmentation，对已有样本做保持语义的变换）和提前停止（early stopping，在验证表现恶化前结束训练）。它们形式不同，但都在处理同一个问题：训练集上的拟合能力很强，不代表模型对未见数据也能泛化。
 
 ---
 
-# 第四周：神经网络怎样完成 Forward
+# 第四周：神经网络怎样完成前向传播
 
 ## 8. 神经网络表示（Neural Network Representation）
 
 ### 8.1 为什么需要神经网络
 
-逻辑回归只能在现有 features 上画一个 linear boundary。我们当然可以手工制造大量 polynomial features，但 features 一多，组合数量会快速膨胀，而且人很难提前知道哪些组合真正有用。
+逻辑回归只能在现有特征上画一个线性边界（linear boundary）。我们当然可以手工制造大量多项式特征，但特征一多，组合数量会快速膨胀，而且人很难提前知道哪些组合真正有用。
 
 神经网络换了一个思路：**让中间层自己学习新的表示。**
 
-输入不再直接通向最终 prediction，而是先经过一层或多层 hidden units。
+输入不再直接通向最终预测，而是先经过一层或多层隐藏单元（hidden units，负责学习中间特征的神经元）。
 
-### 8.2 一个 neuron 做了什么
+### 8.2 一个神经元（neuron）做了什么
 
-一个 neuron 先做线性变换：
+一个神经元先做线性变换：
 
 $$
 z=\mathbf w^T\mathbf x+b
 $$
 
-然后通过 activation function：
+然后通过激活函数（activation function，为线性结果加入非线性变化）：
 
 $$
 a=g(z)
@@ -741,7 +765,9 @@ $$
 
 ![神经网络结构](assets/week4-neural-network.jpg)
 
-这里的 $a$ 叫 activation。它既是当前 neuron 的输出，也是下一层的输入。
+> **读图：** 圆点代表神经元，连线代表带权重的信息传递。输入先进入隐藏层，隐藏层产生新的中间表示，再交给输出层；这正是“逐层学习表示”的结构。
+
+这里的 $a$ 叫激活值（activation）。它既是当前神经元的输出，也是下一层的输入。
 
 如果没有 activation，连续叠加多个 linear layers 仍然等价于一个 linear transformation：
 
@@ -763,7 +789,7 @@ $$
 A^{[l]}=g(Z^{[l]})
 $$
 
-若采用 batch-first layout：
+若采用 batch-first layout（批次维在最前面的张量布局）：
 
 ```text
 A[l-1]: [batch, input_features]
@@ -776,13 +802,15 @@ bias 通过 broadcasting 加到 batch 中每条 example。
 
 ![Forward propagation](assets/week4-forward-propagation.png)
 
-这就是 PyTorch `nn.Linear` 最核心的 computation。框架替你管理 parameter、autograd 和 device，但 matrix multiplication 与 broadcasting 没有消失。
+> **读图：** 图按层展示前向传播：上一层激活值乘本层权重，得到线性结果 $z$，再通过激活函数得到下一层的 $a$。每一层只消费前一层输出并产生后一层输入。
 
-### 8.4 Hidden layer 学到了什么
+这就是 PyTorch `nn.Linear` 最核心的计算。框架替你管理参数、自动微分和设备（device，例如 CPU 或 GPU），但矩阵乘法与广播没有消失。
+
+### 8.4 隐藏层（hidden layer）学到了什么
 
 hidden unit 不需要被人工命名成“边缘检测器”或“某种房屋组合特征”。训练只要求最终 loss 下降，网络会自动找到对任务有帮助的 intermediate representation。
 
-这就是 representation learning。
+这就是表示学习（representation learning，让模型自己学习中间特征）。
 
 在图像中，早期 layers 可能对边缘和纹理敏感；在语言模型中，token representations 会逐层混合上下文信息。它们都不是手工写出的 feature formula。
 
@@ -798,7 +826,7 @@ hidden unit 不需要被人工命名成“边缘检测器”或“某种房屋�
 
 ### 8.5 多类别输出
 
-如果有 $K$ 个 classes，output layer 通常产生 $K$ 个 logits：
+如果有 $K$ 个类别，输出层通常产生 $K$ 个 logits（未经概率归一化的原始分类分数）：
 
 $$
 \mathbf z\in\mathbb R^K
@@ -814,6 +842,8 @@ $$
 
 ![多类别输出](assets/week4-multiclass.jpg)
 
+> **读图：** 输出层为每个类别保留一个单独的输出单元。经过 softmax 后，这些输出变成总和为 $1$ 的概率，最大概率所在的位置就是模型当前最倾向的类别。
+
 实现时通常先减去最大 logit：
 
 $$
@@ -822,7 +852,7 @@ $$
 
 这个变换不改变结果，却能减少 exponential overflow。这里开始，数值稳定性正式进入模型实现。
 
-### 8.6 Forward 的完整数据流
+### 8.6 前向传播的完整数据流
 
 ```text
 input batch X
@@ -848,7 +878,7 @@ tensor allocation
 -> softmax / loss reduction
 ```
 
-AI Infra 关心的不只是数学答案，还包括 tensor layout、dtype、kernel launch、memory reuse、operator fusion 和 device communication。但只有先读懂 forward graph，后面才知道系统究竟在优化什么。
+AI Infra 关心的不只是数学答案，还包括张量布局（tensor layout，元素在内存中的组织方式）、数据类型、计算内核启动（kernel launch）、内存复用、算子融合（operator fusion，把多个连续计算合并执行）和设备通信。但只有先读懂前向计算图，后面才知道系统究竟在优化什么。
 
 ---
 
@@ -860,9 +890,9 @@ AI Infra 关心的不只是数学答案，还包括 tensor layout、dtype、kern
 
 Forward 能算出 loss，但一个神经网络可能有数百万甚至数十亿 parameters。我们不可能手工对每个 parameter 单独展开完整公式。
 
-反向传播解决的是：**怎样复用 computation graph 中的局部导数，高效得到 loss 对所有 parameters 的 gradients。**
+反向传播解决的是：**怎样复用计算图（computation graph，用节点和边记录计算依赖关系）中的局部导数，高效得到损失对所有参数的梯度。**
 
-### 9.2 从一个最小 computation graph 开始
+### 9.2 从一个最小计算图（computation graph，记录运算与依赖关系的图）开始
 
 假设：
 
@@ -884,7 +914,7 @@ $$
 \frac{\partial L}{\partial L}=1
 $$
 
-这是 backward 的 seed gradient。然后每个 operation 只处理自己的 local derivative：
+这是反向传播的种子梯度（seed gradient，也就是反向计算的起始值）。然后每个运算只处理自己的局部导数（local derivative，当前输出对当前输入的导数）：
 
 $$
 \frac{\partial L}{\partial e}=2e
@@ -911,8 +941,8 @@ $$
 这里最重要的不是结果，而是模式：
 
 $$
-\text{downstream gradient}
-=\text{upstream gradient}\times\text{local derivative}
+\text{下游梯度}
+=\text{上游梯度}\times\text{局部导数}
 $$
 
 ### 9.3 多条路径为什么要累加
@@ -931,9 +961,9 @@ $$
 \frac{dL}{dx}=2x+1
 $$
 
-这就是为什么 autograd 中 gradient 通常采用 accumulate 语义，而不是“最后一次写入覆盖前一次结果”。
+这就是为什么自动微分（autograd，由框架自动沿计算图求导）中的梯度通常采用累加（accumulate）语义，而不是“最后一次写入覆盖前一次结果”。
 
-### 9.4 神经网络中的 backward
+### 9.4 神经网络中的反向传播
 
 对每一层：
 
@@ -947,21 +977,23 @@ backward 接收上游 gradient
 
 ![反向传播](assets/week5-backpropagation.png)
 
+> **读图：** 蓝色箭头表示前向传播逐层计算激活值，红色箭头表示梯度从输出层向输入层反向流动。反向过程会同时得到每层参数的梯度，并把对输入的梯度继续传给前一层。
+
 Forward 从 input 向 loss 流动；backward 从 loss 沿相反方向传播 gradient。
 
-这也解释了训练为什么比纯 inference 占用更多 memory：训练期间不能随便丢掉 backward 仍然需要的 activations 和 metadata。
+这也解释了训练为什么比纯推理（inference，只执行前向计算得到输出）占用更多内存：训练期间不能随便丢掉反向传播仍然需要的激活值和元数据（metadata，描述计算和张量的信息）。
 
-### 9.5 展开与还原 parameters
+### 9.5 展开与还原参数
 
 老课程会把多个 weight matrices 展开成一个长 parameter vector，交给 generic optimizer，再还原成原始 shapes。
 
-现代框架会替你维护 parameter tensors，但本质相同：optimizer 需要遍历一组 parameters，并用相同结构的 gradients 更新它们。
+现代框架会替你维护参数张量（parameter tensors），但本质相同：优化器需要遍历一组参数，并用形状相同的梯度更新它们。
 
 无论是否 flatten，都必须保存 shape、offset、dtype 与 parameter identity，否则 gradient 无法准确写回原对象。
 
-### 9.6 Gradient checking：给 backward 找一个独立法官
+### 9.6 梯度检查（Gradient checking）：给反向传播找一个独立法官
 
-analytic gradient 来自 backprop。为了验证它，可以用 centered finite difference：
+解析梯度（analytic gradient，由反向传播公式直接算出的梯度）来自 backprop。为了验证它，可以用中心有限差分（centered finite difference，通过参数左右两次扰动近似导数）：
 
 $$
 \frac{\partial J}{\partial\theta_i}
@@ -971,27 +1003,29 @@ $$
 
 ![梯度检查](assets/week5-gradient-check.png)
 
-finite difference 只调用 forward，不复用 backward formula，因此它能作为独立 correctness oracle。
+> **读图：** 图中通过把某个参数分别增加和减少一个很小的 $\varepsilon$，观察两次前向结果的差值，以此近似该参数的导数。这个数值结果会和反向传播给出的解析梯度比较。
+
+有限差分只调用前向传播，不复用反向公式，因此它能作为独立正确性判据（correctness oracle，用另一条实现路径判断结果是否正确）。
 
 但 $\varepsilon$ 不是越小越好：
 
-- 太大：Taylor approximation 的 truncation error 增大。
-- 太小：floating-point cancellation 与 rounding error 增大。
+- 太大：Taylor approximation（泰勒近似）的截断误差（truncation error，忽略高阶项产生的误差）增大。
+- 太小：浮点消减误差（cancellation，两个接近的数相减会损失有效数字）与舍入误差增大。
 
 Gradient check 很慢，因为每个 coordinate 至少需要额外两次 forward。它适合小模型、抽样 parameter 或 reference implementation，不适合每一步大规模训练。
 
-### 9.7 为什么不能把所有 weights 初始化成相同值
+### 9.7 为什么不能把所有权重初始化成相同值
 
 如果同一层所有 neurons 以完全相同的 weights 开始，它们会得到相同 output、相同 gradient，并在每一步继续保持相同。
 
-这叫 symmetry。网络虽然有很多 neurons，却像只有一个 neuron。
+这叫对称性（symmetry）。网络虽然有很多神经元，却像只有一个神经元。
 
-因此 weights 要随机初始化来打破 symmetry；bias 可以初始化为 $0$。现代初始化方法还会根据 fan-in/fan-out 控制 variance，避免 activations 和 gradients 在深层网络中迅速放大或衰减。
+因此权重要随机初始化来打破对称性；偏差可以初始化为 $0$。现代初始化方法还会根据 fan-in / fan-out（一个神经元的输入连接数 / 输出连接数）控制方差，避免激活值和梯度在深层网络中迅速放大或衰减。
 
-### 9.8 Training 与 inference 的第一条分界线
+### 9.8 训练（Training）与推理（inference）的第一条分界线
 
 ```text
-inference：只执行 forward，主要关心 weights、activations、KV Cache 与 latency
+inference：只执行 forward，主要关心 weights、activations、KV Cache（注意力层保存历史 key/value 的缓存）与 latency（完成一次请求所需的延迟）
 training：forward + backward + optimizer，还要保存 activations、gradients 和 optimizer states
 ```
 
@@ -1033,11 +1067,11 @@ training：forward + backward + optimizer，还要保存 activations、gradients
 
 第六周真正教的是一套工程判断方法：**先用 evidence 判断问题属于哪里，再决定把时间花在哪里。**
 
-### 10.2 Train、validation 与 test 为什么必须分开
+### 10.2 训练集、验证集与测试集为什么必须分开
 
-- **Training set**：用于学习 parameters。
-- **Validation / dev set**：用于选择 model、hyperparameters 和 threshold。
-- **Test set**：只用于最后估计泛化能力。
+- **训练集（Training set）**：用于学习模型参数。
+- **验证集（Validation / dev set）**：用于选择模型、超参数和判定阈值。
+- **测试集（Test set）**：只用于最后估计泛化能力。
 
 如果反复查看 test result 并据此修改模型，test set 就已经参与了开发过程。它不再是独立证据，而是另一个 validation set。
 
@@ -1049,14 +1083,16 @@ train multiple candidates on training set
 -> report final result once on test set
 ```
 
-### 10.3 Bias 与 variance 怎样从误差中看出来
+### 10.3 偏差（bias）与方差（variance）怎样从误差中看出来
 
-假设 human-level 或简单 baseline error 很低：
+假设人类水平（human-level performance）或简单基准误差（baseline error，用来比较模型是否真的进步的参考水平）很低：
 
 - train error 很高：模型连 training data 都没有拟合好，通常是 high bias。
 - train error 低、validation error 明显更高：模型记住了 training data，却不能泛化，通常是 high variance。
 
 ![Bias 与 variance](assets/week6-bias-variance.jpg)
+
+> **读图：** 模型复杂度从左到右增加。左侧训练和验证都差，表现为高偏差；右侧训练很好、验证明显变差，表现为高方差；中间区域才是希望找到的平衡。
 
 这两个诊断会直接改变下一步：
 
@@ -1067,17 +1103,19 @@ train multiple candidates on training set
 
 “更多数据”主要帮助 variance 问题。如果模型本身连训练集都学不好，继续堆同分布数据不一定解决 bias。
 
-### 10.4 Learning curve 把数据量也纳入证据
+### 10.4 学习曲线（Learning curve）把数据量也纳入证据
 
 Learning curve 画的是不同 training-set size 下的 train error 与 validation error。
 
 ![Learning curve](assets/week6-learning-curve.png)
 
+> **读图：** 横轴是训练样本数量，纵轴是误差。要同时观察训练误差与验证误差的高度和间距：两者都高更像偏差问题，间距长期很大更像方差问题。
+
 High bias 时，两条曲线最终会在较高 error 附近靠拢。继续加数据通常收益有限。
 
 High variance 时，train error 低而 validation error 高，两者之间存在明显 gap。更多数据有机会缩小 gap。
 
-### 10.5 Regularization 与 bias/variance
+### 10.5 正则化与偏差/方差
 
 $\lambda$ 太大，model 被限制得太死，容易 high bias。
 
@@ -1089,21 +1127,21 @@ $\lambda$ 太小，model 自由度太高，容易 high variance。
 
 ## 11. 机器学习系统设计（Machine Learning System Design）
 
-### 11.1 先建立一个简单 pipeline
+### 11.1 先建立一个简单流水线（pipeline）
 
-以 spam classifier 为例，第一版不需要一次设计完美。可以先完成：
+以垃圾邮件分类器（spam classifier）为例，第一版不需要一次设计完美。可以先完成：
 
 ```text
 text
--> feature extraction
--> classifier
--> prediction
--> metric
+-> 特征提取（feature extraction）
+-> 分类器（classifier）
+-> 预测结果（prediction）
+-> 评估指标（metric）
 ```
 
-让 pipeline 跑起来后，再根据真实 errors 决定下一步。这和系统工程里的 V1 思路相同：先建立可观察的 end-to-end path，再针对瓶颈迭代。
+让流水线跑起来后，再根据真实错误决定下一步。这和系统工程里的 V1 思路相同：先建立可观察的端到端路径（end-to-end path，从输入一直贯通到最终输出），再针对瓶颈迭代。
 
-### 11.2 Error analysis
+### 11.2 错误分析（Error analysis）
 
 从 validation set 中人工查看一批错误样本，记录错误类别：
 
@@ -1115,13 +1153,15 @@ text
 图片型垃圾邮件
 ```
 
-统计每一类出现多少次。这样你能知道“增加某类 feature”最多可能修复多少错误，而不是凭印象重写系统。
+统计每一类出现多少次。这样你能知道“增加某类特征”最多可能修复多少错误，而不是凭印象重写系统。
 
-### 11.3 Skewed classes 为什么不能只看 accuracy
+### 11.3 类别失衡（Skewed classes）为什么不能只看准确率
 
-如果异常请求只占 $1\%$，一个永远预测“正常”的模型也有 $99\%$ accuracy，但它没有任何检测能力。
+如果异常请求只占 $1\%$，一个永远预测“正常”的模型也有 $99\%$ 准确率（accuracy，预测正确的样本占全部样本的比例），但它没有任何检测能力。
 
-这时需要 precision 和 recall：
+这时需要查准率（precision，被判为正类的样本中有多少真的为正）和查全率（recall，所有真实正类中有多少被找出来）：
+
+这里把需要检测的目标称为正类（positive class）。`TP`（True Positive，真正类）表示正确找出的正类；`FP`（False Positive，假正类）表示被误报成正类的负类；`FN`（False Negative，假负类）表示被漏掉的正类。
 
 $$
 \text{precision}=\frac{TP}{TP+FP}
@@ -1133,30 +1173,32 @@ $$
 
 ![Precision 与 recall](assets/week6-precision-recall.png)
 
-- precision 高：被模型判为 positive 的样本大多真的 positive。
-- recall 高：真正的 positive 大多被模型找到了。
+> **读图：** 图展示阈值变化时查准率和查全率的此消彼长。提高阈值会让模型更谨慎，通常减少误报却增加漏报；业务需要根据两类错误的真实代价选择工作点。
 
-F1 score 把两者合并：
+- precision 高：被模型判为正类的样本大多确实是正类。
+- recall 高：真正的正类大多被模型找到了。
+
+F1 分数（F1 score，precision 与 recall 的调和平均）把两者合并：
 
 $$
 F_1=2\cdot\frac{precision\cdot recall}{precision+recall}
 $$
 
-但最终选择哪个 metric，仍取决于业务成本。漏掉欺诈和误封正常用户的代价并不相同。
+但最终选择哪个评估指标，仍取决于业务成本。漏掉欺诈和误封正常用户的代价并不相同。
 
-### 11.4 Threshold 是系统策略的一部分
+### 11.4 判定阈值（Threshold）是系统策略的一部分
 
-classifier 输出 probability 后，还需要 threshold 才能得到最终 label。
+分类器（classifier）输出概率后，还需要判定阈值（threshold，超过该数值才判为正类）才能得到最终标签。
 
-提高 threshold 通常会提升 precision、降低 recall；降低 threshold 通常会提升 recall、降低 precision。
+提高阈值通常会提升查准率、降低查全率；降低阈值通常会提升查全率、降低查准率。
 
-所以 model score 与业务决策不是同一个对象。线上系统经常需要根据 SLA、风险预算和下游处理能力动态选择 threshold。
+所以模型分数与业务决策不是同一个对象。线上系统经常需要根据 SLA（Service Level Agreement，服务等级约定）、风险预算和下游处理能力动态选择阈值。
 
 ### 11.5 更多数据什么时候真正有用
 
-如果 features 足以让人类专家从输入中预测输出，并且 model 容量足够，那么更多高质量数据通常有帮助。
+如果特征足以让人类专家从输入中预测输出，并且模型容量足够，那么更多高质量数据通常有帮助。
 
-但“数据越多越好”不是无条件定律。数据分布错误、label 噪声严重、training-serving skew 或 evaluation metric 不匹配时，盲目扩充数量只会把原问题放大。
+但“数据越多越好”不是无条件定律。数据分布错误、标签噪声严重、训练—服务偏移（training-serving skew，训练数据与线上真实输入分布不同）或评估指标不匹配时，盲目扩充数量只会把原问题放大。
 
 ### 11.6 与主线的连接
 
@@ -1169,44 +1211,48 @@ precision/recall          -> 系统指标必须对应业务代价
 learning curve            -> 用证据决定增加 data 还是 compute/model
 ```
 
-以后做 inference benchmark，也要保持同样纪律：吞吐、延迟、正确率、显存和 workload 必须一起定义，否则一个漂亮数字没有解释力。
+以后做推理性能测试（inference benchmark），也要保持同样纪律：吞吐、延迟、正确率、显存和 workload（测试所使用的请求规模与分布）必须一起定义，否则一个漂亮数字没有解释力。
 
 ---
 
-# 第七周：支持向量机与 Kernel
+# 第七周：支持向量机与核函数（Kernel，用相似度隐式表示高维特征）
 
-## 12. 支持向量机（Support Vector Machine）
+## 12. 支持向量机（Support Vector Machine，SVM）
 
 ### 12.1 从逻辑回归走到大间隔分类
 
 逻辑回归只要求把 classes 分开。支持向量机进一步希望 decision boundary 离两边最近的 training examples 都尽可能远。
 
-这个距离叫 margin。
+这个距离叫间隔（margin，也就是边界到最近训练样本的距离）。
 
 ![大间隔分类](assets/week7-large-margin.png)
 
+> **读图：** 多条直线都能分开样本，但 SVM 更偏好离两类最近样本都较远的那一条。边界两侧留出的空白区域就是 margin，它反映了分类结果对小扰动的容忍程度。
+
 直觉上，boundary 如果紧贴某个样本，数据稍微发生扰动就可能分类翻转；margin 更大的 boundary 往往更稳健。
 
-### 12.2 Parameter $C$ 在控制什么
+### 12.2 参数 $C$ 在控制什么
 
-SVM 中的 $C$ 可以理解为“多重视训练错误”与“多重视宽 margin”之间的权衡。
+SVM 中的 $C$ 是控制训练错误惩罚强度的超参数，可以理解为“多重视训练错误”与“多重视宽间隔”之间的权衡。
 
 - $C$ 很大：强烈惩罚 training errors，boundary 更努力拟合每个样本，variance 可能增大。
 - $C$ 较小：允许少量 training errors，换取更宽 margin，regularization 更强。
 
 它与逻辑回归中的 $\lambda$ 方向大致相反：更大的 $C$ 通常意味着更弱的 regularization。
 
-### 12.3 Kernel 解决什么问题
+### 12.3 核函数解决什么问题
 
 如果原空间中无法用直线分开，可以把 input 映射到新的 features。
 
-Gaussian kernel 衡量 $x$ 与 landmark $l$ 的接近程度：
+高斯核（Gaussian kernel，用距离生成相似度）衡量 $x$ 与地标点（landmark，用作相似度参照的样本）$l$ 的接近程度：
 
 $$
 K(x,l)=\exp\left(-\frac{\|x-l\|^2}{2\sigma^2}\right)
 $$
 
 ![Gaussian kernel](assets/week7-kernel.png)
+
+> **读图：** landmark 附近的点得到接近 $1$ 的相似度，距离越远结果越接近 $0$。把多个 landmark 的相似度组成新特征后，原空间中的弯曲边界可以在新空间里用线性方法表达。
 
 离 landmark 越近，kernel value 越接近 $1$；越远则越接近 $0$。以多个 landmarks 生成 features 后，原本弯曲的 boundary 可能在新 feature space 中变成 linear boundary。
 
@@ -1215,9 +1261,9 @@ $\sigma$ 控制影响范围：
 - $\sigma$ 小：每个 landmark 影响范围窄，boundary 更曲折，variance 更高。
 - $\sigma$ 大：影响范围宽，boundary 更平滑，bias 更高。
 
-### 12.4 为什么 kernel trick 曾经重要
+### 12.4 为什么核技巧（kernel trick）曾经重要
 
-显式构造高维 features 可能非常昂贵。Kernel method 可以直接计算两个 examples 在隐式 feature space 中的 inner product，而不必真的构造那个巨大 vector。
+显式构造高维特征可能非常昂贵。核方法（Kernel method）可以直接计算两个样本在隐式特征空间中的内积（inner product，两个向量对应元素乘积之和），而不必真的构造那个巨大向量。
 
 这是一个非常漂亮的 algorithmic idea：只计算优化真正需要的相似度，而不是 materialize 完整表示。
 
@@ -1232,7 +1278,7 @@ kernel 是一种相似度与隐式 feature mapping
 algorithm choice 会受 dataset size 和 compute complexity 限制
 ```
 
-不需要现在完整推导 dual optimization，也不需要手写 production SVM。现代 LLM 工作负载的核心计算不在这里。
+不需要现在完整推导对偶优化（dual optimization，把原优化问题转换到另一组变量上求解），也不需要手写生产级 SVM。现代 LLM 工作负载的核心计算不在这里。
 
 ---
 
@@ -1240,22 +1286,24 @@ algorithm choice 会受 dataset size 和 compute complexity 限制
 
 ## 13. K-means 聚类
 
-### 13.1 没有 labels 时，怎样寻找 group
+### 13.1 没有标签时，怎样寻找分组
 
 K-means 的目标是把 examples 分到 $K$ 个 clusters，使每个 example 离自己 cluster center 尽可能近。
 
 它反复执行两个步骤：
 
 ```text
-assignment step：把每个 example 分给最近的 centroid
-update step：把每个 centroid 移到所属 examples 的 mean
+分配步骤（assignment step）：把每个样本分给最近的中心点
+更新步骤（update step）：把每个中心点（centroid，代表一个分组中心的位置）移到所属样本的均值
 ```
 
 ![K-means](assets/week8-kmeans.jpg)
 
-### 13.2 Optimization objective
+> **读图：** 不同颜色表示当前 cluster，中心标记表示 centroid。算法先按最近中心给样本分组，再把中心移动到该组样本均值；两步交替执行，直到分组和中心基本不再变化。
 
-若 $c^{(i)}$ 表示 example $i$ 所属 cluster，$\mu_k$ 表示第 $k$ 个 centroid：
+### 13.2 优化目标（Optimization objective）
+
+若 $c^{(i)}$ 表示样本 $i$ 所属的簇（cluster，也就是一个分组），$\mu_k$ 表示第 $k$ 个中心点：
 
 $$
 J=\frac{1}{m}\sum_{i=1}^{m}
@@ -1264,17 +1312,17 @@ $$
 
 assignment step 在固定 centroids 时减小 $J$；update step 在固定 assignments 时也减小 $J$。所以每轮 objective 不会上升。
 
-但它只能保证收敛到 local optimum，不保证全局最优。
+但它只能保证收敛到局部最优（local optimum，在附近已经无法继续降低目标），不保证全局最优。
 
 ### 13.3 为什么要多次随机初始化
 
-不同初始 centroids 可能收敛到不同结果。因此通常进行多次 random initialization，选择最终 cost 最低的一次。
+不同初始中心点可能收敛到不同结果。因此通常进行多次随机初始化（random initialization，从不同起点重复运行），选择最终成本最低的一次。
 
 如果 $K$ 小于等于 examples 数，可以从 training examples 中随机选择 $K$ 个不同 points 作为初始 centroids，避免所有 centers 从同一点开始。
 
 ### 13.4 怎样选择 $K$
 
-Elbow method 会观察 cost 随 $K$ 增加的变化。如果某个位置后收益明显变缓，它可能是合理选择。
+肘部法（Elbow method）会观察成本随 $K$ 增加的变化。如果某个位置后收益明显变缓，它可能是合理选择。
 
 但真实数据不一定存在清晰 elbow。很多时候 $K$ 最终由 downstream purpose 决定，例如压缩图片允许多少 colors，或业务希望划分多少用户 groups。
 
@@ -1284,17 +1332,19 @@ Elbow method 会观察 cost 随 $K$ 增加的变化。如果某个位置后收�
 
 ### 14.1 PCA 想保留什么
 
-高维数据中，不同 features 可能高度相关。PCA 希望找到一组新的 orthogonal directions，让前几个 directions 尽可能保留数据 variance。
+高维数据中，不同特征可能高度相关。PCA（Principal Component Analysis，主成分分析）希望找到一组新的正交方向（orthogonal directions，彼此垂直、信息不重复的方向），让前几个方向尽可能保留数据方差（variance，数据沿某个方向的变化程度）。
 
 如果从二维压到一维，就是寻找一条线，让所有 points 投影到这条线后的 reconstruction error 尽可能小。
 
 ![PCA 的投影直觉](assets/week8-pca.jpg)
 
+> **读图：** 高维数据被投影到一条主要方向上。PCA 要让点到该方向的正交投影误差尽量小，从而用较少维度保留尽可能多的整体变化。
+
 ### 14.2 PCA 不是线性回归
 
 线性回归最小化的是 prediction 与 label $y$ 的 vertical error。
 
-PCA 没有 label。它最小化的是 input point 到低维 subspace 的 orthogonal projection distance。
+PCA 没有标签。它最小化的是输入点到低维子空间（subspace，由少数方向张成的空间）的正交投影距离（orthogonal projection distance）。
 
 两者图上都可能出现一条线，但解决的问题完全不同。
 
@@ -1326,7 +1376,7 @@ $$
 
 ### 14.4 怎样选择主成分数量
 
-常见目标是让 retained variance ratio 达到 $99\%$ 或 $95\%$。用 singular values 可计算：
+常见目标是让保留方差比例（retained variance ratio，压缩后仍保存的数据变化比例）达到 $99\%$ 或 $95\%$。用奇异值可计算：
 
 $$
 \frac{\sum_{i=1}^{k}S_{ii}}
@@ -1356,17 +1406,17 @@ K-means 与 PCA 不直接等于现代 embedding system，但它们建立了两�
 
 # 第九周：异常检测与推荐系统
 
-## 15. 异常检测（Anomaly Detection）
+## 15. 异常检测（Anomaly Detection，判断新样本是否明显偏离正常分布）
 
 ### 15.1 为什么有些问题不适合普通分类
 
-假设服务器每天产生大量正常 metrics，真正的 failure 却极少，而且新的 failure pattern 可能以前从未出现。
+假设服务器每天产生大量正常指标（metrics），真正的故障（failure）却极少，而且新的故障模式可能以前从未出现。
 
-这时很难列举所有异常类别去训练一个普通 classifier。更自然的做法是先学习“正常数据长什么样”，然后判断新样本在这种分布下是不是极不可能出现。
+这时很难列举所有异常类别去训练一个普通分类器。更自然的做法是先学习“正常数据长什么样”，然后判断新样本在这种分布下是不是极不可能出现。
 
-### 15.2 从 Gaussian distribution 开始
+### 15.2 从高斯分布（Gaussian distribution）开始
 
-一维 Gaussian distribution：
+一维高斯分布：
 
 $$
 p(x;\mu,\sigma^2)
@@ -1376,7 +1426,9 @@ $$
 
 ![Gaussian distribution](assets/week9-gaussian.png)
 
-从 training data 估计：
+> **读图：** 曲线中心由均值 $\mu$ 决定，宽窄由标准差 $\sigma$ 决定。靠近中心的数值概率密度高，落在远端尾部的数值更罕见，因此可被用作异常信号。
+
+从训练数据估计：
 
 $$
 \mu=\frac{1}{m}\sum_{i=1}^{m}x^{(i)}
@@ -1386,49 +1438,49 @@ $$
 \sigma^2=\frac{1}{m}\sum_{i=1}^{m}(x^{(i)}-\mu)^2
 $$
 
-如果暂时假设各 features 独立：
+如果暂时假设各特征独立：
 
 $$
 p(\mathbf x)=\prod_{j=1}^{n}p(x_j;\mu_j,\sigma_j^2)
 $$
 
-若 $p(\mathbf x)<\varepsilon$，就判定为 anomaly。
+若 $p(\mathbf x)<\varepsilon$，就判定为异常（anomaly，也就是在正常分布下极少出现的样本）。
 
-### 15.3 Threshold 怎样选择
+### 15.3 阈值怎样选择
 
-$\varepsilon$ 不是凭感觉设置。使用带有少量 labels 的 validation set，比较不同 thresholds 下的 precision、recall 或 F1，再选择符合业务代价的一点。
+$\varepsilon$ 不是凭感觉设置。使用带有少量标签的验证集，比较不同阈值下的查准率、查全率或 F1，再选择符合业务代价的一点。
 
-training set 可以主要由 normal examples 构成；validation/test 中要保留真实 anomalies，才能验证检测能力。
+训练集可以主要由正常样本构成；验证集和测试集中要保留真实异常样本，才能验证检测能力。
 
-### 15.4 Anomaly detection 与 supervised learning 的边界
+### 15.4 异常检测与监督学习的边界
 
-更适合 anomaly detection：
+更适合异常检测：
 
 ```text
-positive examples 极少
+正类样本极少
 异常种类很多，未来还会出现新类型
-normal behavior 比 anomaly behavior 更容易建模
+正常行为比异常行为更容易建模
 ```
 
-更适合 supervised classification：
+更适合监督分类：
 
 ```text
-positive examples 足够多
-未来 positives 与历史 positives 类型相近
-模型能够直接学习 class boundary
+正类样本足够多
+未来正类与历史正类类型相近
+模型能够直接学习分类边界
 ```
 
-### 15.5 Feature engineering 为什么特别重要
+### 15.5 特征工程（Feature engineering）为什么特别重要
 
-如果 raw features 的分布严重偏斜，可以使用 $\log(x+c)$、square root 等 transformation，让数据更接近 Gaussian shape。
+如果原始特征的分布严重偏斜，可以使用 $\log(x+c)$、平方根等变换（transformation），让数据形状更接近高斯分布。
 
-更重要的是，features 要能暴露异常。例如只有 CPU utilization 可能发现不了问题，但“CPU utilization / network traffic”也许能揭示资源比例异常。
+更重要的是，特征要能暴露异常。例如只有 CPU 利用率（CPU utilization）可能发现不了问题，但“CPU 利用率 / 网络流量（network traffic）”也许能揭示资源比例异常。
 
-### 15.6 Multivariate Gaussian
+### 15.6 多元高斯分布（Multivariate Gaussian）
 
-独立 Gaussian model 分别建模每个 feature，无法直接表示 correlations。
+独立高斯模型分别建模每个特征，无法直接表示相关性（correlation，两个特征共同变化的关系）。
 
-Multivariate Gaussian 使用 covariance matrix：
+多元高斯分布使用协方差矩阵（covariance matrix，描述多个特征怎样共同变化）：
 
 $$
 p(\mathbf x)
@@ -1437,22 +1489,22 @@ p(\mathbf x)
 \Sigma^{-1}(\mathbf x-\mu)\right)
 $$
 
-它能发现“每个 feature 单独看都正常，但组合关系异常”的样本。代价是需要更多数据估计 $\Sigma$，计算也更昂贵。
+它能发现“每个特征单独看都正常，但组合关系异常”的样本。代价是需要更多数据估计 $\Sigma$，计算也更昂贵。
 
 ### 15.7 与系统监控的连接
 
-异常检测直接对应 AI Infra observability：
+异常检测直接对应 AI Infra 的可观测性：
 
 ```text
-latency
-throughput
-GPU utilization
-memory usage
-queue depth
-error rate
+延迟（latency）
+吞吐量（throughput）
+GPU 利用率（GPU utilization）
+内存用量（memory usage）
+队列深度（queue depth）
+错误率（error rate）
 ```
 
-但是生产告警不能只依赖一个概率公式。还要处理 concept drift、seasonality、missing metrics、alert fatigue 和回滚策略。课程给的是统计核心，不是完整监控系统。
+但是生产告警不能只依赖一个概率公式。还要处理概念漂移（concept drift，线上数据规律随时间改变）、季节性（seasonality，按时间周期重复的波动）、指标缺失、告警疲劳（alert fatigue，告警过多导致真正问题被忽略）和回滚策略。课程给的是统计核心，不是完整监控系统。
 
 ---
 
@@ -1460,15 +1512,17 @@ error rate
 
 ### 16.1 问题怎样表示
 
-设 $Y_{ij}$ 表示用户 $j$ 对物品 $i$ 的 rating，$R_{ij}=1$ 表示这条 rating 已知。
+设 $Y_{ij}$ 表示用户 $j$ 对物品 $i$ 的评分（rating），$R_{ij}=1$ 表示这条评分已知。
 
 推荐系统的目标，是预测缺失的 $Y_{ij}$。
 
 ![推荐系统矩阵](assets/week9-recommender.png)
 
-### 16.2 Content-based recommendation
+> **读图：** 行表示物品，列表示用户，已填写位置是已有评分，空白位置是待预测值。推荐系统要利用已有交互推断这些空白，而不是把空白误当成评分为零。
 
-如果每个 movie 已有 feature vector $x^{(i)}$，例如 romance、action 的程度，那么每个 user 可以学习自己的 preference vector $\theta^{(j)}$：
+### 16.2 基于内容的推荐（Content-based recommendation）
+
+如果每部电影已有特征向量 $x^{(i)}$，例如爱情、动作元素的程度，那么每个用户可以学习自己的偏好向量（preference vector）$\theta^{(j)}$：
 
 $$
 \hat y^{(i,j)}=(\theta^{(j)})^Tx^{(i)}
@@ -1478,12 +1532,12 @@ $$
 
 问题是：现实中 item features 往往也不知道，手工标注成本很高。
 
-### 16.3 Collaborative filtering
+### 16.3 协同过滤（Collaborative filtering）
 
-Collaborative filtering 同时学习：
+协同过滤同时学习：
 
 ```text
-每个 item 的 latent feature vector x(i)
+每个物品的隐含特征向量（latent feature vector，模型自动学习而非人工标注的特征）x(i)
 每个 user 的 preference vector theta(j)
 ```
 
@@ -1493,9 +1547,9 @@ $$
 \hat y^{(i,j)}=(\theta^{(j)})^Tx^{(i)}
 $$
 
-训练只在 $R_{ij}=1$ 的 observed entries 上计算 error，并对两组 vectors 都做 regularization。
+训练只在 $R_{ij}=1$ 的已观测位置（observed entries，也就是确实存在评分的位置）上计算误差，并对两组向量都做正则化。
 
-### 16.4 Low-rank matrix factorization
+### 16.4 低秩矩阵分解（Low-rank matrix factorization）
 
 把所有 item vectors 组成 $X$，所有 user vectors 组成 $\Theta$，完整预测矩阵是：
 
@@ -1505,11 +1559,13 @@ $$
 
 ![低秩矩阵分解](assets/week9-low-rank.png)
 
+> **读图：** 巨大的用户—物品矩阵被拆成“物品向量矩阵 × 用户向量矩阵”。中间较窄的维度保存 latent features，也就是模型自动学习出的隐含兴趣坐标。
+
 原本巨大的 user-item matrix，被表示成两个较窄 matrices 的乘积。这就是 low-rank factorization。
 
-这里的 latent vector 已经非常接近 embedding 的直觉：一个离散 ID 被映射成可学习的 dense vector，vector geometry 编码了相似性与偏好。
+这里的隐向量已经非常接近嵌入（embedding，把离散 ID 映射成可学习的稠密向量）的直觉：一个离散 ID 被映射成 dense vector（大多数位置都有有效数值的稠密向量），向量之间的几何关系编码了相似性与偏好。
 
-### 16.5 Mean normalization 与 cold start
+### 16.5 均值归一化（Mean normalization）与冷启动（cold start）
 
 如果一个新 user 没有任何 ratings，未经处理的 model 可能预测得很差。对每个 item 的 ratings 先减去 mean，模型只学习相对偏好，最终再把 mean 加回去，会得到更合理的 baseline。
 
@@ -1521,147 +1577,153 @@ $$
 
 ```text
 embedding table
-sparse IDs -> dense vectors
+sparse IDs（离散且取值空间很大的编号）-> dense vectors（稠密向量）
 large matrix multiplication
-top-k retrieval
+top-k retrieval（检索分数最高的 k 个结果）
 online updates
-memory capacity 与 sharding
+memory capacity 与 sharding（把大表切分到多个设备或节点）
 ```
 
-这些都是机器学习基础设施中的真实问题。课程只讲 objective；工程上还要解决亿级 embeddings 的存储、更新、一致性、cache 与 distributed serving。
+这些都是机器学习基础设施中的真实问题。课程只讲优化目标；工程上还要解决亿级嵌入向量的存储、更新、一致性、缓存和分布式服务（distributed serving，让多个节点共同承载在线推理）。
 
 ---
 
-# 第十周：大规模机器学习与 Pipeline 分析
+# 第十周：大规模机器学习与流水线分析
 
 ## 17. 大规模机器学习（Large Scale Machine Learning）
 
-### 17.1 数据很多时，batch gradient descent 为什么变贵
+### 17.1 数据很多时，批量梯度下降（batch gradient descent）为什么变贵
 
-Batch gradient descent 每次 parameter update 都扫描全部 $m$ 条 examples。
+批量梯度下降每次更新参数都扫描全部 $m$ 条样本。
 
-当 $m$ 很大时，单次 update 就可能耗时很久。问题不在公式错误，而在“每走一步都必须读完整 dataset”。
+当 $m$ 很大时，单次参数更新就可能耗时很久。问题不在公式错误，而在“每走一步都必须读完整数据集”。
 
-### 17.2 Stochastic gradient descent
+### 17.2 随机梯度下降（Stochastic Gradient Descent，SGD）
 
-SGD 每次只用一个 example 估计 gradient：
+SGD 每次只用一个样本估计梯度：
 
 ```text
-shuffle dataset
--> read one example
--> compute prediction and error
--> update parameters immediately
+打乱数据集（shuffle dataset）
+-> 读取一条样本
+-> 计算预测与误差
+-> 立刻更新参数
 ```
 
 ![SGD 路径](assets/week10-sgd.jpg)
 
-因为单个 example 的 gradient 很 noisy，cost 不会平滑下降，而是在最优区域附近波动。但 update 非常频繁，能够快速开始学习，也适合 streaming data。
+> **读图：** 随机梯度使用单个或少量样本估计下降方向，因此路径不会像全量梯度那样平滑，而会在最低点附近抖动。它换来的好处是每次更新成本更低、开始学习更快。
 
-### 17.3 Mini-batch gradient descent
+因为单个样本给出的梯度噪声很大，成本不会平滑下降，而是在最优区域附近波动。但更新非常频繁，能够快速开始学习，也适合流式数据（streaming data，持续到达而不是一次全部读入的数据）。
 
-Mini-batch 每次使用 $B$ 条 examples：
+### 17.3 小批量梯度下降（Mini-batch gradient descent）
+
+小批量每次使用 $B$ 条样本：
 
 $$
 \nabla J_B
 =\frac{1}{B}\sum_{i\in batch}\nabla L^{(i)}
 $$
 
-它位于 batch GD 与 SGD 之间：
+它位于全量梯度下降与 SGD 之间：
 
-- 比单样本 gradient 稳定。
-- 比全量 batch 更频繁更新。
-- 最重要的是能把 $B$ 条 examples 组织成 matrix operation，利用 SIMD、BLAS 和 GPU parallelism。
+- 比单样本梯度稳定。
+- 比全量批次更频繁更新。
+- 最重要的是能把 $B$ 条样本组织成矩阵运算，利用 SIMD、BLAS 和 GPU 并行能力（parallelism）。
 
-这就是现代 deep learning training 的默认形态。
+这就是现代深度学习训练的默认形态。
 
 ### 17.4 怎样观察 SGD 是否收敛
 
-单条 example 的 loss 噪声太大，通常每隔一段时间对最近若干 losses 求 average，再观察趋势。
+单条样本的损失噪声太大，通常每隔一段时间对最近若干损失求平均值，再观察趋势。
 
-如果平均窗口太小，curve 仍然很 noisy；窗口太大，又会掩盖近期变化。
+如果平均窗口太小，曲线仍然会剧烈抖动；窗口太大，又会掩盖近期变化。
 
-减小 learning rate 通常能让结果在 optimum 附近更稳定，但会牺牲前期速度。现代 optimizer 会使用 learning-rate schedule、momentum 和 adaptive statistics 改进这一过程。
+减小学习率通常能让结果在最优点附近更稳定，但会牺牲前期速度。现代优化器会使用学习率调度（learning-rate schedule，随训练进度改变学习率）、动量（momentum，累积过去更新方向）和自适应统计量改进这一过程。
 
-### 17.5 Online learning
+### 17.5 在线学习（Online learning）
 
-在线学习让每次新 interaction 都成为一次 update：
+在线学习让每次新的交互事件（interaction）都成为一次更新：
 
 ```text
-receive user event
--> make prediction
--> observe outcome
--> update model
+收到用户事件
+-> 做出预测
+-> 观察真实结果
+-> 更新模型
 ```
 
-它适合 data distribution 持续变化的场景。但 production system 还必须处理 bad data、feedback loop、rollback、versioning 和 delayed labels。能更新不代表应该让任何请求直接改变线上模型。
+它适合数据分布持续变化的场景。但生产系统还必须处理坏数据、反馈回路（feedback loop，模型输出反过来改变后续训练数据）、回滚、版本管理和延迟标签（delayed labels，真实答案过一段时间才到达）。能更新不代表应该让任何请求直接改变线上模型。
 
-### 17.6 MapReduce 与 data parallel 的早期直觉
+### 17.6 MapReduce（分布式映射—归约模型）与数据并行（data parallel）的早期直觉
 
-如果 gradient 是 examples 上贡献的 sum，就可以把 dataset 分片：
+如果梯度是各样本贡献之和，就可以把数据集分片：
 
 ```text
-worker 1 computes partial gradient on shard 1
-worker 2 computes partial gradient on shard 2
+工作进程 1 在分片 1 上计算局部梯度
+工作进程 2 在分片 2 上计算局部梯度
 ...
-reduce partial gradients
--> update shared parameters
+归约所有局部梯度
+-> 更新共享参数
 ```
 
 ![数据并行](assets/week10-data-parallel.jpg)
 
-现代 distributed training 的 data parallel 仍沿用这个核心结构，只是通信通常由 all-reduce 完成，并加入 gradient bucketing、overlap、mixed precision、fault tolerance 等系统机制。
+> **读图：** 数据被分给多个工作进程（worker），各自计算局部梯度，再通过归约操作合并。计算可以并行，但梯度合并会引入通信成本，这正是分布式训练需要优化的部分。
 
-真正的瓶颈也不只在 compute：
+现代分布式训练的数据并行仍沿用这个核心结构，只是通信通常由 all-reduce（让多个 worker 汇总并共享归约结果的通信操作）完成，并加入梯度分桶（gradient bucketing，把许多小梯度合并通信）、计算通信重叠（overlap）、混合精度（mixed precision，用不同浮点精度平衡速度与稳定性）、容错（fault tolerance，节点失败后继续或恢复训练）等系统机制。
+
+真正的瓶颈也不只在计算：
 
 ```text
-dataset I/O
-host-to-device transfer
-GPU compute
-gradient communication
-optimizer state update
-checkpoint write
+数据集 I/O（输入输出）
+host-to-device transfer（CPU 内存到加速器显存的数据传输）
+GPU 计算
+梯度通信
+优化器状态更新
+checkpoint write（把模型与训练状态写成可恢复快照）
 ```
 
-AI Infra 的工作，就是找出这些阶段谁在阻塞谁，再通过 batching、parallelism、memory management 与 communication optimization 改善 end-to-end performance。
+AI Infra 的工作，就是找出这些阶段谁在阻塞谁，再通过批处理（batching）、并行、内存管理与通信优化改善端到端性能。
 
 ---
 
-## 18. 应用实例：图片文字识别（Photo OCR）
+## 18. 应用实例：图片文字识别（Photo OCR，Optical Character Recognition，光学字符识别）
 
-### 18.1 为什么课程最后讲 pipeline
+### 18.1 为什么课程最后讲流水线
 
-识别街景图片中的文字，不是一个单独 classifier 就能解决的任务。完整 pipeline 可能包含：
+识别街景图片中的文字，不是一个单独分类器就能解决的任务。完整流水线可能包含：
 
 ```text
-image
--> text detection
--> character segmentation
--> character recognition
--> language correction
--> final text
+图片
+-> 文字检测
+-> 字符切分
+-> 字符识别
+-> 语言纠错
+-> 最终文本
 ```
 
 ![OCR pipeline](assets/week10-ocr-pipeline.jpg)
 
-这一章真正想教的不是旧版 OCR 技术，而是：复杂 ML product 由多个 stages 组成，最终效果取决于整条 pipeline。
+> **读图：** 一张输入图片依次经过文字检测、字符切分和字符识别，前一阶段的输出成为后一阶段的输入。任何一段犯错都可能传到最终结果，因此需要逐段评估上限和瓶颈。
 
-### 18.2 Sliding window
+这一章真正想教的不是旧版 OCR 技术，而是：复杂机器学习产品由多个处理阶段（stages）组成，最终效果取决于整条流水线。
 
-早期 object detection 会用固定窗口在 image 上滑动，对每个位置运行 classifier，再改变 window size 重复扫描。
+### 18.2 滑动窗口（Sliding window）
 
-它计算量大、重复工作多，但建立了 dense prediction 的基本直觉。现代 convolutional architecture 会复用大量 computation，不再把每个 window 当成完全独立任务。
+早期目标检测（object detection，在图片中找出目标的位置与类别）会用固定窗口在图片上滑动，对每个位置运行分类器，再改变窗口大小重复扫描。
 
-### 18.3 Artificial data synthesis
+它计算量大、重复工作多，但建立了密集预测（dense prediction，在许多空间位置同时产生结果）的基本直觉。现代卷积架构（convolutional architecture）会复用大量计算，不再把每个窗口当成完全独立任务。
 
-如果真实 labeled data 不够，可以通过字体渲染、背景合成、旋转、裁剪、颜色变化等方式生成训练数据。
+### 18.3 人工数据合成（Artificial data synthesis）
 
-但 synthetic data 必须逼近真实 input distribution。如果合成过程留下过于明显的 artifacts，模型可能只学会区分“合成痕迹”，线上效果仍然很差。
+如果真实标注数据不够，可以通过字体渲染、背景合成、旋转、裁剪、颜色变化等方式生成训练数据。
 
-### 18.4 Ceiling analysis
+但合成数据（synthetic data）必须逼近真实输入分布（input distribution，线上输入出现的概率规律）。如果合成过程留下过于明显的伪影（artifacts，由生成过程额外带来的异常痕迹），模型可能只学会区分“合成痕迹”，线上效果仍然很差。
 
-怎样判断 pipeline 下一步该优化哪一段？
+### 18.4 上限分析（Ceiling analysis）
 
-把某个 stage 暂时替换成 perfect ground truth，观察 end-to-end metric 最多提升多少。
+怎样判断流水线下一步该优化哪一段？
+
+把某个阶段暂时替换成完美真值（perfect ground truth，也就是假设该阶段永不出错的正确答案），观察端到端指标最多能提升多少。
 
 例如：
 
@@ -1674,7 +1736,7 @@ image
 
 这说明 detection 与 recognition 都有较大改进空间，segmentation 的上限收益较小。
 
-Ceiling analysis 与性能 profiling 是同一种工程思想：**不要平均优化所有模块，先找到限制 end-to-end result 的主要瓶颈。**
+上限分析与性能剖析（profiling，测量时间和资源究竟花在哪里）是同一种工程思想：**不要平均优化所有模块，先找到限制端到端结果的主要瓶颈。**
 
 ---
 
