@@ -1,6 +1,6 @@
 # 吴恩达 2014 机器学习：面向 AI Infra（人工智能基础设施）的完整自学讲义
 
-> 版本：2026-09-23
+> 版本：2026-09-24，全课程展开版
 >
 > 对齐课程：[斯坦福大学 2014 机器学习中文笔记](http://www.ai-start.com/ml2014/)
 >
@@ -11,6 +11,8 @@
 > 端到端工作流练习：[Kaggle入门实践.md](Kaggle入门实践.md)（T13 后必做 Titanic；T12 后可选 Digit Recognizer；不刷榜）
 >
 > 这份讲义保留原 `ML.md` 的直觉式语言，但补齐课程、公式、图片和 AI Infra 连接。旧稿保存在 [archive/ML_20260923_original.md](archive/ML_20260923_original.md)。
+
+本版按原课程 `week1~week10` 逐节复核，不再把中间推理压成“记住结论”。原课程的 Octave 操作会迁移到当前 Python 3.12 / NumPy 环境，但它训练的矩阵操作、向量化、数据移动、绘图和控制流能力都会保留。正文是重新组织后的教学讲义，不是网页原文的逐字复制。
 
 ---
 
@@ -93,6 +95,39 @@ $x^{(i)}$ 是第 $i$ 个输入，$y^{(i)}$ 是它对应的正确答案。
 监督学习：训练时有正确答案
 无监督学习：训练时没有正确答案，需要从数据中发现结构
 ```
+
+### 1.4 一次“学习”究竟发生了什么
+
+把一个算法叫作机器学习算法，至少要分清四个对象：
+
+```text
+training set：算法用来学习的数据
+model：从 input 计算 prediction 的规则
+parameters：训练过程真正修改的数值
+learning algorithm：根据 prediction error 修改 parameters 的过程
+```
+
+假设训练集中有 $m$ 条样本：
+
+$$
+\left\{\left(x^{(1)},y^{(1)}\right),\ldots,
+\left(x^{(m)},y^{(m)}\right)\right\}
+$$
+
+上标 $(i)$ 表示“第 $i$ 条样本”，不是乘方。学习算法先把当前参数交给模型，模型为所有 $x^{(i)}$ 产生预测；成本函数把预测和 $y^{(i)}$ 汇总成一个数；优化算法再根据这个数对参数的导数修改参数。
+
+```text
+parameters
+-> model forward
+-> predictions
+-> compare with labels
+-> scalar cost
+-> gradients
+-> parameter update
+-> 下一轮
+```
+
+因此，训练不是一次函数调用，而是这条闭环反复运行。推理只保留其中的 `input -> model -> prediction`，不再计算标签误差和更新参数。这条分界会一直延续到神经网络与大模型。
 
 ---
 
@@ -266,6 +301,27 @@ $$
 
 线性回归的平方误差是凸函数（convex function，任意局部最低点也属于全局最低点），因此不存在更差的局部极小值（local minimum）。设计矩阵满列秩时最优参数唯一；特征线性相关时可能存在多组等价的全局最优解（global solutions），但梯度下降仍不会被错误的局部谷底困住。
 
+### 2.8 把 batch gradient descent 写成完整算法
+
+原课程把这种“每次更新前看完全部训练样本”的方法叫 batch gradient descent（批量梯度下降）。这里的 batch 指全部 $m$ 条训练样本，不是后面深度学习里常说的小批量。
+
+```python
+for step in range(num_steps):
+    prediction = w * x + b
+    error = prediction - y
+
+    grad_w = np.mean(error * x)
+    grad_b = np.mean(error)
+
+    new_w = w - learning_rate * grad_w
+    new_b = b - learning_rate * grad_b
+    w, b = new_w, new_b
+```
+
+这段代码里最值得检查的不是语法，而是更新顺序。`grad_w` 和 `grad_b` 都必须由同一组旧参数产生，然后再同步写回。若先更新 `w`，再用新 `w` 计算 `grad_b`，你实现的就不是公式中的同一步。
+
+每隔若干 step 记录一次 $J(w,b)$。成本持续下降只能说明“当前训练过程看起来在朝正确方向移动”，不能单独证明 gradient、数据读取和 shape 全部正确。后面还会用 finite difference（有限差分）为 gradient 建立独立证据。
+
 ---
 
 ## 3. 线性代数回顾（Linear Algebra Review）
@@ -361,6 +417,38 @@ $$
 所以向量化（vectorization）的准确含义是：**把规则相同的数据计算交给底层批量计算内核（kernel）**。
 
 它通常能显著提速，但不等于“一万次乘法真的只需要一个时钟周期”。硬件仍然要执行运算、搬运数据、同步并写回结果。
+
+### 3.6 线性代数操作的边界不能省略
+
+原课程还要求掌握矩阵加法、标量乘法和矩阵乘法的性质，因为这些性质决定代码能不能合法组合。
+
+矩阵加法要求 shape 完全相同：
+
+$$
+[m,n]+[m,n]\longrightarrow[m,n]
+$$
+
+矩阵乘法要求左边最后一维等于右边倒数第二维：
+
+$$
+[m,n]@[n,k]\longrightarrow[m,k]
+$$
+
+乘法满足结合律：
+
+$$
+(AB)C=A(BC)
+$$
+
+但通常不满足交换律：
+
+$$
+AB\ne BA
+$$
+
+这不只是考试性质。改变结合顺序会改变中间 tensor 的 shape、内存和计算量；随意交换顺序则可能连数学含义都变掉。AI Infra 后面做 operator fusion、attention kernel 和计算图优化时，必须在“数学等价”成立的前提下选择更便宜的执行顺序。
+
+逆矩阵也不是普通除法。只有方阵才可能存在 inverse，而且线性相关会让它成为 singular matrix（奇异矩阵，也就是不可逆矩阵）。代码中看到 `np.linalg.inv(A) @ b` 时，第一反应应该是“我是在求解线性方程，能否直接用 solver”，而不是把 inverse 当成默认 API。
 
 ---
 
@@ -479,6 +567,72 @@ $$
 
 此时伪逆（pseudo-inverse，在矩阵不可逆时推广逆矩阵概念的工具）仍可给出最小二乘解，但你需要理解问题本身为什么没有唯一解。
 
+### 4.7 把多变量线性回归完整走一轮
+
+假设每套房子使用三个特征：面积、卧室数、房龄。把 bias 合并进参数后，一条样本写成：
+
+$$
+\tilde{\mathbf x}^{(i)}=
+\begin{bmatrix}
+1 & x_1^{(i)} & x_2^{(i)} & x_3^{(i)}
+\end{bmatrix}
+$$
+
+数据矩阵与参数 shape 是：
+
+```text
+X:     [m, 4]
+theta: [4]
+y:     [m]
+```
+
+一次训练迭代依次发生：
+
+$$
+\hat{\mathbf y}=X\theta
+$$
+
+$$
+\mathbf e=\hat{\mathbf y}-\mathbf y
+$$
+
+$$
+J(\theta)=\frac{1}{2m}\mathbf e^T\mathbf e
+$$
+
+$$
+\nabla_\theta J=\frac{1}{m}X^T\mathbf e
+$$
+
+$$
+\theta\leftarrow\theta-\alpha\nabla_\theta J
+$$
+
+shape 也应逐步闭合：
+
+```text
+[m,4] @ [4]      -> [m] predictions
+[m] - [m]        -> [m] errors
+[4,m] @ [m]      -> [4] gradient
+[4] - alpha*[4]  -> [4] updated parameters
+```
+
+这就是从数学到实现最不能省略的一层：公式中的每个对象都对应一个明确 array，矩阵乘法消掉哪个 axis、保留哪个 axis，都能从 shape 直接读出来。
+
+### 4.8 正规方程与梯度下降怎样选择
+
+不要背原课程中的固定阈值，例如“特征少于一万就一定用正规方程”。硬件、数据规模、稀疏性和数值库都已经变化，真正要比较的是工作量。
+
+| 问题 | 迭代优化 | 直接最小二乘求解 |
+|---|---|---|
+| 是否需要 learning rate | 需要 | 不需要 |
+| 是否需要多轮读取数据 | 通常需要 | 需要构造并求解线性系统 |
+| feature 数很大 | 可用 SGD / mini-batch 扩展 | 分解成本和内存可能过高 |
+| 是否适用于 logistic / neural network | 是 | 否 |
+| 数值实现 | optimizer | `lstsq` / QR / SVD |
+
+对于今天的小型线性回归，两条路径都值得运行，并比较 predictions 和 residual。对后面的通用模型，迭代优化才是主线。
+
 ---
 
 ## 5. 从 Octave（课程原先使用的数值计算语言）迁移到 Python / NumPy
@@ -556,6 +710,166 @@ learning rate 有没有导致震荡？
 ```
 
 以后你面对 Transformer 的投影层（projection，把表示映射到另一组特征）、注意力（attention，根据相关性混合上下文信息）和 MLP（Multi-Layer Perceptron，多层感知机），看到的仍然是更大规模的矩阵乘法、归一化、归约和参数更新。
+
+### 5.5 创建、索引和移动数据
+
+原课程用 Octave 演示“矩阵语言怎样快速试验算法”。在当前环境中，对应工具是 NumPy。首先要能明确创建结果的 shape 和 dtype：
+
+```python
+zeros = np.zeros((3, 4), dtype=np.float32)
+ones = np.ones((2, 3), dtype=np.float32)
+identity = np.eye(4, dtype=np.float32)
+sequence = np.arange(0, 12, dtype=np.float32).reshape(3, 4)
+```
+
+索引要区分“单个元素”“一行”“一列”和“二维子矩阵”：
+
+```python
+x[1, 2]       # scalar
+x[1, :]       # shape [4]
+x[:, 2]       # shape [3]
+x[:, 2:3]     # shape [3, 1]
+x[0:2, 1:3]   # shape [2, 2]
+```
+
+`x[:, 2]` 与 `x[:, 2:3]` 数值看起来相似，shape 却不同。前者是一维 array，后者保留二维列向量；它们参加 matrix multiplication 或 broadcasting 时行为可能不同。
+
+读取文本数据时，不要假定文件永远只有纯数字：
+
+```python
+data = np.loadtxt("train.csv", delimiter=",")
+X = data[:, :-1]
+y = data[:, -1]
+```
+
+读完先检查 `shape`、`dtype`、前几行和是否存在 `NaN`。真正的大数据集通常使用 pandas、memory mapping（内存映射）或专用 dataset loader，但入口纪律不变：先证明数据和自己以为的一样。
+
+### 5.6 区分矩阵运算与逐元素运算
+
+原 Octave 语法用 `*` 表示矩阵乘法、`.*` 表示逐元素乘法。NumPy 改成：
+
+```python
+A @ B       # matrix multiplication
+A * B       # elementwise multiplication
+A ** 2      # elementwise square
+```
+
+设：
+
+```text
+A: [m, n]
+B: [n, k]
+```
+
+那么 `A @ B` 合法并得到 `[m,k]`。`A * B` 是否合法则取决于 broadcasting；即使碰巧合法，它表达的也不是点积。
+
+常见 reduction：
+
+```python
+x.sum()          # 所有元素归约成 scalar
+x.sum(axis=0)    # 消掉 rows，保留 columns
+x.sum(axis=1)    # 消掉 columns，保留 rows
+x.mean(axis=0)
+x.max(axis=1)
+```
+
+每次看到 `axis`，先问“哪个维度被消掉，输出 shape 是什么”，再运行代码。
+
+### 5.7 reshape、transpose 与拼接
+
+`reshape` 只改变 array 的逻辑 shape，不改变元素总数：
+
+```python
+x = np.arange(12)
+matrix = x.reshape(3, 4)
+flat = matrix.reshape(-1)
+```
+
+transpose 交换轴：
+
+```python
+matrix.T                 # [3,4] -> [4,3]
+tensor.transpose(0, 2, 1)
+```
+
+一维 array 的 `.T` 不会把 `[n]` 变成 `[n,1]`。若确实需要列向量，应明确写：
+
+```python
+column = x.reshape(-1, 1)
+```
+
+拼接也必须说明沿哪个 axis：
+
+```python
+np.concatenate([a, b], axis=0)
+np.concatenate([a, b], axis=1)
+```
+
+它们不是“把两个东西放一起”这么模糊，而是在指定 axis 上增加长度，其他 axes 必须兼容。
+
+### 5.8 绘图不是装饰，而是检查算法
+
+线性回归至少画三类图：
+
+1. 原始 points 与 fitted line，检查模型是否抓住主要趋势；
+2. iteration 与 cost，检查优化是否下降、震荡或发散；
+3. 若只有一到两个 parameters，可画 contour（等高线）观察更新路线。
+
+```python
+import matplotlib.pyplot as plt
+
+plt.plot(cost_history)
+plt.xlabel("iteration")
+plt.ylabel("cost")
+plt.grid(True)
+plt.savefig("cost_curve.png", dpi=160, bbox_inches="tight")
+```
+
+图必须回答问题。只生成图片但不解释趋势，不算证据；只看最终 cost 而不看训练轨迹，也可能错过中途发散后偶然落回的实现异常。
+
+### 5.9 控制流、函数和 vectorization
+
+课程中的 `for`、`while`、`if` 不是为了重新教编程，而是把算法拆成可复用函数：
+
+```python
+def compute_cost(X, y, theta):
+    prediction = X @ theta
+    error = prediction - y
+    return float(error @ error / (2 * X.shape[0]))
+```
+
+真正的边界是：外层可以用 loop 表示训练轮次，内层尽量用 vectorized operations 一次处理所有 examples。
+
+```text
+合理：for step in training_steps
+      inside step: X @ theta, X.T @ error
+
+应避免：for each example
+       for each feature
+       手工累加本可由矩阵运算完成的结果
+```
+
+向量化不只是代码短。它把数据排成底层 kernel 能批量消费的形式，也使 shape 和 memory layout 成为显式 contract。
+
+### 5.10 第二周的完整程序应该是什么样
+
+把这一周收成一个 `linear_regression_numpy.py`：
+
+```text
+load / generate data
+-> print shape, dtype, ranges
+-> split features and targets
+-> fit normalization on training data
+-> vectorized forward
+-> vectorized cost and gradients
+-> simultaneous updates
+-> record cost history
+-> inverse-transform or interpret prediction
+-> compare with np.linalg.lstsq
+-> save fitted line / cost curve
+```
+
+它不需要变成工程项目。它的任务是把“数据 -> shape -> forward -> cost -> gradient -> update -> evidence”第一次完整串通。对应实现细节放在 [ML_配套练习.md](ML_配套练习.md) 的 Ex1，不在讲义正文复制一份答案。
 
 ---
 
@@ -697,6 +1011,67 @@ $$
 
 现代神经网络更常用 softmax（把多个任意分数转换成总和为 $1$ 的类别概率），一次产生所有类别的概率分布（probability distribution）。one-vs-rest 在这里的意义，是让你先看见“多个类别”可以从多个二分类问题构造出来。
 
+### 6.7 probability、threshold 与 prediction 是三层对象
+
+逻辑回归先输出 probability，再由 threshold（阈值）产生离散 prediction：
+
+```text
+linear score z
+-> sigmoid
+-> probability p(y=1|x)
+-> compare with threshold
+-> predicted label 0/1
+```
+
+默认 threshold 为 $0.5$，只是因为：
+
+$$
+g(z)\ge 0.5\iff z\ge 0
+$$
+
+它不是任何业务都必须使用的常数。医疗筛查可能更重视少漏掉阳性样本，欺诈拦截则要权衡误杀正常交易。模型参数决定 probability，系统策略再决定 threshold；两者不能混成同一个东西。
+
+### 6.8 从单样本 loss 推到整个 objective
+
+对单条样本：
+
+$$
+L(\hat y,y)=-y\log\hat y-(1-y)\log(1-\hat y)
+$$
+
+它用同一条公式同时覆盖两种标签：
+
+```text
+y=1 -> L=-log(y_hat)
+y=0 -> L=-log(1-y_hat)
+```
+
+训练集 objective 是所有单样本 loss 的平均。为了避免数值上计算 `log(0)`，代码通常不会先显式算出极端 probability 再取 log，而会使用稳定的 `logaddexp`、`softplus` 或框架提供的 `BCEWithLogitsLoss`，直接把 logits 与 label 组合起来。
+
+这是一条重要的工程分界：数学上等价的公式，浮点实现不一定同样稳定。选择稳定 formulation（公式形式）也是算法实现的一部分。
+
+### 6.9 one-vs-rest 怎样真正做 prediction
+
+若有 $K$ 个 classes，为每个类别训练一组参数：
+
+$$
+\theta^{(1)},\theta^{(2)},\ldots,\theta^{(K)}
+$$
+
+第 $k$ 个 classifier 把“属于类别 $k$”看成正类，其余全部看成负类。对新样本，得到 $K$ 个 probability estimates：
+
+$$
+p_k=g\left((\theta^{(k)})^Tx\right)
+$$
+
+最终选择：
+
+$$
+\hat y=\arg\max_k p_k
+$$
+
+`argmax` 返回最大值所在的 index，不是最大 probability 本身。实现时还要处理课程 label 是否从 1 开始、Python index 是否从 0 开始；手写数字 `10` 表示数字 `0` 是经典作业中的数据编码约定，不是算法规律。
+
 ---
 
 ## 7. 正则化（Regularization）
@@ -738,6 +1113,65 @@ $\lambda$ 控制惩罚强度。
 ### 7.4 与现代深度学习的连接
 
 后面会见到权重衰减（weight decay，持续压小权重）、随机失活（dropout，训练时随机屏蔽部分神经元）、数据增强（data augmentation，对已有样本做保持语义的变换）和提前停止（early stopping，在验证表现恶化前结束训练）。它们形式不同，但都在处理同一个问题：训练集上的拟合能力很强，不代表模型对未见数据也能泛化。
+
+### 7.5 regularized linear regression 的梯度
+
+加入 L2 penalty 后：
+
+$$
+J(\theta)
+=\frac{1}{2m}\sum_{i=1}^{m}
+\left(h_\theta(x^{(i)})-y^{(i)}\right)^2
++\frac{\lambda}{2m}\sum_{j=1}^{n}\theta_j^2
+$$
+
+注意 penalty 从 $j=1$ 开始，不包含 $	heta_0$。对应 gradient：
+
+$$
+\frac{\partial J}{\partial\theta_0}
+=\frac{1}{m}\sum_i
+\left(h_\theta(x^{(i)})-y^{(i)}\right)x_0^{(i)}
+$$
+
+对 $j\ge1$：
+
+$$
+\frac{\partial J}{\partial\theta_j}
+=\frac{1}{m}\sum_i
+\left(h_\theta(x^{(i)})-y^{(i)}\right)x_j^{(i)}
++\frac{\lambda}{m}\theta_j
+$$
+
+把更新式重新整理，会发现旧 weight 先乘上一个略小于 $1$ 的系数，再叠加数据梯度。这就是“weight decay”这个名字的第一层来源。
+
+### 7.6 regularized logistic regression 只换 data loss
+
+逻辑回归仍然使用 binary cross-entropy，regularization term 保持不变：
+
+$$
+J(\theta)=
+-\frac{1}{m}\sum_i
+\left[y^{(i)}\log h_\theta(x^{(i)})
++(1-y^{(i)})\log(1-h_\theta(x^{(i)}))\right]
++\frac{\lambda}{2m}\sum_{j=1}^{n}\theta_j^2
+$$
+
+对应 gradient 也是“原 logistic gradient + $\lambda\theta_j/m$”。这说明 regularization 是加在 objective 上的独立约束，不需要为每一种 model 重新发明一套思想。
+
+在代码里最容易出错的是把 bias 一起 penalty、cost 加了 penalty 但 gradient 忘了加，或者两边使用不同的 $\lambda$。因此 Ex2 的局部 numerical checkpoints 和后续 gradient check 很重要。
+
+### 7.7 正则化不能替代 validation
+
+训练 loss 加入 penalty 后，比较不同 $\lambda$ 时不能只看 regularized training objective。你真正关心的是未参与拟合的数据表现：
+
+```text
+training split -> fit parameters for a fixed lambda
+validation split -> compare predictive metric
+best lambda -> retrain or confirm
+test split -> one final estimate
+```
+
+regularization 是控制模型自由度的手段，validation 才是选择强度的证据。后面的 Week6 会把这一套诊断流程完整展开。
 
 ---
 
@@ -893,6 +1327,67 @@ Forward 的职责是根据当前 parameters 产生 prediction 和 loss。它还�
 ```
 
 AI Infra 关心的不只是数学答案，还包括张量布局（tensor layout，元素在内存中的组织方式）、数据类型、计算内核启动（kernel launch）、内存复用、算子融合（operator fusion，把多个连续计算合并执行）和设备通信。但只有先读懂前向计算图，后面才知道系统究竟在优化什么。
+
+### 8.8 bias unit 与课程下标怎样读
+
+原课程会在每一层前面补一个始终等于 $1$ 的 bias unit：
+
+$$
+a_0^{(l)}=1
+$$
+
+然后把 bias weight 一起放进 $\Theta^{(l)}$。现代框架通常把 bias 单独保存成向量 $b^{[l]}$。两种写法数学等价：
+
+```text
+课程矩阵写法：Theta includes bias column
+现代框架写法：Z = A @ W + b
+```
+
+$\Theta^{(l)}_{ji}$ 表示“第 $l$ 层的第 $i$ 个 unit，连接到第 $l+1$ 层的第 $j$ 个 unit 的 weight”。读下标时先找 source layer 和 destination layer，不能只凭矩阵位置猜方向。
+
+若第 $l$ 层有 $s_l$ 个非 bias units，下一层有 $s_{l+1}$ 个 units，则课程写法：
+
+$$
+\Theta^{(l)}\in\mathbb R^{s_{l+1}\times(s_l+1)}
+$$
+
+多出的 $1$ 就是 bias input。当前 NumPy/PyTorch 采用 batch-first 形式时，weight matrix 常转置保存；看起来 shape 相反，不代表网络逻辑改变。
+
+### 8.9 用 XNOR 看见 hidden representation
+
+XNOR 在两个输入相同时输出 $1$，不同时输出 $0$。一条直线无法把平面上对角的两个正样本与另外两个负样本分开，所以单个 logistic unit 不够。
+
+可以让 hidden units 分别学习两个简单区域，再由 output unit 组合：
+
+```text
+hidden unit 1：识别 x1=1 且 x2=1
+hidden unit 2：识别 x1=0 且 x2=0
+output unit：两者任意成立则输出 1
+```
+
+重要的不是背一组人为设计的 weights，而是看见层的作用：原始输入在 hidden layer 中被映射成两个“是否满足某个条件”的新 features；在这组新 features 上，output layer 又变成一个简单的线性分类器。
+
+这就是 representation learning 的最小例子。深层网络不是凭空增加魔法，而是在多层中反复完成“把上一层表示改写成下一层更容易处理的表示”。
+
+### 8.10 一次 batch forward 必须保存哪些对象
+
+两层网络：
+
+$$
+Z^{[1]}=XW^{[1]}+b^{[1]}
+$$
+
+$$
+A^{[1]}=g(Z^{[1]})
+$$
+
+$$
+Z^{[2]}=A^{[1]}W^{[2]}+b^{[2]}
+$$
+
+为了 inference，只要按顺序算出最终 output，中间 tensor 用完即可复用或释放。为了 training，backward 还需要 $X$、$Z^{[1]}$ 或 $A^{[1]}$ 等信息，因此 forward 往往要保存 activations。
+
+这就是 activation memory（激活内存）的来源：它不是 parameter memory，也不是 output buffer，而是未来求 gradient 需要保留的 forward intermediates。checkpointing（用重算换内存）和 inference mode 的系统差异，都从这里开始。
 
 ---
 
@@ -1059,6 +1554,101 @@ training：forward + backward + optimizer，还要保存 activations、gradients
 
 真正的自动驾驶系统当然还需要感知、预测、规划、控制、冗余与安全验证。一个监督学习网络只是系统流水线（pipeline，把多个处理阶段串成完整输入输出路径）中的一部分，不能把演示准确率（demo accuracy，演示样例上的正确率）等同于系统安全。
 
+### 9.10 神经网络的 cost function 为什么要对所有输出求和
+
+若输出层有 $K$ 个 units，每条样本使用 one-hot label（只有正确类别位置为 1 的标签向量），网络会为每个类别输出 $h_\theta(x)_k$。
+
+多类别 cross-entropy：
+
+$$
+J(\Theta)=
+-\frac{1}{m}\sum_{i=1}^{m}\sum_{k=1}^{K}
+\left[
+y_k^{(i)}\log h_\Theta(x^{(i)})_k
++(1-y_k^{(i)})\log(1-h_\Theta(x^{(i)})_k)
+\right]
++\text{regularization}
+$$
+
+外层对 examples 求和，内层对 output units 求和。regularization 只作用于真正连接 unit 的 weights，不处罚 bias columns。
+
+现代多类别分类通常使用 softmax cross-entropy，而原课程的写法把每个 output unit 当作一个 sigmoid classifier。两者具体概率模型不同，但共同目标都是：提高正确类别分数、降低错误类别分数，并把所有样本汇总成一个 scalar objective。
+
+### 9.11 backpropagation algorithm 逐层在算什么
+
+以前向传播使用 column-vector convention 为例。输出层 error signal：
+
+$$
+\delta^{(L)}=a^{(L)}-y
+$$
+
+隐藏层从后一层接收 gradient，再乘当前 activation derivative：
+
+$$
+\delta^{(l)}=
+\left((\Theta^{(l)})^T\delta^{(l+1)}\right)
+\odot g'(z^{(l)})
+$$
+
+$\odot$ 表示 elementwise multiplication。bias unit 没有属于上一层的 activation input，因此传播回隐藏层时要去掉对应 bias component。
+
+每条样本对 weight gradient 的贡献是一个 outer product（外积，把两个向量组合成矩阵）：
+
+$$
+\Delta^{(l)}mathrel{+}=
+\delta^{(l+1)}(a^{(l)})^T
+$$
+
+处理完全部 examples 后再除以 $m$，并对非 bias weights 加 regularization gradient。完整方向是：
+
+```text
+forward 保存 z 和 a
+-> output delta
+-> layer by layer propagate delta backward
+-> accumulate outer-product gradients
+-> average over examples
+-> add regularization except bias
+```
+
+batch-first vectorization 会把“逐样本 outer product 再求和”改写成矩阵乘法，但意义没有改变。
+
+### 9.12 gradient check 怎样判断通过
+
+不要逐元素打印几千个 gradient。把 analytic 与 numerical gradient 看成两个向量，使用 relative difference：
+
+$$
+\operatorname{relative\_difference}=
+\frac{\lVert g_{analytic}-g_{numeric}\rVert_2}
+{\lVert g_{analytic}\rVert_2+\lVert g_{numeric}\rVert_2}
+$$
+
+分母让判断不依赖 gradient 的绝对量级。具体 tolerance 要结合 dtype 和 $\varepsilon$ 说明；double precision 的小型平滑函数通常应远小于 `1e-6`，但不能把一个固定阈值冒充所有模型、所有 dtype 的通用定理。
+
+检查时必须：
+
+```text
+用同一组 parameters 和同一批 data
+关闭 dropout 等随机行为
+每个 coordinate 的 plus/minus 都从原 parameters copy
+cost 与 analytic gradient 使用完全相同的 regularization
+通过后关闭全量 numerical check，再进行正常训练
+```
+
+### 9.13 把神经网络训练完整串起来
+
+```text
+选择 architecture 与 layer sizes
+-> 随机初始化 weights，打破 symmetry
+-> forward 得到 logits/probabilities 与 cost
+-> backprop 得到所有 gradients
+-> finite difference 抽查 gradients
+-> optimizer 反复更新 parameters
+-> validation 选择 architecture / lambda
+-> test 只做最终评估
+```
+
+“cost 下降”只验证 optimizer 找到了某个更低位置；“gradient check 通过”只验证当前小 case 中 forward/backward 一致；“validation 表现好”才开始支持泛化结论。三种证据回答的是不同问题。
+
 ---
 
 # 第六周：模型诊断与机器学习系统设计
@@ -1136,6 +1726,69 @@ $\lambda$ 太大，model 被限制得太死，容易 high bias。
 $\lambda$ 太小，model 自由度太高，容易 high variance。
 
 因此 $\lambda$ 不能用 test set 选择，而应该在 validation set 上比较多个候选配置（candidates）。
+
+### 10.6 用误差组合诊断 high bias 与 high variance
+
+先建立一个接近问题可达到水平的 baseline error，例如 human-level performance 或已知简单规则的 error。然后比较：
+
+| 现象 | Training error | Validation error | 更可能的问题 |
+|---|---:|---:|---|
+| 两者都高且接近 | 高 | 高 | high bias |
+| train 很低，validation 明显更高 | 低 | 高 | high variance |
+| 两者都低且接近 | 低 | 低 | 当前模型基本合适 |
+| train 已明显高于可达到水平，validation 又更高 | 中高 | 更高 | bias 与 variance 同时存在 |
+
+这里的“高”和“低”必须相对于任务基准解释，不能看到 `10%` 就凭感觉下结论。若标签本身噪声很大，Bayes error（不可约误差的理论下限）可能就不低。
+
+对应动作也不同：
+
+```text
+high bias
+-> 更强 features / 更大 model / 更弱 regularization / 更充分 optimization
+
+high variance
+-> 更多数据 / 更强 regularization / 更小 model / 更稳定 features
+```
+
+“收集更多数据”主要帮助 variance，不保证能救一个表达能力不足的 model。
+
+### 10.7 learning curve 怎样读
+
+learning curve 不是普通的“epoch-loss 曲线”。它把 training set size 放在横轴：使用前 10、20、...、$m$ 条样本分别训练新 model，再记录 training 与 validation error。
+
+high bias 时：
+
+```text
+training examples 增多
+-> training error 上升到较高平台
+-> validation error 下降到相近的较高平台
+-> 再加数据帮助有限
+```
+
+high variance 时：
+
+```text
+training error 仍然较低
+validation error 明显更高
+两条曲线之间有较大 gap
+-> 更多数据可能继续缩小 gap
+```
+
+每个横轴点都要重新 fit model，不能训练一次后只截取不同数量的数据做 evaluation。学习曲线成本较高，但它直接回答“继续收集 data 是否可能有收益”。
+
+### 10.8 model selection 的顺序
+
+以 polynomial degree 为例：
+
+```text
+for each degree candidate
+-> 只在 training split fit parameters
+-> 在 validation split 计算 error
+-> 选择 validation error 最低的 degree
+-> 最后只在 test split 评估一次
+```
+
+选择 $\lambda$、hidden size、threshold 或 feature set 都遵守同一结构。test set 的职责不是帮助你做选择，而是估计整个“训练 + 选择过程”最终面对新数据时的表现。
 
 ---
 
@@ -1227,6 +1880,65 @@ learning curve            -> 用证据决定增加 data 还是 compute/model
 
 以后做推理性能测试（inference benchmark），也要保持同样纪律：吞吐、延迟、正确率、显存和 workload（测试所使用的请求规模与分布）必须一起定义，否则一个漂亮数字没有解释力。
 
+### 11.7 用 spam classifier 走一次系统设计
+
+垃圾邮件系统的第一版可以把词是否出现作为 binary features。词表里有 $n$ 个 words，一封邮件变成 $x\in\{0,1\}^n$，再交给 logistic regression 或 SVM。
+
+第一版跑通后，不要立刻加入所有能想到的 features。先查看 false positives 与 false negatives：
+
+```text
+哪些正常邮件被误杀？
+哪些垃圾邮件被漏过？
+错误是否集中在拼写变体、URL、HTML 或特定语言？
+某类错误在 validation errors 中占多少？
+```
+
+如果 100 个错误里只有 2 个来自故意拼错单词，那么花两天写复杂拼写纠正，理论上最多也只直接覆盖这 2 个。error analysis 把开发优先级从“这个想法听起来高级”变成“它最多能影响多少真实错误”。
+
+### 11.8 precision、recall 与 F1 的完整关系
+
+定义：
+
+```text
+TP：真实为正，预测也为正
+FP：真实为负，却预测为正
+FN：真实为正，却预测为负
+TN：真实为负，预测也为负
+```
+
+$$
+\operatorname{precision}=\frac{TP}{TP+FP}
+$$
+
+$$
+\operatorname{recall}=\frac{TP}{TP+FN}
+$$
+
+precision 回答“我报出来的 positive 有多少是真的”，recall 回答“所有真实 positive 中我抓到了多少”。提高 threshold 往往提高 precision、降低 recall；降低 threshold 往往相反。
+
+F1 score 使用 harmonic mean（调和平均，对过低一项更敏感）：
+
+$$
+F_1=2\frac{PR}{P+R}
+$$
+
+它适合需要同时关注 precision 与 recall 的比较，但也不是万能 metric。不同错误代价不对称时，应直接根据业务成本选择 threshold 和 metric。
+
+### 11.9 什么时候“大量数据”才可能带来优势
+
+原课程强调一种组合：
+
+```text
+features 中确实包含足够的预测信息
++ model capacity 足够学习复杂关系
++ optimization 能把 training error 降下来
++ 更多高质量 examples
+```
+
+只有数据多，而 features 与 label 几乎无关，模型不会凭空学出规律；模型太弱导致 high bias，再加数据也可能停在同一平台；label 错误和 distribution mismatch 还会把更多噪声送进训练。
+
+对 AI Infra 来说，“更多 data”同时意味着更大的 storage、I/O、shuffle、checkpoint 与 training cost。因此是否扩数据集也必须先有 learning curve 和 bottleneck evidence。
+
 ---
 
 # 第七周：支持向量机与核函数（Kernel，用相似度隐式表示高维特征）
@@ -1294,6 +2006,87 @@ algorithm choice 会受 dataset size 和 compute complexity 限制
 
 不需要现在完整推导对偶优化（dual optimization，把原优化问题转换到另一组变量上求解），也不需要手写生产级 SVM。现代大型语言模型（LLM，Large Language Model）工作负载的核心计算不在这里。
 
+### 12.6 SVM objective 怎样产生大间隔
+
+逻辑回归希望正样本的 score 偏正、负样本的 score 偏负。SVM 把要求推得更远：不仅分类方向正确，还希望留出安全距离。
+
+令 $y\in\{-1,+1\}$，score 为 $z=\theta^Tx$。理想约束是：
+
+$$
+y^{(i)}\theta^Tx^{(i)}\ge1
+$$
+
+也就是：
+
+```text
+y=+1 -> score 至少达到 +1
+y=-1 -> score 至少低于 -1
+```
+
+落在正确一侧但距离边界太近，仍然产生 hinge loss（合页损失，在 margin 内线性惩罚样本）：
+
+$$
+L_i=\max\left(0,1-y^{(i)}\theta^Tx^{(i)}\right)
+$$
+
+完整 objective 可以写成：
+
+$$
+\frac{1}{2}\lVert\theta\rVert^2
++C\sum_{i=1}^{m}L_i
+$$
+
+第一项偏好较小的 $\lVert\theta\rVert$，对应更宽 margin；第二项处罚 margin violation 与 classification error。$C$ 就在两者之间权衡。
+
+这里把 bias（偏置/截距）单独记为 $b$ 时，范数项正则化的是 weight vector，不包含 $b$。若代码把 bias 合并进 $\theta$，也要在 regularization 中明确跳过对应的 bias 分量。
+
+真正决定 boundary 的通常只是少数最靠近 margin 或违反 margin 的 examples，它们叫 support vectors（支持向量）。远离边界的样本即使轻微移动，也不会直接改变当前最优 boundary。
+
+### 12.7 Gaussian kernel 怎样从 landmark 生成新 feature
+
+选择 landmarks $l^{(1)},\ldots,l^{(p)}$。对输入 $x$ 计算：
+
+$$
+f_j=\exp\left(
+-\frac{\lVert x-l^{(j)}\rVert^2}{2\sigma^2}
+\right)
+$$
+
+若 $x$ 靠近第 $j$ 个 landmark，$f_j$ 接近 $1$；距离远时接近 $0$。于是原输入被改写成：
+
+$$
+f(x)=
+\begin{bmatrix}
+f_1 & f_2 & \cdots & f_p
+\end{bmatrix}^T
+$$
+
+在这组相似度 features 上训练 linear SVM，就能在原空间形成 nonlinear boundary。
+
+$\sigma$ 控制每个 landmark 的影响范围：
+
+- 小 $\sigma$：相似度下降很快，boundary 可以非常弯曲，variance 增大；
+- 大 $\sigma$：影响范围更宽，boundary 更平滑，bias 可能增大。
+
+因此 $C$ 与 $\sigma$ 都必须由 validation set 选择。使用 Gaussian kernel 前通常还要 scale features，否则数值范围大的 feature 会主导 Euclidean distance。
+
+### 12.8 实际使用 SVM 时的选择
+
+```text
+n 较小、m 很大
+-> linear model 往往更现实，kernel matrix 太昂贵
+
+n 中等、m 中等、boundary 非线性
+-> Gaussian kernel 可以成为候选
+
+n 很大但 m 较小
+-> linear classifier 已拥有大量表达能力，先检查 regularization
+```
+
+不要自己发明一个“看起来像相似度”的函数就交给 SVM。合法 kernel 需要满足相应数学条件，成熟库已经实现并验证常用 kernels。
+
+使用 library 时仍要明确：input scaling、$C$、kernel 与 $\sigma$ 或 `gamma`、multiclass strategy、probability calibration 和 validation metric。API 替你完成 optimizer，不替你定义问题。
+
 ---
 
 # 第八周：聚类与降维
@@ -1343,6 +2136,139 @@ assignment step 在固定 centroids 时减小 $J$；update step 在固定 assign
 肘部法（Elbow method）会观察成本随 $K$ 增加的变化。如果某个位置后收益明显变缓，它可能是合理选择。
 
 但真实数据不一定存在清晰的 elbow。很多时候 $K$ 最终由下游用途（downstream purpose，也就是聚类结果接下来要服务的任务）决定，例如压缩图片允许多少种颜色，或业务希望划分多少用户组。
+
+### 13.5 assignment step 不是一句“找最近”就结束
+
+假设数据是：
+
+$$
+X=
+\left\{
+(1,1),(1,2),(2,1),(8,8),(8,9),(9,8)
+\right\}
+$$
+
+选择 $K=2$，初始 centers 为：
+
+$$
+\mu_1=(1,1),\qquad \mu_2=(8,8)
+$$
+
+对每个 $x^{(i)}$，分别计算到两个 center 的 squared Euclidean distance（平方欧氏距离）：
+
+$$
+d_{ik}=\lVert x^{(i)}-\mu_k\rVert_2^2
+$$
+
+再选择距离最小的 index：
+
+$$
+c^{(i)}=\arg\min_k d_{ik}
+$$
+
+例如点 $(2,1)$：
+
+$$
+\lVert(2,1)-(1,1)\rVert^2=1
+$$
+
+$$
+\lVert(2,1)-(8,8)\rVert^2=85
+$$
+
+所以它被分给 cluster 1。对所有点执行同样动作后，前三个进入 cluster 1，后三个进入 cluster 2。
+
+向量化时可以构造 pairwise distance matrix：
+
+```text
+X[:, None, :]         [m, 1, n]
+centroids[None, :, :] [1, K, n]
+difference            [m, K, n]
+squared sum over n    [m, K]
+argmin over K         [m]
+```
+
+这一步的 output 不是新 centers，而是每条 sample 的 cluster assignment。
+
+### 13.6 update step 为什么一定是均值
+
+固定 assignments 后，cluster $k$ 的 objective 是：
+
+$$
+\sum_{i:c^{(i)}=k}\lVert x^{(i)}-\mu_k\rVert^2
+$$
+
+对 $\mu_k$ 求导并令其为零，最小值正好位于所属样本的 arithmetic mean：
+
+$$
+\mu_k=
+\frac{1}{|C_k|}
+\sum_{i:c^{(i)}=k}x^{(i)}
+$$
+
+上面的例子更新为：
+
+$$
+\mu_1=\left(\frac{4}{3},\frac{4}{3}\right),
+\qquad
+\mu_2=\left(\frac{25}{3},\frac{25}{3}\right)
+$$
+
+现在用新 centers 重新执行 assignment，再更新 centers。如此交替，直到 assignments 不再变化、centroid movement 足够小，或达到 iteration 上限。
+
+所以“反复执行两个步骤”的完整含义是：
+
+```text
+旧 centroids
+-> 计算所有 sample-center distances
+-> 为每条 sample 选择 nearest centroid
+-> 根据新 assignments 重新计算每组 mean
+-> 得到新 centroids
+-> 检查停止条件
+-> 必要时回到 distance calculation
+```
+
+### 13.7 为什么每一步都不会让 objective 变大
+
+assignment step 固定 centers，为每条样本选择所有 centers 中距离最小者，因此不会比旧 assignment 更差。
+
+update step 固定 cluster members，把 center 放到该组 mean；mean 正是 squared-distance sum 的最优位置，因此也不会更差。
+
+两步都不增加 objective，所以 K-means 会收敛。但 objective 非凸，不同 initial centroids 可能落在不同 local optimum。这就是多次初始化后选择最低 distortion 的原因，不是“多跑几次更保险”这么模糊。
+
+### 13.8 空 cluster、尺度与停止条件
+
+若某轮没有任何 sample 分给一个 centroid，mean 无法计算。最简单策略是重新用某个 training example 初始化该 centroid，或者重新开始这次 run。实现不能静默产生 `NaN` 再继续。
+
+距离还会受到 feature scale 强烈影响。一个范围在几千的 feature 会压过范围在 0~1 的 feature，因此在距离语义允许时应先 normalization。但这不是机械操作：如果原始单位本来就代表业务重要度，缩放也会改变“相似”的定义。
+
+常见停止条件：
+
+```text
+assignments no longer change
+centroid movement < tolerance
+objective improvement < tolerance
+reached max iterations
+```
+
+生产库通常使用更高效的实现与初始化方法，例如 k-means++。今天手写 reference 的目的，是能解释每轮 state 怎样变化和 objective 为什么下降。
+
+### 13.9 图像压缩例子把算法变成真实数据流
+
+一张 RGB image 的每个 pixel 是三维向量 $(R,G,B)$。把所有 pixels reshape 成 `[num_pixels, 3]`，运行 K-means 后得到 $K$ 个 color centroids。
+
+压缩时，每个 pixel 不再保存完整三通道数值，只保存 nearest centroid 的 index；显示时再用该 centroid color 替代原 color。
+
+```text
+image [H,W,3]
+-> pixels [H*W,3]
+-> K-means centroids [K,3]
+-> assignment [H*W]
+-> replace each pixel with centroid color
+-> reconstructed image [H,W,3]
+```
+
+这个例子同时展示算法收益和代价：$K$ 越小，表示更省，颜色失真越明显；$K$ 越大，重建更接近原图，压缩收益下降。
 
 ---
 
@@ -1423,6 +2349,86 @@ K-means 与 PCA 不直接等于现代嵌入系统（embedding system，用稠密
 ```
 
 以后接触嵌入（embedding）、向量检索（vector retrieval，按向量距离寻找相似对象）、量化（quantization，用更低精度表示数值）和表示压缩（representation compression）时，这些直觉会再次出现。系统侧则要进一步考虑索引（index，加速查找的数据结构）、内存占用（memory footprint）、批量查询（batch query）与距离计算内核（distance kernel）。
+
+### 14.7 PCA 的 preprocessing 与 K-means 不同
+
+PCA 至少要做 mean normalization：
+
+$$
+x_j\leftarrow x_j-\mu_j
+$$
+
+若 features 的量纲差距很大，还可能需要除以 standard deviation。否则方差最大的方向可能只是在反映“单位较大”，而不是更有信息。
+
+这些 $\mu_j$ 与 $\sigma_j$ 只能从 training data 估计，并和 projection matrix 一起保存。新输入必须使用同一组 statistics；若线上重新计算均值，training 和 serving 就不在同一个 coordinate system 中。
+
+### 14.8 projection 与 reconstruction 逐步看
+
+取前 $k$ 个 principal directions：
+
+$$
+U_{reduce}\in\mathbb R^{n\times k}
+$$
+
+一条原始样本 $x\in\mathbb R^n$ 投影为：
+
+$$
+z=U_{reduce}^Tx\in\mathbb R^k
+$$
+
+从低维近似恢复：
+
+$$
+x_{approx}=U_{reduce}z
+$$
+
+batch-first 数据矩阵写成：
+
+$$
+Z=XU_{reduce}\quad[m,n]@[n,k]\to[m,k]
+$$
+
+$$
+X_{approx}=ZU_{reduce}^T\quad[m,k]@[k,n]\to[m,n]
+$$
+
+`reconstruction` 不是还原丢失的信息，而是找到保留子空间内离原样本最近的近似。被舍弃 directions 上的分量已经消失。
+
+### 14.9 怎样用 reconstruction error 选择 $k$
+
+平均平方投影误差：
+
+$$
+\frac{1}{m}\sum_{i=1}^{m}
+\left\|x^{(i)}-x_{approx}^{(i)}\right\|^2
+$$
+
+可以和原数据平均能量比较：
+
+$$
+\frac{
+\sum_i\lVert x^{(i)}-x_{approx}^{(i)}\rVert^2
+}{
+\sum_i\lVert x^{(i)}\rVert^2
+}
+\le \delta
+$$
+
+若希望保留 $99\%$ variance，就让相对 reconstruction error 不超过约 $1\%$。等价地，也可以累加 singular values 的贡献，选择达到目标比例的最小 $k$。
+
+不要从 $k=1$ 开始反复完整计算 SVD。一次 SVD 已经得到所有 directions 与 singular values，随后只需扫描 cumulative ratio（累计比例）。
+
+### 14.10 PCA 应该放在 pipeline 的哪个位置
+
+```text
+fit normalization on training data
+-> normalize training data
+-> fit PCA directions on training data
+-> project training/validation/test with same directions
+-> train downstream model in reduced space
+```
+
+PCA 不能在包含 validation/test 的全量数据上先 fit，否则低维 directions 已经看过未来数据。它也不自动提高 model accuracy；它交换的是 information、compute、storage 与 visualization convenience，需要由 downstream metric 和资源成本共同判断。
 
 ---
 
@@ -1528,6 +2534,62 @@ GPU 利用率（GPU utilization）
 
 但是生产告警不能只依赖一个概率公式。还要处理概念漂移（concept drift，线上数据规律随时间改变）、季节性（seasonality，按时间周期重复的波动）、指标缺失、告警疲劳（alert fatigue，告警过多导致真正问题被忽略）和回滚策略。课程给的是统计核心，不是完整监控系统。
 
+### 15.8 anomaly detection algorithm 从训练到判断的完整链
+
+对主要由 normal examples 组成的 training set：
+
+```text
+for each feature j
+-> estimate mean mu_j
+-> estimate variance sigma_j^2
+
+for a new example x
+-> compute each p(x_j; mu_j, sigma_j^2)
+-> multiply feature densities
+-> compare p(x) with epsilon
+```
+
+参数估计使用 $1/m$ 而不是统计学无偏估计常见的 $1/(m-1)$，因为这里的目标是 maximum likelihood estimate（最大似然估计，让观测数据概率最大的参数）。
+
+实际计算多个很小 probability 的乘积容易 underflow（下溢，小到浮点数表示成 0）。因此代码更常在 log domain（对数域）相加：
+
+$$
+\log p(x)=\sum_{j=1}^{n}\log p(x_j)
+$$
+
+再把 threshold 也转换到 log space。数学判断不变，数值实现更稳定。
+
+### 15.9 epsilon 必须由 validation anomalies 选择
+
+只有 normal data 也能 fit density，但不能判断 detector 是否真的抓得到异常。需要带 label 的 validation set：
+
+```text
+candidate epsilon
+-> predict anomaly when p(x) < epsilon
+-> compute precision / recall / F1
+-> choose epsilon on validation set
+-> evaluate once on test set
+```
+
+由于 anomalies 极少，accuracy 常常没有意义。一个始终输出 normal 的模型也可能拥有很高 accuracy，F1 或业务加权成本更能暴露问题。
+
+若 training set 中混入少量 anomalies，独立 Gaussian model 可能仍能工作，因为正常样本数量占主导；但污染比例升高会扭曲 $\mu$ 与 $\sigma$。课程的简化模型不是 robust statistics（稳健统计，专门降低异常点影响的方法）的替代品。
+
+### 15.10 multivariate Gaussian 何时值得使用
+
+独立模型通过人工构造 ratio features，也能间接暴露相关性；多元 Gaussian 则直接用 covariance matrix 表示倾斜的椭圆分布。
+
+使用多元模型的代价：
+
+```text
+Sigma has shape [n,n]
+需要足够多 m 才能稳定估计
+需要求解与 covariance 相关的线性系统
+强相关或 m <= n 时可能 singular
+```
+
+所以不是“多元版本一定更高级”。当 $n$ 不大、features 相关性明显且 training examples 足够时，它才是合理候选。
+
 ---
 
 ## 16. 推荐系统（Recommender Systems）
@@ -1609,6 +2671,87 @@ top-k retrieval（检索分数最高的 k 个结果）
 ```
 
 这些都是机器学习基础设施中的真实问题。课程只讲优化目标；工程上还要解决亿级嵌入向量的存储、更新、一致性、缓存和分布式服务（distributed serving，让多个节点共同承载在线推理）。
+
+### 16.7 collaborative filtering 的完整 objective
+
+只在 $R_{ij}=1$ 的位置计算 error：
+
+$$
+J(X,\Theta)=
+\frac{1}{2}
+\sum_{(i,j):R_{ij}=1}
+\left((\theta^{(j)})^Tx^{(i)}-Y_{ij}\right)^2
++\frac{\lambda}{2}
+\sum_j\lVert\theta^{(j)}\rVert^2
++\frac{\lambda}{2}
+\sum_i\lVert x^{(i)}\rVert^2
+$$
+
+这个 objective 同时优化 user vectors 与 item vectors。对某个 user vector：
+
+$$
+\frac{\partial J}{\partial\theta^{(j)}}=
+\sum_{i:R_{ij}=1}
+\left((\theta^{(j)})^Tx^{(i)}-Y_{ij}\right)x^{(i)}
++\lambda\theta^{(j)}
+$$
+
+对某个 item vector：
+
+$$
+\frac{\partial J}{\partial x^{(i)}}=
+\sum_{j:R_{ij}=1}
+\left((\theta^{(j)})^Tx^{(i)}-Y_{ij}\right)\theta^{(j)}
++\lambda x^{(i)}
+$$
+
+两边结构对称：固定 items 可以学习 users，固定 users 可以学习 items，同时优化则让双方互相塑造 latent space。
+
+### 16.8 为什么缺失评分不能按零分处理
+
+$R_{ij}=0$ 表示“没有观察到 interaction”，不表示用户讨厌该物品。如果把所有 missing entries 当成 rating 0，巨量缺失值会压过少量真实评分，模型只会学到“所有东西都预测接近 0”。
+
+因此 cost、gradient 和 metric 都必须 mask（遮蔽）未观测位置：
+
+```text
+prediction = X @ Theta.T
+error = (prediction - Y) * R
+cost only sums observed entries
+```
+
+现代 implicit feedback（隐式反馈，例如点击、播放、停留）系统会用 negative sampling、confidence weighting 等方法处理“没发生互动”的含义，但它们仍然不能把 missing 简单等同于明确负反馈。
+
+### 16.9 从相似物品到 top-k retrieval
+
+学到 item vectors 后，两件物品是否相似，可以比较：
+
+$$
+\lVert x^{(i)}-x^{(j)}\rVert^2
+$$
+
+为某用户生成推荐，则先计算所有 item scores，再取 top-k：
+
+$$
+s=X\theta^{(user)}
+$$
+
+课程数据很小，可以完整计算并排序。真实系统物品规模巨大时，full scan 的 cost、embedding storage、approximate nearest-neighbor index（近似最近邻索引）和在线 feature freshness 才成为 Infra 问题。
+
+### 16.10 mean normalization 实际怎样恢复 prediction
+
+对每个 movie，只在已评分 users 上计算平均值 $\mu_i$：
+
+$$
+Y'_{ij}=Y_{ij}-\mu_i\qquad(R_{ij}=1)
+$$
+
+模型学习的是“用户相对该电影平均分的偏移”。最终 prediction：
+
+$$
+\hat Y_{ij}=(\theta^{(j)})^Tx^{(i)}+\mu_i
+$$
+
+对没有任何评分的新用户，latent contribution 可能接近 0，于是至少得到 item average，而不是全部预测成 0。它缓解一类 cold-start baseline，却不能凭空知道新用户个性。
 
 ---
 
@@ -1710,6 +2853,82 @@ checkpoint write（把模型与训练状态写成可恢复快照）
 
 AI Infra 的工作，就是找出这些阶段谁在阻塞谁，再通过批处理（batching）、并行、内存管理与通信优化改善端到端性能。
 
+### 17.7 SGD 的一轮到底怎样执行
+
+对 linear regression，单条样本的 SGD：
+
+$$
+\theta_j\leftarrow\theta_j-
+\alpha\left(h_\theta(x^{(i)})-y^{(i)}\right)x_j^{(i)}
+$$
+
+程序结构：
+
+```text
+repeat for epochs
+-> shuffle training examples
+-> for each example i
+   -> prediction
+   -> sample loss
+   -> sample gradient
+   -> immediate parameter update
+```
+
+shuffle 很重要。如果数据按类别或时间块排序，连续 gradients 会带有强烈顺序偏差。在线学习场景不能随意 shuffle 未来事件，此时数据顺序本身就是 workload 的一部分。
+
+SGD 的“stochastic”来自 gradient estimate 使用随机样本，不代表 algorithm 毫无规律。期望上它估计 full gradient，但单步 variance 更大。
+
+### 17.8 mini-batch size 是算法参数，也是系统参数
+
+batch size 增大通常会：
+
+```text
+提高单次 kernel 的数据并行度
+降低每个 sample 分摊的 launch / Python overhead
+增加 activation 与 temporary memory
+降低每个 epoch 的 update 次数
+改变 gradient noise
+```
+
+所以 batch size 不是“GPU 塞得下越大越好”。它同时影响 optimization dynamics（优化动态）和 hardware efficiency（硬件效率）。比较 batch sizes 时，至少同时记录：
+
+```text
+training loss / validation metric
+samples per second
+step latency
+peak memory
+number of optimizer updates
+```
+
+如果只比较每 step 时间，而不同 batch 每 step 处理的 samples 不同，结论没有可比性。
+
+### 17.9 怎样为 stochastic training 建立可读曲线
+
+课程建议每处理固定数量 examples，就把这一段 sample losses 求平均，再画点：
+
+$$
+\bar L_t=\frac{1}{q}\sum_{r=t-q+1}^{t}L_r
+$$
+
+$q$ 小，曲线响应快但噪声大；$q$ 大，曲线平滑但延迟发现变化。若减小 learning rate 后曲线在更低区域稳定，原来可能是在 optimum 周围震荡；若始终不下降，应先检查 gradient、scale 与 implementation。
+
+validation metric 不应每个 sample 都计算，因为代价太高且会诱导对 validation 过度调参。训练可观测性与最终泛化评估应使用不同频率。
+
+### 17.10 分布式求和成立，不代表扩展免费
+
+只要 objective 能写成样本贡献之和，workers 就可以独立算 local gradients，再 sum/average。但增加 worker 后会出现：
+
+```text
+communication time
+load imbalance
+straggler（拖慢整轮同步的慢 worker）
+parameter / optimizer state placement
+failure recovery
+numerical reduction order differences
+```
+
+理想计算时间可能近似除以 worker 数，通信和同步却不会消失。scale-out 是否有效必须看 end-to-end speedup 与 model quality，而不是只看 GPU utilization。
+
 ---
 
 ## 18. 应用实例：图片文字识别（Photo OCR，Optical Character Recognition，光学字符识别）
@@ -1763,6 +2982,50 @@ AI Infra 的工作，就是找出这些阶段谁在阻塞谁，再通过批处�
 这说明 detection 与 recognition 都有较大改进空间，segmentation 的上限收益较小。
 
 上限分析与性能剖析（profiling，测量时间和资源究竟花在哪里）是同一种工程思想：**不要平均优化所有模块，先找到限制端到端结果的主要瓶颈。**
+
+### 18.5 sliding window 的完整输入输出
+
+假设已经训练一个“当前 patch 是否包含行人”的 classifier。运行时：
+
+```text
+choose window size
+-> move window across x/y positions
+-> crop patch
+-> resize/normalize to classifier input
+-> run prediction
+-> keep high-score locations
+-> repeat with several window sizes
+```
+
+窗口大小决定能覆盖的 object scale，stride（滑动步长）决定空间采样密度。stride 小，定位更密但计算更多；stride 大，速度快但可能跨过目标。
+
+文字识别还会先检测 text region，再对连续区域 segmentation（切分）成字符，最后逐字符 classification。每一级都改变下一阶段看到的数据分布，因此前级 errors 会传播。
+
+### 18.6 数据合成必须回答“真实变化来自哪里”
+
+OCR 可以从字体文件生成字符，再加入 background、rotation、blur、contrast 等变化。但有效 augmentation 必须模拟真实采集过程可能发生的变化。
+
+```text
+真实相机可能轻微旋转 -> rotation augmentation 有理由
+真实图片存在模糊与光照变化 -> blur / contrast 有理由
+随意扭曲到人也看不懂 -> 只是在制造 label noise
+```
+
+合成量很大不等于覆盖真实 distribution。应保留真实 validation/test，验证 synthetic training 是否真的迁移到真实输入。
+
+### 18.7 ceiling analysis 怎样避免优化错模块
+
+假设当前 pipeline accuracy 为 $72\%$。分别用人工真值替换中间 output：
+
+| 临时替换 | 新 accuracy | 该阶段理论最大收益 |
+|---|---:|---:|
+| perfect detection | $89\%$ | $+17\%$ |
+| 再加 perfect segmentation | $91\%$ | $+2\%$ |
+| 再加 perfect recognition | $99\%$ | $+8\%$ |
+
+这不代表 detection 一定容易提升 17 个点，而是说明：即使 detection 完美，end-to-end 最多能来到哪里。若某阶段 ceiling gain 只有 0.2%，就不值得先投入一个月重写。
+
+同样方法可迁移到 AI serving：假设 tokenizer、scheduler、prefill kernel、decode kernel 或 network 完全免费，端到端 latency 能下降多少？把一个阶段临时替换成理想结果，就是用实验估计优化上限。
 
 ---
 

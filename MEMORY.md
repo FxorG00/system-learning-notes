@@ -6824,3 +6824,26 @@ T13 + Ex5 通过后
 固定纪律：只允许一个 baseline、一次有理由且保持 validation 条件不变的改进、最多一至两次 submission；榜单名次和任意高分阈值不作为通过条件。账号 token、`kaggle.json`、competition data 不进入 Git。每次真正开始比赛前重新核对 Kaggle 官方页面、rules、metric、data files 与 CLI，因为这些属于可变化的外部状态。
 
 主线仍是 HTTP Server -> Mini Redis -> inference serving。Kaggle 练习不得抢占系统主线每天 3 小时以上的优先级，也不能替代 Tn code gate、经典 Ex1~Ex8 或后续系统项目。独立教程保存在 `ML/Kaggle入门实践.md`，`ML/ML.md`、`ML/ML_配套练习.md` 和 `AI_Infra理论伴随线规划.md` 只保留入口与时间锚点。
+
+## 2026-09-24：完整课程讲义不能用“覆盖了标题”代替讲清中间过程
+
+用户复读 `ML/ML.md` 后指出：上一版虽然覆盖吴恩达 2014 课程 `week1~week10` 的大标题，许多内容却压缩得过度，导致阅读时必须一边看讲义一边追问 AI。典型问题是 K-means 只写“反复执行 assignment 和 update”，却没有真正讲每步输入、距离计算、assignment state、centroid mean、停止条件和一次具体迭代。以后不能用“关键词存在”“公式出现”或“标题齐全”证明一份长课程已经完整。
+
+`ML/ML.md` 的新密度标准是：对原课程每个核心 mechanism，至少交付下面这条连续链：
+
+```text
+这一节要解决的具体问题
+-> 最小数据或场景
+-> 数学对象及 shape
+-> 算法每一步读取什么、产生什么
+-> 一次可手算或可运行的具体过程
+-> objective / stopping / failure boundary
+-> 怎样观察或验证它工作
+-> 与当前 T module、经典 Ex 作业及 AI Infra 的连接
+```
+
+尤其不能把 iterative algorithm 压成两个 bullet。K-means 必须讲 assignment distance、argmin output、centroid mean 的来源、objective 为何不升、local optimum、random restarts、empty cluster、feature scale 和 stopping conditions；gradient descent、backprop、SGD、anomaly detection、collaborative filtering 等也按同样责任展开。
+
+资料分工固定为：`ai-start.com/ml2014/html/week1.html~week10.html` 与其开源 Markdown 仓库用于核对课程覆盖范围、原始顺序、公式和例子；MEMORY 中已经确定的“目标 -> 直觉 -> 本质 -> 推导 -> 术语”用于重写讲解；`AI_Infra理论伴随线规划.md` 决定学习深度与时间锚点。不能整页逐字复制来源，也不能以“面向 AI Infra”为理由删除建立 ML 心智模型所必需的中间推理。Octave 语法迁移到 Python 3.12 / NumPy，但其数据移动、矩阵计算、绘图、控制流和 vectorization 教学目标必须保留。
+
+本次已从当前磁盘版本继续扩写全部十周，而不是从归档旧稿覆盖。新增内容覆盖：Week1 完整训练闭环与矩阵边界；Week2 数据操作、向量化、绘图、控制流和多变量训练；Week3 probability/threshold、one-vs-rest 与两类 regularized objective；Week4 bias unit、XNOR 表示和 activation memory；Week5 多类别 cost、逐层 backprop、gradient-check 判据与训练链；Week6 bias/variance 诊断、learning curve、spam error analysis、precision/recall/F1；Week7 hinge loss、support vectors、Gaussian landmarks 与 SVM 选择；Week8 K-means 完整迭代/PCA projection-reconstruction；Week9 anomaly threshold 与 collaborative-filtering gradients；Week10 SGD/mini-batch/distributed costs 与 OCR ceiling analysis。
