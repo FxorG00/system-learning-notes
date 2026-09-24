@@ -6847,3 +6847,60 @@ T13 + Ex5 通过后
 资料分工固定为：`ai-start.com/ml2014/html/week1.html~week10.html` 与其开源 Markdown 仓库用于核对课程覆盖范围、原始顺序、公式和例子；MEMORY 中已经确定的“目标 -> 直觉 -> 本质 -> 推导 -> 术语”用于重写讲解；`AI_Infra理论伴随线规划.md` 决定学习深度与时间锚点。不能整页逐字复制来源，也不能以“面向 AI Infra”为理由删除建立 ML 心智模型所必需的中间推理。Octave 语法迁移到 Python 3.12 / NumPy，但其数据移动、矩阵计算、绘图、控制流和 vectorization 教学目标必须保留。
 
 本次已从当前磁盘版本继续扩写全部十周，而不是从归档旧稿覆盖。新增内容覆盖：Week1 完整训练闭环与矩阵边界；Week2 数据操作、向量化、绘图、控制流和多变量训练；Week3 probability/threshold、one-vs-rest 与两类 regularized objective；Week4 bias unit、XNOR 表示和 activation memory；Week5 多类别 cost、逐层 backprop、gradient-check 判据与训练链；Week6 bias/variance 诊断、learning curve、spam error analysis、precision/recall/F1；Week7 hinge loss、support vectors、Gaussian landmarks 与 SVM 选择；Week8 K-means 完整迭代/PCA projection-reconstruction；Week9 anomaly threshold 与 collaborative-filtering gradients；Week10 SGD/mini-batch/distributed costs 与 OCR ceiling analysis。
+
+## 2026-09-24：AI Theory T4~T14 统一重构
+
+用户要求依据近期反馈、对话和 MEMORY 统一润色 T4~T14。此前这些提前稿成熟度不一致：T5/T7 过薄，T6/T8~T12 仍保留大量“术语表、API 表、检查清单先行”的旧结构，T4/T13 已较接近近期认可的讲法，T14 技术内容足够但入口偏词典式。本次从当前磁盘版本继续修改，Git baseline 为 `f75e948`，没有从历史版本覆盖用户内容。
+
+理论线今后的统一认知顺序固定为：
+
+```text
+第一句给出今天要解决/造出的对象
+-> 一个最小具体数据或失败场景
+-> 解释为什么原方法不够
+-> 从物理动作和数据流推出公式
+-> 逐项说明公式、shape 和 code 对应
+-> 此时再命名英文术语
+-> 完成一条可运行 evidence chain
+-> 最后连接 AI Infra cost/lifecycle
+```
+
+“术语后置”不是删除术语。新英文第一次出现时仍给中文含义与当前作用；后续直接复用。正面讲清“它是什么、输入什么、做什么、输出什么”，减少连续的“它不是什么”防错段落。必要边界保留在真实调用点，不在开篇堆成百科、API reference 或错误全集。
+
+理论线按课判断是否需要单一闸门，不统一设置也不统一删除：
+
+```text
+T4 finite-difference state isolation：保留
+T5 probability object mapping：不设闸门
+T6 stable-softmax shift：保留
+T7 complete training loop：保留
+T8 NumPy classifier + workflow：保留
+T9 metadata prediction：保留
+T10 Module/state round trip：不设闸门，连续完成
+T11 autograd prediction/accumulation：保留
+T12 train-save-load-infer composition：保留
+T13 baseline observation：保留
+T14 identity/projection residual path：保留
+```
+
+闸门前必须给足问题、输入输出、最小 API、运行方式和 observable result，但不组合泄露核心实现；闸门后才解释机制和升级。理论课以“先学清，再独立实现”为主，不机械复制系统主线的工程 contract。没有真实认知墙时用连续讲义与一个综合实验收口。
+
+本次各课的新主线：
+
+```text
+T4：scalar loss -> computation graph -> chain rule -> independent finite difference
+T5：distribution -> random variable -> sample -> empirical statistics -> sampling policy
+T6：overflowing logits -> translation invariance -> stable softmax -> log-sum-exp loss
+T7：prediction -> MSE -> gradient -> update -> multi-layer evidence
+T8：softmax classifier -> gradient -> split/validation/test -> Theory Gate 1
+T9：storage + metadata -> stride/offset -> view/reshape/copy -> hidden serving cost
+T10：Module registration -> parameter/buffer/activation -> mode -> checkpoint round trip
+T11：forward graph -> backward seed -> accumulation/lifetime -> training memory
+T12：XOR limitation -> activation -> training loop -> fresh-object checkpoint inference
+T13：baseline -> validation curves -> one controlled regularization comparison
+T14：local convolution -> NCHW/channel shape -> residual paths -> state/memory evidence
+```
+
+技术审计经验同步保留：loss convention 必须明确，例如普通 MSE 的 $\frac{1}{m}$ 与带 $\frac{1}{2m}$ 的教学写法会让 gradient 相差常数；array formula 必须检查实际 broadcasting，例如 `[m]` errors 不能直接按预期与 `[m,n]` features 做逐元素乘；optimizer baseline 不应在 regularization 课程前含糊带入 weight decay；重排章节后必须全量检查节号交叉引用。
+
+这次修改只更新 AI Theory T4~T14 与本条 MEMORY。系统主线 `daily.md` 的三 Part、R1 progressive disclosure、R1 后定向润色、目录同步和 executable evidence 规则完全不变。
