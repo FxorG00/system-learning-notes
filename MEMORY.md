@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-22）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser 与 Day2 header-section parser 均已正式通过，Day3 Content-Length/body framing 教程已生成并进入 R1。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
+最新进度快照（2026-09-27）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser、Day2 header-section parser 与 Day3 Content-Length/body framing 均已正式通过，Day3 最终评分 `95/100`。Week11 Day4 HTTP response encoder 与 fixed routes 教程已生成，当前进入 Day4 Round1；这不表示 Day4 已学习或通过。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
 
 ### Week1：已完成
 
@@ -3131,7 +3131,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-09-22 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1 与 Day2 均已正式通过；Day3 教程已生成，当前进入 Content-Length/body framing R1，把 request-line 与 header-section 结果组合成完整 request boundary。AI Theory T1~T3 已正式通过，下一模块为 T4。
+2026-09-27 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1、Day2 与 Day3 均已正式通过；Week11 Day4 教程已生成，当前进入 response encoder 与 fixed routes Round1。AI Theory T1~T3 已正式通过，下一模块为 T4。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -6904,3 +6904,51 @@ T14：local convolution -> NCHW/channel shape -> residual paths -> state/memory 
 技术审计经验同步保留：loss convention 必须明确，例如普通 MSE 的 $\frac{1}{m}$ 与带 $\frac{1}{2m}$ 的教学写法会让 gradient 相差常数；array formula 必须检查实际 broadcasting，例如 `[m]` errors 不能直接按预期与 `[m,n]` features 做逐元素乘；optimizer baseline 不应在 regularization 课程前含糊带入 weight decay；重排章节后必须全量检查节号交叉引用。
 
 这次修改只更新 AI Theory T4~T14 与本条 MEMORY。系统主线 `daily.md` 的三 Part、R1 progressive disclosure、R1 后定向润色、目录同步和 executable evidence 规则完全不变。
+
+## 2026-09-27：Week11 Day3 Round1 正式通过
+
+Week11 Day3 R1 以 `89/100` 正式通过。用户独立完成 `HttpRequest::body`、完整 `HttpRequestParseResult` 与 `HttpRequestParser::parse_request()`：复用 request-line/header-section parser，在本轮内部使用 temporary `HttpRequest`，只有 request line、headers 和 declared body 全部完成后才一次性提交 public output；body 不足时返回 `NeedMore + consumed_bytes=0`，完整时返回 current request 的 exact `consumed_bytes`，不会吞掉同一 Buffer 中的 suffix。
+
+用户明确授权 Codex 只追加两个机械性 R1 tests，Codex 没有修改 production code：zero-body + suffix，以及 fragmented `hel` -> `helloNEXT`。前者验证无 Content-Length 时 body length 为 0、Complete 后 `retrieve(consumed_bytes)` 保留 `NEXT`；后者验证 body 未到齐时 public output sentinel 不变，补齐后 body 为 `hello` 且 suffix 仍保留。测试 scaffold 由 Codex 编写不冒充用户手写 evidence，但其通过验证了用户 parser 的真实 observable behavior。
+
+独立 fresh build 位于 Ubuntu `/tmp/week11-day3-r1-review`：C++17、CMake target 的 `-Wall -Wextra -g` 编译零 warning；规定的 request-line/header-section/complete-request focused CTest `23/23` PASS，其中旧回归 `21/21`，本轮核心 `2/2`。用户还补齐旧 aggregate test fixtures 的 `body` initializer，消除了此前两条 `-Wmissing-field-initializers` warning。
+
+`day3_note.md` 对 temporary output / transactional commit 的解释正确，也正确识别 body 不足是 `NeedMore`。需要修正两处表述：完整 request 不要求一定存在 Content-Length；V1 在既无 Content-Length 也无 Transfer-Encoding 时把 body length 解释为 0。`parse_request_line()` / `parse_header_section()` 返回的是具体 result object，不是“非空 result”，应按 `status == NeedMore / Error / Complete` 分支。
+
+用户对 `day3.md` 新增的 `std::from_chars` 说明技术正确：同时检查 `ec` 与 `ptr == end`，并明确 `1 MiB = 1048576 bytes` 的包含边界。R2/R3 前仍有三个真实收口点，但不阻塞 R1：
+
+```text
+HeaderSectionTooLong 尚未映射到 HttpRequestError::HeaderSectionTooLong，当前 Error 分支会继续向后执行
+Content-Length > 1 MiB 当前经 parse_digits(nullopt) 被归为 BadRequest，而 contract 要求 BodyTooLarge
+http_request_error_message 已声明但尚未定义，caller 一旦使用会出现 link error
+```
+
+本轮 review 没有修改 Ubuntu production code、tests 或 `day3_note.md`。R1 正式通过后已按既定流程，以磁盘当前 `day3.md` 为唯一底稿定向润色完整 R2/R3：保留用户新增的 `std::from_chars` 说明和 error-table 更正，只让后半教程对齐真实 `tmp_output`、`parse_digits`、offset 计算、`23/23` evidence 与三个已知 contract 缺口。今后普通 review 仍默认只读，但不能再用该规则跳过 R1 正式通过后的必做润色。
+
+## 2026-09-27：Week11 Day3 正式通过
+
+Week11 Day3 最终评分 `95/100`，正式通过。用户亲自完成并修正三个 R2/R3 production targets：完整 parser 现在把 header parser 的 `HeaderSectionTooLong` 稳定映射为 `HttpRequestError::HeaderSectionTooLong`；`parse_digits()` 只负责 strict decimal 到 `std::size_t` 的转换，`parse_request()` 再独立执行 1 MiB policy limit，使 invalid/overflow decimal 归入 `BadRequest`、`1048577` 归入 `BodyTooLarge`；`http_request_error_message()` 已定义全部 public enum values 的固定英文消息。此前 note 中“Content-Length 必须存在”和“result 非空”的表述也已纠正：无 CL/TE 时 body length 为 0，各 stage 按 `NeedMore/Error/Complete` status 分支。
+
+用户没有机械抄写 §21.2~§21.6 tests，但能逐项解释每个 oracle：binary-NUL 证明按 `Content-Length` 处理 raw bytes；body split 证明不足时 NeedMore 且 exact/full boundary 正确；coalesced requests 证明 first consumed boundary 不吞第二条 request；error matrix 证明错误分类、`consumed_bytes=0` 和 output sentinel 不变；body limit 证明 exact limit 与 limit+1 的策略分界。按既定 dirty-work 边界，这足以授权 Codex 只追加测试 scaffold，不修改 production code。
+
+Codex 在 `tests/http_request_parser_test.cpp` 末尾追加 7 组 GoogleTest：binary body with embedded NUL、all body split points、two coalesced requests、8-case framing error matrix、header-section limit propagation、1 MiB body limit 和全部 known diagnostic messages。fresh Debug focused CTest 从 `23/23` 增至 `30/30` PASS；fresh ASan/UBSan focused CTest `30/30` PASS 且无 report；全项目 fresh Debug build 零 warning，CTest `45/45` PASS。测试 scaffold 由 Codex 编写，production mechanism 和三个修复属于用户实现，验收记录必须继续区分二者。
+
+非阻塞工程项：`parse_digits(std::string)` 当前按值复制 header value，可在以后自然整理时改为只读引用或 `string_view`；diagnostic 函数对非法 enum cast 会落到 `BodyTooLarge` 文案，但当前 public contract 只要求已声明 enum values；body 在 public output commit 后逐 byte append，若未来把 allocation failure 下的强异常保证纳入 contract，再改为先写 candidate、最后一次 commit。三项均不影响 Week11 V1 的 framing correctness，不要求为此停留或重写。
+
+## 2026-09-27：Week11 Day4 教程生成
+
+已生成 `week11/day4/day4.md`。本日严格承接 Day1~Day3 已正式通过的结构化 `HttpRequest`，只完成纯内存链路：
+
+```text
+HttpRequest
+-> fixed route policy
+-> HttpResponse
+-> response encoder
+-> exact owning HTTP/1.1 bytes
+```
+
+Round1 明确要求 `HttpResponse` model、`route_http_request()`、`encode_http_response()`、三组核心 tests 与 CMake/CTest integration。固定 routes 为 `GET /health`、`GET /hello`、`POST /echo`；受支持 method 下未知 route 返回 404，未实现 method 返回 501。Encoder 的 `Content-Length` 只能来自 `body.size()`，body 使用 binary-safe `std::string`，可包含 NUL；invalid status、empty content type、CR/LF content type 均给出稳定 exception type 与英文 message contract。R1 前只提供 public model、observable contract、最小使用方式和 exact-byte oracles，没有泄露 serializer control flow。
+
+Round2 才展开 `route -> response -> encoder` 的职责链、status line/header terminator、single source of truth、binary body、404/501 和 `Connection: close` 的 flush-before-close 语义。Round3 再增加 `response_for_parse_error(HttpRequestError)`，将 Day3 errors 固定映射到 400/413/501/505，并通过 route matrix、encoder matrix、error-response matrix、full parser regression 与 ASan/UBSan 收口。今天不接 Reactor、不启动 server、不实现 keep-alive/pipelining，也不把 HTTP policy 塞进 transport Connection。
+
+教程发布前已对照 `week11/week11.md` Day4 contract、Week11 Day3 标杆、RFC 9112 message/status-line framing 和 RFC 9110 Content-Length/501 语义；使用 Typora Mermaid 8.8.3 兼容的 quoted labels。`DAILY_INDEX.md` 已同步加入 Week11 Day4。Day4 尚未学习或验收；R1 正式通过后必须从用户当时磁盘版本出发，读取真实 headers/sources/tests/note/CMake，对 R2/R3 做定向润色并保留用户新增内容。

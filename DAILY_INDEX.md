@@ -1,8 +1,8 @@
 # Daily 教程总目录
 
-> 更新日期：2026-09-22
+> 更新日期：2026-09-27
 >
-> 收录范围：主线 Week1 Day1 至 Week11 Day2，共 72 份正式 daily 教程。
+> 收录范围：主线 Week1 Day1 至 Week11 Day4，共 74 份正式 daily 教程。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week10 已通过
-Week11 Day1 已正式通过；Week11 Day2 Round1 已通过，当前进入 terminating-CR split 与 section-limit 收口
+Week11 Day1~Day3 已正式通过；Week11 Day4 教程已生成，当前进入 response encoder 与 fixed routes Round1
 ```
 
 ---
@@ -192,6 +192,7 @@ Week11 Day1 已正式通过；Week11 Day2 Round1 已通过，当前进入 termin
 | [Day1：HTTP request line](week11/day1/day1.md) | 在 TCP arbitrary fragmentation/coalescing 下，从累计 byte range 增量识别 method、origin-form target 与 HTTP/1.1；区分 NeedMore/Complete/Error，并用 consumed bytes 保留 suffix | `HttpRequest` + request-line parser + split-point tests | HTTP, request line, incremental parser, CRLF, NeedMore, consumed bytes, fragmentation |
 | [Day2：HTTP headers](week11/day2/day2.md) | 从 request line 后继续增量识别 header section；处理 field-name 大小写、OWS、Host、duplicates 与 section limit | `parse_header_section` contract + Host/header policy + fragmentation/limit evidence | header field, Host, OWS, case-insensitive, CRLF CRLF, section limit |
 | [Day3：HTTP body framing](week11/day3/day3.md) | 组合 request-line 与 header parser；用 Content-Length 决定 binary body boundary；区分 incomplete body、当前 request 与下一条 request suffix | `parse_request` + binary body/coalesced request/framing error tests | Content-Length, message body, framing, octet, binary body, coalesced request, request smuggling |
+| [Day4：HTTP response 与 fixed routes](week11/day4/day4.md) | 把完整 `HttpRequest` 映射成结构化 `HttpResponse`，再按固定 status/header/body contract 生成 exact HTTP/1.1 bytes | `HttpResponse` + fixed route policy + response encoder + exact-byte tests | HTTP response, status line, response encoder, Content-Length, route, serialization |
 
 ---
 
@@ -264,6 +265,7 @@ Reactor architecture / composition root   -> Week10 Day7
 HTTP request line / incremental parser    -> Week11 Day1
 HTTP headers / Host / OWS / section limit -> Week11 Day2
 HTTP body / Content-Length / request boundary -> Week11 Day3
+HTTP response / status / encoder / route  -> Week11 Day4
 ```
 
 ## 并发与工程工具

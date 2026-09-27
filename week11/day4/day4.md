@@ -1,0 +1,748 @@
+# Week11 Day4：把结构化请求变成精确 HTTP Response
+
+> 日期：2026-09-27
+> 主线位置：HTTP Server V1
+> 前置：Week11 Day1~Day3 已正式通过
+> 今日产出：<code>HttpResponse</code>、固定 routes、response encoder 与 exact-byte tests
+
+今天只干一件事：
+
+> **输入一份已经解析完成的 HttpRequest，决定该返回什么，再把 HttpResponse 精确编码成可发送的 HTTP/1.1 bytes。**
+
+今天不接 socket，不接 EventLoop，也不修改已经通过的 parser。先把“业务决定”和“协议序列化”做成两个纯内存组件；Day5 再接进 Reactor。
+
+---
+
+# Part 1：前情提要与任务边界
+
+## 1. 从一个真实请求开始
+
+Day3 之后，下面的 bytes：
+
+~~~~text
+POST /echo HTTP/1.1\r\n
+Host: localhost\r\n
+Content-Length: 3\r\n
+\r\n
+A\0B
+~~~~
+
+已经能被 parser 证明为一条完整请求，并得到：
+
+~~~~text
+method  = POST
+target  = /echo
+version = HTTP/1.1
+body    = ['A', '\0', 'B']
+~~~~
+
+server 接下来还缺两步：
+
+~~~mermaid
+flowchart LR
+    A["HttpRequest<br/>parser 已证明边界"] --> B["route_http_request<br/>决定回什么"]
+    B --> C["HttpResponse<br/>结构化响应"]
+    C --> D["encode_http_response<br/>生成 wire bytes"]
+    D --> E["std::string<br/>Day5 交给 Connection::send"]
+~~~
+
+例如 <code>POST /echo</code> 应得到：
+
+~~~~text
+HTTP/1.1 200 OK\r\n
+Content-Type: application/octet-stream\r\n
+Content-Length: 3\r\n
+\r\n
+A\0B
+~~~~
+
+最后三个 body bytes 是 <code>A</code>、NUL、<code>B</code>，不能用 C-string 长度猜边界。
+
+## 2. 今天必须回答的四个问题
+
+1. route 怎样区分 <code>404 Not Found</code> 和 <code>501 Not Implemented</code>？
+2. encoder 怎样保证 <code>Content-Length</code> 等于 body 的 byte count？
+3. body 含 <code>\0</code> 时，为什么仍能完整编码？
+4. <code>Connection: close</code> 写入 response 后，为什么不能立刻销毁 Connection？
+
+每个问题都对应 observable behavior，不要求只背定义。
+
+## 3. 职责边界
+
+| 对象 | 今天负责什么 |
+|---|---|
+| <code>HttpRequest</code> | 保存 parser 已确认的 method、target、headers 与 body |
+| route | 根据 method 和 target 选择 status、content type 与 body |
+| <code>HttpResponse</code> | 保存尚未序列化的结构化 response |
+| encoder | 把 response 按 HTTP/1.1 格式生成 owning bytes |
+| Connection | 今天不参与；Day5 只接收最终 bytes 并处理 partial write |
+
+## 4. 必要术语
+
+### 4.1 response
+
+<code>response</code>：响应。它是 server 对 request 给出的结果，由 status line、headers 和可选 body 组成。
+
+### 4.2 status line
+
+<code>status line</code>：状态行，即 response 的第一行：
+
+~~~~text
+HTTP-version SP status-code SP reason-phrase CRLF
+~~~~
+
+今天固定输出 HTTP/1.1，例如：
+
+~~~~text
+HTTP/1.1 200 OK\r\n
+~~~~
+
+### 4.3 status code 与 reason phrase
+
+<code>status code</code>：三位十进制状态码。<code>reason phrase</code>（原因短语）是状态码后便于人阅读的文本。
+
+| code | reason phrase | 当前含义 |
+|---:|---|---|
+| 200 | OK | route 找到并正常产生结果 |
+| 400 | Bad Request | parser 已证明 request 不合法 |
+| 404 | Not Found | method 受支持，但没有匹配 route |
+| 413 | Content Too Large | body 超过本项目 1 MiB policy |
+| 501 | Not Implemented | server 没实现该 method 或 transfer coding |
+| 505 | HTTP Version Not Supported | request version 不受支持 |
+
+### 4.4 route
+
+<code>route</code>：路由规则。它把 method + target 映射到 application behavior：
+
+~~~~text
+POST + /echo -> 把 request body 原样作为 response body
+~~~~
+
+这里不是 IP routing，而是 HTTP application 层的请求分派。
+
+### 4.5 encoder 与 serialization
+
+<code>encoder</code>：编码器。它接收结构化 <code>HttpResponse</code>，输出符合约定的 byte sequence。
+
+<code>serialization</code>：序列化。当前物理动作是把 status、content type、body 和 close flag 排成 HTTP wire format。
+
+### 4.6 wire bytes
+
+<code>wire bytes</code>：最终准备交给网络发送的 bytes。今天不用开 socket；把 encoder 返回值与 expected bytes exact comparison，就能证明布局。
+
+## 5. 文件与停止边界
+
+建议新增：
+
+~~~~text
+include/http/http_response.hpp
+include/http/http_routes.hpp
+src/http_response.cpp
+src/http_routes.cpp
+tests/http_response_test.cpp
+CMakeLists.txt
+~~~~
+
+今天完成：
+
+~~~~text
+HttpRequest -> fixed route -> HttpResponse -> exact bytes
+~~~~
+
+今天不做：
+
+~~~~text
+socket / EventLoop integration
+Connection::send integration
+keep-alive / pipelining
+dynamic router framework
+HTML templates
+完整 RFC response-header set
+~~~~
+
+---
+
+# Part 2：教程开始
+
+## 6. Round1：先独立造出 response path
+
+程序用途：
+
+> **给定完整 HttpRequest，返回结构化 HttpResponse；再把 response 编码成可直接交给 Connection::send 的 owning bytes。**
+
+两层 public API：
+
+~~~~cpp
+HttpResponse route_http_request(const HttpRequest& request);
+
+std::string encode_http_response(const HttpResponse& response);
+~~~~
+
+route 输出 object；encoder 输出 bytes。不要合成一个“大函数直接拼字符串”，否则 route、protocol layout 和 Day5 integration 会缠在一起。
+
+## 7. Round1 public model
+
+~~~~cpp
+#pragma once
+
+#include <string>
+
+enum class HttpStatus {
+    Ok = 200,
+    BadRequest = 400,
+    NotFound = 404,
+    ContentTooLarge = 413,
+    NotImplemented = 501,
+    HttpVersionNotSupported = 505
+};
+
+struct HttpResponse {
+    HttpStatus status;
+    std::string content_type;
+    std::string body;
+    bool close_connection{false};
+};
+
+std::string encode_http_response(const HttpResponse& response);
+~~~~
+
+| field | 功能 |
+|---|---|
+| <code>status</code> | 决定 status code 与固定 reason phrase |
+| <code>content_type</code> | 描述 response body 的 media type |
+| <code>body</code> | 真实 body bytes，可包含 NUL |
+| <code>close_connection</code> | 是否生成 <code>Connection: close</code> |
+
+<code>std::string body</code> 在这里是 byte container，不表示 body 必须是文本。
+
+## 8. encoder 的完整 contract
+
+### 8.1 输入与成功输出
+
+encoder 只读 <code>const HttpResponse&</code>，不保存其中 pointer/reference。返回 owning <code>std::string</code>：
+
+~~~~text
+HTTP/1.1 <code> <reason>\r\n
+Content-Type: <content_type>\r\n
+Content-Length: <body.size()>\r\n
+[Connection: close\r\n]
+\r\n
+<body bytes>
+~~~~
+
+方括号这一行只在 <code>close_connection == true</code> 时出现；方括号本身不输出。
+
+### 8.2 固定 header 顺序
+
+1. status line
+2. <code>Content-Type</code>
+3. <code>Content-Length</code>
+4. 可选 <code>Connection: close</code>
+5. empty line
+6. body bytes
+
+HTTP 语义通常不依赖这几个字段的相对顺序，但固定顺序能让测试和调试稳定。
+
+### 8.3 错误 contract
+
+| 错误条件 | C++ 行为 | 建议 <code>what()</code> 英文 |
+|---|---|---|
+| <code>status</code> 不是已声明 value | throw <code>std::invalid_argument</code> | <code>unknown HTTP status</code> |
+| <code>content_type</code> 为空 | throw <code>std::invalid_argument</code> | <code>empty HTTP content type</code> |
+| <code>content_type</code> 含 CR/LF | throw <code>std::invalid_argument</code> | <code>invalid HTTP content type</code> |
+
+body 可为空，也可包含任意 byte。header value 的 CR/LF 检查用于阻止它生成额外 header line。
+
+### 8.4 side effects
+
+无 socket I/O、无全局状态修改。相同 input 必须得到相同 bytes。
+
+## 9. fixed route contract
+
+声明：
+
+~~~~cpp
+#pragma once
+
+#include "http/http_request.hpp"
+#include "http/http_response.hpp"
+
+HttpResponse route_http_request(const HttpRequest& request);
+~~~~
+
+固定规则：
+
+| method | target | status | content type | body |
+|---|---|---:|---|---|
+| GET | <code>/health</code> | 200 | <code>text/plain; charset=utf-8</code> | <code>OK\n</code> |
+| GET | <code>/hello</code> | 200 | <code>text/plain; charset=utf-8</code> | <code>Hello, World!\n</code> |
+| POST | <code>/echo</code> | 200 | <code>application/octet-stream</code> | request body exact bytes |
+| GET/POST | 其他组合 | 404 | <code>text/plain; charset=utf-8</code> | <code>Not Found\n</code> |
+| 其他 method | 任意 target | 501 | <code>text/plain; charset=utf-8</code> | <code>Not Implemented\n</code> |
+
+判断顺序：
+
+~~~~text
+先判断 method 是否属于本 server 支持集合
+-> 不支持：501
+-> 支持：再查 route
+-> 没匹配：404
+~~~~
+
+因此：
+
+~~~~text
+GET /missing  -> 404
+PUT /health   -> 501
+POST /health  -> 404
+~~~~
+
+固定 route 的 <code>close_connection</code> 默认 <code>false</code>。Day5 的 session policy 再决定是否关闭。
+
+## 10. 最小使用例子
+
+### 10.1 health
+
+~~~~cpp
+HttpRequest request;
+request.method = "GET";
+request.target = "/health";
+
+const HttpResponse response = route_http_request(request);
+const std::string bytes = encode_http_response(response);
+~~~~
+
+预期：
+
+~~~~text
+HTTP/1.1 200 OK\r\n
+Content-Type: text/plain; charset=utf-8\r\n
+Content-Length: 3\r\n
+\r\n
+OK\n
+~~~~
+
+<code>OK\n</code> 是 3 bytes，所以 Content-Length 是 3。
+
+### 10.2 binary echo
+
+~~~~cpp
+HttpRequest request;
+request.method = "POST";
+request.target = "/echo";
+request.body = std::string{"A\0B", 3};
+
+const std::string bytes =
+    encode_http_response(route_http_request(request));
+~~~~
+
+预期 Content-Length 是 3，empty line 后最后三个 bytes 仍是 <code>A 00 B</code>。
+
+### 10.3 unsupported method
+
+~~~~cpp
+HttpRequest request;
+request.method = "PUT";
+request.target = "/health";
+
+const HttpResponse response = route_http_request(request);
+~~~~
+
+预期 status 501，body <code>Not Implemented\n</code>。
+
+## 11. Round1 三个核心 tests
+
+### 11.1 exact health response
+
+~~~~text
+GET /health
+-> route fields exact
+-> encoded bytes 与完整 expected string exact equality
+~~~~
+
+不要只查 <code>find("200")</code>。exact comparison 才能同时证明 status line、CRLF、empty line、Content-Length 与 body。
+
+### 11.2 binary echo
+
+输入 <code>std::string{"A\0B", 3}</code>，验证：
+
+~~~~text
+status == 200
+Content-Type == application/octet-stream
+encoded Content-Length == 3
+encoded body size/bytes exact
+~~~~
+
+### 11.3 404 与 501 分界
+
+~~~~text
+GET /missing -> 404
+PUT /health  -> 501
+~~~~
+
+这条证明 route missing 与 method unsupported 没混成一个判断。
+
+## 12. CMake 与运行入口
+
+建议新增 <code>http_response</code> library 和 <code>http_response_test</code> executable。include 路径、request-model dependency 按你当前真实 CMake ownership 连接，不为照抄名字制造重复 target。
+
+统一入口：
+
+~~~~bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j
+cmake -E chdir build ctest --output-on-failure
+~~~~
+
+Round1 最低证据：
+
+~~~~text
+normal build zero warnings
+existing parser tests still pass
+3 response-focused tests pass
+process exit code 0
+~~~~
+
+测试失败必须 non-zero exit；不能打印 FAIL 后仍返回 0。
+
+## 13. Round1 阅读闸门
+
+现在停止阅读。
+
+先完成：
+
+~~~~text
+HttpResponse public model
+route_http_request
+encode_http_response
+3 个核心 tests
+CMake integration
+normal build + full CTest
+~~~~
+
+Round1 通过前，不继续看 encoder 因果链、Connection-close 语义和 parser error mapping。后半部分用于解释并打磨你的真实实现，不应提前变成照抄答案。
+
+---
+
+## 14. Round2：完整主线
+
+有了 R1 后，再检查：
+
+~~~~text
+HttpRequest
+-> route 决定 application result
+-> HttpResponse 保存结构化字段
+-> encoder 查 status code/reason
+-> 写 status line
+-> 写 Content-Type
+-> 根据 body.size() 写 Content-Length
+-> 按 flag 决定 Connection: close
+-> 写 empty line
+-> append body exact range
+-> 返回 owning std::string
+~~~~
+
+## 15. 为什么 route 与 encoder 分开
+
+如果所有逻辑都写成：
+
+~~~~cpp
+std::string handle(const HttpRequest& request);
+~~~~
+
+失败时很难定位：
+
+~~~~text
+route 选错 status？
+reason phrase 映射错？
+CRLF 少了？
+Content-Length 算错？
+body 被 NUL 截断？
+~~~~
+
+拆开后：
+
+~~~~text
+route test：只看 HttpResponse fields
+encoder test：人工构造 response，看 exact bytes
+integration test：request -> route -> encode
+~~~~
+
+Day5 中 Connection 也不需要认识 status code，只发送 encoder 产生的 bytes。
+
+## 16. status line 与 message layout
+
+一个 enum value 必须映射到唯一固定的 code/reason：
+
+~~~~text
+HttpStatus::Ok -> 200 -> "OK"
+~~~~
+
+unknown enum value 必须进入错误 contract，不能悄悄当成 200。
+
+[RFC 9112 Section 4](https://www.rfc-editor.org/rfc/rfc9112#section-4) 给出 status line 结构；本项目固定 reason phrase，便于 exact test。
+
+HTTP/1.1 message 基本布局：
+
+~~~~text
+start-line
+*( field-line CRLF )
+CRLF
+[ message-body ]
+~~~~
+
+单独的 CRLF 表示 header section 结束。Day1~Day3 从 bytes 中证明 boundary；今天 encoder 反过来制造 boundary。参考 [RFC 9112 Section 2.1](https://www.rfc-editor.org/rfc/rfc9112#section-2.1)。
+
+## 17. Content-Length 只有一个事实源
+
+今天唯一来源：
+
+~~~~cpp
+response.body.size()
+~~~~
+
+~~~~text
+"OK\n"         -> 3 bytes
+['A','\0','B'] -> 3 bytes
+empty          -> 0 bytes
+~~~~
+
+encoder 不让 caller 单独传 Content-Length，否则可能出现：
+
+~~~~text
+body.size() == 3
+caller says Content-Length == 100
+~~~~
+
+从 body 自动计算，在结构上消除了双事实源。
+
+参考 [RFC 9110 Section 8.6](https://www.rfc-editor.org/rfc/rfc9110#section-8.6) 与 [RFC 9112 Section 6.2](https://www.rfc-editor.org/rfc/rfc9112#section-6.2)。
+
+## 18. binary body 为什么不能用 strlen
+
+<code>A 00 B</code> 是三个 bytes。<code>strlen</code> 在 NUL 停止，只得到 1；<code>std::string::size()</code> 返回 3。
+
+encoder 必须按 explicit length append，或直接 append 整个 string object。不能把 <code>body.c_str()</code> 再当无长度 C-string 计算。
+
+## 19. Connection: close 不等于立刻 close(fd)
+
+<code>Connection: close</code> 表示当前 response 发完后，不再承载下一条 request。
+
+真实顺序：
+
+~~~~text
+encoder 产生 response bytes
+-> Connection::send 纳入 output ordering
+-> 可能只写出 prefix
+-> suffix 留在 output Buffer
+-> EPOLLOUT drain suffix
+-> 再 close fd / 销毁 connection
+~~~~
+
+若生成 response 后立即 close，output Buffer 中尚未交给 kernel 的 suffix 会丢失。
+
+所以：header 表达 protocol policy，Connection lifecycle 负责安全执行完。
+
+## 20. 404 与 501
+
+<code>GET /missing</code>：server 认识 GET，但没找到 route，所以 404。
+
+<code>PUT /health</code>：server 没实现 PUT 的语义，所以 501。参考 [RFC 9110 Section 15.6.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.6.2)。
+
+route 判断顺序不是内部小事，而是 observable protocol behavior。
+
+## 21. ownership 与 lifetime
+
+encoder 返回 owning <code>std::string</code>：
+
+~~~~text
+HttpResponse 离开作用域
+-> encoded bytes 仍有效
+-> Day5 可传给 Connection::send
+~~~~
+
+encoder 不返回 local string pointer，也不保存 response body pointer。
+
+## 22. R1 通过后的定向润色
+
+你正式通过 R1 后，我会先读取当前磁盘上的：
+
+~~~~text
+http_response.hpp / http_routes.hpp
+http_response.cpp / http_routes.cpp
+http_response_test.cpp / day4_note.md / CMakeLists.txt
+~~~~
+
+再按你的真实 status mapping、route precedence、encoder representation、tests 和遇到的问题改写后半教程。不会用初始模板覆盖你增加或修正的内容，也不会要求你为迎合教程改名。
+
+---
+
+# Part 3：Round3 收口、证据与下一步
+
+## 23. parser error 变成 response
+
+Round3 增加：
+
+~~~~cpp
+HttpResponse response_for_parse_error(HttpRequestError error);
+~~~~
+
+固定 policy：
+
+| parser error | status | body |
+|---|---:|---|
+| <code>BadRequest</code> | 400 | <code>Bad Request\n</code> |
+| <code>RequestLineTooLong</code> | 400 | <code>Bad Request\n</code> |
+| <code>HeaderSectionTooLong</code> | 400 | <code>Bad Request\n</code> |
+| <code>BodyTooLarge</code> | 413 | <code>Content Too Large\n</code> |
+| <code>UnsupportedTransferEncoding</code> | 501 | <code>Not Implemented\n</code> |
+| <code>UnsupportedHttpVersion</code> | 505 | <code>HTTP Version Not Supported\n</code> |
+
+全部使用：
+
+~~~~text
+content_type = text/plain; charset=utf-8
+close_connection = true
+~~~~
+
+当前 stream 已无法按本项目 contract 继续可靠解析，所以错误 response 发完后关闭。
+
+传入 <code>HttpRequestError::None</code>：
+
+| 条件 | 行为 | 建议 <code>what()</code> |
+|---|---|---|
+| <code>error == None</code> | throw <code>std::invalid_argument</code> | <code>HTTP parse error is none</code> |
+
+## 24. Round3 route 与 encoder matrix
+
+route 用 table-driven test 覆盖：
+
+~~~~text
+GET  /health   -> 200
+GET  /hello    -> 200
+POST /echo     -> 200 + exact body
+GET  /missing  -> 404
+POST /missing  -> 404
+PUT  /health   -> 501
+DELETE /echo   -> 501
+~~~~
+
+encoder 补齐：
+
+1. empty body -> <code>Content-Length: 0</code>
+2. embedded NUL -> byte count 与 suffix exact
+3. close false -> 无 Connection header
+4. close true -> exact 一行 <code>Connection: close</code>
+5. empty/CRLF content type -> exact exception type/message
+6. every declared status -> code/reason exact
+
+不需要为每个 case 手抄 fixture；机械 scaffold 可以委托，但你必须能说明每个 oracle。
+
+## 25. parser-error response matrix
+
+对每个 public error 验证：
+
+~~~~text
+expected status/body
+close_connection == true
+encoded Content-Length exact
+encoded Connection: close present
+~~~~
+
+这里不重新喂 malformed request。parser 分类已在 Day1~Day3 证明；今天验证“结构化 error -> response policy”。
+
+## 26. evidence 层级
+
+### component
+
+~~~~text
+route fields exact
+encoder bytes exact
+error mapper fields exact
+~~~~
+
+### regression
+
+~~~~text
+Day1 request-line
+Day2 headers
+Day3 body framing
+Day4 response
+all pass in one CTest run
+~~~~
+
+### memory safety
+
+normal build 后运行现有 ASan/UBSan 配置。TSan 不是今日主证据：这些组件是同步纯内存逻辑，没有新增 shared mutable state。
+
+## 27. 验收命令
+
+~~~~bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j
+cmake -E chdir build ctest --output-on-failure
+~~~~
+
+记录：
+
+~~~~text
+compiler/version
+normal build warning count
+response-focused pass count
+full CTest pass count
+ASan/UBSan pass count and reports
+~~~~
+
+## 28. 验收问题
+
+如果 source/tests/note 已有等价证据，不要求机械抄长答案。
+
+1. 为什么 GET /missing 是 404，而 PUT /health 是 501？
+2. body 是 <code>A\0B</code> 时，Content-Length 是多少？为什么？
+3. 为什么 encoder 不让 caller 单独传 Content-Length？
+4. 写入 <code>Connection: close</code> 后，为什么仍要等 output Buffer drain？
+5. route、encoder、Connection 分别负责什么？
+6. 为什么 error mapper 不重新解析 malformed bytes？
+
+## 29. 正式通过标准
+
+~~~~text
+HttpResponse 清楚表达 status/content_type/body/close policy
+fixed routes 满足 contract
+404/501 分界正确
+encoder 产生 exact HTTP/1.1 bytes
+Content-Length 来自 body.size()
+binary body 不被 NUL 截断
+invalid response object 有稳定异常 contract
+parser error mapping 完成
+normal build zero warnings
+existing parser regression 全通过
+response tests 全通过
+ASan/UBSan 无报告
+~~~~
+
+不要求今天启动 server、用 curl、实现 keep-alive、设计通用 router，或手抄重复 GoogleTest。
+
+## 30. 今日压缩记忆
+
+~~~~text
+HttpRequest
+-> route 决定 status/content_type/body
+-> HttpResponse 保存结构化结果
+-> encoder 从 body.size() 生成 Content-Length
+-> 产生 exact owning wire bytes
+-> Day5 再交给 Connection::send
+~~~~
+
+> **route 决定回什么，encoder 决定怎样编码，Connection 决定怎样把 bytes 安全发完。**
+
+Day5 将接成：
+
+~~~~text
+Connection input Buffer
+-> parse_request
+-> route / parse-error mapping
+-> encode_http_response
+-> Connection::send
+-> output drain
+~~~~
