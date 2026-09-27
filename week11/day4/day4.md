@@ -333,7 +333,7 @@ POST + /echo -> 把 request body 原样作为 response body
 
 <code>wire bytes</code>：最终准备交给网络发送的 bytes。今天不用开 socket；把 encoder 返回值与 expected bytes exact comparison，就能证明布局。
 
-### 4.7 owing bytes
+### 4.7 owning bytes
 
 **owning bytes** 就是：这个对象**自己拥有并负责管理这段字节内存的生命周期**。
 
