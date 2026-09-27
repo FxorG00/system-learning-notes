@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week10 已通过
-Week11 Day1~Day3 已正式通过；Week11 Day4 教程已生成，当前进入 response encoder 与 fixed routes Round1
+Week11 Day1~Day3 已正式通过；Week11 Day4 Round1 已以 92/100 正式通过，当前进入针对真实实现的 Round2
 ```
 
 ---

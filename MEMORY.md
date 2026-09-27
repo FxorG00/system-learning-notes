@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-27）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser、Day2 header-section parser 与 Day3 Content-Length/body framing 均已正式通过，Day3 最终评分 `95/100`。Week11 Day4 HTTP response encoder 与 fixed routes 教程已生成，当前进入 Day4 Round1；这不表示 Day4 已学习或通过。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
+最新进度快照（2026-09-27）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser、Day2 header-section parser 与 Day3 Content-Length/body framing 均已正式通过，Day3 最终评分 `95/100`。Week11 Day4 HTTP response encoder 与 fixed routes Round1 已以 `92/100` 正式通过，当前进入针对真实实现的 Round2；Day4 尚未最终通过。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
 
 ### Week1：已完成
 
@@ -3132,7 +3132,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-09-27 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1、Day2 与 Day3 均已正式通过；Week11 Day4 教程已生成，当前进入 response encoder 与 fixed routes Round1。AI Theory T1~T3 已正式通过，下一模块为 T4。
+2026-09-27 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1、Day2 与 Day3 均已正式通过；Week11 Day4 Round1 已以 `92/100` 正式通过，当前进入 response encoder 与 fixed routes Round2，Day4 尚未最终通过。AI Theory T1~T3 已正式通过，下一模块为 T4。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -6953,3 +6953,13 @@ Round1 明确要求 `HttpResponse` model、`route_http_request()`、`encode_http
 Round2 才展开 `route -> response -> encoder` 的职责链、status line/header terminator、single source of truth、binary body、404/501 和 `Connection: close` 的 flush-before-close 语义。Round3 再增加 `response_for_parse_error(HttpRequestError)`，将 Day3 errors 固定映射到 400/413/501/505，并通过 route matrix、encoder matrix、error-response matrix、full parser regression 与 ASan/UBSan 收口。今天不接 Reactor、不启动 server、不实现 keep-alive/pipelining，也不把 HTTP policy 塞进 transport Connection。
 
 教程发布前已对照 `week11/week11.md` Day4 contract、Week11 Day3 标杆、RFC 9112 message/status-line framing 和 RFC 9110 Content-Length/501 语义；使用 Typora Mermaid 8.8.3 兼容的 quoted labels。`DAILY_INDEX.md` 已同步加入 Week11 Day4。Day4 尚未学习或验收；R1 正式通过后必须从用户当时磁盘版本出发，读取真实 headers/sources/tests/note/CMake，对 R2/R3 做定向润色并保留用户新增内容。
+
+## 2026-09-27：Week11 Day4 Round1 正式通过
+
+Week11 Day4 R1 以 `92/100` 正式通过。用户在 Ubuntu `/home/xgf/code/system-learning/cpp/week10` 中独立完成 `HttpResponse`、`route_http_request()` 和 `encode_http_response()`。真实 representation 为 nested `if` route、aggregate `HttpResponse`、`status_code()` 的 `static_cast<int>`、`reason_phrase_helper()` 与 owning `std::string` concatenation；`Content-Length` 直接来自 `response.body.size()`，`result += response.body` 保留 embedded NUL，`close_connection` 为 true 时生成 `Connection: close`。这套 V1 不需要改成 map、handler hierarchy 或通用 router。
+
+用户亲自编写 `Health` exact-wire test 与 `BinaryEcho` test，并明确把第三个简单 GoogleTest 视为机械 work，授权 Codex 补充。Codex 只修改 `tests/http_response_test.cpp`，新增 `DistinguishesMissingRouteFromUnsupportedMethod`：`GET /missing` 对照 exact 404 response，`PUT /health` 对照 exact 501 response；没有修改 production code。normal 全项目 build 零 warning，全量 CTest `48/48 PASS`；fresh ASan/UBSan response-focused tests `3/3 PASS` 且无 report。
+
+首次验证暴露的是教程构建命令错误：只 build `http_response_test` 后直接运行全量 CTest，会让其他已注册 executable 显示 `NOT_BUILT`。这不是旧组件回归。Day4 已改成先 `cmake --build build -j2` 构建全项目，再使用规定入口 `cmake -E chdir build ctest --output-on-failure`；同一 build 随后全量通过。以后 target-only build 只能配 focused CTest，不能拿它直接声称 full regression。
+
+R1 后已从用户当前磁盘版本定向润色 Day4 R2/R3，并完整保留用户新增的 `owning bytes` 与 `enum class/static_cast` 说明。Round2 只要求两个 correctness 修复：非法 `HttpStatus` 不得生成 `999 qwq`，而应稳定抛 `std::invalid_argument("unknown HTTP status")`；空 `Content-Type` 与含 CR/LF 的值分别按既定英文 message 抛 `std::invalid_argument`。Round3 再完成 parser-error response mapping、close/empty-body/status matrix。当前没有 `day4_note.md`，因此本轮笔记项只能记录“未提交”，不能伪造逐节验收；这不阻塞已有 source/tests/evidence 支撑的 R1 通过。

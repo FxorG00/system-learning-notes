@@ -333,6 +333,25 @@ POST + /echo -> 把 request body 原样作为 response body
 
 <code>wire bytes</code>：最终准备交给网络发送的 bytes。今天不用开 socket；把 encoder 返回值与 expected bytes exact comparison，就能证明布局。
 
+### 4.7 owing bytes
+
+**owning bytes** 就是：这个对象**自己拥有并负责管理这段字节内存的生命周期**。
+
+比如：
+
+```cpp
+std::vector<char> body;
+body.push_back('h');
+body.push_back('i');
+```
+
+这里 `body` 是 owning bytes：
+
+- 它自己的内部内存里存着 `h`、`i`；
+- 原始数据来自哪里已经不重要；
+- `body` 析构时，`vector` 自动释放这块内存；
+- 外部那段原始内存即使失效，`body` 的内容仍然有效。
+
 ## 5. 文件与停止边界
 
 建议新增：
@@ -514,6 +533,59 @@ POST /health  -> 404
 
 固定 route 的 <code>close_connection</code> 默认 <code>false</code>。Day5 的 session policy 再决定是否关闭。
 
+### 9.1 enum class 是强类型，需要 static_cast 成 int
+
+对，`enum class` 不允许自动转成整数，所以这里就用 `static_cast`。
+
+```cpp
+HttpStatus status = HttpStatus::Ok;
+
+int code = static_cast<int>(status);  // code == 200
+```
+
+写 HTTP response 时通常直接这样：
+
+```cpp
+response += std::to_string(static_cast<int>(status));
+```
+
+例如：
+
+```cpp
+HttpStatus status = HttpStatus::NotFound;
+
+std::string line =
+    "HTTP/1.1 " +
+    std::to_string(static_cast<int>(status)) +
+    " Not Found\r\n";
+```
+
+这里会得到：
+
+```text
+HTTP/1.1 404 Not Found\r\n
+```
+
+`enum class` 的特点就是“强类型”：它不会偷偷把 `HttpStatus::Ok` 当成 `200`，因此你必须明确写 `static_cast<int>(status)`。
+
+后面如果嫌每次都写长，可以封装：
+
+```cpp
+int status_code(HttpStatus status) {
+    return static_cast<int>(status);
+}
+```
+
+然后：
+
+```cpp
+std::to_string(status_code(HttpStatus::ContentTooLarge))
+```
+
+结果就是 `"413"`。
+
+
+
 ## 10. 最小使用例子
 
 ### 10.1 health
@@ -681,9 +753,11 @@ http_response_test executable
 
 ~~~~bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j2 --target http_response_test
+cmake --build build -j2
 cmake -E chdir build ctest --output-on-failure
 ~~~~
+
+这里必须 build 全项目再跑全量 CTest。只 build <code>http_response_test</code> 后直接跑全量 CTest，会让其他已注册但尚未生成的 executable 显示 <code>NOT_BUILT</code>；这次 R1 检阅已经实际触发并纠正了这个命令问题。
 
 第一次配置后，CMake 会记录：
 
@@ -744,6 +818,36 @@ HttpRequest
 -> 返回 owning std::string
 ~~~~
 
+### 14.1 你的 R1 已经怎样实现这条链
+
+你当前真实代码没有引入额外 class：
+
+~~~~text
+route_http_request
+    用 nested if 判断 method 和 target
+    -> 直接 aggregate-initialize HttpResponse
+
+encode_http_response
+    -> status_code 做 enum class 到 int 的显式转换
+    -> reason_phrase_helper 选择固定英文短语
+    -> 依次追加 status line、Content-Type、Content-Length
+    -> close_connection 为 true 时追加 Connection: close
+    -> 追加 empty line 和 body
+~~~~
+
+这个 representation 足够直接，符合 Day4 V1。Round2/3 不要求把 route 改成 map、注册表或 handler hierarchy，也不要求为了“像框架”而增加 class。
+
+你在教程中补充的两点也已经真实落到代码：
+
+~~~~text
+enum class 不隐式转 int
+-> status_code 使用 static_cast<int>
+
+encoder 返回 std::string
+-> 返回值自己拥有 encoded bytes
+-> HttpResponse 离开作用域后，返回的 bytes 仍有效
+~~~~
+
 ## 15. 为什么 route 与 encoder 分开
 
 如果所有逻辑都写成：
@@ -782,6 +886,23 @@ HttpStatus::Ok -> 200 -> "OK"
 
 unknown enum value 必须进入错误 contract，不能悄悄当成 200。
 
+你当前的 declared values 都能正确映射，但 fallback 仍是：
+
+~~~~cpp
+return "qwq";
+~~~~
+
+同时 <code>status_code()</code> 会直接把任意强制转换得到的 enum 数值转成整数。因此：
+
+~~~~text
+static_cast<HttpStatus>(999)
+-> status_code 得到 999
+-> reason_phrase_helper 得到 "qwq"
+-> encoder 生成 "HTTP/1.1 999 qwq"
+~~~~
+
+这不符合第 8.3 节的错误 contract。Round2 的第一个修复目标是：unknown status 稳定抛出 <code>std::invalid_argument("unknown HTTP status")</code>，不能产生伪造 wire response。
+
 [RFC 9112 Section 4](https://www.rfc-editor.org/rfc/rfc9112#section-4) 给出 status line 结构；本项目固定 reason phrase，便于 exact test。
 
 HTTP/1.1 message 基本布局：
@@ -818,6 +939,16 @@ caller says Content-Length == 100
 
 从 body 自动计算，在结构上消除了双事实源。
 
+你当前实现正是：
+
+~~~~cpp
+result += "Content-Length: "
+       + std::to_string(response.body.size())
+       + "\r\n";
+~~~~
+
+因此 route 不保存第二份 length，encoder 也不接受 caller 传入的 length。Health exact-wire test 已证明 <code>OK\n</code> 得到 3；新增的 404/501 test 又分别证明 <code>Not Found\n</code> 得到 10、<code>Not Implemented\n</code> 得到 16。
+
 参考 [RFC 9110 Section 8.6](https://www.rfc-editor.org/rfc/rfc9110#section-8.6) 与 [RFC 9112 Section 6.2](https://www.rfc-editor.org/rfc/rfc9112#section-6.2)。
 
 ## 18. binary body 为什么不能用 strlen
@@ -825,6 +956,14 @@ caller says Content-Length == 100
 <code>A 00 B</code> 是三个 bytes。<code>strlen</code> 在 NUL 停止，只得到 1；<code>std::string::size()</code> 返回 3。
 
 encoder 必须按 explicit length append，或直接 append 整个 string object。不能把 <code>body.c_str()</code> 再当无长度 C-string 计算。
+
+你当前使用：
+
+~~~~cpp
+result += response.body;
+~~~~
+
+这里追加的是整个 <code>std::string</code> object 保存的 range，不调用 <code>strlen()</code>。你的 <code>BinaryEcho</code> test 已证明 encoded suffix 仍是 <code>A</code>、NUL、<code>B</code>。
 
 ## 19. Connection: close 不等于立刻 close(fd)
 
@@ -853,6 +992,33 @@ encoder 产生 response bytes
 
 route 判断顺序不是内部小事，而是 observable protocol behavior。
 
+你当前 nested <code>if</code> 的顺序正确：
+
+~~~~text
+method == GET
+-> 已知 target 返回 200
+-> 其他 target 返回 404
+
+method == POST
+-> /echo 返回 200
+-> 其他 target 返回 404
+
+其他 method
+-> 501
+~~~~
+
+你不想继续手写的第三个 GoogleTest 已由 Codex 追加到 <code>tests/http_response_test.cpp</code>。它用一个 test 同时验证：
+
+~~~~text
+GET /missing
+-> exact 404 status line / headers / body
+
+PUT /health
+-> exact 501 status line / headers / body
+~~~~
+
+这条 scaffold 属于 Codex 补测；route mechanism 和前两个 tests 属于你的实现，验收记录必须继续区分。
+
 ## 21. ownership 与 lifetime
 
 encoder 返回 owning <code>std::string</code>：
@@ -865,17 +1031,43 @@ HttpResponse 离开作用域
 
 encoder 不返回 local string pointer，也不保存 response body pointer。
 
+你当前 <code>result</code> 是 local <code>std::string</code>，函数按值返回。C++17 会安全地返回一个拥有 storage 的 string object；它不是指向 local buffer 的 dangling pointer。这与教程中新增的 <code>owning bytes</code> 解释一致。
+
 ## 22. R1 通过后的定向润色
 
-你正式通过 R1 后，我会先读取当前磁盘上的：
+R1 已正式通过。继续保留你的 representation：
 
 ~~~~text
-http_response.hpp / http_routes.hpp
-http_response.cpp / http_routes.cpp
-http_response_test.cpp / day4_note.md / CMakeLists.txt
+nested if routes
+aggregate HttpResponse
+status_code + reason_phrase_helper
+std::string concatenation
+body.size() as the only Content-Length source
 ~~~~
 
-再按你的真实 status mapping、route precedence、encoder representation、tests 和遇到的问题改写后半教程。不会用初始模板覆盖你增加或修正的内容，也不会要求你为迎合教程改名。
+Round2 只做下面两个 correctness 修复：
+
+1. **unknown status 必须抛异常。** 删除 <code>"qwq"</code> fallback，让非法 enum value 稳定产生 <code>std::invalid_argument("unknown HTTP status")</code>。
+2. **验证 Content-Type。** 空值抛 <code>"empty HTTP content type"</code>；含 CR 或 LF 抛 <code>"invalid HTTP content type"</code>。必须在开始生成 wire response 前完成验证。
+
+完成后补三条小测试：
+
+~~~~text
+unknown status -> exact exception type/message
+empty content type -> exact exception type/message
+CR/LF content type -> exact exception type/message
+~~~~
+
+这三条测试可以放在一个 table-driven test 中，不要求手抄重复 fixture。
+
+非阻塞整理：
+
+~~~~text
+http_response.cpp 未使用 http_request.hpp，可删
+status_code / reason_phrase_helper 若只供 encoder 使用，可移到 source 内部
+~~~~
+
+这两项不影响 correctness，不为了清理它们重写 public design。
 
 ---
 
@@ -954,6 +1146,19 @@ encoded Connection: close present
 这里不重新喂 malformed request。parser 分类已在 Day1~Day3 证明；今天验证“结构化 error -> response policy”。
 
 ## 26. evidence 层级
+
+### R1 已有证据
+
+~~~~text
+Ubuntu: g++ 10.5.0 / C++17
+normal full build: zero warnings
+full CTest after building all targets: 48/48 PASS
+response-focused tests: 3/3 PASS
+fresh ASan/UBSan response-focused tests: 3/3 PASS
+sanitizer reports: none
+~~~~
+
+第一次只 build <code>http_response_test</code> 后运行全量 CTest，出现 6 个 <code>NOT_BUILT</code>；这不是旧组件回归，而是测试 executable 尚未生成。改为 build 全项目后，同一全量 CTest 为 48/48 PASS。以后 evidence 必须区分“程序失败”和“根本没有构建被测试程序”。
 
 ### component
 
