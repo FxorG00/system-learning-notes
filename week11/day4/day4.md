@@ -58,24 +58,227 @@ A\0B
 
 最后三个 body bytes 是 <code>A</code>、NUL、<code>B</code>，不能用 C-string 长度猜边界。
 
-## 2. 今天必须回答的四个问题
+## 1.1 先把它放回整条网络链
 
-1. route 怎样区分 <code>404 Not Found</code> 和 <code>501 Not Implemented</code>？
-2. encoder 怎样保证 <code>Content-Length</code> 等于 body 的 byte count？
-3. body 含 <code>\0</code> 时，为什么仍能完整编码？
-4. <code>Connection: close</code> 写入 response 后，为什么不能立刻销毁 Connection？
+你现在看到的 <code>route_http_request</code> 和 encoder 都只是普通 C++ 函数，因此很容易产生一个疑问：
+
+> 它们明明没有调用 socket，也没有处理 packet，到底算网络系统的哪一部分？
+
+先给结论：
+
+> **它们都属于 TCP/IP 四层模型里的应用层。Parser 负责读懂 HTTP request，route 负责决定 server 要做什么，encoder 负责把结果重新写成 HTTP response。**
+
+### 1.1.1 从四层模型看
+
+~~~mermaid
+flowchart TD
+    A["应用层<br/>HTTP parser<br/>HTTP route<br/>HTTP response encoder"]
+    B["传输层<br/>TCP reliable byte stream"]
+    C["网络层<br/>IP addressing and forwarding"]
+    D["链路层<br/>Ethernet or WiFi frames"]
+    A --> B
+    B --> C
+    C --> D
+~~~
+
+四层各自处理的问题不同：
+
+| TCP/IP 层次 | 当前链路中的对象 | 它解决什么问题 |
+|---|---|---|
+| 应用层 | HTTP parser、route、encoder | bytes 表达什么请求，server 应做什么，response 应长什么样 |
+| 传输层 | TCP、connected socket | 在两个进程之间提供可靠、有序的 byte stream |
+| 网络层 | IP | packet 应跨哪些 networks 到达目标 host |
+| 链路层 | Ethernet、Wi-Fi | 当前 link 上怎样把 frame 交给下一跳 |
+
+所以 <code>route_http_request</code> 不是在决定 packet 下一跳，也不接触 IP address。
+
+它是在 server process 内部决定：
+
+~~~~text
+这条已经读懂的 HTTP request
+应该交给哪一种 application behavior
+~~~~
+
+### 1.1.2 这里有两个完全不同的 route
+
+英文都叫 <code>route</code>，但上下文不同：
+
+| 名称 | 所在层次 | 输入 | 决定什么 |
+|---|---|---|---|
+| IP route | 网络层 | destination IP | packet 下一跳走哪里 |
+| HTTP route | 应用层 | method + target | request 交给哪个 application behavior |
+
+今天写的是第二个。
+
+例如：
+
+~~~~text
+GET  /health -> health behavior -> "OK\n"
+GET  /hello  -> hello behavior  -> "Hello, World!\n"
+POST /echo   -> echo behavior   -> request.body
+~~~~
+
+这里没有真正独立的 handler function 也没关系。你现在的固定 <code>if</code>、<code>switch</code> 或查表逻辑，本质上都在完成同一个动作：
+
+> **根据 method + target，把 request 分派到正确的业务规则。**
+
+这就是 HTTP route 的用途。
+
+### 1.1.3 从 client 到 server，再回到 client
+
+把前十周造出的组件和今天的组件全部接回来：
+
+~~~mermaid
+flowchart TD
+    A["Client application<br/>creates HTTP request bytes"]
+    B["Client kernel TCP<br/>sends byte stream"]
+    C["Network<br/>IP packets and link frames"]
+    D["Server kernel TCP<br/>reassembles receive stream"]
+    E["EventLoop<br/>observes readable socket"]
+    F["Connection<br/>recv into input Buffer"]
+    G["HTTP parser<br/>bytes become HttpRequest"]
+    H["HTTP route<br/>HttpRequest becomes HttpResponse"]
+    I["HTTP encoder<br/>HttpResponse becomes bytes"]
+    J["Connection<br/>send and drain output Buffer"]
+    K["Server kernel TCP<br/>sends response stream"]
+    L["Network<br/>response packets and frames"]
+    M["Client kernel TCP<br/>reassembles response stream"]
+    N["Client application<br/>reads HTTP response bytes"]
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+    H --> I
+    I --> J
+    J --> K
+    K --> L
+    L --> M
+    M --> N
+~~~
+
+这张图里：
+
+~~~~text
+kernel TCP / IP / link
+    负责把 bytes 跨机器运过来和运回去
+
+EventLoop / Channel / Connection / Buffer
+    负责在 server process 中等待 socket、收发 bytes、保存 partial I/O state
+
+HTTP parser / route / encoder
+    负责解释应用层协议并产生应用层结果
+~~~~
+
+<code>EventLoop</code>、<code>Connection</code> 和 <code>Buffer</code> 是我们在 user space 里组织网络程序的工程组件；它们不是 TCP/IP 四层模型额外长出的三层。
+
+### 1.1.4 route 为什么不能省
+
+Parser 只回答：
+
+~~~~text
+client 说了什么？
+~~~~
+
+例如：
+
+~~~~text
+method = POST
+target = /echo
+body   = A 00 B
+~~~~
+
+Encoder 只回答：
+
+~~~~text
+给定一个 HttpResponse，怎样把它写成合法 HTTP bytes？
+~~~~
+
+中间仍缺少最重要的决定：
+
+~~~~text
+server 收到这个请求后，到底要做什么？
+~~~~
+
+<code>route_http_request</code> 就填上这一步：
+
+~~~~text
+HttpRequest
+-> 根据 method + target 选择 behavior
+-> 执行当前固定业务规则
+-> 产生 HttpResponse
+~~~~
+
+如果没有 route，parser 虽然读懂了 <code>GET /health</code>，server 却不知道该返回健康状态、hello text、echo body，还是 404。
+
+因此完整职责是：
+
+~~~~text
+parser：client 要什么
+route：server 决定做什么
+encoder：怎样把结果写回 HTTP
+~~~~
+
+### 1.1.5 为什么今天看上去不像在写网络
+
+因为今天故意把应用层逻辑从 socket 中拆出来：
+
+~~~~text
+不需要启动 server
+不需要真的 recv
+不需要真的 send
+只给普通 object
+就能验证 route decision 和 exact response bytes
+~~~~
+
+这不是它离开了网络，而是我们先把整条网络链中的一段拆下来做 component test。
+
+Day5 才会把插头接回去：
+
+~~~~text
+Connection 收到 bytes
+-> parser
+-> route_http_request
+-> encode_http_response
+-> Connection::send
+~~~~
+
+到那时，今天的两个普通函数就会真正处于每条 connection 的 request/response path 中。
+
+这套形状以后还会直接迁移到 Mini Redis：
+
+~~~~text
+RESP bytes
+-> RESP parser
+-> command dispatch
+-> SET / GET behavior
+-> RESP encoder
+-> response bytes
+~~~~
+
+HTTP route 在当前项目中练的，正是“协议解析结果怎样进入 application command handling”这一层。
+
+## 2. 今天必须回答的五个问题
+
+1. route 与 encoder 在 TCP/IP 四层和 server 内部链路中分别处在哪里？
+2. route 怎样区分 <code>404 Not Found</code> 和 <code>501 Not Implemented</code>？
+3. encoder 怎样保证 <code>Content-Length</code> 等于 body 的 byte count？
+4. body 含 <code>\0</code> 时，为什么仍能完整编码？
+5. <code>Connection: close</code> 写入 response 后，为什么不能立刻销毁 Connection？
 
 每个问题都对应 observable behavior，不要求只背定义。
 
 ## 3. 职责边界
 
-| 对象 | 今天负责什么 |
-|---|---|
-| <code>HttpRequest</code> | 保存 parser 已确认的 method、target、headers 与 body |
-| route | 根据 method 和 target 选择 status、content type 与 body |
-| <code>HttpResponse</code> | 保存尚未序列化的结构化 response |
-| encoder | 把 response 按 HTTP/1.1 格式生成 owning bytes |
-| Connection | 今天不参与；Day5 只接收最终 bytes 并处理 partial write |
+| 对象 | 所在位置 | 今天负责什么 |
+|---|---|---|
+| <code>HttpRequest</code> | 应用层 HTTP model | 保存 parser 已确认的 method、target、headers 与 body |
+| route | 应用层 application policy | 根据 method 和 target 选择 status、content type 与 body |
+| <code>HttpResponse</code> | 应用层 HTTP model | 保存尚未序列化的结构化 response |
+| encoder | 应用层 HTTP protocol | 把 response 按 HTTP/1.1 格式生成 owning bytes |
+| Connection | user-space I/O component | 今天不参与；Day5 接收最终 bytes 并处理 partial write |
 
 ## 4. 必要术语
 
@@ -179,6 +382,18 @@ std::string encode_http_response(const HttpResponse& response);
 ~~~~
 
 route 输出 object；encoder 输出 bytes。不要合成一个“大函数直接拼字符串”，否则 route、protocol layout 和 Day5 integration 会缠在一起。
+
+它们在完整 server 中的位置是：
+
+~~~~text
+Connection input Buffer
+-> parser
+-> route_http_request
+-> encode_http_response
+-> Connection::send
+~~~~
+
+Round1 只是直接构造 <code>HttpRequest</code>，从 route 开始调用，以便暂时绕过 socket 和 Reactor，单独验证应用层 decision 与 serialization。
 
 ## 7. Round1 public model
 

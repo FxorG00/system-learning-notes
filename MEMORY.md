@@ -1781,6 +1781,7 @@ Part 3：收尾、验证与验收
 
 - 必须明确标出“教程开始”。
 - R1 开头先给完整组件图景：input 是什么、组件内部负责哪些阶段、返回什么、caller 接手什么；不能直接从 types 或 API declarations 开始。
+- 当当天组件只是更大系统中的一段时，组件图景还必须给出它的**全局坐标**：它属于哪一个协议/系统层次，上游谁产生输入，下游谁消费输出，运行在 user space、kernel 还是 hardware，今天为什么可以从完整系统中拆出来单测，以及下一天怎样重新接回。网络主题尤其要同时画出“TCP/IP 四层位置”和“server process 内部组件链”，并主动区分同名但不同层的概念，例如 IP route 与 HTTP route。不能因为 local API 的输入输出容易理解，就省略它在完整 request path 中存在的理由；也不能借全局图提前泄露后续实现。
 - Public data model、API、observable contract 与 R1 子集要分层：先说明最终目标，再明确本轮只实现哪条主链路。
 - 先建立机制，再给必要接口和代码。
 - 每个 demo 必须可编译运行。
