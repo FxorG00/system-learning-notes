@@ -599,15 +599,102 @@ PUT /health  -> 501
 
 ## 12. CMake 与运行入口
 
-建议新增 <code>http_response</code> library 和 <code>http_response_test</code> executable。include 路径、request-model dependency 按你当前真实 CMake ownership 连接，不为照抄名字制造重复 target。
+我已经按你 Ubuntu 当前工程核对过 target 和目录。你现在的 Week11 代码仍在：
+
+~~~~text
+/home/xgf/code/system-learning/cpp/week10
+~~~~
+
+Day4 已经新建：
+
+~~~~text
+include/http/http_response.hpp
+include/http/http_routes.hpp
+src/http_response.cpp
+src/http_routes.cpp
+tests/http_response_test.cpp
+~~~~
+
+把下面整段**直接追加到现有 <code>CMakeLists.txt</code> 末尾**：
+
+~~~~cmake
+# HTTP response encoder and fixed routes
+add_library(http_response
+    src/http_response.cpp
+    src/http_routes.cpp
+)
+
+target_include_directories(http_response PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/http
+)
+
+target_compile_options(http_response PRIVATE
+    -Wall
+    -Wextra
+    -g
+)
+
+add_executable(http_response_test
+    tests/http_response_test.cpp
+)
+
+target_compile_options(http_response_test PRIVATE
+    -Wall
+    -Wextra
+    -g
+)
+
+target_link_libraries(http_response_test PRIVATE
+    http_response
+    GTest::gtest_main
+    GTest::gtest
+)
+
+gtest_discover_tests(http_response_test)
+~~~~
+
+这段 CMake 建立的依赖是：
+
+~~~~text
+src/http_response.cpp
+src/http_routes.cpp
+        |
+        v
+http_response library
+        |
+        v
+http_response_test executable
+        |
+        +--> GTest::gtest_main
+        +--> GTest::gtest
+~~~~
+
+几个你不需要再猜的点：
+
+- 两个 <code>.cpp</code> 放进同一个 <code>http_response</code> library，因为 route 的结果就是 <code>HttpResponse</code>，它们共同构成今天的 component。
+- <code>PUBLIC include/http</code> 会把 header 搜索路径传播给 <code>http_response_test</code>，test target 不需要再重复写一次 include directory。
+- <code>HttpRequest</code> 当前是 header 中的数据类型；Day4 route 只读取这个 object，不调用 <code>http_request_parser.cpp</code> 中的函数，因此 <code>http_response</code> **不需要**链接 <code>http_request_parser</code>。
+- 今天的 test 不使用 Reactor <code>Buffer</code>，也不启动 socket，因此不链接 <code>buffer</code>、<code>connection</code> 或 <code>event_loop</code>。
+- 现有文件前面已经执行过 <code>include(GoogleTest)</code>，这里可以直接调用 <code>gtest_discover_tests</code>，不用再写一遍。
 
 统一入口：
 
 ~~~~bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j
+cmake --build build -j2 --target http_response_test
 cmake -E chdir build ctest --output-on-failure
 ~~~~
+
+第一次配置后，CMake 会记录：
+
+~~~~text
+怎样编译两个 response source
+怎样生成 libhttp_response.a
+怎样把 test 与 library、GoogleTest 链接起来
+怎样把 GoogleTest cases 注册给 CTest
+~~~~
+
+后面你只修改 <code>.cpp</code> 时，一般重新执行 build 和 CTest 即可；如果新增 target/source 或改 CMake，再重新运行 configure。
 
 Round1 最低证据：
 
