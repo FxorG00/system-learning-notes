@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-27）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser、Day2 header-section parser 与 Day3 Content-Length/body framing 均已正式通过，Day3 最终评分 `95/100`。Week11 Day4 HTTP response encoder 与 fixed routes Round1 已以 `92/100` 正式通过，当前进入针对真实实现的 Round2；Day4 尚未最终通过。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
+最新进度快照（2026-09-28）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser、Day2 header-section parser 与 Day3 Content-Length/body framing 均已正式通过，Day3 最终评分 `95/100`。Week11 Day4 R2/R3 的 unknown-status exception 与 parser-error response mapping 已完成，第一次最终验收暂定 `93/100`；Codex 补入机械测试后全项目 `53/54 PASS`，唯一 blocker 是 encoder 尚未拒绝 empty/CR/LF `Content-Type`，因此 Day4 尚未正式通过。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
 
 ### Week1：已完成
 
@@ -3132,7 +3132,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-09-27 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1、Day2 与 Day3 均已正式通过；Week11 Day4 Round1 已以 `92/100` 正式通过，当前进入 response encoder 与 fixed routes Round2，Day4 尚未最终通过。AI Theory T1~T3 已正式通过，下一模块为 T4。
+2026-09-28 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1、Day2 与 Day3 均已正式通过；Week11 Day4 R2/R3 已提交并完成第一次最终验收，暂定 `93/100`。route/status/binary body/parser-error mapping 已通过补充矩阵，当前唯一 blocker 是 encoder 未实现 empty/CR/LF `Content-Type` 的稳定异常 contract；Day4 尚未正式通过。AI Theory T1~T3 已正式通过，下一模块为 T4。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -6963,3 +6963,11 @@ Week11 Day4 R1 以 `92/100` 正式通过。用户在 Ubuntu `/home/xgf/code/syst
 首次验证暴露的是教程构建命令错误：只 build `http_response_test` 后直接运行全量 CTest，会让其他已注册 executable 显示 `NOT_BUILT`。这不是旧组件回归。Day4 已改成先 `cmake --build build -j2` 构建全项目，再使用规定入口 `cmake -E chdir build ctest --output-on-failure`；同一 build 随后全量通过。以后 target-only build 只能配 focused CTest，不能拿它直接声称 full regression。
 
 R1 后已从用户当前磁盘版本定向润色 Day4 R2/R3，并完整保留用户新增的 `owning bytes` 与 `enum class/static_cast` 说明。Round2 只要求两个 correctness 修复：非法 `HttpStatus` 不得生成 `999 qwq`，而应稳定抛 `std::invalid_argument("unknown HTTP status")`；空 `Content-Type` 与含 CR/LF 的值分别按既定英文 message 抛 `std::invalid_argument`。Round3 再完成 parser-error response mapping、close/empty-body/status matrix。当前没有 `day4_note.md`，因此本轮笔记项只能记录“未提交”，不能伪造逐节验收；这不阻塞已有 source/tests/evidence 支撑的 R1 通过。
+
+## 2026-09-28：Week11 Day4 第一次最终验收
+
+用户完成 unknown-status exception 和 `response_for_parse_error(HttpRequestError)`，并能准确说明 route matrix、parse-error mapping 与 encoder tests 的 oracle；因此重复 GoogleTest scaffold 被判定为可委托的机械工作。Codex 只修改 Ubuntu 的 `tests/http_response_test.cpp`，保留用户原有三条 tests，新增六条紧凑测试：fixed route matrix、empty/binary exact encoding、全部 declared statuses、invalid response metadata、全部 parser-error responses，以及 `None` rejection。没有修改 production headers/sources。
+
+补测后 route/status/empty body/binary NUL/`Connection: close`/六类 parser error mapping/`None` exception 全部通过；normal full build 零 warning。response suite `8/9 PASS`，full CTest `53/54 PASS`。唯一失败是 `RejectsInvalidResponseMetadata` 中 empty `Content-Type`、含 CR 与含 LF 三个输入都没有抛出 daily 规定的 `std::invalid_argument`。这不是可省略的形式项：未验证的值被直接拼进 response header，会生成 malformed response，并允许 caller 注入额外 header line。因此第一次最终验收暂定 `93/100`，Day4 尚未正式通过；用户只需在 encoder 生成任何 wire bytes 前补齐三种检查，再重跑现有 suite，无需新增测试或重写已通过的 mapping。
+
+本轮 daily diff 只有两处用户补充，技术上均正确：一处把 `Connection: close` 解释成 response bytes 全部 drain 后再关闭 connected socket；另一处把 `response_for_parse_error` 放回 client request -> parser error -> error response -> close 的完整 server path。当前仍无独立 `day4_note.md`，因此验收不能伪造逐节 note 回答；用户通过 daily 增补、真实实现与口述 oracle 提供了本轮理解证据。

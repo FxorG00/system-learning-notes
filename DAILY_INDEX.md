@@ -1,6 +1,6 @@
 # Daily 教程总目录
 
-> 更新日期：2026-09-27
+> 更新日期：2026-09-28
 >
 > 收录范围：主线 Week1 Day1 至 Week11 Day4，共 74 份正式 daily 教程。
 >
@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week10 已通过
-Week11 Day1~Day3 已正式通过；Week11 Day4 Round1 已以 92/100 正式通过，当前进入针对真实实现的 Round2
+Week11 Day1~Day3 已正式通过；Week11 Day4 第一次最终验收暂定 93/100，当前只剩 Content-Type validation blocker，尚未正式通过
 ```
 
 ---

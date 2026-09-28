@@ -969,6 +969,17 @@ result += response.body;
 
 <code>Connection: close</code> 表示当前 response 发完后，不再承载下一条 request。
 
+就是 server 发完这个 response 了之后，server 会关闭这个 connected socket，然后不再处理它之后发来的下一条 HTTP request。
+
+例如：
+
+```
+client -- request 1 --> server
+server -- response 1: Connection: close --> client
+```
+
+此时 server 还要先把 `response 1` 的所有 bytes 真正发完；等 `output Buffer` 清空，才 `close(fd)`。
+
 真实顺序：
 
 ~~~~text
@@ -1074,6 +1085,19 @@ status_code / reason_phrase_helper 若只供 encoder 使用，可移到 source �
 # Part 3：Round3 收口、证据与下一步
 
 ## 23. parser error 变成 response
+
+>你的 client 发一条 request 过来，然后我的 server 在 parse 这条 request的时候发生了错误，也就是说可能不合法这条 request，但是我的 server还是要给你传回去一个 response，所以才有这个 response parse error这个接口在。
+
+```text
+client 发送一条 request
+    -> Connection 收到 bytes，放进 input Buffer
+    -> parser 尝试解析
+    -> 发现这条 request 不合法
+    -> parser 返回某个 HttpRequestError
+    -> response_for_parse_error(error) 造出对应 HTTP response
+    -> Connection 把这份 response 发回 client
+    -> response 发完后关闭这条 connection
+```
 
 Round3 增加：
 
