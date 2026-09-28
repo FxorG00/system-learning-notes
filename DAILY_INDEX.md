@@ -2,7 +2,7 @@
 
 > 更新日期：2026-09-28
 >
-> 收录范围：主线 Week1 Day1 至 Week11 Day4，共 74 份正式 daily 教程。
+> 收录范围：主线 Week1 Day1 至 Week11 Day5，共 75 份正式 daily 教程。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week10 已通过
-Week11 Day1~Day4 已正式通过；Day4 最终评分 96/100，下一步为 Day5 HTTP session/Reactor integration
+Week11 Day1~Day4 已正式通过；Day5 教程已生成，等待 Round1 实现与验收
 ```
 
 ---
@@ -193,6 +193,7 @@ Week11 Day1~Day4 已正式通过；Day4 最终评分 96/100，下一步为 Day5 
 | [Day2：HTTP headers](week11/day2/day2.md) | 从 request line 后继续增量识别 header section；处理 field-name 大小写、OWS、Host、duplicates 与 section limit | `parse_header_section` contract + Host/header policy + fragmentation/limit evidence | header field, Host, OWS, case-insensitive, CRLF CRLF, section limit |
 | [Day3：HTTP body framing](week11/day3/day3.md) | 组合 request-line 与 header parser；用 Content-Length 决定 binary body boundary；区分 incomplete body、当前 request 与下一条 request suffix | `parse_request` + binary body/coalesced request/framing error tests | Content-Length, message body, framing, octet, binary body, coalesced request, request smuggling |
 | [Day4：HTTP response 与 fixed routes](week11/day4/day4.md) | 把完整 `HttpRequest` 映射成结构化 `HttpResponse`，再按固定 status/header/body contract 生成 exact HTTP/1.1 bytes | `HttpResponse` + fixed route policy + response encoder + exact-byte tests | HTTP response, status line, response encoder, Content-Length, route, serialization |
+| [Day5：HTTP session 与 Reactor integration](week11/day5/day5.md) | 把 Acceptor、Connection、HTTP parser、route 与 encoder 接成第一条可运行链；区分 stateless parser helper 与 per-connection session，并在 output drain 后安全关闭 | `http_server_v1` + `close_after_flush()` + curl/Python process-external smoke | application session, composition root, close after flush, deferred erase, Reactor integration |
 
 ---
 
@@ -266,6 +267,8 @@ HTTP request line / incremental parser    -> Week11 Day1
 HTTP headers / Host / OWS / section limit -> Week11 Day2
 HTTP body / Content-Length / request boundary -> Week11 Day3
 HTTP response / status / encoder / route  -> Week11 Day4
+HTTP session / Reactor integration         -> Week11 Day5
+close-after-flush / deferred erase         -> Week11 Day5
 ```
 
 ## 并发与工程工具

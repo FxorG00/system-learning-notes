@@ -198,8 +198,8 @@ enum class HttpRequestError {
 |---|---|---|
 | malformed line/header、Host 错误、invalid/duplicate CL、TE+CL | `BadRequest` | `400 Bad Request` |
 | 合法形状但 version 不受支持 | `UnsupportedHttpVersion` | `505 HTTP Version Not Supported` |
-| request line 超限 | `RequestLineTooLong` | V1 使用 `400` |
-| header section 超限 | `HeaderSectionTooLong` | V1 使用 `400` |
+| request line 超限 | `RequestLineTooLong` | `400 Bad Request` |
+| header section 超限 | `HeaderSectionTooLong`        | `400 Bad Request`                |
 | 只有 TE，而 V1 不实现 | `UnsupportedTransferEncoding` | `501 Not Implemented` |
 | 声明的 body 超过 1 MiB | `BodyTooLarge` | `413 Content Too Large` |
 
@@ -302,6 +302,60 @@ V1 接受的 value 必须同时满足：
 - 不超过 `1 MiB`。
 
 `+5`、`-1`、`5x`、空字符串和整数 overflow 都归入 `BadRequest`。Day2 已经 trim value 两端 OWS，Day3 直接处理 trim 后的 value。
+
+---
+
+#### 怎么 check
+
+用 `std::from_chars` 最合适：它能直接把一段字符范围转换为 `std::size_t`，不会抛异常。
+
+```cpp
+#include <charconv>
+#include <system_error>
+
+constexpr std::size_t kMaxBodyBytes = 1024 * 1024;  // 1 MiB
+
+std::size_t value = 0;
+const char* begin = value_text.data();
+const char* end = begin + value_text.size();
+
+const auto [ptr, ec] = std::from_chars(begin, end, value);
+```
+
+第三个条件“能完整转换为 `std::size_t`”判断：
+
+```cpp
+if (ec != std::errc{} || ptr != end) {
+    // Error
+}
+```
+
+含义是：
+
+- `ec != std::errc{}`：转换失败。对于全是数字的输入，主要是数字太大，超出了 `std::size_t` 能表示的范围。
+- `ptr != end`：只转换了前缀，没有吃完整段输入。例如 `"123abc"` 会只读到 `123` 后停下。不过你前一步已经保证全是数字，这里仍保留它作为完整性检查。
+
+第四个条件就是在转换成功后比较：
+
+```cpp
+if (value > kMaxBodyBytes) {
+    // Error: Content-Length exceeds 1 MiB limit
+}
+```
+
+因此完整顺序就是：
+
+```text
+非空
+-> 每个字符都是 '0' 到 '9'
+-> from_chars 且 ec 成功、ptr 到达结尾
+-> value <= 1024 * 1024
+-> 接受
+```
+
+注意：`1 MiB = 1024 * 1024 = 1,048,576` bytes，所以 `1048576` 应该接受，`1048577` 才拒绝。
+
+---
 
 ### 9.3 重复 `Content-Length`
 
@@ -450,160 +504,245 @@ cmake -E chdir build ctest \
 
 ---
 
-## 14. Round2：完整 Request 的主因果链
+## 14. Round2：沿你的 R1 走完真实主因果链
 
-> 本节暂时只给机制骨架。R1 通过后，流程中的函数、local objects 和 offsets 必须改成你的真实实现。
+你的 R1 baseline 已经确认：
+
+```text
+parse_request() 已接通两个旧 parser
+tmp_output 负责保存本轮 candidate
+parse_digits() 使用 std::from_chars
+zero-body + suffix PASS
+fragmented body + suffix PASS
+Day1/Day2 regression 21/21 PASS
+fresh build 零 warning
+```
+
+Round2 不换 representation，也不要求重写已经正确的主链。下面直接按你的函数和变量名复盘。
+
+### 14.1 先修正 note 中的两个表达
+
+完整 request **不要求一定出现 `Content-Length`**：
+
+```text
+没有 Content-Length，也没有 Transfer-Encoding
+-> body_length 保持 0
+-> header section 结束处就是当前 request boundary
+```
+
+另外，`parse_request_line()` 和 `parse_header_section()` 返回的是具体 result object，不存在“result 是否为空”的判断。你的代码实际读取的是：
+
+```text
+result.status == NeedMore
+result.status == Error
+result.status == Complete
+```
+
+### 14.2 你的真实调用链
 
 ```mermaid
 flowchart TD
-    A["caller 提供 cumulative bytes"] --> B["证明 request line 完整"]
-    B --> C["证明 header section 完整"]
-    C --> D["从 headers 得到 body length"]
-    D --> E{"available body 足够吗"}
-    E -->|"no"| F["NeedMore；public output 不变"]
-    E -->|"yes"| G["复制 exact body bytes"]
-    G --> H["一次性提交完整 HttpRequest"]
-    H --> I["返回 exact consumed_bytes"]
+    A["parse_request receives cumulative bytes"] --> B["create tmp_output"]
+    B --> C["parse_request_line writes tmp_output"]
+    C --> D{"request line status"}
+    D -->|"NeedMore or Error"| E["return without changing output"]
+    D -->|"Complete"| F["record request_line_length"]
+    F --> G["parse_header_section writes tmp_output"]
+    G --> H{"header status"}
+    H -->|"NeedMore"| E
+    H -->|"Error"| I{"current error branch maps it"}
+    I -->|"yes"| E
+    I -->|"HeaderSectionTooLong missing"| J["currently falls through; Round3 fixes it"]
+    H -->|"Complete"| K["scan headers and decide body_length"]
+    J --> K
+    K --> L["compute body_begin and available bytes"]
+    L --> M{"available bytes enough"}
+    M -->|"no"| N["NeedMore and output unchanged"]
+    M -->|"yes"| O["commit tmp_output and exact body"]
+    O --> P["return exact consumed_bytes"]
 ```
 
-**前两阶段证明 grammar，Header 决定还要等多少 body bytes，最后一步才提交完整 request。**
+这条链的核心不是“依次调用三个函数”，而是：**所有中间结果先进入 `tmp_output`，只有完整 request 被证明后，public `output` 才获得新状态。**
 
-## 15. Candidate 与 Public Output
+## 15. 你的 `tmp_output` 正在保护什么
 
-现有 `parse_request_line()` 和 `parse_header_section()` 在各自 Complete 时会修改传入对象。但完整 request 可能仍缺 body：
-
-```text
-request line Complete
-header section Complete
-body 还缺 2 bytes
--> parse_request() 必须返回 NeedMore
--> caller 的 output 必须保持原样
-```
-
-因此完整 parser 需要两个层次：
-
-```text
-candidate：本轮内部逐步构造
-public output：整条 request 完整后一次性提交
-```
-
-这与 Day2 的 validate-before-commit 是同一个事务边界，只是范围从 headers 扩大到整个 request。
-
-## 16. Request Boundary 怎样计算
-
-设：
-
-```text
-L = request-line bytes
-H = header-section bytes
-B = expected body bytes
-```
-
-完整 request 占用：
-
-```text
-L + H + B
-```
-
-代码需要先证明 `body_begin <= length`，再计算：
-
-```text
-available_body_bytes = length - body_begin
-```
-
-随后比较 `available_body_bytes` 与 `B`。这样 subtraction 的前置条件清楚，也避免先做未经保护的总和。
-
-## 17. `Content-Length` 的数值转换
-
-`Content-Length` 是一段 byte range，适合继续使用 `std::from_chars`：
+`parse_request_line()` 和 `parse_header_section()` 在 Complete 时都会修改传入的 `HttpRequest&`。你没有把 caller 的 `output` 直接交给它们，而是先创建：
 
 ```cpp
-std::size_t value = 0;
-const char* begin = text.data();
-const char* end = begin + text.size();
-const auto result = std::from_chars(begin, end, value);
+HttpRequest tmp_output;
 ```
 
-成功需要同时满足：
+因此 fragmented body 的真实状态是：
 
 ```text
-result.ec == std::errc{}
-result.ptr == end
+request line 已写入 tmp_output
+-> headers 已写入 tmp_output
+-> available body 只有 hel
+-> parse_request 返回 NeedMore
+-> tmp_output 析构
+-> caller 的 sentinel output 完全不变
 ```
 
-第一项证明转换没有 invalid/overflow error，第二项证明整个 value 都被消费，没有遗留 `x` 等尾巴。
+这就是今天的 **validate before commit（先验证、后提交）**。你在 body 到齐后执行 `output = std::move(tmp_output)`，正常返回路径已经满足 R1 contract。
 
-## 18. Binary Body 为什么按 Length Copy
+当前代码在 move 之后再逐 byte append body；对今天已经验证的正常路径没有问题。若以后把“内存分配异常时 output 也必须完全不变”纳入 contract，才需要把 body 也先写进 `tmp_output`，最后只做一次 commit。Day3 不把这个异常安全增强列为阻塞项。
 
-下面是一段合法的 3-byte body：
+## 16. 你的 Offset 怎样得到 Exact Boundary
+
+你当前的变量可以直接对应三个长度：
+
+```text
+L = request_line_length
+H = header_section_length
+B = body_length
+```
+
+代码中的位置变化是：
+
+```text
+header_section_begin = data + L
+remained_length = length - L
+
+parse_header_section(...)
+-> 得到 H
+
+remained_length -= H
+body_begin = header_section_begin + H
+```
+
+此时 `remained_length` 已经不再表示“line 后还剩多少”，而是**完整 headers 后可用的 body/suffix bytes**。因此：
+
+```text
+remained_length < B
+-> body incomplete
+-> NeedMore
+
+remained_length >= B
+-> current request complete
+-> consumed_bytes = L + H + B
+```
+
+多出来的 `remained_length - B` bytes 不进入 `consumed_bytes`，所以 caller 执行 `Buffer::retrieve(consumed_bytes)` 后，`NEXT` 或下一条 request 会成为新的 readable prefix。
+
+## 17. `parse_digits()` 现在需要拆开两类失败
+
+你新增到 R1 的 `std::from_chars` 说明已经把转换本身讲清楚；Round2 不再重复 API。这里直接看真实实现的一个 contract 缺口。
+
+当前 `parse_digits()` 同时把下面两种情况变成 `std::nullopt`：
+
+```text
+"5x" 或整数 overflow
+-> 数字语法/转换失败
+-> 应为 BadRequest
+
+"1048577"
+-> 数字合法，但超过项目 body limit
+-> 应为 BodyTooLarge
+```
+
+caller 收到同一个 `nullopt` 后无法区分原因，所以目前两者都会返回 `BadRequest`。
+
+Round3 的明确升级动作是：
+
+```text
+parse_digits 只负责 strict decimal -> size_t
+-> 转换失败：BadRequest
+
+转换成功后由 parse_request 比较 kMaxBodyBytes
+-> value > limit：BodyTooLarge
+-> value <= limit：作为 body_length
+```
+
+这样 `1048576` 仍被接受，`1048577` 才稳定进入 `BodyTooLarge`。
+
+## 18. 你的 Body Copy 为什么是 Binary-safe
+
+你当前按 `body_length` 次循环，把 `body_begin[i]` 追加到 `std::string body`。这条路径**不调用 `strlen()`，也不把 `\0` 当终止符**，因此下面三 bytes 会完整保存：
 
 ```text
 {'A', '\0', 'B'}
 ```
 
-**Body copy 必须使用 pointer + explicit length。** `strlen()` 会在 `\0` 处停止，无法表示这段数据的真实长度。
-
-`std::string` 在这里负责拥有连续 bytes 并记录 size；它不会因为中间出现 `\0` 而截断内容。
-
-## 19. Complete 后怎样保留下一条 Request
-
-输入：
+验收时不能只比较打印结果，因为中间的 NUL 不可见。测试应检查：
 
 ```text
-[request 1][request 2]
+request.body.size() == 3
+request.body[0] == 'A'
+request.body[1] == '\0'
+request.body[2] == 'B'
 ```
 
-第一次调用只完成 request 1：
+你的逐 byte loop 在 correctness 上成立，不需要为了迎合教程改成另一种 copy 写法。
+
+## 19. 你的 Parser 怎样保留下一条 Request
+
+R1 的两个 tests 已经验证了第一层 boundary：
 
 ```text
-consumed_bytes = request 1 length
+[current request][NEXT]
+-> parse_request 只报告 current request 的 L + H + B
+-> caller retrieve(L + H + B)
+-> Buffer 仍保留 NEXT
 ```
 
-Caller 执行：
+Round3 再把 `NEXT` 换成一条完整 GET request：
+
+```text
+[POST /echo + hello][GET /health]
+-> 第一次 parse 得到 POST
+-> retrieve(first.consumed_bytes)
+-> 第二次从 Buffer 新 prefix 得到 GET
+```
+
+你的 parser 本身不保存跨调用 stage；每次调用都从当前 readable prefix 重新证明一条 request。Day6 才由 per-connection session 循环调用它并决定 response 顺序。
+
+## 20. 你的 V1 性能边界
+
+当前 `parse_request()` 是 stateless parser：body 每增加一段，下一次调用会重新扫描 request line 和 headers。这个设计在 Week11 V1 中优先保证 boundary correctness，暂时不引入 persistent parse stage。
+
+还有一个很小的实现成本：
 
 ```cpp
-input.retrieve(result.consumed_bytes);
+for (auto line : tmp_output.headers)
 ```
 
-Buffer 的 readable prefix 随后从 request 2 开始。第二次 `parse_request()` 再处理 request 2。
-
-Day3 的 parser 每次只证明一条 request；Day6 再由 connection/session 决定 response 顺序与 persistent-connection loop。
-
-## 20. V1 的性能边界
-
-如果每次 callback 都从累计 Buffer 开头重新扫描 request line 和 headers，V1 仍然可以保持行为正确，但会产生重复扫描。
-
-今天先保留简单的无持久状态实现。等 Day5/Day6 的结构或 profiling 证明重复扫描成为真实成本，再让 per-connection session 保存 parse stage 和 offsets。
+会复制每个 header field。以后自然整理时可使用 `const auto&`，但它不是 Day3 correctness 问题，也不要求现在为此返工。只有 profiling 证明重复扫描成为真实成本时，才把 stage/offset state 放进 per-connection HTTP session。
 
 ---
 
 # Part 3：Round3、验证与收尾
 
-## 21. Round3 只补高价值 Evidence
+## 21. Round3：先修三个已知缺口，再补 Evidence
 
-保留 R1 的两个核心 tests，再补下面五组证据。
+这不是一张泛泛的错误清单。它直接来自本次对你 R1 source 的 review。
 
-### 21.1 Binary Body
+### 21.1 三个明确修复目标
+
+1. **传播 header-section limit error。** 当前 header parser 返回 `HeaderSectionTooLong` 时，`parse_request()` 的 Error 分支没有 return，会继续执行 framing。应稳定映射为 `HttpRequestError::HeaderSectionTooLong`。
+2. **区分 invalid length 与 oversized body。** 按第 17 节拆开转换失败和项目 limit，使 `1048577` 返回 `BodyTooLarge`。
+3. **补齐 diagnostic definition。** `http_request_error_message()` 已在 header 声明，但 source 尚无定义；按第 7.4 节表格返回稳定英文消息。
+
+### 21.2 Binary Body
 
 ```text
 Content-Length: 3
 body bytes: {'A', '\0', 'B'}
 ```
 
-要求 `request.body.size() == 3`，并逐 byte 相同。
+要求 `request.body.size() == 3`，并逐 byte 相同。这条测试验证你现有逐 byte loop，而不是要求重写它。
 
-### 21.2 Body Split Loop
+### 21.3 Body Split Loop
 
 只遍历固定 request 的 body split points：
 
 ```text
-body 尚未到齐 -> NeedMore，output 不变
-body exact 到齐 -> Complete
+body 尚未到齐 -> NeedMore，consumed_bytes=0，sentinel output 不变
+body exact 到齐 -> Complete，body exact
 ```
 
 Request-line/header split 已在 Day1/Day2 证明，不做三层笛卡尔积。
 
-### 21.3 Coalesced Requests
+### 21.4 Coalesced Requests
 
 ```text
 [POST body request][GET request]
@@ -611,39 +750,49 @@ Request-line/header split 已在 Day1/Day2 证明，不做三层笛卡尔积。
 
 证明第一次 consumed boundary 停在 POST 末尾；retrieve 后第二次解析得到正确 GET。
 
-### 21.4 Framing Error Matrix
+### 21.5 Framing Error Matrix
 
-Parameterized cases 覆盖：
+Parameterized cases 使用下面的 exact oracle：
+
+| Input | Expected error |
+|---|---|
+| empty `Content-Length` | `BadRequest` |
+| `Content-Length: +5` | `BadRequest` |
+| `Content-Length: -1` | `BadRequest` |
+| `Content-Length: 5x` | `BadRequest` |
+| integer overflow | `BadRequest` |
+| duplicate `Content-Length` | `BadRequest` |
+| TE + CL | `BadRequest` |
+| TE only | `UnsupportedTransferEncoding` |
+| header section over limit | `HeaderSectionTooLong` |
+
+所有 Error cases 还要共同证明：
 
 ```text
-empty Content-Length
-Content-Length: +5
-Content-Length: -1
-Content-Length: 5x
-Content-Length overflow
-duplicate Content-Length
-Transfer-Encoding + Content-Length
-Transfer-Encoding only
+consumed_bytes == 0
+public output 保持 sentinel
 ```
 
-Codex 可以写测试 scaffold；你需要能把每个 input 对应到 expected error。
+Codex 可以补 parameterized scaffold；你需要能解释每一行为什么属于该 error category。
 
-### 21.5 Body Limit
+### 21.6 Body Limit
 
 ```text
-Content-Length == 1 MiB     -> 可以等待或完成
-Content-Length == 1 MiB + 1 -> BodyTooLarge
+Content-Length == 1 MiB，body 尚未到齐 -> NeedMore
+Content-Length == 1 MiB + 1             -> BodyTooLarge
 ```
+
+不需要真的构造超过 1 MiB 的 body；第二条在读完合法 length value 后就应立即拒绝。
 
 ## 22. 这些 Tests 能证明什么
 
 能证明：
 
-- 当前 V1 framing contract。
-- Binary-safe body ownership。
-- Exact consumed boundary。
-- Error classification。
-- 实际覆盖路径没有 sanitizer report。
+- 你的逐 byte body copy 能保留中间 NUL。
+- `tmp_output` 让 NeedMore/Error 不污染 public output。
+- `L + H + B` 给出的 exact consumed boundary 不吞 suffix。
+- 当前 error mapping 与第 7.2 节 contract 一致。
+- 本次实际覆盖路径没有 sanitizer report。
 
 它们不把 V1 提升成完整 RFC 9112 parser。Chunked body、socket integration、keep-alive lifecycle 和跨 proxy 的完整安全分析仍属于后续范围。
 
@@ -679,10 +828,12 @@ strict decimal Content-Length
 duplicate CL rejected
 TE+CL -> BadRequest
 TE only -> UnsupportedTransferEncoding
+header section over limit -> HeaderSectionTooLong
 1 MiB body limit
 binary NUL body exact
 coalesced requests exact
 NeedMore/Error preserve output
+all HttpRequestError values have stable messages
 fresh Debug and ASan/UBSan focused tests PASS
 ```
 
@@ -692,10 +843,11 @@ fresh Debug and ASan/UBSan focused tests PASS
 
 代码和 tests 已经提供等价证据时，不要求写长答案。
 
-1. 为什么 `Content-Length` 表示 bytes，不能用 `strlen(body)`？
-2. Body 不足时，为什么已解析的 line/headers 仍不能提交给 public output？
-3. 为什么 Complete 后不能把 Buffer 中的 suffix 一起消费？
-4. 为什么 V1 同时看到 TE 与 CL 时直接拒绝？
+1. 没有 CL/TE 时，你的 `body_length` 为什么自然保持为 `0`？
+2. Body 不足时，`tmp_output` 为什么可以被丢弃，而 caller 的 `output` 仍保持 sentinel？
+3. 为什么 `parse_digits()` 不能同时把 invalid decimal 和 `value > kMaxBodyBytes` 都压成同一个失败结果？
+4. Header parser 已经返回 `HeaderSectionTooLong` 后，完整 parser 为什么必须立即 return，而不能继续 framing？
+5. `consumed_bytes = L + H + B` 为什么能让第二条 request 留在 Buffer 中？
 
 ## 26. 今日压缩记忆
 
@@ -718,4 +870,4 @@ NeedMore/Error 不提交半成品。
 Complete 只消费当前 request，suffix 留给下一次 parse。
 ```
 
-先完成 Round1。检阅通过后，再沿你的真实实现润色 Round2/Round3，并补机械性 framing tests。
+Round1 已正式通过。现在按第 17、21 节修正三个已知 contract 缺口，再补 binary、split、coalesced 和 error matrix evidence；不重写已经正确的主链。

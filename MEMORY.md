@@ -15,7 +15,29 @@
 6. Ubuntu 中对应目录的实际代码和测试结果
 ```
 
-若长期记忆与用户最新明确要求冲突，以最新要求为准，并及时更新本文件。
+若长期记忆与用户最新明确要求冲突，以最新要求为准，并及时更新本文件。但更新不能只在末尾追加一条新句子：**每次准备新增或修改长期规则前，必须先全篇扫描 MEMORY，并对同主题旧规则做冲突审计。**
+
+MEMORY 规则更新固定执行：
+
+```text
+1. 全篇扫描 MEMORY，并用主题关键词定位所有相关旧规则、例外和历史记录
+2. 判断新要求与旧规则属于：兼容补充 / 细化 / 条件例外 / 正式替换 / 真正冲突
+3. 兼容补充或细化：合并进原来的 canonical rule，避免在多处重复表达
+4. 条件例外：写清触发条件、适用范围和不影响的旧规则
+5. 正式替换或真正冲突：以用户最新明确要求为准，同时修改或删除旧的冲突表述，不能让两套相反规则并存
+6. 历史记录只说明“为什么改变”，不能再充当第二套 canonical rule
+7. 修改后再次全局搜索同主题关键词，检查规则层、当前进度、当前下一步和历史总结是否仍互相矛盾
+```
+
+解释规则优先级时，不能使用“新增规则自动覆盖全部旧规则”的粗暴模型。先确定两条规则的对象和范围，例如：
+
+```text
+代码文件默认只读
+并不取消
+R1 正式通过后必须定向润色 Daily 的 R2/R3
+```
+
+二者作用对象不同，可以同时成立。只有对象、触发条件和作用范围真正相同且结论相反时，才按最新要求替换旧规则。
 
 ---
 
@@ -102,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-28）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser、Day2 header-section parser、Day3 Content-Length/body framing 与 Day4 HTTP response encoder/fixed routes 均已正式通过，Day4 最终评分 `96/100`。下一步为 Week11 Day5，把现有 parser/route/encoder 接入 Reactor，形成 one-response-then-close HTTP Server V1。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
+最新进度快照（2026-09-28）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser、Day2 header-section parser、Day3 Content-Length/body framing 与 Day4 HTTP response encoder/fixed routes 均已正式通过，Day4 最终评分 `96/100`。Week11 Day5 HTTP session/Reactor integration 教程已经生成，等待用户开始 Round1；尚未实现或验收，不能提前记为通过。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
 
 ### Week1：已完成
 
@@ -1815,6 +1837,8 @@ Codex 修改 daily 的边界仍然是：
 修改后重新校验
 ```
 
+这里有一个既定流程例外：**某个 Round1 经正式检阅通过后，必须在同一轮依据用户真实 source、note、tests、对话和当前 daily diff，定向润色该 Daily 的完整 Round2/Round3。** 这项后半教程润色属于用户已经长期授权的验收步骤，不需要每次再次询问；但它只能修改后半教程，必须以磁盘最新版为唯一底稿，并完整保留用户在 R1 阅读期间对 Daily 作出的更正、增加和解释。
+
 每次验收某个 Day 时，除了 note、代码和验收题，还必须检查 daily 自首次生成后的变化：
 
 ```text
@@ -3019,6 +3043,10 @@ Round 3：补 deterministic tests、TSan/stress/benchmark、README 与最终证�
 - RAII 类型要明确唯一所有权、移动后状态、析构责任和是否允许拷贝。
 - 项目代码逐步追求：边界、测试、README、错误处理、可解释性和可复现验证。
 - 用户独立实现的代码应尽量保留其思路；先理解写法，再指出真实问题。
+- 用户代码文件默认只读。检阅、编译、运行和定位问题时只报告发现，不自动替用户修复、重构或格式化；只有用户在当前请求中明确授权修改某个文件或某组测试时，才可在该精确范围内动手。
+- 任何获准修改开始前都必须重新读取用户已经保存的最新版。只做最小增量 patch，保留用户已有代码、注释、命名、笔记和每一轮新增内容；禁止用旧 Git baseline、旧临时副本或先前生成版本覆盖用户修改。
+- 用户明确授权“帮我写测试”时，可以新增约定的测试与测试辅助代码，但不能顺手修改 production code 让测试通过。若发现 production code 编译错误或行为缺陷，先报告并等待该部分的单独授权。
+- 冻结后的 `daily.md`、用户已经编辑过的教程和 note 在普通问答、普通 review 与评分时默认只读；用户当轮显式要求修改，或 R1 正式通过触发既定的 Round2/Round3 定向润色流程时，才允许编辑。两种情况下都必须以磁盘最新版为底稿，保留用户修改，只调整被授权的部分。R1 正式通过本身就是后半教程定向润色的 standing authorization，不能因“默认只读”而跳过。
 
 完成日验收流程：
 
@@ -3132,7 +3160,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-09-28 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1~Day4 均已正式通过；Day4 最终评分 `96/100`。下一步为 Week11 Day5 HTTP session/Reactor integration；Day5 尚未生成。AI Theory T1~T3 已正式通过，下一模块为 T4。
+2026-09-28 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1~Day4 均已正式通过；Day4 最终评分 `96/100`。Week11 Day5 HTTP session/Reactor integration 教程已生成，下一步是用户实现 Round1；Day5 尚未学习或验收。AI Theory T1~T3 已正式通过，下一模块为 T4。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -6979,3 +7007,29 @@ R1 后已从用户当前磁盘版本定向润色 Day4 R2/R3，并完整保留用
 normal build 零 warning；response suite `9/9 PASS`；使用规定入口运行全项目 CTest 为 `54/54 PASS`。另建全新的 `build-day4-final-sanitize`，以 ASan/UBSan 和 frame pointer 编译 response target，focused CTest `9/9 PASS`，无 sanitizer report。Week11 Day4 最终评分 `96/100`，正式通过。Codex 编写机械测试 scaffold，用户完成全部 production mechanism 与最终修复，两类贡献继续分开记录。
 
 最终复检时，用户又在 `day4.md` 增补 `wire response`：准确说明它是 `HttpResponse` 经 encoder 产生、准备交给 `Connection::send()` 的 owning HTTP response byte stream。这是有效的术语到运行路径映射，应保留。非阻塞整理只剩直接 include `<stdexcept>`、移除 response source 中未使用的 request header，以及把仅供 encoder 使用的 helper 收窄到 source 内部；不要求为了这些风格项停留。下一步进入 Week11 Day5，把 Day1~Day4 的纯内存链路接入现有 Reactor；Day5 当前尚未生成，无需执行提前教程润色。
+
+## 2026-09-28：Week11 Day5 教程生成
+
+已生成 `week11/day5/day5.md`。本日承接 Week10 Reactor V1 与 Week11 Day1~Day4 已通过组件，目标是形成第一条真实可运行的 HTTP vertical slice：
+
+```text
+Acceptor
+-> Connection input Buffer
+-> HTTP MessageCallback / application session
+-> parser
+-> route or parse-error mapping
+-> response encoder
+-> Connection output Buffer
+-> close after flush
+-> deferred erase after poll_once
+```
+
+教程首先用 `curl --http1.1 -v http://127.0.0.1:9092/health` 的 observable result 建立目标，再给五个主问题和整条 server runtime chain，之后才命名 application session、per-connection state、transport/protocol separation、composition root 与 close-after-flush。Round1 明确程序用途、四个文件、one-response-then-close 行为、NeedMore/Complete/Error handling、CMake target、启动命令和 curl smoke，但不泄露 session container、callback capture、内部 close flag 或 event-mask control flow。
+
+生成时已对齐用户真实 `Connection`：当前 transport component 只有 peer EOF 后 drain-output-and-close，没有 application 主动结束 response 的命令；因此 Day5 新增唯一 public API `void close_after_flush()`。其 contract 是 start 前抛 `std::logic_error`，output 为空时提交一次 close，output 非空时 drain 后提交，重复调用幂等，close request 后再次 send 稳定拒绝。教程同时明确 `Connection: close` 只生成 HTTP protocol header，`close_after_flush()` 才执行本进程 transport lifetime；二者不能互相替代。
+
+计划中的“per-connection parser/session state”已按真实实现纠偏：当前 `HttpRequestParser` 没有 mutable members，可以临时构造或复用；真正必须按 connection 隔离的是各自 `Connection::input_` 中的 partial bytes、是否已经提交第一份 response、是否已进入 closing phase 等 mutable session state。教程不虚构“每条 connection 必须拥有 parser object”。
+
+Round3 提供 process-external Python checker，验证 exact health response、fragmented binary `POST /echo`、embedded NUL 与 response 后 EOF。Checker 明确不调用 `shutdown(SHUT_WR)`，避免旧 peer-EOF close path 掩盖缺失的 application close-after-flush。多个 `sendall` 不能证明 server 经历多个 `recv`，因此 fragmentation 的确定性证据仍来自已有 parser split-point unit tests。另保留一个可委托的 deterministic pending-output component-test 方向，由 R1 真实实现和 coverage 决定是否需要，不提前制造 dirty work。
+
+`DAILY_INDEX.md` 已更新为 75 份教程并加入 Day5 与 close-after-flush 检索项。Day5 当前仅完成教程生成，用户尚未开始或验收 Round1；正式 R1 通过后，必须从用户届时磁盘上的 day5.md、source、tests、note 和对话出发逐节定向润色 R2/R3，保留用户新增内容，不从本次初稿覆盖。
