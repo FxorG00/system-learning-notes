@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week10 已通过
-Week11 Day1~Day3 已正式通过；Week11 Day4 第一次最终验收暂定 93/100，当前只剩 Content-Type validation blocker，尚未正式通过
+Week11 Day1~Day4 已正式通过；Day4 最终评分 96/100，下一步为 Day5 HTTP session/Reactor integration
 ```
 
 ---

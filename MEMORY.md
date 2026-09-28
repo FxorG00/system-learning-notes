@@ -102,7 +102,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-28）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser、Day2 header-section parser 与 Day3 Content-Length/body framing 均已正式通过，Day3 最终评分 `95/100`。Week11 Day4 R2/R3 的 unknown-status exception 与 parser-error response mapping 已完成，第一次最终验收暂定 `93/100`；Codex 补入机械测试后全项目 `53/54 PASS`，唯一 blocker 是 encoder 尚未拒绝 empty/CR/LF `Content-Type`，因此 Day4 尚未正式通过。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
+最新进度快照（2026-09-28）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser、Day2 header-section parser、Day3 Content-Length/body framing 与 Day4 HTTP response encoder/fixed routes 均已正式通过，Day4 最终评分 `96/100`。下一步为 Week11 Day5，把现有 parser/route/encoder 接入 Reactor，形成 one-response-then-close HTTP Server V1。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
 
 ### Week1：已完成
 
@@ -3132,7 +3132,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-09-28 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1、Day2 与 Day3 均已正式通过；Week11 Day4 R2/R3 已提交并完成第一次最终验收，暂定 `93/100`。route/status/binary body/parser-error mapping 已通过补充矩阵，当前唯一 blocker 是 encoder 未实现 empty/CR/LF `Content-Type` 的稳定异常 contract；Day4 尚未正式通过。AI Theory T1~T3 已正式通过，下一模块为 T4。
+2026-09-28 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1~Day4 均已正式通过；Day4 最终评分 `96/100`。下一步为 Week11 Day5 HTTP session/Reactor integration；Day5 尚未生成。AI Theory T1~T3 已正式通过，下一模块为 T4。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -6971,3 +6971,11 @@ R1 后已从用户当前磁盘版本定向润色 Day4 R2/R3，并完整保留用
 补测后 route/status/empty body/binary NUL/`Connection: close`/六类 parser error mapping/`None` exception 全部通过；normal full build 零 warning。response suite `8/9 PASS`，full CTest `53/54 PASS`。唯一失败是 `RejectsInvalidResponseMetadata` 中 empty `Content-Type`、含 CR 与含 LF 三个输入都没有抛出 daily 规定的 `std::invalid_argument`。这不是可省略的形式项：未验证的值被直接拼进 response header，会生成 malformed response，并允许 caller 注入额外 header line。因此第一次最终验收暂定 `93/100`，Day4 尚未正式通过；用户只需在 encoder 生成任何 wire bytes 前补齐三种检查，再重跑现有 suite，无需新增测试或重写已通过的 mapping。
 
 本轮 daily diff 只有两处用户补充，技术上均正确：一处把 `Connection: close` 解释成 response bytes 全部 drain 后再关闭 connected socket；另一处把 `response_for_parse_error` 放回 client request -> parser error -> error response -> close 的完整 server path。当前仍无独立 `day4_note.md`，因此验收不能伪造逐节 note 回答；用户通过 daily 增补、真实实现与口述 oracle 提供了本轮理解证据。
+
+## 2026-09-28：Week11 Day4 最终复检通过
+
+用户在 `encode_http_response()` 生成任何 wire bytes 前补齐 response metadata validation：empty `Content-Type` 稳定抛 `std::invalid_argument("empty HTTP content type")`，包含 CR 或 LF 稳定抛 `std::invalid_argument("invalid HTTP content type")`。现有 `RejectsInvalidResponseMetadata` 三个 failure subcases 全部转绿，未修改测试或降低 contract。
+
+normal build 零 warning；response suite `9/9 PASS`；使用规定入口运行全项目 CTest 为 `54/54 PASS`。另建全新的 `build-day4-final-sanitize`，以 ASan/UBSan 和 frame pointer 编译 response target，focused CTest `9/9 PASS`，无 sanitizer report。Week11 Day4 最终评分 `96/100`，正式通过。Codex 编写机械测试 scaffold，用户完成全部 production mechanism 与最终修复，两类贡献继续分开记录。
+
+最终复检时，用户又在 `day4.md` 增补 `wire response`：准确说明它是 `HttpResponse` 经 encoder 产生、准备交给 `Connection::send()` 的 owning HTTP response byte stream。这是有效的术语到运行路径映射，应保留。非阻塞整理只剩直接 include `<stdexcept>`、移除 response source 中未使用的 request header，以及把仅供 encoder 使用的 helper 收窄到 source 内部；不要求为了这些风格项停留。下一步进入 Week11 Day5，把 Day1~Day4 的纯内存链路接入现有 Reactor；Day5 当前尚未生成，无需执行提前教程润色。

@@ -352,6 +352,25 @@ body.push_back('i');
 - `body` 析构时，`vector` 自动释放这块内存；
 - 外部那段原始内存即使失效，`body` 的内容仍然有效。
 
+### 4.8 wire response
+
+对。`wire response` 就可以理解成：
+
+```text
+response byte stream
+```
+
+更准确一点，是 **HTTP response 被编码后、准备通过 TCP 发给 client 的那串 bytes**。
+
+```text
+HttpResponse object
+-> encode_http_response()
+-> wire response / response byte stream
+-> Connection::send()
+```
+
+在你当前项目里，两者几乎可以当同义词用。
+
 ## 5. 文件与停止边界
 
 建议新增：
