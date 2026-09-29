@@ -853,7 +853,7 @@ def compute_cost(X, y, theta):
 
 ### 5.10 第二周的完整程序应该是什么样
 
-把这一周收成一个 `linear_regression_numpy.py`：
+把这一周收成一个完整 linear-regression program。推荐直接按 Ex1 使用 `linear_regression.py`；暂时不做 Ex1 时，才使用 T7 fallback 的 `linear_regression_numpy.py`：
 
 ```text
 load / generate data
@@ -870,6 +870,18 @@ load / generate data
 ```
 
 它不需要变成工程项目。它的任务是把“数据 -> shape -> forward -> cost -> gradient -> update -> evidence”第一次完整串通。对应实现细节放在 [ML_配套练习.md](ML_配套练习.md) 的 Ex1，不在讲义正文复制一份答案。
+
+### 5.11 Ex1 与理论线 T7 只实现一次
+
+完成 Ex1 后，这份真实数据实现直接作为 T7 的 linear-regression 等价产出：
+
+```text
+ML.md：第一次学懂 linear regression
+Ex1：真实数据、检查值、loss curve、prediction 与 least-squares reference
+T7：复核这些证据，并补 training workload 到 AI Infra 的映射
+```
+
+不再额外生成同构的 synthetic `linear_regression_numpy.py`。只有暂时不做 Ex1 时，才使用 T7 的 synthetic fallback；两条路径二选一。
 
 ---
 
@@ -3064,7 +3076,7 @@ pipeline 优化必须看 end-to-end bottleneck
 
 ## 20. 与当前学习规划的最终对齐
 
-这份 ML 讲义不会抢走系统主线，也不会替代 T module。
+这份 ML 讲义不会抢走系统主线，也不会替代 T module 中的数值稳定性、framework mechanism 与 AI Infra mapping；但它与经典作业已经完整覆盖的 model theory/code evidence，可以按明确 contract 抵扣对应 T 的重复部分。
 
 接下来的职责分工是：
 
@@ -3073,7 +3085,12 @@ pipeline 优化必须看 end-to-end bottleneck
 -> 给出完整机器学习地图、优化方法和诊断思维
 
 ai_theory/T4~T13
--> 把 gradient、loss、PyTorch、autograd、MLP 真正写成可运行 reference
+-> 补 finite difference、stable softmax、PyTorch、autograd、MLP 与 AI Infra mapping
+
+等价验收
+-> Ex1 抵扣 T7 linear-regression implementation
+-> Ex2 只抵扣 T8 binary-logistic/regularization 部分
+-> T8 仍完成 multiclass softmax 与 train/validation/test workflow
 
 后续 Transformer / inference modules
 -> 把 forward、attention、KV Cache、sampling 映射到 memory 与 performance

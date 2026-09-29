@@ -1,6 +1,6 @@
 # AI Infra 理论伴随线规划
 
-> 版本：2026-09-20，T3 进度同步与 serving 生态校准版
+> 版本：2026-09-30，ML 讲义 / 经典作业 / T module 去重校准版
 > 适用对象：FxorG，中山大学计算机科学与技术专业；系统主线已完成 Week10、正在 Week11，理论线 T1~T3 已通过、下一模块为 T4
 > 职业目标：本科就业，主攻 LLM inference systems / serving 与 CUDA/Triton kernel optimization
 > 本文件定位：`plan_strengthened.md` 的 AI Infra 理论伴随线，不替代 C++ / Linux / OS / 网络 / Reactor / Mini Redis 主线
@@ -144,6 +144,16 @@ AI Theory T module：负责把已学数学映射到 NumPy/PyTorch、Tensor shape
 
 这里的“掌握”不按成绩猜测，而用很短的 diagnostic gate 判断；若能手算、解释并完成对应代码，就直接通过数学部分。
 
+传统机器学习讲义、经典作业与 T module 也执行同一条去重规则：
+
+```text
+ML/ML.md：负责第一次学懂模型原理、数学直觉和算法全貌
+ML/ML_配套练习.md：负责在真实课程数据上形成 executable evidence
+AI Theory T module：只补 NumPy/PyTorch、数值稳定性、framework mechanism 和 AI Infra mapping
+```
+
+同一个 learning contract 已经由一份实现和一组证据完整覆盖时，允许跨资料等价验收，不再要求换一份 synthetic data 重写同一算法。等价验收必须逐条映射 shape、value、gradient、workflow 与 failure/evidence，不能因为“看过”或“感觉会”直接跳过。抽象层发生变化时不算重复，例如 finite-difference gradient checker、NumPy 到 PyTorch autograd、training 到 inference memory、CPU reference 到 GPU kernel。
+
 ---
 
 ## 3. 和系统主线怎样并行
@@ -201,7 +211,7 @@ AI 可持续计划值：每周 4~6 小时
 
 | 阶段 | 范围 | 估算有效工时 | 说明 |
 |---|---|---:|---|
-| Phase 1 | T1~T8 | 30~45h | 数学基础扎实，可用 diagnostic 跳过重复理论 |
+| Phase 1 | T1~T8 | 30~45h | 数学基础扎实；ML/Ex 与 T7 共用一份线性回归产出，不重复实现 |
 | Phase 2 求职核心 | T9~T13、T15~T16 | 45~60h | PyTorch、autograd、MLP、token/mask、attention |
 | Phase 2 可延期 | T14 | 6~10h | CNN/ResNet 对 LLM inference 不是硬前置 |
 | Phase 3 | T17~T24 | 65~90h | decoder、KV Cache、batching、benchmark、最终整合 |
@@ -221,7 +231,7 @@ AI 可持续计划值：每周 4~6 小时
 | Week9 | T1 | 2026.08 末~09 初 | `numpy_basics.py`，能解释 shape/dtype/nbytes |
 | Week10 | T3 | 2026.09 | matmul/broadcast reference 与 shape 推导 |
 | Week11 | T6 | 2026.09 末 | finite difference、概率映射、stable softmax |
-| Week12 | T8 / Theory Gate 1 | 2026.10 上半 | NumPy linear/softmax model 与 ML workflow |
+| Week12 | T8 / Theory Gate 1 | 2026.10 上半 | Ex1 或 T7 fallback 提供 linear evidence；T8 提供 softmax 与 ML workflow |
 | Week13 | T10 | 2026.10 下半 | Tensor layout 与 Module inference |
 | Week14 | T12 | 2026.11 | autograd + MLP training/inference flow |
 | Week15 | T13 + T15~T16 | 2026.12 上半 | token/mask 与 single-head attention reference |
@@ -280,7 +290,7 @@ T23 correctness/benchmark
 
 ## 4. 学习方法与固定产出
 
-每个 T module 固定产出：
+每个 T module 默认需要覆盖四类 evidence：
 
 ```text
 1. 一份短 note：只记录真正不熟的概念
@@ -288,6 +298,8 @@ T23 correctness/benchmark
 3. 至少一组 shape / value / tolerance 验证
 4. 一段“这和 AI Infra 有什么关系”的解释
 ```
+
+这里的“固定产出”按 learning contract 计数，不按文件名计数。若经典作业已经提供同等或更强的代码与 evidence，T module 可以登记该 artifact 为等价产出，只补尚未覆盖的 AI mapping；不能为了让每个目录都有一个新 `.py` 而复制同一 training loop。
 
 每个 T module 开始前，再单独生成一份 `Tn.md` 教程。下面只定义 AI Theory 教程的写法，不定义或修改系统主线 `daily.md` 的编写规则：
 
@@ -369,7 +381,7 @@ AI Theory Tn.md
 - 吴恩达：[机器学习课程合集 `BV1owrpYKEtP`](https://www.bilibili.com/video/BV1owrpYKEtP)
 - 李沐：[“跟李沐学AI”账号内搜索《动手学深度学习》](https://space.bilibili.com/1567748478/search?keyword=%E5%8A%A8%E6%89%8B)
 
-吴恩达 2014 传统机器学习课程另有一份本地连续自学讲义：[ML/ML.md](ML/ML.md)，以及按经典 `ex1~ex8` 组织的中文实践教程 [ML/ML_配套练习.md](ML/ML_配套练习.md)。练习不再按知识章节散列成抽象题目，而是逐套交付真实问题、最终程序、本地数据路径、数据字段、实现阶段、原题检查值和图像 evidence。Python starter notebooks、Data、Figures 与原始题面保存在本机 `ML/official_assignments/`，第三方材料不进入仓库提交。它们不新增一条必须逐周打卡的主线，也不替代 `Tn.md` 的 NumPy/PyTorch code gate；进入 T4~T13 时按当前概念调用相应作业，不要求暂停系统主线连续做完八套。
+吴恩达 2014 传统机器学习课程另有一份本地连续自学讲义：[ML/ML.md](ML/ML.md)，以及按经典 `ex1~ex8` 组织的中文实践教程 [ML/ML_配套练习.md](ML/ML_配套练习.md)。练习不再按知识章节散列成抽象题目，而是逐套交付真实问题、最终程序、本地数据路径、数据字段、实现阶段、原题检查值和图像 evidence。Python starter notebooks、Data、Figures 与原始题面保存在本机 `ML/official_assignments/`，第三方材料不进入仓库提交。它们不新增一条必须逐周打卡的主线；当作业完整覆盖某个 T module 的 learning contract 时，可以成为该 T 的等价代码 gate。当前明确：Ex1 可替代 T7 的 synthetic linear-regression 产出；Ex2 可覆盖 T8 的 binary-logistic/regularization 部分，但不能替代 T8 的 multiclass softmax 与 train/validation/test workflow。其余作业是否抵扣，在进入对应 T 时逐条核对，不默认整套互换。
 
 Kaggle 只作为传统 ML 阅读与经典作业之后的端到端 workflow lab，具体任务见 [ML/Kaggle入门实践.md](ML/Kaggle入门实践.md)。当前固定为：T12 + Ex3/Ex4 通过后可选做 Digit Recognizer，T13 + Ex5 通过后必做 Titanic。每项最多 4~6 小时，只允许 baseline、一次有依据的改进和最多一至两次 submission；达到 schema、validation、artifact 和外部 score 的证据后立即停止。它不新增刷榜、特征工程或月赛支线，也不能挤占 HTTP Server、Mini Redis 和后续 inference project。
 
@@ -854,29 +866,26 @@ stable softmax
 
 ---
 
-## T7：linear regression 与 gradient descent
+## T7：linear regression 等价验收与 training-loop bridge
 
 ### 本周问题
 
 ```text
-model、loss 和 optimizer 分别负责什么？
+怎样证明自己已经能把 linear-regression 数学变成完整 training loop，同时不把 ML.md 和 Ex1 再做一遍？
 ```
 
 ### 学习内容
 
 ```text
-supervised learning
-feature / label
-linear model
-mean squared error
-full-batch gradient descent
-learning rate
-parameter update
+model / loss / optimizer 的职责边界
+vectorized forward / loss / gradient / simultaneous update
+loss curve、parameter/prediction 与 reference 的多层证据
+training 与 inference 的第一层对象差异
 ```
 
 ### 学到什么程度
 
-必须能够串出：
+必须能够串出并用代码证明：
 
 ```text
 input
@@ -887,34 +896,31 @@ input
 -> next iteration
 ```
 
-### 对应视频
+### 去重入口
 
-- 李沐：[08 `线性回归 + 基础优化算法`](https://www.bilibili.com/video/BV1PX4y1g7KC/) 中的“线性回归”“基础优化算法”“从零开始实现”“简洁实现”。
-- 吴恩达线性回归模型：[P6 `线性回归模型`](https://www.bilibili.com/video/BV1owrpYKEtP?p=6)、[P7 `成本函数及其直觉`](https://www.bilibili.com/video/BV1owrpYKEtP?p=7)、[P8 `可视化成本函数`](https://www.bilibili.com/video/BV1owrpYKEtP?p=8)、[P9 `可视化示例`](https://www.bilibili.com/video/BV1owrpYKEtP?p=9)。
-- 吴恩达梯度下降：[P10 `梯度下降`](https://www.bilibili.com/video/BV1owrpYKEtP?p=10)、[P11 `实现梯度下降`](https://www.bilibili.com/video/BV1owrpYKEtP?p=11)、[P12 `梯度下降直觉`](https://www.bilibili.com/video/BV1owrpYKEtP?p=12)、[P13 `学习率`](https://www.bilibili.com/video/BV1owrpYKEtP?p=13)、[P14 `线性回归的梯度下降`](https://www.bilibili.com/video/BV1owrpYKEtP?p=14)、[P15 `运行梯度下降`](https://www.bilibili.com/video/BV1owrpYKEtP?p=15)。
-- 吴恩达多特征与收敛：[P16 `多特征`](https://www.bilibili.com/video/BV1owrpYKEtP?p=16)、[P17 `向量化（第一部分）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=17)、[P18 `向量化（第二部分）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=18)、[P19 `多重线性回归的梯度下降`](https://www.bilibili.com/video/BV1owrpYKEtP?p=19)、[P20 `特征缩放（第一部分）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=20)、[P21 `特征缩放（第二部分）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=21)、[P22 `检查梯度下降是否收敛`](https://www.bilibili.com/video/BV1owrpYKEtP?p=22)、[P23 `选择学习率`](https://www.bilibili.com/video/BV1owrpYKEtP?p=23)。
+若已经学完 [ML/ML.md](ML/ML.md) 的单变量/多变量线性回归，并完成 [Ex1](ML/ML_配套练习.md#ex1让线性回归真正预测餐车利润和房价)，不再播放同一组线性回归视频，也不再写第二份 synthetic implementation。直接把 Ex1 的代码、检查值、loss curve、feature scaling 与 `np.linalg.lstsq` 对照登记为 T7 evidence。
 
-T7 的 NumPy 手写实现仍是主产出，不复制课程 framework lab。
+若尚未完成 Ex1，才走 T7 fallback：按原范围写一个最小 synthetic NumPy training loop。两条路径二选一，不能为了形式两套都做。
 
-### 代码产出
+### 等价代码产出
 
 ```text
-linear_regression_numpy.py
+推荐：ML/exercises/ex1_linear_regression/linear_regression.py
+fallback：linear_regression_numpy.py
 ```
 
-要求：
+两条路径共同要求：
 
 ```text
-自己生成 synthetic data
 不用 sklearn
 手写 forward / loss / gradient / update
-记录 loss 下降
-与真实参数比较
+记录 loss curve
+用 parameter、prediction、cost/gradient checkpoint 与独立 reference 多层验证
 ```
 
 ### 通过标准
 
-能解释 loss 降低不等于程序绝对正确，并能用参数、prediction 和 loss 多层验证。
+能解释 loss 降低不等于程序绝对正确，并能用参数、prediction、cost/gradient checkpoint 和最小二乘 reference 多层验证。Ex1 满足这些条目时，T7 直接记为等价通过，不再要求 `linear_regression_numpy.py`。
 
 ---
 
@@ -938,6 +944,8 @@ regularization 直觉
 accuracy 与 loss 的区别
 bias / variance 只到直觉
 ```
+
+去重规则：若 `ML.md` 的逻辑回归/正则化章节和 Ex2 已完成，binary logistic、decision boundary 与 L2 推导只做 diagnostic，不重复看视频或重写；T8 仍必须完成 multiclass softmax、stable logits-space cross entropy、finite-difference spot check 与 train/validation/test workflow，这些不是 Ex1 能替代的。
 
 ### 学到什么程度
 
@@ -989,7 +997,9 @@ softmax_classifier_numpy.py
 [ ] 能手算简单 gradient
 [ ] 能解释 expectation / variance / conditional probability
 [ ] 能独立实现 stable softmax
-[ ] 能实现 NumPy linear regression 或 softmax classifier
+[ ] Ex1 或 T7 fallback 已提供一份 linear-regression training evidence，不重复实现
+[ ] 能实现 NumPy multiclass softmax classifier
+[ ] 能区分 train / validation / test，并避免 preprocessing leakage
 [ ] 当前系统主线没有因为理论线停摆
 ```
 

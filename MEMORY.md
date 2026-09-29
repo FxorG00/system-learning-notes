@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-29）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day5 均已正式通过。Day5 最终评分 `95/100`：HTTP Server V1 已把 Acceptor、Connection、incremental parser、fixed routes、response encoder、close-after-flush 与 deferred erase 接成可运行 vertical slice；fresh full build 零 warning、CTest `54/54 PASS`，normal 与 ASan/UBSan process-external smoke 通过且无 sanitizer report。Week11 Day6 教程已经生成，下一步是完成 Day6 Round1：把单响应即关闭策略升级为 HTTP/1.1 默认持久连接，并证明 same-socket reuse、pipeline order 与 `Connection: close`。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
+最新进度快照（2026-09-30）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day5 均已正式通过。Day5 最终评分 `95/100`：HTTP Server V1 已把 Acceptor、Connection、incremental parser、fixed routes、response encoder、close-after-flush 与 deferred erase 接成可运行 vertical slice；fresh full build 零 warning、CTest `54/54 PASS`，normal 与 ASan/UBSan process-external smoke 通过且无 sanitizer report。Week11 Day6 教程已经生成，下一步是完成 Day6 Round1：把单响应即关闭策略升级为 HTTP/1.1 默认持久连接，并证明 same-socket reuse、pipeline order 与 `Connection: close`。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -3160,7 +3160,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-09-29 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1~Day5 均已正式通过；Day5 最终评分 `95/100`。Week11 Day6 已根据 Day5 最终实现、证据和反馈生成，下一步完成 Day6 Round1：把 one-response-then-close 升级为 HTTP/1.1 persistent connection，并验证 same-socket reuse、pipelining/order 与 `Connection: close`。AI Theory T1~T3 已正式通过，下一模块为 T4。
+2026-09-30 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1~Day5 均已正式通过；Day5 最终评分 `95/100`。Week11 Day6 已根据 Day5 最终实现、证据和反馈生成，下一步完成 Day6 Round1：把 one-response-then-close 升级为 HTTP/1.1 persistent connection，并验证 same-socket reuse、pipelining/order 与 `Connection: close`。AI Theory T1~T3 已正式通过，下一模块为 T4；ML 自学已到多变量线性回归，Ex1 可在完成后作为 T7 等价产出。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -3183,10 +3183,10 @@ AI Infra 理论伴随线规划（2026-08-21）：
 路径：C:\Users\FxorG\Desktop\gpt_infra\AI_Infra理论伴随线规划.md
 定位：plan_strengthened.md 的理论伴随线，不改变 C++ -> Linux/OS -> 网络 -> Reactor -> Mini Redis 系统主线
 时间：AI 理论每天 30~60 分钟、可持续计划值每周 4~6 小时；系统主线每天仍优先保证 3 小时以上；主线有 correctness bug、考试或睡眠不足时主动降速并记录理论线欠账
-T1~T8：Python/NumPy、shape/dtype、向量矩阵、matmul/broadcasting、gradient/chain rule、概率最低入口、stable softmax、linear/softmax regression 与 ML workflow
+T1~T8：Python/NumPy、shape/dtype、向量矩阵、matmul/broadcasting、gradient/chain rule、概率最低入口、stable softmax、linear/softmax regression 与 ML workflow；Ex1 和 T7 共用一份 linear-regression evidence
 T9~T16：PyTorch Tensor/layout、Module/inference_mode、autograd、MLP、generalization、ResNet forward、embedding/mask、single-head attention
 T17~T24：multi-head/Transformer block、decoder-only forward、sampling、training-vs-inference memory、prefill/decode/KV Cache、continuous batching、correctness/benchmark、tiny Transformer reference
-验收方式：每周短 note + 可运行代码 + shape/value/tolerance assertions + AI Infra 映射；视频看完或公式抄完不算通过
+验收方式：每个 learning contract 需要短 note、可运行代码、shape/value/tolerance evidence 与 AI Infra 映射；允许一份经典作业 artifact 等价覆盖相同 T code gate，不按目录机械重复；视频看完或公式抄完不算通过
 三个 Theory Gates：NumPy/math -> PyTorch/DL -> Transformer/inference；Gate 3 后再进入 mini-infer-cpu，CUDA 仍必须单独满足总规划 Gate C
 B 站资源：3Blue1Brown 官方账号负责线代/微积分直觉；李沐 D2L 为主课；小土堆只补 PyTorch API；李宏毅只选 ML/attention/Transformer 关键章节；我是傅傅猪后置到 CPU inference
 资源纪律：优先原作者/官方账号、大学官方课程和框架官方文档；不追“最新版几百集/三天精通/资料包”，视频时间必须落到代码和验证
@@ -3203,7 +3203,7 @@ AI_Infra理论伴随线规划.md 只负责 T1~T24 的路线、范围与 gate；�
 AI Theory 前期默认约 70% 概念讲解与推导、30% 手推/实验/coding。T9 以后框架与 inference engineering 增多时，理论线 coding 比例可以提高，但仍先讲完整概念主线
 Txx.md 默认是一份从头可以连续阅读的自包含讲义：当前问题 -> 新对象/术语 -> 最小数值或 shape 例子 -> 完整推导 -> 紧邻小实验 -> 下一概念，不把知识拆成术语表、资料清单和孤立问答
 外部视频与官方文档是校准、查证或第二解释源。先由 Txx.md 把必学内容讲清，再把精确链接放到概念出现的位置并标明选看/延伸；不能让用户先跳出教程读一份冗长资料，再猜它应该插在何处
-通常只保留一个综合 coding 产出和 3~5 个高价值理解问题，不用“完成 checklist”冒充理解；简单 numerical exercise 不包装成大型工程 contract
+通常只保留一个综合 coding 产出和 3~5 个高价值理解问题，不用“完成 checklist”冒充理解；简单 numerical exercise 不包装成大型工程 contract。这里的“一个产出”按 learning contract 计数：若 ML 经典作业已经提供同等或更强证据，T module 复用该 artifact 并只补 AI mapping，不另写同构程序
 同一个 invariant 正文完整解释一次，结尾最多压缩一次；删除重复 pass criteria、训诫式错误全集、过长固定 note 模板和只为仪式感存在的环境/阅读闸门；保留能够保护真实独立思考空间的单一闸门
 每份 Txx.md 仍必须包含：真实问题、必要术语、公式/shape 推导、可运行小例子、综合实验、correctness evidence、AI Infra 连接和明确停止边界
 用户完成某个 T 后，根据真实 note、代码、口述和问题补强薄弱概念；没有真实认知墙时不默认设置 R1，有闸门时必须先验收 R1，再根据真实实现定向核对和润色 R2/R3
@@ -7095,3 +7095,21 @@ Round1 明确沿用真实 Day5 baseline：`http_server_v1.cpp` 当前以 `first_
 新增的 `tests/http_server_keep_alive_smoke.py` scaffold 从进程外验证两条关键路径：同一 socket 先 `/health` 后 `/hello + Connection: Close`，以及三条 pipelined requests 的 exact response order 与 final EOF。Python checker 已通过独立语法编译检查。教程还规定 `Connection` field value 必须按 comma-separated token、OWS trim 与 ASCII case-insensitive 规则识别 `close`，不能用 substring search 把 `disclose` 误判为 close。
 
 技术语义在生成时对照 RFC 9112 与 RFC 9110：HTTP/1.1 默认 persistent；同一 connection 上 responses 必须与 requests 保持对应顺序；收到 `Connection: close` 后完成当前 final response 并停止处理后续 requests。`DAILY_INDEX.md` 已同步更新为 76 份教程并加入 persistent connection、keep-alive、pipelining、parse loop 与 response order 检索项。当前只是教程生成，Day6 尚未开始或验收；R1 正式通过后必须从用户当时磁盘上的 Daily、source、tests、note 与对话出发定向润色 R2/R3，并完整保留用户新增内容。此次没有修改 Ubuntu 用户代码。
+
+## 2026-09-30：ML 讲义、经典作业与 AI Theory 去重校准
+
+用户在 `ML.md` 已学到多变量线性回归，能够解释线性模型、MSE、gradient descent、feature scaling 与正规方程，并判断自己有能力完成 Ex1。复核发现当前 T7 仍从头讲同一组概念并要求另写 synthetic `linear_regression_numpy.py`，而 `ML_配套练习.md` 又要求用真实数据完成 Ex1，确实形成重复 work。理论线继续保留，但职责从“第二份机器学习课程”收束为数值计算、framework mechanism、AI workload 与 Infra mapping。
+
+新的 canonical 分工：
+
+```text
+ML/ML.md：第一次学懂模型原理、数学直觉和算法全貌
+ML/ML_配套练习.md：真实数据、原题检查值、图像与 executable evidence
+AI Theory T module：NumPy/PyTorch、数值稳定性、autograd、Tensor workload 和 AI Infra mapping
+```
+
+同一个 learning contract 已被一份 artifact 和一组 evidence 完整覆盖时，允许跨资料等价验收，不按目录、文件名或课程来源重复实现。等价必须逐条核对 shape、value、gradient、workflow 与 independent reference；“看过”“会推”“感觉会写”不能单独算通过。抽象层发生变化时继续学习，例如 general chain rule -> finite-difference oracle、NumPy -> PyTorch autograd、training -> inference memory、CPU reference -> GPU kernel。
+
+本轮具体决策：Ex1 与 T7 二选一。Ex1 完成 cost checkpoints、vectorized forward/loss/gradient、loss curve、feature scaling、prediction 与 `np.linalg.lstsq`/正规方程对照后，直接作为 T7 linear-regression code gate；T7 只补 training workload 到 AI Infra 的映射，不再要求 synthetic implementation。若不做 Ex1，才走 T7 的 synthetic fallback。Ex2 可抵扣 T8 的 binary logistic 与 regularization 部分，但 T8 仍必须完成 multiclass softmax、stable logits-space cross entropy、finite-difference spot check 和 train/validation/test workflow。
+
+已同步修改 `AI_Infra理论伴随线规划.md`、`plan_strengthened.md`、`ai_theory/T7/T7.md`、`ai_theory/T8/T8.md`、`ML/ML.md` 与 `ML/ML_配套练习.md`。`DAILY_INDEX.md` 只索引系统主线 daily，按其维护 contract 不加入理论线条目，因此本次无需修改；这不是遗漏。当前真实进度仍是 AI Theory T1~T3 正式通过、T4 下一步，ML 自学到多变量线性回归；Ex1 尚未提交可执行证据，T7 尚未通过。

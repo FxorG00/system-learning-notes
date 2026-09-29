@@ -1,8 +1,8 @@
 # C++ 系统工程 / AI Infra 求职总规划
 
-> 版本：2026-09-20，Week11 / T3 / serving 生态与真实进度校准版
+> 版本：2026-09-30，Week11 / T3 / ML-Theory 去重与真实进度校准版
 > 学习者：FxorG，中山大学计算机科学与技术专业，按当前学制为 2029 届
-> 当前进度：Week1 ~ Week10 已完成，Reactor V1 已闭环；Week11 HTTP Server V1 正在推进。AI Theory T1~T3 已通过，下一模块为 T4
+> 当前进度：Week1 ~ Week10 已完成，Reactor V1 已闭环；Week11 Day1~Day5 已通过，Day6 教程已生成。AI Theory T1~T3 已通过，下一模块为 T4；ML 自学已到多变量线性回归
 > 近期目标：2026 年 12 月形成第一版简历，2027 年 1 月开始投递后台开发、C++ Infra 与 AI 业务基础设施相关实习
 > 长期目标：本科就业进入 AI Infra，重点发展 LLM inference systems / serving 与 CUDA kernel optimization
 
@@ -349,7 +349,7 @@ shutdown 如何避免丢任务、死锁和 use-after-free？
 2026 年底不要求 CUDA 大项目，也不要求为了第一次投递提前完成 T24。T24 的进取目标是 2027 年 3 月，周均投入不足时可顺延到 2027 年第二季度。系统主线按时闭环时，AI 伴随线至少形成：
 
 ```text
-T1~T8：NumPy、shape/matmul、stable softmax、最小 ML workflow
+T1~T8：NumPy、shape/matmul、stable softmax、最小 ML workflow；Ex1 与 T7 共用一份 linear-regression evidence
 T9~T13：PyTorch Tensor/Module/autograd/MLP/generalization
 T15~T16：token/embedding/mask 与 single-head attention reference
 Stretch：T17~T18，能够从 token IDs 串到 decoder-only logits
@@ -587,7 +587,7 @@ atomic/CAS、acquire/release、happens-before 第一层
 |---|---|---|---|
 | 2026.08 下旬 | Week9 | 启动 T1 | Epoll Echo Server；能解释 ndarray/shape/dtype |
 | 2026.09 | Week10~11 | T2~T3 已达；T4~T6 为当月后续目标 | Reactor 已通过、HTTP 进行中；matmul/broadcast reference 已形成 |
-| 2026.10 上半 | Week12 | T7~T8，Theory Gate 1 | Mini Redis RESP/KV；NumPy ML 小闭环 |
+| 2026.10 上半 | Week12 | T7 等价验收 + T8，Theory Gate 1 | Mini Redis RESP/KV；Ex1/T7 只实现一次，T8 完成 softmax workflow |
 | 2026.10 下半~11 月 | Week13~14 | T9~T12 | TTL/AOF；PyTorch Tensor/Module/autograd/MLP |
 | 2026.11 下半~12 月上半 | Week15 | T13、T15~T16；T14 可延期 | 测试/性能；single-head attention reference |
 | 2026.12 下半 | Week16 | 复检 T1~T16；Stretch T17~T18 | 项目 README/简历；能解释 Transformer block 与 decoder forward |
@@ -606,7 +606,7 @@ atomic/CAS、acquire/release、happens-before 第一层
 | Week9 | T1 | array metadata、bytes estimate、reference 思维 |
 | Week10 | T3 | shape、matmul、batch 维度，为后续 operator 做准备 |
 | Week11 | T6 | gradient/概率映射、stable softmax 与数值稳定性 |
-| Week12 | T8 / Theory Gate 1 | 完成 NumPy 与最小 ML workflow |
+| Week12 | T8 / Theory Gate 1 | Ex1 或 T7 fallback 提供 linear evidence；T8 完成 multiclass softmax 与最小 ML workflow |
 | Week13 | T10 | PyTorch Tensor、Module、parameter、inference mode |
 | Week14 | T12 | autograd、MLP、training/inference flow |
 | Week15 | T13 + T15~T16 | generalization 第一层、token/mask、single-head attention |

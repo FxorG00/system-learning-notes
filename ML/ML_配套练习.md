@@ -236,7 +236,7 @@ def feature_normalize(X):
 4. 房价特征缩放前后的 loss curve；
 5. 梯度下降与最小二乘对同一房子的预测。
 
-这套作业对应 `ML.md` 的线性回归、成本函数、梯度下降、多特征和特征缩放，也对应理论线 T7~T8。当前 T1~T3 已通过时，不需要立刻为了进度表硬做；进入相关 T 模块后再完整完成。
+这套作业对应 `ML.md` 的线性回归、成本函数、梯度下降、多特征和特征缩放，并可直接作为理论线 T7 的等价代码产出。完成上面五类 evidence 后，不再另写 synthetic `linear_regression_numpy.py`；T7 只补 training workload 到 AI Infra 的映射。Ex1 不替代 T8 的 multiclass softmax 与 train/validation/test workflow。
 
 ---
 
@@ -888,8 +888,8 @@ gradient-check 结果
 | 到达理论线位置 | 对应作业 | 处理方式 |
 |---|---|---|
 | T4 | Ex4 的最小 gradient check | 先完成 T4 小计算图，不直接训练完整数字网络 |
-| T7~T8 | Ex1 | 完整完成，建立 regression 闭环 |
-| T8、T13 | Ex2 | 完成 logistic + regularization |
+| T7 | Ex1 | 推荐等价产出；完整完成后直接抵扣 T7 synthetic implementation |
+| T8 | Ex2 | 可抵扣 binary logistic + regularization；仍需完成 T8 multiclass softmax 与 workflow |
 | T10 | Ex3 forward 部分 | 作为 NumPy reference，对照 `nn.Module` |
 | T11~T12 | Ex4 | 完整完成 backprop + gradient check |
 | T13 | Ex5 | 完成 bias/variance 与 learning curve |
