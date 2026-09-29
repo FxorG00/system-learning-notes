@@ -213,6 +213,56 @@ request 是否完整或非法
 
 它不表示 remote application 已经处理完这些 bytes；它只定义本进程的发送与关闭顺序。
 
+### 5.6 curl
+
+`curl` 是一个命令行网络客户端，名字来自 **Client URL**。
+
+你可以把它当成“在终端里扮演浏览器、向 server 发 HTTP request 的工具”。
+
+例如你的 server 跑在 `9091`：
+
+```bash
+curl -v http://127.0.0.1:9091/health
+```
+
+它会：
+
+```text
+curl 连接 server 的 TCP port
+-> 发送 HTTP request，例如 GET /health HTTP/1.1
+-> 接收 server 的 response byte stream
+-> 把 body 打印到终端
+```
+
+`-v` 是 verbose（详细模式），会额外显示连接、request header、response header 等过程。这里说 “curl connects” 就是指 `curl` 作为 client 成功连上你的 server。
+
+### 5.7 URL
+
+URL 是 **Uniform Resource Locator**，中文常叫“统一资源定位符”。
+
+它就是一个资源在网络上的地址，例如：
+
+```text
+http://127.0.0.1:9091/health
+```
+
+拆开看：
+
+```text
+http      -> 用 HTTP 协议交流
+127.0.0.1 -> 要连接哪台主机
+9091      -> 那台主机上的哪个 port
+/health   -> 请求这台 server 的哪个 HTTP route
+```
+
+所以你执行：
+
+```bash
+curl http://127.0.0.1:9091/health
+```
+
+就是让 `curl` 根据这个 URL 找到你的 server，并请求 `/health`。
+
 ## 6. 今天直接复用的资产
 
 | 已有组件 | 今天怎样使用 | 今天不重写什么 |
@@ -316,6 +366,65 @@ HTTP application 对当前 prefix 只做一次分类：
 
 ## 11. 新增 public API：`close_after_flush()`
 
+### 11.0 review Connection::close_flag_
+
+对，你基本抓准了。但有一个词需要修正：
+
+> `close_flag_ == true` 不是“fd 已经关闭”，而是“关闭请求已经提交，这个 Connection 已进入终止状态，不再处理任何 I/O”。
+>
+> close_flag_ 的墓碑机制是由于 pending close 所导致的对象本应该被销毁，但是我们延后了，所以当实际访问这个对象的时候，应该去观察到 close_flag_ 并且学习到 connection 已经提交关闭请求。
+
+你现在的完整流程是：
+
+```
+close_helper()
+-> close_flag_ = true
+-> close_callback_(fd)
+-> fd 被放进 pending_close
+-> Connection 对象暂时仍然存在
+-> 当前 poll_once 的 callback 全部返回
+-> owner 执行 connections.erase(fd)
+-> Connection 析构并从 EventLoop 注销 Channel
+-> UniqueFd 析构，真正 close(fd)
+```
+
+所以你说的这个作用完全正确：
+
+```
+void Connection::handle_recv() {
+    if (close_flag_) {
+        return;
+    }
+}
+```
+
+假如同一个 epoll event 同时带有多个 bits：
+
+```
+EPOLLIN | EPOLLERR | EPOLLOUT
+```
+
+前一个 callback 已经调用 `close_helper()`，后面的 callback 仍可能进入。但它们看到 `close_flag_` 后会立刻返回，避免继续 `recv/send/getsockopt`。
+
+它还有第二个作用：保证 close callback 只提交一次。
+
+```
+if (!close_flag_) {
+    close_flag_ = true;
+    close_callback_(fd);
+}
+```
+
+否则 `recv` error、`send` error、peer EOF 等多个路径可能把同一个 fd 重复塞进 `pending_close`。
+
+可以把它理解成：
+
+```
+close_flag_：Connection 内部的 logical tombstone（逻辑墓碑）
+pending_close：owner 的 deferred-destruction queue（延迟销毁队列）
+erase + UniqueFd destructor：真正关闭 fd
+```
+
 ### 11.1 declaration
 
 在 `Connection` 的 public section 增加：
@@ -388,6 +497,57 @@ close callback records fd
 ```
 
 Day5 沿用这条 lifetime 纪律。
+
+### 11.6 为啥 first_request_over_flag 不放进 connection
+
+对，完全是这个意思。注释 1
+
+`first_request_over_flag_` 表达的是：
+
+```text
+这个 HTTP V1 application 规定：
+一条 TCP connection 只处理一条 HTTP request。
+```
+
+这是今天选择的 **HTTP application policy（应用层策略）**。到了 Day6 支持 keep-alive 后，策略可能变成：
+
+```text
+一条 connection 可以连续处理多条 HTTP requests
+```
+
+但底层 `Connection` 不应该跟着改。它只负责：
+
+```text
+接收 bytes
+发送 bytes
+维护 input/output Buffer
+处理 readiness
+管理 transport lifetime
+```
+
+因此状态归属应该是：
+
+```text
+close_after_flush_flag_
+-> transport 层 Connection
+-> 表示 output 排空后关闭 socket
+
+first_request_over_flag_
+-> application 层 HTTP session
+-> 表示当前 HTTP 策略已经处理完第一条 request
+```
+
+也就是说，可以让每条 `Connection` 对应一个 HTTP session，由 session 保存：
+
+```cpp
+bool response_committed = false;
+```
+
+MessageCallback 查询的是这个 session state，而不是给通用 `Connection` 增加 `first_request_over_flag_`。
+
+压缩成一句：
+
+> **凡是换一种 application protocol 或修改 HTTP policy 后可能消失的状态，都不应该放进通用 transport `Connection`。**
 
 ## 12. 现有 HTTP API 的最小连接方式
 
@@ -560,22 +720,29 @@ Round1 通过前，不继续看下面的 ownership、callback lifetime 和 close
 
 ## 17. Round2：先把“parser state”这句话说准确
 
-Week11 计划里写了 per-connection parser/session state。结合你当前的真实代码，需要拆成两部分：
+你当前的 R1 已经把 state 拆到了三个明确位置：
 
 ```text
-HttpRequestParser object
-    当前没有 mutable members
-    它只是根据 pointer + length 计算结果
+Connection object
+    input Buffer 保存尚未消费的 request bytes
+    output Buffer 保存尚未交给 kernel 的 response suffix
+    close_after_flush_flag_ 保存 transport close state
 
-HTTP session state
-    partial bytes 在每条 Connection 自己的 input Buffer
-    第一份 response 是否已提交属于每连接 mutable state
-    closing 是否已开始也属于每连接 mutable state
+http_server_v1.cpp 中的 application state
+    connections[fd] 拥有对应 Connection
+    first_request_over_flag[fd] 记录该 HTTP V1 session 是否已经作出一次 response decision
+    pending_close 保存本轮 callback 结束后需要 erase 的 fd
+
+MessageCallback 的局部对象
+    HttpRequestParser 本身没有 mutable members
+    HttpRequest 只承接本次 parse 结果
 ```
 
-所以 Day5 不要求“每条 connection 必须 new 一个 parser object”。真正的 invariant（不变量）是：
+所以你不需要为每条 connection 长期保存一个 parser object。真正跨 callback 存活的是累计 bytes、关闭状态和“是否已经响应”的 application state。
 
-> **任何会随某条 connection 的历史变化的 mutable state，都不能被其他 connection 共用。**
+当前最重要的 invariant（不变量）是：
+
+> **任何会随某条 connection 的历史变化的 mutable state，都必须按 fd 找回对应实例，不能被其他 connection 共用。**
 
 ## 18. 为什么 HTTP state 不放进 `Connection`
 
@@ -602,26 +769,31 @@ Connection
 
 这就是 transport/protocol separation。
 
-## 19. 一条 Complete request 的完整因果链
+你的 R1 已经符合这个方向：`first_request_over_flag` 位于 `http_server_v1.cpp`，没有塞进 `Connection`。它是今天规定的 one-response-per-connection policy；Day6 改成 keep-alive 时，application 可以替换这条 policy，而不必改 transport component。
+
+## 19. 按你的 R1 走一遍 Complete 因果链
 
 ```text
 kernel reports EPOLLIN
 -> EventLoop dispatches Channel read callback
 -> Connection drains recv bytes into its input Buffer
 -> Connection invokes MessageCallback(Connection&, Buffer&)
--> HTTP session calls parse_request
+-> http_server_v1 的 MessageCallback 构造局部 parser/request
+-> parser 读取 Connection::input_buffer()
 -> parser returns Complete + consumed_bytes
--> session retrieves exactly consumed_bytes
+-> callback 从 input Buffer retrieve exactly consumed_bytes
 -> route_http_request creates HttpResponse
--> session sets Connection: close policy
+-> callback sets response.close_connection = true
 -> encode_http_response creates wire bytes
 -> Connection::send accepts the bytes
--> session requests close_after_flush
+-> callback sets first_request_over_flag[fd] = true
+-> callback calls Connection::close_after_flush()
 -> pending output drains now or on later EPOLLOUT
--> Connection submits CloseCallback exactly once
--> owner records pending fd
+-> Connection::close_helper() submits CloseCallback exactly once
+-> CloseCallback appends fd to pending_close
 -> poll_once returns
--> owner erases session and Connection
+-> main loop erases first_request_over_flag[fd]
+-> main loop erases connections[fd]
 -> UniqueFd closes the socket
 ```
 
@@ -679,6 +851,27 @@ accept application response bytes
 
 这里的“empty”只证明 user-space suffix 已被 kernel 接受。TCP 再按自己的可靠、有序规则发送这些 bytes。
 
+你的实现已经把这条顺序写进 state  transition：
+
+```text
+send()
+    close_flag_ == true                 -> reject
+    close_after_flush_flag_ == true     -> reject
+    否则先尝试 send，未发送 suffix 进入 output Buffer
+
+close_after_flush()
+    设置 close_after_flush_flag_
+    output 已空  -> close_helper()
+    output 非空  -> 保留 Connection，等待 EPOLLOUT
+
+handle_send()
+    drain output Buffer
+    drain 完且 close_after_flush_flag_ 为 true
+    -> close_helper()
+```
+
+这也修正了你 note 里原先容易漏掉的一点：**pending output 阶段 `close_flag_` 还可能是 false，因此 `send()` 必须同时检查 `close_after_flush_flag_`。**
+
 ## 22. application close 与 peer EOF 是两条不同原因链
 
 Week10 `Connection` 已经处理 peer half-close：
@@ -714,14 +907,20 @@ callback 未来运行时，被捕获对象是否仍然活着？
 
 错误不是“用了引用捕获”这四个字本身，而是引用指向一个已经离开作用域或已被 erase 的对象。
 
-Day5 的 lifetime requirement：
+你当前几处引用捕获是成立的，原因不是“引用捕获总是安全”，而是被捕获对象都由 `main` 的作用域拥有，并且活过整个 event loop：
 
 ```text
-Connection、对应 session state 与 callbacks
-必须共同活到 close 已提交并完成 deferred erase
+connections / first_request_over_flag / pending_close
+    在 main loop 外创建
+    -> callback 运行时仍然存在
+
+Connection
+    由 connections[fd] 的 unique_ptr 拥有
+    -> callback stack 返回前不会 erase
+    -> poll_once 返回后才进入 pending cleanup
 ```
 
-具体用 object、map value、`unique_ptr` 组合还是另一种正确 representation，由你的 R1 决定。
+`first_request_over_flag[fd]` 在 new-connection callback 中与 `connections[fd]` 同时建立，在 cleanup 中与它同时 erase，因此两张 map 的生命周期目前保持一致。以后若状态继续增多，再把它们合成一个 `HttpSession` value；Day5 不要求为了形式立刻重构。
 
 ## 24. 为什么 erase 要放在 `poll_once()` 之后
 
@@ -746,6 +945,8 @@ deferred erase 把销毁推迟到：
 
 这是 lifetime correctness，不只是代码风格。
 
+你的 R1 正是让 `CloseCallback` 只把 fd 放进 `pending_close`，等 `poll_once()` 整轮结束后，再依次 erase application state 与 `Connection`。因此正在运行的 `Connection::handle_recv()` / `handle_send()` 不会在成员函数中途失去 `this`。
+
 ## 25. 一条 connection 只允许一份 response decision
 
 假设同一批 recv bytes 是：
@@ -762,6 +963,22 @@ Day5 parser 能证明第一条 request 的边界，但 V1 contract 是 one-respo
 response 1 已请求 close
 -> callback 又提交 response 2
 -> send after close request
+```
+
+你的实现用 `first_request_over_flag[fd]` 落地这条 policy：
+
+```text
+NeedMore
+    不修改 flag，保留 input bytes，等待下一轮 recv
+
+Complete
+    先把 flag 设为 true，再 send + close-after-flush
+
+Error
+    同样把 flag 设为 true，再发送 error response + close-after-flush
+
+后续 MessageCallback
+    看到 flag 为 true，直接返回，不再 route 第二条 request
 ```
 
 Day6 才决定 keep-alive 与 pipelining 的循环规则。Day5 先稳定关闭第一条链。
@@ -782,17 +999,21 @@ Day5 不要求完成 production-grade per-connection exception isolation；但�
 
 ## 27. R1 通过后的定向润色规则
 
-你提交 Round1 后，后续内容要按你的真实实现更新：
+你的 R1 不需要重写。R2 只核对下面三个具体问题：
 
 ```text
-明确指出 session state 实际放在哪里
-按你的 callback capture 解释 lifetime
-按你的 close-after-flush state 转换检查 invariant
-给你的 composition root 画真实 ownership graph
-列出你的实现真正需要修的 R2/R3 目标
+1. 能解释三个 state owner：
+   Connection / first_request_over_flag / pending_close
+
+2. 能解释两个 close flags 的先后关系：
+   close_after_flush_flag_ 表示不再接受新 send
+   close_flag_ 表示 close 已经提交，所有 I/O handler 应停止
+
+3. 能解释为什么 cleanup 顺序是：
+   poll_once 返回 -> erase application state -> erase Connection
 ```
 
-不会要求你为了迎合教程重命名正确代码，也不会用一排“如果你这样、如果你那样”代替定向结论。
+两个非阻塞的小整理项留给你决定：启动后补一条稳定的 `HTTP_SERVER_V1 listening on 127.0.0.1:9092`；若 `get_close_after_flush_flag()` 只供 class 内部使用，可继续缩小 public surface。它们不推翻当前 R1。
 
 ---
 
@@ -800,12 +1021,22 @@ Day5 不要求完成 production-grade per-connection exception isolation；但�
 
 ## 28. Round3 要证明什么
 
-Round3 不再重写 server。它只补四类证据：
+你的当前 baseline 已经有：
 
-1. 三个正常 routes 从进程外可达；
-2. binary body 与 fragmented send 不破坏边界；
-3. client 在完整 response 后读到 EOF；
-4. close-after-flush 不依赖 client 先发送 EOF。
+```text
+normal Debug build 零 warning
+54 / 54 CTest PASS
+GET /health exact body + Connection: close + EOF
+fragmented POST /echo 保留 A\0B
+malformed request -> 400
+coalesced 两条 requests 只产生一份 response
+```
+
+Round3 不再重写 server，也不要求你手写重复 curl。只补目前还没有被确定性钉住的证据：
+
+1. pending output 时调用 `close_after_flush()`，不能提前 close；
+2. close-after-flush 之后再次 `send()`，必须稳定拒绝；
+3. peer drain 后 close callback 恰好一次。
 
 ## 29. route 与 error smoke matrix
 
@@ -942,7 +1173,7 @@ python3 tests/http_server_v1_smoke.py
 
 大 response 也可能在本机一次 `send` 就全部进入 kernel buffer，因此只靠“发一个大 body”不能确定性证明 pending-output path。
 
-若你的 Round1 implementation 对 close state 仍不放心，Round3 可增加一个受控 component test：
+你现有 checker 已经能制造 pending output。Round3 只沿用那条路径增加三条 assertion，不重新搭第二套 fixture：
 
 ```text
 建立 local socket pair
@@ -951,6 +1182,7 @@ python3 tests/http_server_v1_smoke.py
 -> send 足够多 bytes，确定 pending_output_bytes > 0
 -> 调用 close_after_flush
 -> 此时 close callback 不能发生
+-> 再调用一次 send，必须抛 logic_error
 -> peer 开始 drain
 -> 驱动 writable event
 -> output 归零后 close callback 恰好一次
@@ -959,12 +1191,12 @@ python3 tests/http_server_v1_smoke.py
 这份 test scaffold 可以由 Codex 补全；你需要能解释 oracle：
 
 ```text
-pending output 时不能 close
-drain 完成后必须 close
-close callback 只能发生一次
+pending output 时不能 close: 证明调用 close_after_flush 之后，是在 output empty 的时候才能关闭 connection
+drain 完成后必须 close: 因为之前调用了 close_after_flush
+close callback 只能发生一次: idempotent；并且保证 close request 只发出一次
 ```
 
-是否必须手写，等 R1 真实实现与现有 coverage 检阅后再决定，不提前制造 dirty work。
+这部分 test scaffold 可以由 Codex 补全，因为 socket setup 与 drain loop 是重复工程；你需要亲自确认上述三个 oracle 分别证明什么。
 
 ## 32. normal build、CTest 与 sanitizer
 
@@ -1019,11 +1251,11 @@ smoke 完成后在 Terminal A 用 `Ctrl+C` 停止 server。这里暂时关闭 Le
 
 不要求重复抄正文。你至少能口头讲清：
 
-1. 当前 parser 没有 mutable members，per-connection state 到底在哪里？
-2. 为什么 `Connection: close` 和 `close_after_flush()` 必须同时存在？
-3. output Buffer 非空时，为什么不能立刻 erase `Connection`？
-4. close callback 为什么只记录 pending fd，而不是当场 erase？
-5. Python checker 为什么故意不调用 `shutdown(SHUT_WR)`？
+1. 为什么 `first_request_over_flag_` 从 `Connection` 移到 `http_server_v1.cpp` 后，transport/protocol boundary 更准确？
+2. 为什么 pending output 阶段仅检查 `close_flag_` 不够？
+3. 为什么 `Connection: close` 和 `close_after_flush()` 必须同时存在？
+4. 为什么 CloseCallback 只写入 `pending_close`，不能当场 erase `connections[fd]`？
+5. 你的两张 fd map 在创建和销毁时怎样保持同生命周期？
 
 如果代码、note 与运行证据已经自然覆盖这些问题，不要求为了形式再誊写一遍。
 
@@ -1041,7 +1273,11 @@ close-after-flush 的实际 state transition
 
 不复制教程已有的 route 表和命令说明。
 
+你当前 note 里关于 `close-after-flush` 的表述需要以最终代码为准：不是“调用后立刻有 `close_flag_`”，而是“立刻有 `close_after_flush_flag_`；output drain 完成后才进入 `close_flag_`”。这是本轮最值得保留的一条修正。
+
 ## 36. 正式通过标准
+
+当前 R1 已通过 integration baseline；以下是整个 Day5 的最终出口，不代表需要重复已经通过的 54 个 tests 和四组 process-external smoke。
 
 ### Correctness
 

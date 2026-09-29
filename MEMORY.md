@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-28）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1 request-line parser、Day2 header-section parser、Day3 Content-Length/body framing 与 Day4 HTTP response encoder/fixed routes 均已正式通过，Day4 最终评分 `96/100`。Week11 Day5 HTTP session/Reactor integration 教程已经生成，等待用户开始 Round1；尚未实现或验收，不能提前记为通过。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
+最新进度快照（2026-09-29）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day5 均已正式通过。Day5 最终评分 `95/100`：HTTP Server V1 已把 Acceptor、Connection、incremental parser、fixed routes、response encoder、close-after-flush 与 deferred erase 接成可运行 vertical slice；fresh full build 零 warning、CTest `54/54 PASS`，normal 与 ASan/UBSan process-external smoke 通过且无 sanitizer report。Week11 Day6 教程已经生成，下一步是完成 Day6 Round1：把单响应即关闭策略升级为 HTTP/1.1 默认持久连接，并证明 same-socket reuse、pipeline order 与 `Connection: close`。AI Theory T1~T3 已正式通过，下一步为 T4；提前生成但尚未验收的后续 T 教材不计为已学习。
 
 ### Week1：已完成
 
@@ -3160,7 +3160,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-09-28 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1~Day4 均已正式通过；Day4 最终评分 `96/100`。Week11 Day5 HTTP session/Reactor integration 教程已生成，下一步是用户实现 Round1；Day5 尚未学习或验收。AI Theory T1~T3 已正式通过，下一模块为 T4。
+2026-09-29 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1~Day5 均已正式通过；Day5 最终评分 `95/100`。Week11 Day6 已根据 Day5 最终实现、证据和反馈生成，下一步完成 Day6 Round1：把 one-response-then-close 升级为 HTTP/1.1 persistent connection，并验证 same-socket reuse、pipelining/order 与 `Connection: close`。AI Theory T1~T3 已正式通过，下一模块为 T4。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -7033,3 +7033,65 @@ Acceptor
 Round3 提供 process-external Python checker，验证 exact health response、fragmented binary `POST /echo`、embedded NUL 与 response 后 EOF。Checker 明确不调用 `shutdown(SHUT_WR)`，避免旧 peer-EOF close path 掩盖缺失的 application close-after-flush。多个 `sendall` 不能证明 server 经历多个 `recv`，因此 fragmentation 的确定性证据仍来自已有 parser split-point unit tests。另保留一个可委托的 deterministic pending-output component-test 方向，由 R1 真实实现和 coverage 决定是否需要，不提前制造 dirty work。
 
 `DAILY_INDEX.md` 已更新为 75 份教程并加入 Day5 与 close-after-flush 检索项。Day5 当前仅完成教程生成，用户尚未开始或验收 Round1；正式 R1 通过后，必须从用户届时磁盘上的 day5.md、source、tests、note 和对话出发逐节定向润色 R2/R3，保留用户新增内容，不从本次初稿覆盖。
+
+## 2026-09-28：Week11 Day5 Round1 第一次检阅
+
+用户完成第一版 `http_server_v1` 与 `Connection::close_after_flush()`，但本轮暂定 `82/100`，R1 尚未正式通过。真实 evidence：Ubuntu 全项目 Debug build 在 `-Wall -Wextra -g` 下零 warning；固定入口运行 CTest `54/54 PASS`；Codex 在真实 server process 上验证 fragmented `GET /hello`、binary `POST /echo`（body 为 `A\0B`）、malformed request 的 400 response、同一 TCP input 中两条 coalesced requests 只返回第一条 response，以及完整 response 后 EOF，均成立。用户独立完成 production mechanism，本轮 Codex 只读代码并运行验证，没有修改 source/tests。
+
+三项仍属于 R1 核心 contract，不能降为风格建议：
+
+```text
+1. send() 只检查最终 close_flag_。当 close_after_flush 已请求但 output 仍 pending 时，close_flag_ 尚为 false，后续 send 仍能追加 bytes，违反“close-after-flush 后不再接受 application bytes”的 contract。
+2. 正常 route 返回的 HttpResponse 没有把 close_connection 设为 true，真实 /health、/hello、/echo response 缺少 Connection: close header；server 最终 EOF 正确，但 protocol header 与 transport close 两项只完成了后一项。
+3. first_request_over_flag_ 被放进通用 Connection，并通过 public raw setters/getters 暴露。它是 HTTP one-response policy 的 mutable session state，不属于 transport component；同时 public set_close_after_flush_flag(false) 可破坏 close command 的单向 state transition。
+```
+
+另有两个非阻塞项：Error branch 没有显式提交 first-response state；当前 error response 很小并立即进入最终 close，实测不会产生第二份 response，但 ownership 修正时应自然统一 Complete/Error decision；`http_server_v1` 没有教程约定的稳定 startup line。用户在 `day5.md` 新增的 curl/URL 解释总体正确，但示例 port 写成 `9091`，与本日 server 的 `9092` 不一致；新增 close-flag 复盘正确区分 logical close request 与 deferred destruction，不过 code comment 中“实际上已经关闭”仍应改成“已提交关闭、fd 尚未物理关闭”。
+
+`day5_note.md` 的主链、close tombstone、peer 仍可发送而 HTTP session 不再处理第二条 request、等待 output drain 时不能让最终 close flag 阻断 `handle_send()` 等理解正确。最后一句“close-after-flush 后会调用 close_helper，所以再次 send 已被 close_flag_ 拒绝”只在 output 当场清空时成立；若 output pending，close helper 尚未执行，正是本轮第一个 blocker。
+
+由于 R1 尚未正式通过，本轮不触发 R2/R3 定向润色，不修改用户 `day5.md`、note 或 Ubuntu code。用户修复三项核心 contract 后再做极短复检；通过时必须从当时磁盘最新版出发，完整保留 curl/URL 与 close-flag 增补，再逐节定向修改 Day5 后半教程。
+
+## 2026-09-29：Week11 Day5 Round1 第二次复检
+
+第二版已正确完成两项实质修复：`Connection::send()` 同时检查 final `close_flag_` 与 `close_after_flush_flag_`，pending-output 阶段也会稳定抛 `std::logic_error("Connection::send called after close-after-flush request")`；`first_request_over_flag_` 已从通用 `Connection` 移到 `http_server_v1.cpp` 的 per-fd HTTP application state，并在 deferred cleanup 时与 connection 一起 erase。用户对“会随 application protocol/policy 改变的 state 不进入 transport component”的理解正确。
+
+本轮不能正式通过，因为 fresh full build 在 `http_response_test.cpp` 编译阶段失败：用户把 `route_http_request(const HttpRequest&)` 改成了双参数 `route_http_request(const HttpRequest&, bool)`，但 Day4 既有 tests 仍按已通过的单参数 public contract 调用，共五处 `too few arguments`。因此不能运行新的 CTest 或用旧 `http_server_v1` binary 证明本轮 source。最小且更符合职责边界的修复是保留 Day4 route 的单参数 API，在 Day5 composition root 得到 `HttpResponse` 后设置 `response.close_connection = true` 再 encode；若坚持修改 public API，则必须同步全部 callers/tests 并重新证明 Day4 contract，但这会让 fixed route function 接收 connection-lifetime policy，设计收益较低。
+
+仍需收口的 API encapsulation：`set_close_after_flush_flag(bool)` 与 `get_close_after_flush_flag()` 目前仍在 `Connection` public section，外部可以把已经请求的 close-after-flush 重新设为 false，破坏单向 state transition。外部只应看到 command `close_after_flush()`；raw flag access 应删除或收回 private。Error branch 也应与 Complete branch 一样在决定 response 时提交 application-side response-committed state，不能依赖当前 error body 很小、通常立即关闭这一偶然条件。
+
+教程/note 尚未修改：`day5.md` 的 curl/URL 增补仍使用 `9091`，与本日 `9092` 不一致；`day5_note.md` 最后一段仍把“close-after-flush 后一定已有 close_flag_”写成绝对结论，尚未纳入 pending-output 阶段。由于 R1 仍未通过，R2/R3 定向润色继续延后；本轮 Codex 只读 source/note、执行 configure/build 并记录 failure，没有修改 Ubuntu code/tests。
+
+本轮评分从 `82/100` 调整为 `85/100`：核心 state ownership 与 send rejection 已修正，提升真实；但全项目由原先 `54/54 PASS` 回归为 compile failure，不能仅凭实现意图继续加分。
+
+## 2026-09-29：Week11 Day5 Round1 正式通过
+
+用户恢复了 Day4 已通过的单参数 public contract `route_http_request(const HttpRequest&)`，并在 Day5 composition root 中显式设置 `response.close_connection = true`；Complete 与 Error 两条分支都会先提交 application-side `first_request_over_flag[fd]`，再 encode/send/close-after-flush。原先 public raw mutator `set_close_after_flush_flag(bool)` 已收回 private，外部只能通过单向 command `close_after_flush()` 发起关闭。通用 `Connection` 不再持有 HTTP one-response policy，transport/protocol ownership 边界正确。
+
+fresh full Debug configure/build 零 warning；固定入口 `cmake -E chdir build ctest --output-on-failure` 得到 `54/54 PASS`。Codex 在真实 `http_server_v1` process 上再次验证四组行为：`GET /health` exact body + `Connection: close` + EOF、fragmented binary `POST /echo` 保留 `A\0B`、malformed request 返回 400、同一 TCP input 中两条 coalesced requests 只产生第一份 response，全部通过。用户 production source/tests 保持只读；本轮没有替用户修改代码。
+
+R1 最终评分 `94/100`，正式通过。未阻塞项：server 尚未打印教程约定的稳定 startup line；只读 `get_close_after_flush_flag()` 若无外部观察需求还可继续收窄；`day5_note.md` 尚应把“close-after-flush 后立刻进入 `close_flag_`”改成“先进入 `close_after_flush_flag_`，output drain 后才进入 `close_flag_`”；用户新增的 curl/URL 示例仍写 `9091`，而本日 binary 实际监听 `9092`，需要用户自行更正，因为用户新增 Daily 内容不得被 Codex覆盖。
+
+R1 通过后已按 canonical rule 定向润色 `day5.md` 的 R2/R3，完整保留闸门前用户新增内容。后半教程现在逐节对齐真实实现：`connections[fd]`、`first_request_over_flag[fd]`、`pending_close` 三类 owner；局部 stateless parser；Complete/Error state transition；两个 close flags 的先后关系；引用 capture 的真实 lifetime；`poll_once` 后 deferred erase；以及当前已经获得的 `54/54` 与四组 smoke evidence。Round3 不再要求重复通用测试，只要求沿用现有 pending-output checker 增加三个 focused oracle：pending 时不能 close、close-after-flush 后新 send 稳定拒绝、drain 后 close callback 恰好一次。可复用经验：R1 通过后的“定向润色”必须把抽象 ownership/state-machine 逐节映射到用户真实变量、容器、callback 和证据，不能只在开头追加一段实现摘要。
+
+## 2026-09-29：Week11 Day5 最终通过
+
+用户完成 R2/R3 阅读，并在 Daily 中正确补写 focused close-after-flush test 的三个 oracle：pending output 时不能提前 close、drain 完成后必须 close、close callback 恰好一次。用户没有为这些结论再手写一套重复 socket fixture；这是允许的，因为核心 production mechanism 由用户完成，既有 `connection_checker` 已确定性建立 pending output 并证明 EPOLLOUT drain，用户又能准确解释缺失组合测试要证明什么。残余风险被明确记录，不能伪称该组合路径已有单条自动化测试。
+
+最终复检读取了用户完整 `day5_note.md`、Daily diff、Ubuntu source/tests 和 CMake。笔记逐段结论正确：server runtime chain、connection/message callback 职责、close-after-flush 与 `handle_send` 的关系、peer 仍可继续发送而 HTTP session 必须拒绝第二次 application processing、以及 deferred erase 的 lifetime 原因均已掌握。需要继续记住的措辞是：`close_after_flush()` 先设置 `close_after_flush_flag_`，output drain 后 `close_helper()` 才设置 `close_flag_`。
+
+fresh full Debug build 零 warning，固定入口 CTest `54/54 PASS`。用户新增 `tests/http_server_v1_smoke.py` 从进程外精确验证 `/health` response、`Connection: close`、主动 EOF、fragmented binary `POST /echo` 与 embedded NUL；normal binary 运行得到 `HTTP_SERVER_V1_SMOKE PASS`。Codex 额外复验 malformed request -> 400 与同一 connection 两条 coalesced requests 只返回一份 response。fresh rebuild 的 ASan/UBSan server 再运行同一 smoke，PASS 且无 sanitizer report。
+
+Week11 Day5 最终评分 `95/100`，正式通过。未阻塞项只有：pending-output + close-after-flush 尚缺一条组合自动化 test；server 缺稳定 startup line；只读 raw close getter 仍可收窄；用户新增 Daily curl/URL 例子的 `9091` 与实际 `9092` 不一致。以上不妨碍本日机制与 vertical slice 通过，但后续修改相关区域时应顺手清理。下一步进入 Week11 Day6。
+
+## 2026-09-29：Week11 Day6 教程生成
+
+已生成 `week11/day6/day6.md`。本日从 Day5 已通过的 one-response server 出发，只升级 HTTP application/session policy，不默认重写 Buffer、Channel、EventLoop、Acceptor、Connection、request parser、route 或 response encoder。核心目标是让一条 HTTP/1.1 connection 连续承载多条 requests：默认保持连接；一次 MessageCallback 处理当前 input Buffer 中所有完整 requests；遇到 `NeedMore` 保留完整 suffix；responses 按 request 顺序进入 Connection 的 FIFO output；当前 request 含 `Connection: close`、发生 parse error 或遇到受控 EOF 时，发送 final response 后再 flush-close。
+
+教程继续采用主线 canonical 三段式。Part 1 先用 Day5 checker “依赖 EOF 才知道 response 结束”在 persistent connection 下会卡住这一具体问题建立直觉，再给 same-socket sequential request 与 pipelined request 两个最小场景，随后才命名 persistent connection、keep-alive、pipelining、parse loop、connection option 与 response order。Part 2 Round1 给出完整 observable contract、错误/关闭语义和进程外 checker，但不泄露 server 的 parse-loop 实现。阅读闸门后，Round2 才沿 `Connection::input()`、`HttpRequestParser::parse_request()`、`input.retrieve(consumed_bytes)`、route、encode、`Connection::send()` 与 `close_after_flush()` 串起完整机制。Part 3 只补高价值 raw-client matrix、normal/full regression 与 sanitizer evidence，不要求重写已通过的底层组件测试。
+
+Round1 明确沿用真实 Day5 baseline：`http_server_v1.cpp` 当前以 `first_request_over_flag[fd]` 实现 one-response policy，正常 response 强制 `close_connection=true`，Complete/Error 都 close-after-flush。Day6 要有意识地替换这项 application policy，而不是把它误判为 transport bug，也不能把 keep-alive state 塞回通用 `Connection`。`Connection` 现有 FIFO output ordering 可以承载顺序 response；HTTP application 负责持续解析、决定何时停止 route 新 request，以及何时提交 final close。
+
+新增的 `tests/http_server_keep_alive_smoke.py` scaffold 从进程外验证两条关键路径：同一 socket 先 `/health` 后 `/hello + Connection: Close`，以及三条 pipelined requests 的 exact response order 与 final EOF。Python checker 已通过独立语法编译检查。教程还规定 `Connection` field value 必须按 comma-separated token、OWS trim 与 ASCII case-insensitive 规则识别 `close`，不能用 substring search 把 `disclose` 误判为 close。
+
+技术语义在生成时对照 RFC 9112 与 RFC 9110：HTTP/1.1 默认 persistent；同一 connection 上 responses 必须与 requests 保持对应顺序；收到 `Connection: close` 后完成当前 final response 并停止处理后续 requests。`DAILY_INDEX.md` 已同步更新为 76 份教程并加入 persistent connection、keep-alive、pipelining、parse loop 与 response order 检索项。当前只是教程生成，Day6 尚未开始或验收；R1 正式通过后必须从用户当时磁盘上的 Daily、source、tests、note 与对话出发定向润色 R2/R3，并完整保留用户新增内容。此次没有修改 Ubuntu 用户代码。
