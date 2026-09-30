@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-30）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day5 均已正式通过。Day5 最终评分 `95/100`：HTTP Server V1 已把 Acceptor、Connection、incremental parser、fixed routes、response encoder、close-after-flush 与 deferred erase 接成可运行 vertical slice。Week11 Day6 Round1 已以 `94/100` 正式通过：same-socket reuse、三请求 pipeline order、terminal close/error、精确 `Connection` token parsing 均有进程外证据，fresh Debug 全量编译零 warning，CTest `54/54 PASS`；R2/R3 已按真实 `request_over_flag`、parse loop、token helpers 与复检证据定向润色。下一步完成 partial-next、oversized、half-close 与当前版本 ASan/UBSan 收口。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-09-30）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day6 均已正式通过。Day6 最终评分 `96/100`：HTTP/1.1 persistent connection、sequential reuse、pipelining/order、NeedMore prefix preservation、terminal close/error、oversized declaration、half-close 与精确 `Connection` token parsing 均有进程外证据；fresh Debug 全量编译零 warning，CTest `54/54 PASS`，当前源码的 ASan/UBSan covered paths 无报告。下一步进入 Week11 Day7，整理 HTTP Server V1 milestone 的 evidence、限制与项目表达。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -3160,7 +3160,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-09-30 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1~Day5 均已正式通过；Day5 最终评分 `95/100`。Week11 Day6 Round1 已以 `94/100` 正式通过，R2/R3 已按真实实现定向润色；下一步只完成 partial-next、oversized declaration、complete-request half-close 与当前版本 ASan/UBSan 收口。AI Theory T1~T3 已正式通过，下一模块为 T4；ML 自学已到多变量线性回归，Ex1 可在完成后作为 T7 等价产出。
+2026-09-30 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1~Day6 均已正式通过；Day6 最终评分 `96/100`。下一步进入 Week11 Day7，整理本周 HTTP Server V1 的 claim-to-evidence ledger、已知限制和项目表达。AI Theory T1~T3 已正式通过，下一模块为 T4；ML 自学已到多变量线性回归，Ex1 可在完成后作为 T7 等价产出。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -7149,3 +7149,13 @@ R1 暂定 `82/100`，尚未正式通过。三个问题属于当天 observable co
 R1 通过后已从用户当前磁盘版本定向润色 Day6 第 17 节以后的完整 R2/R3，并原样保留用户新增的 §13.2/§13.3。后半教程现在逐节映射真实 `request_over_flag[fd]` lifecycle、局部 stateless parser、Complete/NeedMore/Error 三出口、两个 terminal `break`、`request_wants_close`/`check_close`/`ascii_iequals`、Connection FIFO output 与本轮真实 probes。Round3 不再重复已通过证据，只保留 partial-next、oversized declaration、complete-request half-close 与当前版本 ASan/UBSan。`response_for_parse_error()` 已经返回 closing response；Error branch 在 encode 后再次设置 `http_response.close_connection = true` 对现有 wire bytes 没有作用，属于以后可顺手删除或前移的冗余赋值，不阻塞通过。
 
 可复用经验：检查 parse loop 时不能只看“未来 callback 是否有 guard”，还必须检查 terminal decision 后当前循环是否立即退出。Integration probe 也不能只验证 client 收到第一份正确 response；必须继续确认 response 数量、EOF 和 server process 仍存活，否则“先返回正确 bytes、随后进程 abort”会被误判为成功。
+
+## 2026-09-30：Week11 Day6 正式通过
+
+用户亲自向 `tests/http_server_keep_alive_smoke.py` 增加 complete-request + partial-next integration scenario：第一次发送完整 `/health` 与随机 split 的 `/hello + Connection: Close` prefix，只读取 exact health response；第二次补齐剩余 request bytes，再读取 exact hello-close response 与 EOF。`randrange(1, len(request))` 保证第二条在第一次发送时始终不完整；Day3 已有 all-byte split parser tests，因此此处随机选择一个 integration split 足够，不要求再次穷举。该 scenario PASS，证明 `NeedMore` 不消费 partial prefix，后续 append 后能够继续完成同一 request。
+
+Codex 只修改用户明确授权的 Python checker，没有修改任何 C++ production code：新增 oversized request/response 常量与 Scenario 4，发送 `POST /echo` headers 并声明 `Content-Length: 1048577`，不发送 body，要求 server 立即返回 exact `413 Content Too Large`、`Connection: close` 与 EOF。该 scenario 输出 `OVERSIZED_BODY_DECLARATION PASS`，证明 parser 按声明值执行 1 MiB limit，而不是等待巨大 body 到齐。用户原有 Scenario 3 保持原样；其第二个 PASS label 仍写 `PIPELINE_ORDER PASS`，只是显示名称不精确，不影响 oracle。
+
+剩余 evidence 已由 Codex 完成：normal server 下 complete request + `shutdown(SHUT_WR)` 得到完整 `/hello` response 后 EOF，输出 `COMPLETE_REQUEST_HALF_CLOSE PASS`；为了不终止用户当前运行在 `9092` 的 normal server，Codex 从最新源码构建仅修改监听端口为 `19092` 的 `/tmp` 同源 ASan/UBSan binary，以完整 keep-alive checker和 half-close probe 验证 sequential、pipeline、partial-next、oversized 与 half-close，全部 PASS，server terminal 无 sanitizer report。临时源码、checker 与 binary 已清理，用户原 normal server PID 53221 保持运行。
+
+Day6 最终评分 `96/100`，正式通过。轻量扣分只来自 checker 中重复的 `PIPELINE_ORDER PASS` label，以及 partial-next 单次随机 split 本身不提供稳定 coverage distribution；前者不影响 correctness，后者已由 Day3 all-split unit tests 补足。下一步进入 Week11 Day7，不再给 Day6 增加重复测试。
