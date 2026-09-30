@@ -7201,3 +7201,41 @@ AI Theory 的 canonical 教学顺序补强为：
 R2 已按 Day6 最终真实实现串清：partial request 由每个 `Connection::input_` 持有，而不是局部 parser；`Complete / NeedMore / Error` 分别进入 consume-and-continue、preserve-and-return、terminal-response-and-break；HTTP terminal policy、transport flush state 与 owner lifetime 分层保存；`Connection: close` 的完整链为 final response -> output drain -> CloseCallback -> `pending_close` -> `poll_once` 返回 -> erase session/Connection -> RAII close fd。两张 Mermaid 只使用 Typora 8.8.3 可接受的简单 node/edge 语法。
 
 R3 使用现有证据建立 claim-to-evidence ledger：Day1~Day4 unit/exact-byte matrices、Day5 process-external smoke、Day6 sequential/pipeline/partial-next/oversized/half-close/terminal scenarios、fresh Debug 零 warning、CTest `54/54 PASS` 和 ASan/UBSan covered paths。若 Day7 只写 note，不修改 source/build/tests，则允许直接引用 fresh evidence，不机械重跑；HTTP repeated-client fd-count 仅为可选增强，因为 Week10 已观察 Reactor fd lifetime 且 Week11 未修改 ownership model。`DAILY_INDEX.md` 已同步到 77 份教程并加入 Day7 架构、ownership 与 evidence 检索项；`week11.md` 的主线和 AI Theory 真实进度也已校准。
+
+## 2026-10-01：ML 实现迁移到 Ubuntu
+
+用户决定机器学习实现不再放 Windows，后续统一在 Ubuntu terminal 中编写、运行和验收。Canonical 分工固定为：
+
+```text
+Windows C:\Users\FxorG\Desktop\gpt_infra\ML
+    ML.md、ML_配套练习.md、Kaggle入门实践.md 与规划资料的 source of truth
+
+Ubuntu ~/code/system-learning/ai-theory/ML
+    Python 实现、运行、测试、图像输出与 executable evidence 的 source of truth
+```
+
+Ubuntu 已建立并验证以下结构：
+
+```text
+ML/
+├── ML.md
+├── ML_配套练习.md
+├── Kaggle入门实践.md
+├── README.md
+├── requirements.txt
+├── assets/
+├── official_assignments/
+└── exercises/
+    ├── ex1_linear_regression/
+    ├── ex2_logistic_regression/
+    ├── ex3_digits_forward/
+    ├── ex4_backpropagation/
+    ├── ex5_bias_variance/
+    ├── ex6_svm_spam/
+    ├── ex7_kmeans_pca/
+    └── ex8_anomaly_recommender/
+```
+
+`official_assignments/` 已同步 Ex1~Ex8 starter notebooks、Data、Figures、`utils.py` 和原题 PDF，共约 39 MiB，只作本地参考并由 Ubuntu `ML/.gitignore` 排除。同步教程或资源时绝不能覆盖 `exercises/` 中用户自己的实现；以后检阅 ML code 默认 SSH 读取 Ubuntu 目录。
+
+Ubuntu 环境已完成真实验证：Python `3.12.14`，NumPy `2.5.2`、SciPy `1.18.1`、Matplotlib `3.11.2`、pandas `3.0.6`、scikit-learn `1.9.1`、JupyterLab `4.6.4`；`python3 -m pip check` 无 broken requirements。Ex1 两份数据分别可读为 `(97, 2)`、`(47, 3)`，Ex3 `.mat` 中 `X/y` 可读为 `(5000, 400)`、`(5000, 1)`。安装时使用清华 PyPI 镜像解决官方源约 `47 KB/s` 的低速问题，但 requirements 文件不绑定镜像或机器专属版本。

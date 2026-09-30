@@ -1,6 +1,6 @@
 # 吴恩达经典机器学习：8 套编程作业中文实践教程
 
-> 版本：2026-09-23
+> 版本：2026-10-01，Ubuntu 实现工作区对齐版
 >
 > 配套正文：[ML.md](ML.md)
 >
@@ -14,7 +14,19 @@
 
 ## 1. 你现在到底拿到了什么
 
-本机目录：
+教程源文件保存在 Windows：
+
+```text
+C:\Users\FxorG\Desktop\gpt_infra\ML
+```
+
+真正写代码、运行和保存 evidence 的 Ubuntu 工作区是：
+
+```text
+~/code/system-learning/ai-theory/ML
+```
+
+下面所有以 `ML/...` 开头的路径，都展开为 `~/code/system-learning/ai-theory/ML/...`。资料目录：
 
 ```text
 ML/official_assignments/

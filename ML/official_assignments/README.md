@@ -24,6 +24,16 @@ d901c1ca71766bda9d5994af4a27a44f82ae3ae5
 
 这些第三方文件只保存在本机，已由仓库根目录 `.gitignore` 排除，不会随本仓库提交或推送。我们自己的中文任务编排在 [../ML_配套练习.md](../ML_配套练习.md)。
 
+## 当前运行位置
+
+自己的实现与这些本地资料已经同步到 Ubuntu：
+
+```text
+~/code/system-learning/ai-theory/ML
+```
+
+实现写在 `exercises/exN_xxx/`；本目录仍只负责原始题意、数据、图片和检查值。
+
 ## 重新下载
 
 若本地材料丢失，执行：
@@ -32,6 +42,8 @@ d901c1ca71766bda9d5994af4a27a44f82ae3ae5
 cd C:\Users\FxorG\Desktop\gpt_infra\ML\official_assignments
 git clone --depth 1 https://github.com/dibgerge/ml-coursera-python-assignments.git classic_ml_python
 ```
+
+Ubuntu 丢失本地资料时，可以在 Windows 重新取得后同步；不要在 `exercises/` 中混入第三方仓库快照。
 
 原始 PDF 只用于核对旧课程题面。平时直接读中文教程并使用 `classic_ml_python/ExerciseN/Data/` 中的数据即可。
 
