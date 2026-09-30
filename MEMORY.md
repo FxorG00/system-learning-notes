@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-30）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day6 均已正式通过。Day6 最终评分 `96/100`：HTTP/1.1 persistent connection、sequential reuse、pipelining/order、NeedMore prefix preservation、terminal close/error、oversized declaration、half-close 与精确 `Connection` token parsing 均有进程外证据；fresh Debug 全量编译零 warning，CTest `54/54 PASS`，当前源码的 ASan/UBSan covered paths 无报告。下一步进入 Week11 Day7，整理 HTTP Server V1 milestone 的 evidence、限制与项目表达。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-09-30）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day6 均已正式通过，Day7 教程已经生成、等待 Round1。Day6 最终评分 `96/100`：HTTP/1.1 persistent connection、sequential reuse、pipelining/order、NeedMore prefix preservation、terminal close/error、oversized declaration、half-close 与精确 `Connection` token parsing 均有进程外证据；fresh Debug 全量编译零 warning，CTest `54/54 PASS`，当前源码的 ASan/UBSan covered paths 无报告。Day7 只整理 HTTP Server V1 runtime flow、ownership/state、claim-to-evidence ledger 与限制，不新增 feature、不机械重跑已有测试。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -7193,3 +7193,11 @@ AI Theory 的 canonical 教学顺序补强为：
 - 这一规则只修改 AI Theory Txx.md。系统主线 daily.md 继续使用自己的三 Part、R1 progressive disclosure、R1 后定向润色、用户内容保护和 executable evidence 规则，不受本轮影响。
 
 本轮从 Git baseline `43b8760` 继续修改，没有覆盖用户未提交内容。T4 重写为“parameter 微调观察 -> 整体求导的扩展问题 -> computation graph -> chain rule -> 路径累加 -> finite-difference oracle”；T8 补齐单样本三分类的 softmax-cross-entropy gradient 推导，并逐层扩展到 `[C]` 与 `[B,C]`；T9 改为从 `2x3` storage offset 手算推出 stride，再推广三维 Tensor；T5 将 Bayes/independence/PMF-PDF 明确降为可跳过旁线；T6 补 stable shift 的实际 exponential values；T7 标明 Lab / Checkpoint；T10 从 loose Tensor state 的部署问题推出 Module；T11 从 forward value 的“来路记录”推出 autograd metadata。T12~T14 经审计已分别以 XOR、unseen-data comparison 和 sliding local window 作为真实入口，本轮不为制造 diff 重写。
+
+## 2026-09-30：Week11 Day7 教程生成
+
+已生成 `week11/day7/day7.md`。Day7 是 HTTP Server V1 出口日，不增加 route、chunked、TLS、TimerQueue、multi-thread EventLoop、README、interview 文档或 benchmark；也不让用户重新手写 Day1~Day6 已经存在的 parser/response/integration tests。R1 只要求在 `day7_note.md` 独立完成两项高价值复盘：从真实对象恢复 byte-to-response runtime flow，以及填写 ownership/state table。R1 inventory 对齐当前实现中的 `EventLoop::poll_once`、`Channel::handle_event`、`Connection::handle_recv/handle_send`、局部无状态 `HttpRequestParser`、`request_over_flag[fd]`、`close_after_flush`、`pending_close` 与 owner erase，但阅读闸门前不直接给出完整顺序。
+
+R2 已按 Day6 最终真实实现串清：partial request 由每个 `Connection::input_` 持有，而不是局部 parser；`Complete / NeedMore / Error` 分别进入 consume-and-continue、preserve-and-return、terminal-response-and-break；HTTP terminal policy、transport flush state 与 owner lifetime 分层保存；`Connection: close` 的完整链为 final response -> output drain -> CloseCallback -> `pending_close` -> `poll_once` 返回 -> erase session/Connection -> RAII close fd。两张 Mermaid 只使用 Typora 8.8.3 可接受的简单 node/edge 语法。
+
+R3 使用现有证据建立 claim-to-evidence ledger：Day1~Day4 unit/exact-byte matrices、Day5 process-external smoke、Day6 sequential/pipeline/partial-next/oversized/half-close/terminal scenarios、fresh Debug 零 warning、CTest `54/54 PASS` 和 ASan/UBSan covered paths。若 Day7 只写 note，不修改 source/build/tests，则允许直接引用 fresh evidence，不机械重跑；HTTP repeated-client fd-count 仅为可选增强，因为 Week10 已观察 Reactor fd lifetime 且 Week11 未修改 ownership model。`DAILY_INDEX.md` 已同步到 77 份教程并加入 Day7 架构、ownership 与 evidence 检索项；`week11.md` 的主线和 AI Theory 真实进度也已校准。

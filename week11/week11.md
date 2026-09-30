@@ -4,7 +4,7 @@
 >
 > 主线：Reactor V1 -> incremental HTTP parser -> HTTP Server V1 -> Mini Redis
 >
-> 当前真实进度：Week10 Reactor V1 已正式通过；AI Theory 为 T1 已通过，T2/T3 待完成
+> 当前真实进度：Week11 Day1~Day6 已正式通过，Day7 教程已生成；AI Theory T1~T3 已正式通过，下一步为 T4
 >
 > 本周定位：第一次把 application protocol 接到已经验证过的 transport/lifecycle 底座上
 
@@ -1003,32 +1003,31 @@ Week11 的重点是 application framing，不再回头重讲三次握手、epoll
 总规划原时间轴希望 Week11 出口到 T6，但当前真实状态是：
 
 ```text
-T1 已正式通过
-T2 尚未学习验收
-T3 尚未学习验收
-T4~T13 教程已生成，不等于已完成
+T1~T3 已正式通过
+T4 是下一项
+T4~T14 教程已生成，不等于已完成
 ```
 
-本周不做“从 T1 一口气假装冲到 T6”。真实目标：
+本周不做“为了追表格假装冲到 T6”。接下来按真实节奏：
 
 ```text
-必达：完成 T2、T3
-余力：开始 T4，但不为追进度跳过 gradient-check 认知闸门
-暂不要求：T5、T6
+下一项：完成 T4 的 gradient / chain rule / finite-difference 主线
+不重复：ML 自学已经完整覆盖的线性回归推导与 Ex1 同类实现
+暂不要求：为了追原时间表连续完成 T5、T6
 ```
 
 安排建议：
 
 ```text
 每天 30~60 分钟
-前半周完成 T2
-后半周完成 T3
-HTTP 主线顺利且精力足够时再开启 T4
+系统主线结束后每天保留 30~60 分钟
+T4 以真正理解 gradient-check 独立 oracle 为完成标准
+ML 自学与 AI Theory 使用等价验收，避免重复实现同一 learning contract
 ```
 
-T2/T3 需要复习的学校数学内容只列知识点名称，由用户使用自己的成套笔记复习；教程不重写粗糙线性代数课。系统主线仍每天 3 小时以上，两条线分别验收、分别记录真实进度。
+需要复习的学校数学内容只列知识点名称，由用户使用自己的成套笔记复习；教程不重写粗糙数学课。系统主线仍每天 3 小时以上，两条线分别验收、分别记录真实进度。
 
-这意味着 T4~T6 成为显式 schedule debt，后续按真实速度重新分配；不能把未学习文件因为“已经生成”记成完成，也不能为了还债延迟 Week12 Mini Redis 主线。
+T4 以后的排期按真实速度重新分配；不能把未学习文件因为“已经生成”记成完成，也不能为了还理论线进度延迟 Week12 Mini Redis 主线。
 
 ---
 
