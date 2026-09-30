@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-30）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day5 均已正式通过。Day5 最终评分 `95/100`：HTTP Server V1 已把 Acceptor、Connection、incremental parser、fixed routes、response encoder、close-after-flush 与 deferred erase 接成可运行 vertical slice；fresh full build 零 warning、CTest `54/54 PASS`，normal 与 ASan/UBSan process-external smoke 通过且无 sanitizer report。Week11 Day6 教程已经生成，下一步是完成 Day6 Round1：把单响应即关闭策略升级为 HTTP/1.1 默认持久连接，并证明 same-socket reuse、pipeline order 与 `Connection: close`。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-09-30）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day5 均已正式通过。Day5 最终评分 `95/100`：HTTP Server V1 已把 Acceptor、Connection、incremental parser、fixed routes、response encoder、close-after-flush 与 deferred erase 接成可运行 vertical slice；fresh full build 零 warning、CTest `54/54 PASS`，normal 与 ASan/UBSan process-external smoke 通过且无 sanitizer report。Week11 Day6 Round1 首次检阅暂定 `82/100`，尚未正式通过：same-socket sequential reuse 与三请求 pipeline order 已通过，但 terminal close/error 后没有立即退出当前 parse loop，`close request + buffered suffix` 和 malformed request 都会在发出第一份正确 response 后因再次 `send()` 而使 server abort；comma-separated `Connection` value 中 `close` 位于非末尾时也识别失败。下一步只修这三项并做极短复检，不重写已经通过的持久连接主路径。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -7113,3 +7113,29 @@ AI Theory T module：NumPy/PyTorch、数值稳定性、autograd、Tensor workloa
 本轮具体决策：Ex1 与 T7 二选一。Ex1 完成 cost checkpoints、vectorized forward/loss/gradient、loss curve、feature scaling、prediction 与 `np.linalg.lstsq`/正规方程对照后，直接作为 T7 linear-regression code gate；T7 只补 training workload 到 AI Infra 的映射，不再要求 synthetic implementation。若不做 Ex1，才走 T7 的 synthetic fallback。Ex2 可抵扣 T8 的 binary logistic 与 regularization 部分，但 T8 仍必须完成 multiclass softmax、stable logits-space cross entropy、finite-difference spot check 和 train/validation/test workflow。
 
 已同步修改 `AI_Infra理论伴随线规划.md`、`plan_strengthened.md`、`ai_theory/T7/T7.md`、`ai_theory/T8/T8.md`、`ML/ML.md` 与 `ML/ML_配套练习.md`。`DAILY_INDEX.md` 只索引系统主线 daily，按其维护 contract 不加入理论线条目，因此本次无需修改；这不是遗漏。当前真实进度仍是 AI Theory T1~T3 正式通过、T4 下一步，ML 自学到多变量线性回归；Ex1 尚未提交可执行证据，T7 尚未通过。
+
+## 2026-09-30：Week11 Day6 Round1 第一次检阅
+
+用户独立完成 HTTP/1.1 persistent-by-default 的第一版 application policy。真实主路径已经成立：普通 response 不再强制 `Connection: close`；同一 connected socket 可以顺序完成 `/health` 与 `/hello + Connection: Close`；三条 coalesced/pipelined requests 会按 health -> hello -> final health-close 的顺序返回。fresh Debug build 零 warning，固定入口 `cmake -E chdir /tmp/week11-day6-r1-review ctest --output-on-failure` 得到 `54/54 PASS`，用户的 `http_server_keep_alive_smoke.py` 输出 `SEQUENTIAL_KEEP_ALIVE PASS`、`PIPELINE_ORDER PASS` 与 `HTTP_KEEP_ALIVE_SMOKE PASS`。
+
+R1 暂定 `82/100`，尚未正式通过。三个问题属于当天 observable contract，不是代码风格：
+
+```text
+1. Complete request 命中 Connection: close 后，当前 callback 仍继续 while parse。
+   close request 后若同一 input Buffer 已有下一条完整 request，第一份 close response 会正确发出，
+   但下一轮又调用 Connection::send()，抛出未捕获 logic_error，整个 server abort。
+
+2. ParseStatus::Error 分支发送 error response 并 close_after_flush 后同样没有退出 while。
+   malformed request 会先得到正确 400 + Connection: close，随后再次解析同一份未消费 input，
+   第二次 send 抛 logic_error，整个 server abort。
+
+3. Connection option token 的 slice compare 使用 std::string_view(str.data() + l)；
+   它把 token 起点到整条 value 末尾都当作 left operand。
+   因此 `Connection: close, keep-alive` 没有识别 close，response 不带 close header，client 等 EOF 超时。
+   另外逗号出现在开头或连续逗号时，`i - 1` 会发生 size_t 下溢；即使当前运行偶然没有崩溃，
+   也不能把越界 string indexing 当作合法 empty-token handling。
+```
+
+`day6_note.md` 的主判断正确：keep-alive/terminal-close 属于 HTTP application/session policy，不能塞回 transport `Connection`；MessageCallback 需要循环解析 Complete requests，并在 close request 后 flush-close。但笔记里“以后不再进入 MessageCallback，所以开头检查 flag”只覆盖未来 callback，不能替代当前 callback 内的 terminal exit。下次复检只检查 terminal Complete/Error 分支立即离开 parse loop，以及 token parsing 对 token 长度和 empty segment 的正确处理；不重写已经通过的 keep-alive、response FIFO、deferred erase 或现有 smoke checker。
+
+本轮完整检查了 Daily baseline diff。用户只新增 §13.2 与 §13.3：Python `sendall`/`recv` 在 3 秒 timeout 下的 blocking 语义、`recv_exact` 循环理由、EOF 后再次 `recv` 仍返回 EOF，以及 TCP half-close 的方向性。这两节技术上正确，解决了 checker 阅读中的真实理解问题，应原样保留。由于 R1 尚未通过，本轮不修改 Day6 R2/R3，不更新 `DAILY_INDEX.md`，也没有修改任何 Ubuntu production code 或 tests。
