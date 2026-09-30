@@ -313,16 +313,39 @@ AI Theory Tn.md
 
 视频与官方文档承担校准、补充或第二解释源，不能用“去看第几 P”代替教程正文；反过来，也不应把一份很长的外部资料变成必读前置，再让用户猜它应该插在教程哪一段。
 
-理论线每个概念应在主线第一次需要它的位置直接讲清楚：
+理论线每个概念应在主线第一次需要它的位置直接讲清楚。默认认知顺序改为：
 
 ```text
-当前问题
--> 新对象/新术语
--> 最小数值或 shape 例子
--> 完整推导与因果链
--> 紧邻的小实验
--> 自然进入下一个概念
+一个旧方法真正卡住的具体问题
+-> 最小 scalar / 单样本 / 小 Tensor 数值例子
+-> 亲手算出当前现象
+-> 说明为什么需要一种新的能力
+-> 从这个需要推出最小机制
+-> 再命名正式术语
+-> 展开公式与因果链
+-> scalar -> vector -> batch / matrix
+-> code 对应与紧邻小实验
+-> AI Infra workload / memory / numerical connection
 ```
+
+术语、最终矩阵公式和 framework metadata 不能承担第一次理解的责任。读者应先看见“为什么非要有它”，再知道“这个已经出现的对象叫作什么”。重要公式必须先用一个可手算的小例子落地；第一次从 scalar 推广到 matrix 时，必须说明哪个 axis 被归约、哪些 axes 被保留，以及 output shape 为什么与目标对象相同。
+
+### Theory、Lab 与 Gate 的职责分开
+
+同一份 `Tn.md` 可以包含三层内容，但不能把三种文体揉在第一次讲解里：
+
+```text
+Theory Note
+-> 负责第一次讲懂：问题、例子、直觉、推导、正式定义
+
+Worked Example / Lab
+-> 负责亲手算一次、实现一次、观察一次
+
+Gate / Acceptance
+-> 负责 contract、tolerance、fixed evidence、PASS boundary
+```
+
+Contract、error handling、Reading Gate 与 evidence matrix 可以保留，但默认放在概念主线已经闭环之后。`T7` 这类已经由 `ML/ML.md` 完成第一次理论讲解的模块，应明确标记为 Lab / Checkpoint；它不需要伪装成第二份 Theory Note。反过来，T4 的 chain rule、T8 的 softmax gradient、T9 的 stride 等首次概念，不能用验收规格代替讲解。
 
 外部链接放在对应概念之后，标明“查证 / 选看 / 延伸”；除非某一课程片段确实比文字讲义更适合承担主讲，否则不把跳出文档阅读设成必经闸门。
 

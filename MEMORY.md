@@ -7159,3 +7159,37 @@ Codex 只修改用户明确授权的 Python checker，没有修改任何 C++ pro
 剩余 evidence 已由 Codex 完成：normal server 下 complete request + `shutdown(SHUT_WR)` 得到完整 `/hello` response 后 EOF，输出 `COMPLETE_REQUEST_HALF_CLOSE PASS`；为了不终止用户当前运行在 `9092` 的 normal server，Codex 从最新源码构建仅修改监听端口为 `19092` 的 `/tmp` 同源 ASan/UBSan binary，以完整 keep-alive checker和 half-close probe 验证 sequential、pipeline、partial-next、oversized 与 half-close，全部 PASS，server terminal 无 sanitizer report。临时源码、checker 与 binary 已清理，用户原 normal server PID 53221 保持运行。
 
 Day6 最终评分 `96/100`，正式通过。轻量扣分只来自 checker 中重复的 `PIPELINE_ORDER PASS` label，以及 partial-next 单次随机 split 本身不提供稳定 coverage distribution；前者不影响 correctness，后者已由 Day3 all-split unit tests 补足。下一步进入 Week11 Day7，不再给 Day6 增加重复测试。
+
+## 2026-09-30：AI Theory “第一次讲懂”二次校准
+
+用户在正式学习 T4 时确认：2026-09-24 的 T4~T14 统一重构改善了标题顺序、术语位置和闸门安排，但部分正文内部仍像“课程设计文档 + 实验规格 + 验收标准”。典型问题是先宣布 computation graph、local derivative、upstream gradient 与公式，再用几句解释补回动机；读者会觉得每句话都能读，却没有经历“为什么需要这个对象、它怎样从旧知识里长出来”的过程。因此，旧条目中“已经统一重构”只表示第一轮结构迁移完成，不能再推断所有理论课已经达到第一次讲懂的标准。
+
+AI Theory 的 canonical 教学顺序补强为：
+
+```text
+旧方法真正卡住的一个具体问题
+-> 最小 scalar / 单样本 / 小 Tensor 数值例子
+-> 亲手计算并看见现象
+-> 说明因此需要哪一种能力
+-> 从这项需要推出最小机制
+-> 最后命名正式术语
+-> 完整公式与中间推导
+-> scalar -> vector -> batch / matrix
+-> code 与 shape 对应
+-> Lab / independent evidence
+-> AI Infra workload / memory / numerical connection
+```
+
+具体执行规则：
+
+- 正文首先是一位老师第一次把概念讲懂，不是 RFC、API reference、术语词典、课程大纲或验收 checklist。不能只把技术文档换成口语句子，认知顺序本身必须改变。
+- 重要抽象第一次出现前至少有一个很小的 numerical example。Computation graph 要从“整体展开在深模型中不可组合”推出；stride 要从 index 到 storage offset 的手算推出；softmax gradient 要按 scalar loss -> class vector -> batch matrix 推出。
+- 每个重要公式说明从哪里来、每个 symbol 指向什么、为何采用这种形式。第一次矩阵化必须解释被归约的 axis、保留的 axes 与 output shape。
+- 正式英文术语仍保留，但放在对象已经通过问题和例子出现之后命名。不能让一组 metadata/definition 承担第一次理解。
+- `Theory Note` 负责第一次讲懂；`Worked Example / Lab` 负责亲手算与实现；`Gate / Acceptance` 负责 contract、tolerance、fixed evidence 和 PASS boundary。三者可在同一 `Tn.md`，但不能混写在概念入口。
+- Contract、error handling、Reading Gate 与 evidence 不删除，默认后移到理论主线闭环以后。T7 这类理论已由 `ML/ML.md` 完成的模块明确作为 Lab / Checkpoint，不伪装成第二份理论讲义。
+- 不机械把每份 T 改成长篇。若 T12 的 XOR -> nonlinear activation、T13 的 unseen-data 问题、T14 的 local window 已经按正确顺序讲通，则保留；只改真实断点。内容深度按正确顺序出现，不靠重复和百科扩写。
+- T1~T3 已正式通过且包含用户学习痕迹，审计后不为统一外观重写；后续查阅发现真实认知断点时再定点修订。当前学习重点是 T4，T5~T14 属于提前稿，可在正式进入前继续结合上一课实际结果定向润色。
+- 这一规则只修改 AI Theory Txx.md。系统主线 daily.md 继续使用自己的三 Part、R1 progressive disclosure、R1 后定向润色、用户内容保护和 executable evidence 规则，不受本轮影响。
+
+本轮从 Git baseline `43b8760` 继续修改，没有覆盖用户未提交内容。T4 重写为“parameter 微调观察 -> 整体求导的扩展问题 -> computation graph -> chain rule -> 路径累加 -> finite-difference oracle”；T8 补齐单样本三分类的 softmax-cross-entropy gradient 推导，并逐层扩展到 `[C]` 与 `[B,C]`；T9 改为从 `2x3` storage offset 手算推出 stride，再推广三维 Tensor；T5 将 Bayes/independence/PMF-PDF 明确降为可跳过旁线；T6 补 stable shift 的实际 exponential values；T7 标明 Lab / Checkpoint；T10 从 loose Tensor state 的部署问题推出 Module；T11 从 forward value 的“来路记录”推出 autograd metadata。T12~T14 经审计已分别以 XOR、unseen-data comparison 和 sliding local window 作为真实入口，本轮不为制造 diff 重写。
