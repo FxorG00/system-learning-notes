@@ -604,6 +604,57 @@ expect_eof(sock)
 
 `socket.create_connection`、`sendall`、`recv`、`bytes` 和 `bytearray` 的基础语义已经在 Week10 Day5 与 Week11 Day5 讲过，今天不重复展开。
 
+### 13.2 Python 这里的 recv,sendall 都是 blocking
+
+对，你是想说 **blocking（阻塞）**，它们在这里都是“带 3 秒超时的阻塞式调用”。
+
+- `sock.sendall(data)`：会一直尝试把 `data` 的全部字节交给本机 kernel 的 TCP send buffer；暂时写不进去**就等待**，直到全部交出去、超时或报错。它不保证对端已经 `recv` 到，更不保证 server 已处理完。
+
+- `sock.recv(n)`：如果当前没有任何可读数据，也还没收到 EOF，**就会等待**；一旦收到至少一些字节就返回，最多返回 `n` 个字节。它可能只返回一部分，所以 `recv_exact()` 才要循环。
+
+- `sock.settimeout(3.0)`：把这种等待限制为最多 3 秒。超时会抛 `socket.timeout`，避免 smoke test 无限挂住。
+
+所以这一段的关系是：
+
+```text
+sendall(requests)
+-> 阻塞到 requests 全部交给本机 TCP 栈
+
+recv_exact(...)
+-> 多次 recv
+-> 每次都可能等数据
+-> 收齐 expected_size bytes 才返回
+
+expect_eof(...)
+-> recv(1)
+-> 阻塞等 server 关闭连接
+-> 收到 b"" 才证明 EOF
+```
+
+这里 `recv_exact` 是测试自己写的“必须收够预期长度”的 helper；`recv` 本身并没有“收完整 HTTP response”的概念。
+
+### 13.3 client 读到 EOF 后再读，仍会得到 EOF
+
+会。只要 peer 的 write end 已关闭，并且你已经把 FIN 之前残留在接收缓冲区里的 bytes 都读完了：
+
+```cpp
+recv(fd, buf, n, 0)  -> 0   // 第一次看到 EOF
+recv(fd, buf, n, 0)  -> 0   // 之后继续读，仍是 EOF
+```
+
+`0` 的含义不是“这一次暂时没数据”，而是 TCP byte stream 已经正式结束；不会再有新的入站 bytes 了。
+
+注意顺序：
+
+```text
+peer 发送 "hello" 后 shutdown(SHUT_WR)
+-> 你的 recv 先可能读到 "hello"
+-> 下一次 recv 返回 0（EOF）
+-> 再之后每次 recv 仍返回 0
+```
+
+但这只说明对方关闭了“它写给你”的方向。你本地的 write direction 仍可能可用：这正是 TCP half-close。比如客户端 `shutdown(SHUT_WR)` 后，服务器仍可以把最后的 HTTP response 写回客户端。
+
 ## 14. R1 必须亲自完成什么
 
 你亲自设计并实现：
@@ -687,56 +738,68 @@ final close response 后才 EOF
 
 ## 17. Round2：Day5 policy 为什么必须被替换
 
-Day5 的三个真实动作是：
+你的 Day5 baseline 使用 `first_request_over_flag[fd]` 表示“一份 response 已经提交”，每条正常 response 都强制 close。Day6 R1 没有改 transport `Connection`，而是在 `apps/http_server_v1.cpp` 把 application state 改成：
 
 ```text
-first_request_over_flag[fd] = true
-response.close_connection = true
-Complete 后只 parse 一次并 return
+request_over_flag[fd] == false
+    这条 HTTP session 仍接受 request
+
+request_over_flag[fd] == true
+    application 已作出 terminal closing decision
+    后续 callback 不再接受新 HTTP work
 ```
 
-它们共同保证 one-response-then-close。Day6 要把 policy 改成：
+新 connection 建立时，你写入 `request_over_flag[fd] = false`；deferred cleanup erase `Connection` 时，也同步 erase 这项 HTTP state。它没有进入通用 `Connection`，职责边界正确。
+
+你的 R1 实际 policy 是：
 
 ```text
 normal Complete
-    consume current request
-    send response without close header
-    continue if input still contains bytes
+-> retrieve current consumed_bytes
+-> route + encode + send
+-> 不设置 close header
+-> while 继续检查当前 input Buffer
 
 NeedMore
-    consume nothing
-    keep connection and return
+-> 不 retrieve
+-> break，等待后续 recv append
 
 request asks close
-    send final close response
-    close after flush
-    stop parsing suffix
+-> request_over_flag[fd] = true
+-> response.close_connection = true
+-> send + close_after_flush
+-> break，停止解释已在 Buffer 中的 suffix
 
 Error
-    send error close response
-    close after flush
-    stop parsing suffix
+-> response_for_parse_error(error)
+-> request_over_flag[fd] = true
+-> send + close_after_flush
+-> break
 ```
 
-这里真正需要跨 callback 保存的 application state 不再是“第一条 response 是否完成”，而是“当前 session 是否已经进入 terminal closing decision”。
+这里真正跨 callback 保存的 application state，已经从“第一份 response 是否完成”变成“当前 HTTP session 是否已进入 terminal closing”。
 
 ## 18. 一次 MessageCallback 的完整主线
 
 ```mermaid
 flowchart TD
-    A["MessageCallback receives cumulative input"] --> B["Parse current prefix"]
-    B --> C{"Parse result"}
-    C -->|"Complete"| D["Consume one request"]
-    D --> E["Queue one response"]
-    E --> F{"Current request asks close"}
-    F -->|"No"| B
-    F -->|"Yes"| G["Close after flush"]
-    C -->|"NeedMore"| H["Keep suffix and return"]
-    C -->|"Error"| I["Queue error response"]
-    I --> G
+    A["Check request_over_flag"] --> B["Create stateless parser"]
+    B --> C["Parse current input range"]
+    C --> D{"ParseStatus"}
+    D -->|"Complete"| E["Retrieve consumed bytes"]
+    E --> F["Route and inspect Connection tokens"]
+    F --> G["Encode and send"]
+    G --> H{"Terminal close"}
+    H -->|"No"| C
+    H -->|"Yes"| I["close_after_flush then break"]
+    D -->|"NeedMore"| J["Keep bytes then break"]
+    D -->|"Error"| K["Send closing error response"]
+    K --> I
 ```
 
-把主线压缩成三个出口：
+`HttpRequestParser` 在你的实现中没有 mutable parse state，因此每次 callback 创建局部 parser 没有问题。真正保存 partial request 的对象是该 `Connection` 的 input Buffer。
+
+主线只有三个出口：
 
 ```text
 Complete and keep alive -> consume and continue
@@ -759,7 +822,7 @@ NeedMore
 
 Error / closing
 -> 不再继续解释 suffix
--> 立刻离开 parse loop
+-> 你的两个分支都在 close_after_flush 后 break
 ```
 
 如果 parser 错误地返回：
@@ -768,7 +831,9 @@ Error / closing
 Complete + consumed_bytes == 0
 ```
 
-caller 会在相同 input 上无限循环。Parser tests 已经证明正常 Complete 有正长度；application loop 仍应把“每轮有 progress”当作不变量，而不是把 `while` 当作天然安全。
+caller 会在相同 input 上无限循环。现有 parser tests 已证明正常 Complete 有正长度；你的 application loop 则通过 Complete 时 `retrieve(consumed_bytes)` 建立实际 progress。
+
+R1 第一版的真实 bug 正好说明 `while` 本身不保证正确：close/error 分支虽然发出了正确 response，却没有离开循环，下一轮再次 `send()` 触发 `Connection::send called after close request`，整个 server abort。现在两个 terminal 分支都已经 `break`，两条进程外 probe 均通过，而且 server 在 probe 后仍存活。
 
 ## 20. 为什么 Complete 后必须立刻继续 parse
 
@@ -784,7 +849,7 @@ caller 会在相同 input 上无限循环。Parser tests 已经证明正常 Comp
 
 > **只要当前 user-space Buffer 仍可能含有完整 request，application 就必须主动继续 parse，不能依赖下一次 EPOLLIN 替自己推进。**
 
-## 21. Response order 是怎样被当前 `Connection` 保住的
+## 21. Response order 是怎样被你的 `Connection` 保住的
 
 今天 route 同步执行。Application 按 request 顺序调用：
 
@@ -794,7 +859,7 @@ send(response 2)
 send(response 3)
 ```
 
-当前 `Connection::send()` 会把 bytes append 到同一个 output Buffer：
+你的 `Connection::send()` 会先把 response bytes append 到同一个 `output_`，再调用 `handle_send()`：
 
 ```text
 [response 1 unsent suffix][response 2][response 3]
@@ -813,7 +878,7 @@ parse order
 
 今天没有 thread pool route，也没有 parallel completion，所以不需要 response sequence number 或 reorder buffer。
 
-## 22. `Connection: close` 要识别 token，不是 substring
+## 22. 你的 `Connection: close` token parser
 
 Header value grammar 允许：
 
@@ -821,7 +886,9 @@ Header value grammar 允许：
 Connection: keep-alive, close
 ```
 
-因此 value 需要按逗号切成 tokens，并去掉 token 两侧 OWS。Comparison 是 ASCII case-insensitive：
+你的 `request_wants_close()` 逐个检查 name 已规范为 lowercase 的 `connection` fields，再按逗号切分 `line.value`。empty segment 不进入 `segments`，每个非空 segment 交给 `check_close()` 去除 SP/HTAB，最后调用 `ascii_iequals()`。
+
+Comparison 是 ASCII case-insensitive：
 
 ```text
 close
@@ -840,7 +907,16 @@ x-close
 
 不是 `close` token。`value.find("close")` 会误判，不能作为最终判断。
 
-当前 parser 已经把 field name 统一为 lowercase，所以 application 可以直接寻找 `name == "connection"`；value 不能整段粗暴 lowercase 后做 substring search。
+R1 第一版曾使用 `std::string_view(str.data() + l)` 比较 token。它会把 token 起点到整条 value 末尾都纳入 view，因此 `close, keep-alive` 被误判。当前版本先复制精确 `[l, r]` 为 `tmp`，并且只在 `las < i` 时保存 segment，已经同时消除了错误长度和 `i - 1` 下溢。
+
+定向 probe 已证明：
+
+```text
+Connection: close, keep-alive -> close
+Connection: , close           -> close，且不发生下溢访问
+```
+
+当前写法正确，不要求为了形式改成另一种 helper。以后若自然重构，可以使用带显式长度的 `std::string_view(str.data() + l, r - l + 1)` 避免临时 `std::string`，但这不是 Day6 blocker。
 
 ## 23. 为什么 close request 后不能继续处理 suffix
 
@@ -860,7 +936,7 @@ server sends final response 1 with Connection: close
 
 Request 2 已经到达 input Buffer，并不改变 application decision。Transport 仍可能暂时保存这些 bytes，但 HTTP session 已经 terminal。
 
-这就是为什么 Day6 仍可能需要 per-connection closing state：在实际 object 被 deferred erase 前，后续 callback 必须知道 application 不再接受新 work。
+你的实现用 `request_over_flag[fd]` 表示这个 per-connection terminal state。当前 callback 在 `close_after_flush()` 后立即 `break`；如果实际 object 尚未 deferred erase、又出现后续 callback，callback 开头的 flag 检查会直接 return。两层检查分别解决“当前循环继续”和“未来 callback 再进入”，不能互相替代。
 
 ## 24. Error 为什么也是 terminal response
 
@@ -879,6 +955,10 @@ EOF
 ```
 
 Request 3 不处理。原因不是“server 懒得恢复”，而是 malformed current prefix 已破坏了可靠的下一条 boundary 解释。继续扫描 suffix 会让不同组件对 bytes 得出不同 framing，正是 Week11 一直避免的 ambiguity。
+
+你的 Error 分支调用 `response_for_parse_error(error)`。这个 factory 已经返回 `close_connection == true` 的 response，所以 response 在 encode 时已经包含 `Connection: close`。当前源码在 encode 后再次写 `http_response.close_connection = true` 不会改变已经生成的 bytes，属于冗余赋值；以后整理时可以删掉或移到 encode 前，但现有 wire result 正确。
+
+定向 malformed probe 已观察到：恰好一份 `400 Bad Request`、`Connection: close`、随后 EOF，并且 server 继续存活。
 
 ## 25. `NeedMore` 要保留的是整个 next-request prefix
 
@@ -906,7 +986,7 @@ return from MessageCallback
 "lo HTTP/1.1\r\nHost: x\r\n\r\n"
 ```
 
-input 才组成完整 request 2。当前 parser 是 stateless helper，因此它会从保留下来的 request 2 起点重新扫描；这是 V1 可接受的时间复杂度边界。
+input 才组成完整 request 2。你的 parser 是 stateless helper，因此下一次 callback 会从保留下来的 request 2 起点重新扫描；这是当前 V1 可接受的时间复杂度边界。
 
 ## 26. Peer EOF 与 HTTP close policy
 
@@ -920,7 +1000,7 @@ Client 可以发送完整 request 后调用 `shutdown(SHUT_WR)`。当前 `Connec
 
 如果 input 只有不完整 request，parser 返回 `NeedMore`，但 peer 已经声明不会再发送 bytes。它永远不可能变成 Complete。
 
-Day6 V1 的明确策略：
+你的 Day6 V1 继续沿用 `Connection::handle_recv()` 的策略：
 
 ```text
 不 route 半条 request
@@ -950,19 +1030,27 @@ server process exits
 
 ## 28. Round3 不再重写 server
 
-Round3 只补能区分 state machine 是否正确的 process-external evidence：
+R1 结束时，你已经拥有：
 
 ```text
-same socket sequential reuse
-coalesced pipeline order
-first complete + second partial
-Connection: close stops suffix
-malformed response then EOF
-oversized response then EOF
-half-close after complete request
+fresh Debug full CTest 54/54 PASS
+same socket sequential reuse PASS
+three-request pipeline order PASS
+close request + buffered suffix：一份 response + EOF，server 存活
+malformed request：一份 400 + EOF，server 存活
+close token 位于首位或前有 empty segment：正确 close
 ```
 
-测试 scaffold 可以由 Codex 协助；你需要说明每条 oracle 在证明哪个 state transition。
+Round3 不重写 server，也不重复运行这些已经通过且代码未再改变的证据。剩余收口只关注：
+
+```text
+first complete + second partial
+oversized declaration -> 413 + EOF
+complete request + half-close
+当前版本 ASan/UBSan covered paths
+```
+
+测试 scaffold 可以由 Codex 协助；你需要说明每条 oracle 对应哪个 state transition。
 
 ## 29. 高价值 raw-client matrix
 
@@ -971,8 +1059,8 @@ half-close after complete request
 | sequential two requests | response 1 后 socket 可继续使用 | default persistence |
 | two requests in one send | 两份 exact responses，顺序一致 | parse loop + output order |
 | complete + partial | 先只返回 response 1，补齐后返回 response 2 | NeedMore suffix preservation |
-| close request + suffix | 只返回 close request 对应 response，然后 EOF | terminal closing policy |
-| malformed + suffix | error response，然后 EOF，不 route suffix | error terminal decision |
+| close request + suffix | 已通过：一份 close response、EOF，server 存活 | terminal closing policy |
+| malformed + suffix | 已通过：一份 400、EOF，server 存活 | error terminal decision |
 | oversized body declaration | 413 + EOF，无需等待巨大 body | parser limit integration |
 | complete request + half-close | response 完整到达后 EOF | peer EOF does not discard response |
 
@@ -994,7 +1082,7 @@ sendall(request 1 + partial request 2)
 
 Client 在两次发送之间可以用短 timeout 验证没有多余 response；这里的 timeout 是观察“当前没有 bytes”，不是用 sleep 建立 server correctness。
 
-## 31. Close-suffix 的关键 oracle
+## 31. Close-suffix 已经替你抓到过一次真实 bug
 
 发送：
 
@@ -1011,7 +1099,7 @@ response contains Connection: close
 没有 hello response
 ```
 
-这条 evidence 同时证明：
+这条 probe 在第一版中先收到正确 response，随后发现 server abort；修复后观察到 `1` 份 response、close header、EOF，且进程仍存活。它同时证明：
 
 ```text
 close token 被识别
@@ -1020,7 +1108,7 @@ parse loop 在 terminal decision 后停止
 already-buffered suffix 没有被误处理
 ```
 
-## 32. Malformed 与 oversized 的结束方式
+## 32. Malformed 已通过，oversized 留给 Round3
 
 ### 32.1 malformed request
 
@@ -1032,13 +1120,14 @@ Host: x\r\n
 \r\n
 ```
 
-期望：
+当前版本已经观察到：
 
 ```text
 400 response
 Connection: close
 exact Content-Length body
 EOF
+server process remains alive
 ```
 
 ### 32.2 oversized body declaration
@@ -1049,7 +1138,7 @@ EOF
 Content-Length: 1048577
 ```
 
-不发送实际大 body。Parser 应根据声明立即得到 `BodyTooLarge`，server 返回：
+这一项尚未做 process-external probe。无需发送实际大 body；parser 应根据声明立即得到 `BodyTooLarge`，server 返回：
 
 ```text
 413 Content Too Large
@@ -1058,6 +1147,8 @@ EOF
 ```
 
 ## 33. normal build 与全量 regression
+
+R1 正式复检已经在独立 `/tmp/week11-day6-r1-review` build directory 完成：全量编译零 warning，固定入口 CTest `54/54 PASS`。下面保留项目内常规命令，供 Round3 修改后重跑：
 
 ```bash
 cd ~/code/system-learning/cpp/week10
@@ -1075,6 +1166,8 @@ python3 tests/http_server_keep_alive_smoke.py
 不能只 build `http_server_v1` 后直接声称 full CTest regression；全量 CTest 前先 build 全项目。
 
 ## 34. ASan/UBSan covered-path evidence
+
+当前修复后的源码尚未完成这项 evidence，因此 Round3 需要使用新的独立 build directory，不复用旧 sanitizer binary：
 
 使用独立 build directory：
 
@@ -1109,7 +1202,7 @@ Smoke PASS 且 server terminal 没有 sanitizer report，才能记录“本次 c
 | response tests | encoded bytes 与 close header 正确 | connection 会按 policy 关闭 |
 | sequential keep-alive smoke | 同一 socket 能连续 request/response | 同 callback 会处理多个 requests |
 | pipeline smoke | coalesced requests 与 ordered responses 正确 | parallel routing 或 HTTP/2 |
-| close-suffix smoke | close 后不处理 buffered suffix | 所有 TCP reset edge cases |
+| close-suffix 定向 probe | close 后不处理 buffered suffix，且 server 不 abort | 所有 TCP reset edge cases |
 | ASan/UBSan | 本次路径无已检测错误 | 未覆盖路径绝对无 bug |
 
 ## 36. 今日验收问题
@@ -1124,17 +1217,15 @@ Smoke PASS 且 server terminal 没有 sanitizer report，才能记录“本次 c
 
 ## 37. `day6_note.md` 只记录新增理解
 
-建议只保留：
+你现有 R1 note 已经正确记录：policy 属于 application、MessageCallback 需要 parse loop、close request 要设置 session flag 并 close-after-flush。R2/R3 只需在此基础上补三点，不重复抄正文：
 
 ```text
-你的 parse-loop state transitions
-你的 closing state 放在哪里
-Connection close token 的判断规则
-一次 sequential/pipeline evidence
-你真正遇到的 bug、timeout 或错误假设
+callback 开头的 flag 只拦未来 callback；当前 loop 仍必须在 terminal decision 后 break
+close token 要比较精确 token range，不能把 token 起点到整条 value 末尾都拿去比较
+close-suffix / malformed 第一版为何会先返回正确 response、随后却让 server abort
 ```
 
-Day1~Day5 已经掌握的 parser grammar、route table、response encoder 和 deferred erase 不重复誊写。
+Day1~Day5 已经掌握的 parser grammar、route table、response encoder 和 deferred erase 不重复誊写。sequential/pipeline、`54/54 PASS` 等结果可以简短记录，不需要复制 terminal output。
 
 ## 38. 正式通过标准
 

@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-30）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day5 均已正式通过。Day5 最终评分 `95/100`：HTTP Server V1 已把 Acceptor、Connection、incremental parser、fixed routes、response encoder、close-after-flush 与 deferred erase 接成可运行 vertical slice；fresh full build 零 warning、CTest `54/54 PASS`，normal 与 ASan/UBSan process-external smoke 通过且无 sanitizer report。Week11 Day6 Round1 首次检阅暂定 `82/100`，尚未正式通过：same-socket sequential reuse 与三请求 pipeline order 已通过，但 terminal close/error 后没有立即退出当前 parse loop，`close request + buffered suffix` 和 malformed request 都会在发出第一份正确 response 后因再次 `send()` 而使 server abort；comma-separated `Connection` value 中 `close` 位于非末尾时也识别失败。下一步只修这三项并做极短复检，不重写已经通过的持久连接主路径。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-09-30）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day5 均已正式通过。Day5 最终评分 `95/100`：HTTP Server V1 已把 Acceptor、Connection、incremental parser、fixed routes、response encoder、close-after-flush 与 deferred erase 接成可运行 vertical slice。Week11 Day6 Round1 已以 `94/100` 正式通过：same-socket reuse、三请求 pipeline order、terminal close/error、精确 `Connection` token parsing 均有进程外证据，fresh Debug 全量编译零 warning，CTest `54/54 PASS`；R2/R3 已按真实 `request_over_flag`、parse loop、token helpers 与复检证据定向润色。下一步完成 partial-next、oversized、half-close 与当前版本 ASan/UBSan 收口。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -3160,7 +3160,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-09-30 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1~Day5 均已正式通过；Day5 最终评分 `95/100`。Week11 Day6 已根据 Day5 最终实现、证据和反馈生成，下一步完成 Day6 Round1：把 one-response-then-close 升级为 HTTP/1.1 persistent connection，并验证 same-socket reuse、pipelining/order 与 `Connection: close`。AI Theory T1~T3 已正式通过，下一模块为 T4；ML 自学已到多变量线性回归，Ex1 可在完成后作为 T7 等价产出。
+2026-09-30 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1~Day5 均已正式通过；Day5 最终评分 `95/100`。Week11 Day6 Round1 已以 `94/100` 正式通过，R2/R3 已按真实实现定向润色；下一步只完成 partial-next、oversized declaration、complete-request half-close 与当前版本 ASan/UBSan 收口。AI Theory T1~T3 已正式通过，下一模块为 T4；ML 自学已到多变量线性回归，Ex1 可在完成后作为 T7 等价产出。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -7139,3 +7139,13 @@ R1 暂定 `82/100`，尚未正式通过。三个问题属于当天 observable co
 `day6_note.md` 的主判断正确：keep-alive/terminal-close 属于 HTTP application/session policy，不能塞回 transport `Connection`；MessageCallback 需要循环解析 Complete requests，并在 close request 后 flush-close。但笔记里“以后不再进入 MessageCallback，所以开头检查 flag”只覆盖未来 callback，不能替代当前 callback 内的 terminal exit。下次复检只检查 terminal Complete/Error 分支立即离开 parse loop，以及 token parsing 对 token 长度和 empty segment 的正确处理；不重写已经通过的 keep-alive、response FIFO、deferred erase 或现有 smoke checker。
 
 本轮完整检查了 Daily baseline diff。用户只新增 §13.2 与 §13.3：Python `sendall`/`recv` 在 3 秒 timeout 下的 blocking 语义、`recv_exact` 循环理由、EOF 后再次 `recv` 仍返回 EOF，以及 TCP half-close 的方向性。这两节技术上正确，解决了 checker 阅读中的真实理解问题，应原样保留。由于 R1 尚未通过，本轮不修改 Day6 R2/R3，不更新 `DAILY_INDEX.md`，也没有修改任何 Ubuntu production code 或 tests。
+
+## 2026-09-30：Week11 Day6 Round1 正式通过
+
+用户完成三个定向修复。Complete request 命中 close 后会在 `close_after_flush()` 后立即 `break`；Error 分支同样在提交 error response 与 close 后 `break`，不再重复解释同一 input；`request_wants_close()` 只保存非空 comma-separated segments，`check_close()` 对 OWS-trim 后的精确 `[l,r]` 内容做 case-insensitive compare，既识别 `close, keep-alive`，也不会对 leading/consecutive comma 执行 `size_t` 下溢索引。
+
+极短复检在用户最新 `build/http_server_v1` process 上得到：原 sequential/pipeline checker 全部 PASS；close request + buffered suffix 只返回一份 close response 后 EOF；malformed request 只返回一份 400 close response 后 EOF；`close, keep-alive` 与 `, close` 都正确关闭。每条反例后使用 `kill -0` 确认同一个 server process 仍存活。fresh `/tmp/week11-day6-r1-review` 全量编译零 warning，固定入口 CTest `54/54 PASS`。R1 最终评分 `94/100`，正式通过。
+
+R1 通过后已从用户当前磁盘版本定向润色 Day6 第 17 节以后的完整 R2/R3，并原样保留用户新增的 §13.2/§13.3。后半教程现在逐节映射真实 `request_over_flag[fd]` lifecycle、局部 stateless parser、Complete/NeedMore/Error 三出口、两个 terminal `break`、`request_wants_close`/`check_close`/`ascii_iequals`、Connection FIFO output 与本轮真实 probes。Round3 不再重复已通过证据，只保留 partial-next、oversized declaration、complete-request half-close 与当前版本 ASan/UBSan。`response_for_parse_error()` 已经返回 closing response；Error branch 在 encode 后再次设置 `http_response.close_connection = true` 对现有 wire bytes 没有作用，属于以后可顺手删除或前移的冗余赋值，不阻塞通过。
+
+可复用经验：检查 parse loop 时不能只看“未来 callback 是否有 guard”，还必须检查 terminal decision 后当前循环是否立即退出。Integration probe 也不能只验证 client 收到第一份正确 response；必须继续确认 response 数量、EOF 和 server process 仍存活，否则“先返回正确 bytes、随后进程 abort”会被误判为成功。
