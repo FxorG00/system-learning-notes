@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-01）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`，用户能从 readable readiness 讲到 MessageCallback、parser/route/encoder、Connection output、writable drain、deferred cleanup 与 RAII close，并正确区分 transport bytes、HTTP policy 和 owner lifetime。Day7 只新增 note、未修改 Ubuntu source/build/tests，因此沿用 Day6 fresh Debug 零 warning、CTest `54/54 PASS`、normal/ASan/UBSan process-external evidence，不机械重跑。系统主线下一步进入 Week12 RESP parser 与 Mini Redis V1，不推倒 Week10/11 底座。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-01）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`，用户能从 readable readiness 讲到 MessageCallback、parser/route/encoder、Connection output、writable drain、deferred cleanup 与 RAII close，并正确区分 transport bytes、HTTP policy 和 owner lifetime。Week12 Day1 已生成，当前等待用户独立完成 RESP2 reply encoder 的 Round1；本日只做纯内存 encoder，不改 Reactor、不接 socket、不提前写 request parser 或 KV store。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -3160,7 +3160,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-10-01 当前学习状态：系统主线 Week1~Week11 已完成，Week10 Reactor V1 与 Week11 HTTP Server V1 均已正式通过。下一步进入 Week12 RESP incremental parser 与 Mini Redis V1，直接复用现有 Buffer、EventLoop、Channel、Acceptor、Connection、output drain 与 deferred cleanup。AI Theory T1~T3 已正式通过，下一模块为 T4；ML 自学已到多变量线性回归，Ex1 可在完成后作为 T7 等价产出。
+2026-10-01 当前学习状态：系统主线 Week1~Week11 已完成，Week10 Reactor V1 与 Week11 HTTP Server V1 均已正式通过。Week12 Day1 教程已生成，当前下一步是独立完成 RESP2 reply encoder Round1；Round1 正式通过后，再按真实 source、tests、note 与 diff 定向润色 R2/R3。Day2 incremental request parser 尚未开始。AI Theory T1~T3 已正式通过，下一模块为 T4；ML 自学已到多变量线性回归，Ex1 可在完成后作为 T7 等价产出。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -7276,3 +7276,13 @@ Day7 最终评分保持 `95/100`，正式通过；Week11 HTTP Server V1 整周�
 Week12 继续使用系统主线 daily 的三 Part、R1 progressive disclosure、R1 后按真实 source/note/tests 定向润色与用户内容保护规则。机械 GoogleTest/Python harness 可在用户明确授权后由 Codex 补充；RESP parser state model、command/store core code 与 oracle 解释仍由用户掌握。周规划不加入 `DAILY_INDEX.md`，只有实际生成或修改 daily 后才同步目录。
 
 AI Theory 真实进度仍为 T1~T3 通过、T4 下一步。旧协调目标希望 Week12 到 T8，但本周不通过压缩 T4~T8 伪造追平；Week12 理论线以正式完成 T4 为必达，有余力再进入 T5。Ex1 与 T7 继续只实现一次。
+
+## 2026-10-01：Week12 Day1 教程生成
+
+已生成 `week12/day1/day1.md`。今天先从一个明确问题出发：command 已经产生 success、error、integer、bytes 或 null result 后，server 怎样把它编码成 client 能准确拆分的 RESP2 reply bytes。Round1 只新增纯内存 `resp_encoder.hpp/.cpp` 与 exact-byte tests，不接 socket、不写 request parser、不建立 KV store，也不修改 Week10/11 已通过的 Reactor/HTTP components。
+
+R1 public contract 固定为五个窄接口：Simple String、Error、Integer、Bulk String 与 Null Bulk String。教程写清了 type marker、CRLF、Bulk String length prefix、embedded NUL、`string_view` borrowed input 与 owning `std::string` output；Simple String/Error 中的 CR/LF 采用固定 `std::invalid_argument` contract。机械 CMake/CTest glue 已直接给出，encoder implementation、length calculation 与核心 exact-byte oracle 仍由用户完成。
+
+教程保持主线三 Part 与 R1/R2/R3 progressive disclosure：第一屏先说明程序用途和 exact outputs；R1 包含文件名、API、错误契约、最小使用例、三组核心 tests、构建命令和阅读闸门；R2 才解释 binary-safe、empty bulk 与 null bulk、wire length、ownership和复杂度；R3 负责 edge matrix、sanitizer 边界和 Day2 parser 接口。没有因进入 Mini Redis 把教程改成协议百科，也没有提前泄露 encoder 控制流。R1 通过后必须从用户当时磁盘上的 current daily/source/tests/note 出发定向润色后半部分，并保留用户新增内容。
+
+`DAILY_INDEX.md` 已同步到 78 份正式 daily，新增 Week12 Mini Redis V1、Day1 条目和 RESP2 检索词。当前状态只是“教程已生成、等待 R1”，不能提前标记 Day1 或 Week12 通过；本轮未修改 Ubuntu production code，也未触碰用户正在编辑的 ML 文件。

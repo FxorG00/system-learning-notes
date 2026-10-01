@@ -1,8 +1,8 @@
 # Daily 教程总目录
 
-> 更新日期：2026-09-30
+> 更新日期：2026-10-01
 >
-> 收录范围：主线 Week1 Day1 至 Week11 Day7，共 77 份正式 daily 教程。
+> 收录范围：主线 Week1 Day1 至 Week12 Day1，共 78 份正式 daily 教程。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -21,8 +21,8 @@ MEMORY.md：长期规则、进度与历次检阅结论
 ```text
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
-Week1 到 Week10 已通过
-Week11 Day1~Day6 已正式通过；Day7 教程已生成，等待 Round1
+Week1 到 Week11 已通过
+Week12 Day1 教程已生成，等待 Round1
 ```
 
 ---
@@ -42,6 +42,7 @@ Week11 Day1~Day6 已正式通过；Day7 教程已生成，等待 Round1
 | non-blocking 与 epoll | [Week9](#week9non-blocking-ioepoll-与事件驱动-server) | EAGAIN、epoll、per-connection state、dynamic EPOLLOUT、LT/ET |
 | Reactor V1 | [Week10](#week10reactor-v1) | Buffer、Channel、EventLoop、Acceptor、Connection，继续加固 callback lifetime |
 | HTTP Server V1 | [Week11](#week11http-server-v1) | incremental request parser、response encoder、Reactor integration、keep-alive |
+| Mini Redis V1 | [Week12](#week12mini-redis-v1) | RESP2 encoder/parser、command dispatcher、KV store、multi-client integration |
 
 ---
 
@@ -199,6 +200,14 @@ Week11 Day1~Day6 已正式通过；Day7 教程已生成，等待 Round1
 
 ---
 
+# Week12：Mini Redis V1
+
+| Day | 主要内容 | 主要产出 / 观察 | 检索关键词 |
+|---|---|---|---|
+| [Day1：RESP2 reply encoder](week12/day1/day1.md) | 从 type marker、CRLF 与 length prefix 建立 RESP2 reply wire model；区分 Simple String、Error、Integer、Bulk String 与 Null Bulk String，并明确 `string_view` input 和 owning output | `resp_encoder.hpp/.cpp` + exact-byte tests + CMake/CTest target | RESP2, encoder, serialization, wire bytes, Simple String, Bulk String, Null Bulk, binary-safe, string_view |
+
+---
+
 # 按关键词反查
 
 ## C++ 对象与所有权
@@ -275,6 +284,9 @@ HTTP persistent connection / keep-alive    -> Week11 Day6
 HTTP pipelining / parse loop / response order -> Week11 Day6
 HTTP Server V1 architecture / ownership    -> Week11 Day7
 HTTP claim / evidence / limitation         -> Week11 Day7
+RESP2 reply / serialization / encoder      -> Week12 Day1
+Simple String / Bulk String / Null Bulk    -> Week12 Day1
+binary-safe reply / string_view ownership  -> Week12 Day1
 ```
 
 ## 并发与工程工具
