@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-01）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`，用户能从 readable readiness 讲到 MessageCallback、parser/route/encoder、Connection output、writable drain、deferred cleanup 与 RAII close，并正确区分 transport bytes、HTTP policy 和 owner lifetime。Week12 Day1 已生成，当前等待用户独立完成 RESP2 reply encoder 的 Round1；本日只做纯内存 encoder，不改 Reactor、不接 socket、不提前写 request parser 或 KV store。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-01）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`，用户能从 readable readiness 讲到 MessageCallback、parser/route/encoder、Connection output、writable drain、deferred cleanup 与 RAII close，并正确区分 transport bytes、HTTP policy 和 owner lifetime。Week12 Day1 已生成，当前等待用户独立完成 RESP2 reply encoder 的 Round1；本日只做纯内存 encoder，不改 Reactor、不接 socket、不提前写 request parser 或 KV store。AI Theory T1~T3 已正式通过，T4 Round1 已于 2026-10-01 正式通过，下一步阅读根据真实实现定向润色的 T4 R2/R3；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -3160,7 +3160,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-10-01 当前学习状态：系统主线 Week1~Week11 已完成，Week10 Reactor V1 与 Week11 HTTP Server V1 均已正式通过。Week12 Day1 教程已生成，当前下一步是独立完成 RESP2 reply encoder Round1；Round1 正式通过后，再按真实 source、tests、note 与 diff 定向润色 R2/R3。Day2 incremental request parser 尚未开始。AI Theory T1~T3 已正式通过，下一模块为 T4；ML 自学已到多变量线性回归，Ex1 可在完成后作为 T7 等价产出。
+2026-10-01 当前学习状态：系统主线 Week1~Week11 已完成，Week10 Reactor V1 与 Week11 HTTP Server V1 均已正式通过。Week12 Day1 教程已生成，当前下一步是独立完成 RESP2 reply encoder Round1；Round1 正式通过后，再按真实 source、tests、note 与 diff 定向润色 R2/R3。Day2 incremental request parser 尚未开始。AI Theory T1~T3 已正式通过，T4 Round1 已正式通过，下一步阅读已按真实实现定向润色的 T4 R2/R3；ML 自学已覆盖多变量线性回归、logistic regression 与 regularization，Ex1 可在完成后作为 T7 等价产出。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -7322,3 +7322,17 @@ Implementation Bridge 与既有 Reading Gate 不冲突：闸门继续保护值�
 - `T14`：增加真实 shape-mismatch failure；补 residual two-path forward dataflow 与 object/state roles；projection solution 仍留在闸门后。
 
 发布前自检新增一问：即使读者忘了教程规定的 function signatures，能否根据 artifact 目标、dataflow 和 object roles 重新设计出合理程序结构？若答案是否定，说明文档仍在训练“照 specification 填函数”，需要继续重写。`T9/T10/T11` 是当前正向样板，但也只吸收它们的认知顺序，不机械复制章节格式。
+
+## 2026-10-01：AI Theory T4 Round1 正式通过
+
+用户在 Ubuntu `~/code/system-learning/ai-theory/t04_finite_difference/finite_difference_gradient.py` 独立实现了 1-D float64 parameter vector 的 central-difference gradient checker。真实实现采用 `theta = parameters` 的同对象工作状态：每个 coordinate 保存原值，依次做正/负扰动，完成两次 forward 后恢复；scalar loss case 的 numerical gradient 与独立 chain-rule path 都得到 `[6, 2]`。Python `3.12.14`、NumPy `2.5.2` 下 `py_compile`、normal run 与 `python3 -O` 均通过。
+
+第一次检阅发现的唯一真实 evidence bug 是 `before = parameters`：它只复制 name，不复制 ndarray，input-unchanged assertion 因此没有独立性。用户已改为 `before = parameters.copy()`，并补充注释说明 alias / deep copy；central-difference 注释也从容易误读的 `/2*epsilon` 修为 `/(2*epsilon)`。复检确认修改落盘且两种运行模式继续通过。生产代码由用户修改，Codex 始终只读检查。
+
+Codex 使用不修改用户 source 的外部 checker 补验 generic objective $f(\theta)=(\theta_0+2\theta_1)^2+\theta_0$，得到 `[3, 4]`，shape/dtype/finite/input snapshot 全部通过；又用同一 implementation 运行 `sin(1)` epsilon sweep，absolute error 从 `1e-1` 的约 `9.0e-4` 降到 `1e-5` 的约 `1.1e-11`，随后升到 `1e-11` 的约 `1.17e-6`，形成 truncation error 与 floating-point cancellation 的真实证据。用户不需要把这些机械 cases 再复制进主文件。
+
+用户补充的 12 页 `ML note.pdf` 已逐页检阅：linear regression 从单样本扩展到矩阵 gradient、gradient descent、feature scaling、正规方程、logistic regression、BCE/stable softplus、logit/odds 与 L2 regularization 的主推导均正确，证明解析梯度和训练流程不是当前短板；但这些笔记不能代替 finite-difference 独立 oracle，本轮 executable evidence 已补齐该抽象增量。
+
+T4 R1 最终评分 `94/100`，正式通过。扣分只保留为 V1 的明确边界：原地 perturb/restore 在 callback 正常返回时成立，若 callback 在 restoration 前抛异常则 caller array 可能停在 perturbed state；当前 callable contract 假设返回 finite scalar，因此不阻塞 R1，未来通用化时可使用 `try/finally` 或 copy-isolated evaluations。
+
+R1 通过后已从用户当前 `T4.md` 版本定向润色完整 R2/R3，并原样保留用户新增的“说白了”解释。后半教程现在直接映射真实 state strategy、alias oracle 修复、外部 generic case 与 epsilon 数值表；R2 只要求解释 snapshot independence、成功路径 restoration 与 epsilon 非单调，R3 只收口 independent oracle、约 $2d$ 次 forward 成本和 AI Infra reference-first，不要求重写 checker、复制第二套 tests、增加 README/pytest/benchmark 或仅为 PASS label 改程序。当前进度是 T4 R1 通过，尚未把完整 T4 标为通过；下一步阅读定向 R2/R3 后再最终收口。
