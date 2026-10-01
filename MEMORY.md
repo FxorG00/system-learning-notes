@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-01）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`，用户能从 readable readiness 讲到 MessageCallback、parser/route/encoder、Connection output、writable drain、deferred cleanup 与 RAII close，并正确区分 transport bytes、HTTP policy 和 owner lifetime。Week12 Day1 已生成，当前等待用户独立完成 RESP2 reply encoder 的 Round1；本日只做纯内存 encoder，不改 Reactor、不接 socket、不提前写 request parser 或 KV store。AI Theory T1~T3 已正式通过，T4 Round1 已于 2026-10-01 正式通过，下一步阅读根据真实实现定向润色的 T4 R2/R3；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-01）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`，用户能从 readable readiness 讲到 MessageCallback、parser/route/encoder、Connection output、writable drain、deferred cleanup 与 RAII close，并正确区分 transport bytes、HTTP policy 和 owner lifetime。Week12 Day1 已生成，当前等待用户独立完成 RESP2 reply encoder 的 Round1；本日只做纯内存 encoder，不改 Reactor、不接 socket、不提前写 request parser 或 KV store。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -3160,7 +3160,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-10-01 当前学习状态：系统主线 Week1~Week11 已完成，Week10 Reactor V1 与 Week11 HTTP Server V1 均已正式通过。Week12 Day1 教程已生成，当前下一步是独立完成 RESP2 reply encoder Round1；Round1 正式通过后，再按真实 source、tests、note 与 diff 定向润色 R2/R3。Day2 incremental request parser 尚未开始。AI Theory T1~T3 已正式通过，T4 Round1 已正式通过，下一步阅读已按真实实现定向润色的 T4 R2/R3；ML 自学已覆盖多变量线性回归、logistic regression 与 regularization，Ex1 可在完成后作为 T7 等价产出。
+2026-10-01 当前学习状态：系统主线 Week1~Week11 已完成，Week10 Reactor V1 与 Week11 HTTP Server V1 均已正式通过。Week12 Day1 教程已生成，当前下一步是独立完成 RESP2 reply encoder Round1；Round1 正式通过后，再按真实 source、tests、note 与 diff 定向润色 R2/R3。Day2 incremental request parser 尚未开始。AI Theory T1~T4 已正式通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 regularization，Ex1 可在完成后作为 T7 等价产出。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -7336,3 +7336,13 @@ Codex 使用不修改用户 source 的外部 checker 补验 generic objective $f
 T4 R1 最终评分 `94/100`，正式通过。扣分只保留为 V1 的明确边界：原地 perturb/restore 在 callback 正常返回时成立，若 callback 在 restoration 前抛异常则 caller array 可能停在 perturbed state；当前 callable contract 假设返回 finite scalar，因此不阻塞 R1，未来通用化时可使用 `try/finally` 或 copy-isolated evaluations。
 
 R1 通过后已从用户当前 `T4.md` 版本定向润色完整 R2/R3，并原样保留用户新增的“说白了”解释。后半教程现在直接映射真实 state strategy、alias oracle 修复、外部 generic case 与 epsilon 数值表；R2 只要求解释 snapshot independence、成功路径 restoration 与 epsilon 非单调，R3 只收口 independent oracle、约 $2d$ 次 forward 成本和 AI Infra reference-first，不要求重写 checker、复制第二套 tests、增加 README/pytest/benchmark 或仅为 PASS label 改程序。当前进度是 T4 R1 通过，尚未把完整 T4 标为通过；下一步阅读定向 R2/R3 后再最终收口。
+
+## 2026-10-01：AI Theory T4 正式完成
+
+用户完成定向 R2/R3，并准确解释三个核心边界。术语上需要保留的精确修正是：`before = parameters` 不是 shallow copy，而是 assignment/alias，完全没有创建新 ndarray；对当前 float64 ndarray，`.copy()` 会建立独立 ndarray 与独立 numeric data buffer，满足本课隔离需要，但不应无条件推广成对所有 `dtype=object` 元素做递归 deep copy。
+
+用户随后亲自把 implementation 从 `theta = parameters` 升级为每个 coordinate 使用 `theta = parameters.copy()`。因此 plus/minus perturbation 只修改局部 working array；即使 objective callback 在 restoration 前抛异常，caller-owned parameters 仍不受污染。Codex 使用主动抛出 `RuntimeError` 的外部 callback 验证 `EXCEPTION INPUT-PRESERVATION PASS`，并复跑 generic objective 得到 `GENERIC CASE PASS`；normal 与 `python -O` 仍得到 numerical/analytic `[6, 2]`。
+
+用户对 epsilon 的解释正确：$f_+$ 与 $f_-$ 极接近时，leading digits 相消使有效信息减少，随后除以很小的 $2\epsilon$ 会放大 rounding/cancellation error。R3 无需再重复口述：source 清楚证明 numerical path 只调用 forward objective、不复用 analytic formula；$d$ 个 coordinates 各做 plus/minus 两次 forward，成本约为 $2d$，因此 gradient checker 是小 reference/抽样 correctness oracle，而不是 backward 或 optimizer 的替代品。
+
+T4 最终评分 `96/100`，正式通过；AI Theory 当前进度更新为 T1~T4 正式通过，下一模块为 T5。`T4.md` 已再次按最终 copy-isolated implementation 定向更新：记录实现演化、异常反例、精确 copy 语义和完成状态，不要求用户删除无害的局部 restore、重复第二套 tests 或增加 README/pytest/benchmark。用户的 Ubuntu source 仍只由用户修改，Codex 没有改动任何 production code。
