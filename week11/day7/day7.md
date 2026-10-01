@@ -272,6 +272,16 @@ R2 会给出当前实现的完整对照。如果先读答案再画图，今天�
 
 ## 9. Round2：把你当前实现串成一条完整主线
 
+你的 R1 没有把所有内容压进一张大图，而是按真实责任边界拆成三张：
+
+```text
+readable readiness -> Connection::handle_recv
+HTTP MessageCallback -> parse / route / encode / send
+Connection::send -> output_ -> handle_send
+```
+
+再用 ownership table 单独回答 fd、input/output bytes、partial request、HTTP terminal policy 和 `Connection` lifetime 分别由谁持有。这种拆法是成立的；R2 的任务不是要求你重画一张更大的图，而是把三张图之间的接口接起来，并核对你口述的 deferred cleanup 链。
+
 ## 10. 从 readable event 到 response bytes
 
 你当前实现的主路径可以压缩成：
@@ -287,8 +297,9 @@ flowchart TD
     G --> H["route HttpRequest"]
     H --> I["encode HttpResponse"]
     I --> J["Connection send"]
-    J --> K["kernel send buffer or output Buffer"]
-    K --> L["EPOLLOUT drains pending bytes"]
+    J --> K["append full response to output Buffer"]
+    K --> L["handle_send drains accepted prefix"]
+    L --> M["EPOLLOUT continues pending suffix"]
 ```
 
 这里有一条非常重要的分层：
@@ -318,6 +329,8 @@ TCP 交付的是 byte stream。一次 `handle_recv()` drain 后，input Buffer �
 ```
 
 每次继续 loop 前，当前 input 都必须已经缩短；否则会在同一 prefix 上无限重复。
+
+你在 R1 application 图中补上的 `request_over_flag == false -> parse_request`，表达的正是这条 parse loop。若当前 response 不是 terminal response，`Connection::send()` 返回后不会退出 MessageCallback，而是继续检查 `input_` 中是否已经存在下一条完整 request。
 
 ## 12. 走一遍“完整 request + partial next request”
 
@@ -407,7 +420,7 @@ retrieve exact consumed bytes
 
 ## 14. 当前实现的 ownership table
 
-将你的 R1 表格与下面逐项对照：
+你的 R1 表格已经把九类 owner 全部放对。下面不作为另一份标准答案要求你重抄，只把命名和当前源码中的精确变化时机统一下来：
 
 | 对象或 state | 当前 owner / 位置 | 变化时机 | 清理时机 |
 |---|---|---|---|
@@ -416,7 +429,7 @@ retrieve exact consumed bytes
 | partial HTTP request | 同一条 connection 的 input Buffer suffix | `NeedMore` 时原样保留 | 补齐并 Complete 后 retrieve，或 connection 销毁 |
 | parser object | MessageCallback 的局部对象 | 每轮 callback 创建 | callback 返回时销毁；它不保存 partial bytes |
 | terminal session state | `apps/http_server_v1.cpp` 的 `request_over_flag[fd]` | close request 或 parse error 时置 true | owner erase 对应 connection 时同步 erase |
-| output bytes | `Connection::output_` | `send()` 未一次交给 kernel 的 suffix 进入这里 | `handle_send()` drain 或 Connection 析构 |
+| output bytes | `Connection::output_` | 当前实现的 `send()` 先 append 完整 caller byte range，再立即调用 `handle_send()`；kernel 尚未接受的 suffix 留在这里 | `handle_send()` 按成功返回值逐步 retrieve；剩余 storage 随 Connection 析构 |
 | close-after-flush state | `Connection` transport state | application 作出 terminal decision 后设置 | output empty 后转入 close path，随对象销毁 |
 | deferred cleanup requests | composition root 的 `pending_close` | CloseCallback 记录 fd | `poll_once()` 整轮返回后消费 |
 | `Connection` object | composition root 的 active-connections container | accept 后插入 | deferred cleanup 阶段 `connections.erase(fd)` |
@@ -442,6 +455,8 @@ close_after_flush state
 `close_after_flush` 保证 response suffix 不会因为“决定关闭”而立刻丢失。
 
 ## 16. 从 `Connection: close` 到 fd 真正关闭
+
+你已经在 R1 口述中完整说明了这条链，并在 ownership table 中分别写出了 `pending_close` 和 `Connection` 的清理时机，因此不要求为了图的展开程度重新绘制。这里把你的口述压成一条可复查的调用链：
 
 完整因果链是：
 
@@ -581,6 +596,8 @@ RFC 9112 同时要求 persistent connection 上的 messages 具有自定义长�
 
 今天不要求你把下面测试重写一遍。把已有证据按 claim 归位即可。
 
+你的 R1 只新增 note，没有修改 Ubuntu source、CMake 或 tests，因此下面引用 Day1~Day6 的 fresh evidence，不把“没有重复运行”误写成缺少证据。
+
 | Claim | 当前 evidence | 它证明了什么 |
 |---|---|---|
 | request line 可跨任意 split | Day1 all-split tests | CRLF/request-line 任意切分不会丢上下文 |
@@ -688,7 +705,7 @@ cmake -E chdir build ctest --output-on-failure
 
 ## 26. Day7 note 的建议结构
 
-保持短小：
+你当前的 note 已经用三张 runtime flow 和一张 ownership table 完成 R1，不需要为了匹配下面模板重排或重写。进入 R3 后若希望补一句收口，只需在现有文件末尾追加 milestone 与限制，不复制已有流程：
 
 ```markdown
 # Week11 Day7 Note

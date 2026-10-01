@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-09-30）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day6 均已正式通过，Day7 教程已经生成、等待 Round1。Day6 最终评分 `96/100`：HTTP/1.1 persistent connection、sequential reuse、pipelining/order、NeedMore prefix preservation、terminal close/error、oversized declaration、half-close 与精确 `Connection` token parsing 均有进程外证据；fresh Debug 全量编译零 warning，CTest `54/54 PASS`，当前源码的 ASan/UBSan covered paths 无报告。Day7 只整理 HTTP Server V1 runtime flow、ownership/state、claim-to-evidence ledger 与限制，不新增 feature、不机械重跑已有测试。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-01）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day6 均已正式通过，Day7 Round1 以 `95/100` 正式通过。用户完成 readable transport、HTTP MessageCallback、writable transport 三张 runtime flow 和九项 ownership/state table；复检时补上 non-terminal `Complete -> 下一轮 parse`。`route_http_request -> encode_http_response` 与 `close_helper -> deferred erase -> RAII close` 虽未在图中逐 helper 展开，但用户能够准确口述，表格也正确记录 owner 与清理时机，因此视为理解证据，不把绘图详细程度机械设为阻塞项。R1 后已从当前磁盘版本定向润色 Day7 R2/R3，不修改 note 或 Ubuntu code。Day6 最终评分 `96/100`：HTTP/1.1 persistent connection、sequential reuse、pipelining/order、NeedMore prefix preservation、terminal close/error、oversized declaration、half-close 与精确 `Connection` token parsing 均有进程外证据；fresh Debug 全量编译零 warning，CTest `54/54 PASS`，当前源码的 ASan/UBSan covered paths 无报告。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -7239,3 +7239,22 @@ ML/
 `official_assignments/` 已同步 Ex1~Ex8 starter notebooks、Data、Figures、`utils.py` 和原题 PDF，共约 39 MiB，只作本地参考并由 Ubuntu `ML/.gitignore` 排除。同步教程或资源时绝不能覆盖 `exercises/` 中用户自己的实现；以后检阅 ML code 默认 SSH 读取 Ubuntu 目录。
 
 Ubuntu 环境已完成真实验证：Python `3.12.14`，NumPy `2.5.2`、SciPy `1.18.1`、Matplotlib `3.11.2`、pandas `3.0.6`、scikit-learn `1.9.1`、JupyterLab `4.6.4`；`python3 -m pip check` 无 broken requirements。Ex1 两份数据分别可读为 `(97, 2)`、`(47, 3)`，Ex3 `.mat` 中 `X/y` 可读为 `(5000, 400)`、`(5000, 1)`。安装时使用清华 PyPI 镜像解决官方源约 `47 KB/s` 的低速问题，但 requirements 文件不绑定镜像或机器专属版本。
+
+## 2026-10-01：Week11 Day7 Round1 第一次检阅
+
+用户在 `day7_note.md` 中完成了 readable transport、HTTP MessageCallback 和 writable transport 三张 Mermaid 图，并完成九项 ownership/state table。对照 Ubuntu 当前 `connection.cpp` 与 `http_server_v1.cpp`，writable 路径准确覆盖 `send -> output_ -> handle_send`、positive progress、`EINTR` retry、`EAGAIN/EWOULDBLOCK` preserve-and-arm-EPOLLOUT、fatal close-before-throw、full drain、删除 EPOLLOUT，以及 close-after-flush / peer-write-closed 后提交 close request。ownership table 也正确区分 `UniqueFd`、per-connection input/output、input 中的 partial suffix、局部 stateless parser、application-side `request_over_flag[fd]`、Connection-side close-after-flush、owner-side `pending_close` 和 `unique_ptr<Connection>` lifetime。
+
+本轮暂定 `90/100`，R1 尚未正式通过。只剩两组图上缺口：
+
+```text
+1. application 图必须显式补出 non-terminal Complete 在 send 后回到 parse_request，才能表达一次 callback 处理多条 complete requests；同时把“生成 wire response”展开为 route_http_request -> encode_http_response -> Connection::send。
+2. runtime close path 必须从 close_helper 接到 CloseCallback -> pending_close -> poll_once 返回 -> request_over_flag/connections erase -> Connection destructor -> UniqueFd close，才能满足 write side 到 eventual cleanup 的 R1 contract。
+```
+
+readable 图、writable 错误分支和 ownership table 不要求重画；不新增 C++、GoogleTest、probe 或重复运行 Day1~Day6 evidence。由于 R1 尚未通过，本轮不修改 `day7.md` 的 R2/R3，也不触发 Day7 最终收口。
+
+## 2026-10-01：Week11 Day7 Round1 正式通过
+
+用户只补充了第一次检阅中唯一会改变 runtime semantics 的缺口：application flow 在 non-terminal Complete 的 response 进入 `Connection::send()` 后，明确回到 `parse_request`，表达同一 MessageCallback 中继续处理下一条 complete request。`route_http_request -> encode_http_response` 和 `close_helper -> CloseCallback -> pending_close -> poll_once 返回 -> owner erase -> RAII close` 没有继续拆成更多图节点，但用户能够准确口述完整链，ownership table 也已分别记录 policy owner、transport state、deferred request 与 object lifetime；Day7 的目标是检验整体模型，不是考查图的节点数量，因此这些展开项不再阻塞。
+
+R1 最终评分 `95/100`，正式通过。扣分只保留为表达精度：application 图把 route/encode 合并成“生成 wire response”，deferred cleanup 分散在 writable 图与 table 中，没有形成单张 end-to-end 图；这不等于机制不懂。R1 后已从用户当前磁盘版本窄幅润色 `day7.md` 的 R2/R3：按三张图的责任边界组织对照；明确当前 `Connection::send()` 总是先把完整 caller range append 到 `output_` 再尝试 drain；把用户补出的 parse-loop 回边映射到 pipelining；确认口述 cleanup chain 无需重画；R3 直接引用 Day1~Day6 fresh evidence。R1 原文、用户 note 和 Ubuntu source 均未修改，`DAILY_INDEX.md` 的核心主题与检索范围没有变化，因此无需更新。
