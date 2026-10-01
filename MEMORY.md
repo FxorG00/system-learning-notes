@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-01）：Week1~Week10 已完成，Week10 Reactor V1 正式通过；Week11 Day1~Day6 均已正式通过，Day7 Round1 以 `95/100` 正式通过。用户完成 readable transport、HTTP MessageCallback、writable transport 三张 runtime flow 和九项 ownership/state table；复检时补上 non-terminal `Complete -> 下一轮 parse`。`route_http_request -> encode_http_response` 与 `close_helper -> deferred erase -> RAII close` 虽未在图中逐 helper 展开，但用户能够准确口述，表格也正确记录 owner 与清理时机，因此视为理解证据，不把绘图详细程度机械设为阻塞项。R1 后已从当前磁盘版本定向润色 Day7 R2/R3，不修改 note 或 Ubuntu code。Day6 最终评分 `96/100`：HTTP/1.1 persistent connection、sequential reuse、pipelining/order、NeedMore prefix preservation、terminal close/error、oversized declaration、half-close 与精确 `Connection` token parsing 均有进程外证据；fresh Debug 全量编译零 warning，CTest `54/54 PASS`，当前源码的 ASan/UBSan covered paths 无报告。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-01）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`，用户能从 readable readiness 讲到 MessageCallback、parser/route/encoder、Connection output、writable drain、deferred cleanup 与 RAII close，并正确区分 transport bytes、HTTP policy 和 owner lifetime。Day7 只新增 note、未修改 Ubuntu source/build/tests，因此沿用 Day6 fresh Debug 零 warning、CTest `54/54 PASS`、normal/ASan/UBSan process-external evidence，不机械重跑。系统主线下一步进入 Week12 RESP parser 与 Mini Redis V1，不推倒 Week10/11 底座。AI Theory T1~T3 已正式通过，下一步为 T4；用户的 `ML.md` 自学已到多变量线性回归，能够解释 gradient descent、feature scaling 与正规方程，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -7258,3 +7258,9 @@ readable 图、writable 错误分支和 ownership table 不要求重画；不新
 用户只补充了第一次检阅中唯一会改变 runtime semantics 的缺口：application flow 在 non-terminal Complete 的 response 进入 `Connection::send()` 后，明确回到 `parse_request`，表达同一 MessageCallback 中继续处理下一条 complete request。`route_http_request -> encode_http_response` 和 `close_helper -> CloseCallback -> pending_close -> poll_once 返回 -> owner erase -> RAII close` 没有继续拆成更多图节点，但用户能够准确口述完整链，ownership table 也已分别记录 policy owner、transport state、deferred request 与 object lifetime；Day7 的目标是检验整体模型，不是考查图的节点数量，因此这些展开项不再阻塞。
 
 R1 最终评分 `95/100`，正式通过。扣分只保留为表达精度：application 图把 route/encode 合并成“生成 wire response”，deferred cleanup 分散在 writable 图与 table 中，没有形成单张 end-to-end 图；这不等于机制不懂。R1 后已从用户当前磁盘版本窄幅润色 `day7.md` 的 R2/R3：按三张图的责任边界组织对照；明确当前 `Connection::send()` 总是先把完整 caller range append 到 `output_` 再尝试 drain；把用户补出的 parse-loop 回边映射到 pipelining；确认口述 cleanup chain 无需重画；R3 直接引用 Day1~Day6 fresh evidence。R1 原文、用户 note 和 Ubuntu source 均未修改，`DAILY_INDEX.md` 的核心主题与检索范围没有变化，因此无需更新。
+
+## 2026-10-01：Week11 Day7 与 Week11 正式完成
+
+用户阅读完按 R1 定向润色的 R2/R3 后确认 Day7 可以收口。本日没有新增 feature、source、test、README 或 benchmark；这是符合 Day7 复盘定位的选择，不把重复运行已有 evidence 当作学习增量。三张 runtime flow、ownership/state table、用户口述与教程中的 claim-to-evidence ledger 共同覆盖四项出口：byte-to-response 主链、state ownership、terminal flush/deferred erase/fd close，以及 unit/integration/tool evidence 的责任边界。
+
+Day7 最终评分保持 `95/100`，正式通过；Week11 HTTP Server V1 整周正式完成。未扣成阻塞项的内容只有图示压缩：route/encode 与完整 cleanup 没有分别展开成独立节点，但用户能够准确解释，不影响模型验收。下一步进入 Week12 RESP incremental parser 与 Mini Redis V1，直接复用已通过的 Buffer、EventLoop、Channel、Acceptor、Connection、NeedMore/Complete/Error、output drain 和 deferred cleanup 模型。

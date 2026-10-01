@@ -4,7 +4,7 @@
 >
 > 主线：Reactor V1 -> incremental HTTP parser -> HTTP Server V1 -> Mini Redis
 >
-> 当前真实进度：Week11 Day1~Day6 已正式通过，Day7 教程已生成；AI Theory T1~T3 已正式通过，下一步为 T4
+> 当前真实进度：Week11 Day1~Day7 均已正式通过，HTTP Server V1 整周完成；AI Theory T1~T3 已正式通过，下一步为 T4；系统主线下一步进入 Week12 Mini Redis V1
 >
 > 本周定位：第一次把 application protocol 接到已经验证过的 transport/lifecycle 底座上
 

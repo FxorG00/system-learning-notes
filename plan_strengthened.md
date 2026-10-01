@@ -581,12 +581,12 @@ atomic/CAS、acquire/release、happens-before 第一层
 
 ## 6. 2026-08 到 2027-03 双线时间表
 
-截至 2026-09-20 的真实状态：系统主线已完成 Week10，正在 Week11；AI Theory 已通过 T1~T3，T4 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
+截至 2026-10-01 的真实状态：系统主线已完成 Week11 Reactor + HTTP Server V1，下一步进入 Week12 RESP parser 与 Mini Redis V1；AI Theory 已通过 T1~T3，T4 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
 
 | 时间 | 系统主线 | AI 理论伴随线 | 必须形成的结果 |
 |---|---|---|---|
 | 2026.08 下旬 | Week9 | 启动 T1 | Epoll Echo Server；能解释 ndarray/shape/dtype |
-| 2026.09 | Week10~11 | T2~T3 已达；T4~T6 为当月后续目标 | Reactor 已通过、HTTP 进行中；matmul/broadcast reference 已形成 |
+| 2026.09 | Week10~11 | T2~T3 已达；T4~T6 顺延继续推进 | Reactor 与 HTTP Server V1 已通过；matmul/broadcast reference 已形成 |
 | 2026.10 上半 | Week12 | T7 等价验收 + T8，Theory Gate 1 | Mini Redis RESP/KV；Ex1/T7 只实现一次，T8 完成 softmax workflow |
 | 2026.10 下半~11 月 | Week13~14 | T9~T12 | TTL/AOF；PyTorch Tensor/Module/autograd/MLP |
 | 2026.11 下半~12 月上半 | Week15 | T13、T15~T16；T14 可延期 | 测试/性能；single-head attention reference |
@@ -1109,9 +1109,9 @@ CUDA kernel correctness + profiler + benchmark
 ## 13. 当前下一步
 
 ```text
-1. 继续完成 Week11 HTTP Server V1，不推倒 Week10 Reactor
+1. 进入 Week12 RESP parser 与 Mini Redis V1，直接复用 Week10 Reactor 与 Week11 HTTP 的 framing/lifetime 底座
 2. AI Theory 进入 T4，把已有微积分映射到 gradient / chain rule / finite difference
-3. Week11 出口后进入 Week12 RESP parser 与 Mini Redis V1
+3. Week12 先形成可运行的 RESP incremental parser、encoder 与最小 PING/ECHO/SET/GET KV 闭环
 4. T20~T24 到达前只维护 serving 资料索引，不启动完整 vLLM/SGLang 源码主线
 5. 每个系统 milestone 继续保留 correctness、sanitizer、failure case 与可复现实验
 6. 到 Theory Gate 3 后先读 mini-sglang，再决定 production framework 的一个窄路径
