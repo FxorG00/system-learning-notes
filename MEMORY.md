@@ -7286,3 +7286,39 @@ R1 public contract 固定为五个窄接口：Simple String、Error、Integer、
 教程保持主线三 Part 与 R1/R2/R3 progressive disclosure：第一屏先说明程序用途和 exact outputs；R1 包含文件名、API、错误契约、最小使用例、三组核心 tests、构建命令和阅读闸门；R2 才解释 binary-safe、empty bulk 与 null bulk、wire length、ownership和复杂度；R3 负责 edge matrix、sanitizer 边界和 Day2 parser 接口。没有因进入 Mini Redis 把教程改成协议百科，也没有提前泄露 encoder 控制流。R1 通过后必须从用户当时磁盘上的 current daily/source/tests/note 出发定向润色后半部分，并保留用户新增内容。
 
 `DAILY_INDEX.md` 已同步到 78 份正式 daily，新增 Week12 Mini Redis V1、Day1 条目和 RESP2 检索词。当前状态只是“教程已生成、等待 R1”，不能提前标记 Day1 或 Week12 通过；本轮未修改 Ubuntu production code，也未触碰用户正在编辑的 ML 文件。
+
+## 2026-10-01：AI Theory 全局 Implementation Bridge 规则
+
+用户提供两份针对 T4 与 T5~T14 的系统审阅并确认建议可全盘吸收。核心问题不是当前理论深度或技术准确性，而是部分教程在 Theory Note 已经讲懂后，进入 coding 时突然退化成 API specification：直接列 function signatures、shape contract 和 PASS evidence，却没有明确最终 artifact 是什么、functions 怎样组成完整程序、每个 object 在 training/evaluation/inference 中扮演什么角色。
+
+以后所有 AI Theory / AI Infra 教程在第一次进入 code task、public contract 或 class definition 之前，必须建立 Implementation Bridge：
+
+```text
+1. 一句话：今天最终造什么 artifact，替谁解决什么问题
+2. 一张 5~10 行 runtime dataflow：input/state 怎样经过各阶段到 output/evidence
+3. 一张最小 object/function role map：model、forward、loss/objective、metric、optimizer、sampler/policy、checker/helper、checkpoint/artifact 分别是谁
+4. 一次 concrete call：具体 input -> function call -> output；再从重复动作长出 generic API
+5. 数学到代码 mapping：symbols、shapes、被求导变量、fixed context、temporary activation 与 persistent state
+```
+
+第一次出现的重要 function/object 还要回答：它消费什么、产生什么、谁调用它、属于 training/evaluation/inference 哪一阶段、state 是 temporary 还是 persistent。无需每篇机械复制同一张大表，但不能让用户只凭函数名猜角色。
+
+凡是 gradient code，必须明确写出 gradient of what、with respect to what、holding what fixed。例如 `function(parameters)` 在 T4 当前 case 中表示“用这组 parameters 重新跑一次 forward，返回固定 `x/y` 下的 scalar loss”；`numerical_gradient` 是 checker，不是 loss/optimizer；`loss_function` 是当前 objective；`x/y` 是 fixed data。不能在这些关系讲清前交替使用 `function/objective/loss`。
+
+Implementation Bridge 与既有 Reading Gate 不冲突：闸门继续保护值得独立发现的 mechanism、formula、shape rule 与 design choice；不能靠隐藏程序用途、函数输入输出语义或调用关系制造难度。Theory、Lab、Gate 仍保持不同文体，contract/evidence 默认放在第一次理论主线闭环之后。该规则只补强 AI Theory 的“理论 -> 程序”过渡，不覆盖系统主线 daily 的三 Part、R1 progressive disclosure、用户独立实现、R1 后定向润色与 executable evidence 规则。
+
+本轮已实际复检 `T4~T14`，并按需修改：
+
+- `T4`：补 `function(parameters) = L(parameters; x,y)`、fixed context、Python name lookup/closure 边界、单 coordinate 调用过程和 function/objective/loss 层级；generic objective 后移为第二层验证。
+- `T5`：补 distribution -> sampler -> samples -> statistics，明确返回 samples，不是 probabilities/frequencies。
+- `T6`：补 naive/stable 同语义双路径与后续 logits-space loss，明确 operations 与 loss 的角色；稳定技巧仍留给 Round1。
+- `T7`：明确 Ex1 已完成时只提交等价 evidence，不再写第二个 model。
+- `T8`：补三分类 training end-to-end dataflow、function role map、math-to-code mapping 与 concrete logits call。
+- `T9`：补 base/transpose/slice/clone/contiguous 的完整实验图；保留其从地址问题推出 stride 的样板结构。
+- `T10`：审计后保持不动；它已经从 loose state 的部署问题自然推出 `nn.Module`，是 Implementation Bridge 基准。
+- `T11`：补 manual / finite difference / autograd 三路 gradient 对质、求导对象与 graph/gradient object map。
+- `T12`：补 XOR -> training -> checkpoint -> fresh load -> inference 主链和优先级；GELU、optimizer comparison、mini-batch、mode/resume state 继续放在 V1 后。
+- `T13`：先给 train/validation 曲线现象再进入 statistical abstraction；补 controlled experiment runtime flow 与 object roles。
+- `T14`：增加真实 shape-mismatch failure；补 residual two-path forward dataflow 与 object/state roles；projection solution 仍留在闸门后。
+
+发布前自检新增一问：即使读者忘了教程规定的 function signatures，能否根据 artifact 目标、dataflow 和 object roles 重新设计出合理程序结构？若答案是否定，说明文档仍在训练“照 specification 填函数”，需要继续重写。`T9/T10/T11` 是当前正向样板，但也只吸收它们的认知顺序，不机械复制章节格式。

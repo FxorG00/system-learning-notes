@@ -347,6 +347,49 @@ Gate / Acceptance
 
 Contract、error handling、Reading Gate 与 evidence matrix 可以保留，但默认放在概念主线已经闭环之后。`T7` 这类已经由 `ML/ML.md` 完成第一次理论讲解的模块，应明确标记为 Lab / Checkpoint；它不需要伪装成第二份 Theory Note。反过来，T4 的 chain rule、T8 的 softmax gradient、T9 的 stride 等首次概念，不能用验收规格代替讲解。
 
+### Implementation Bridge：从理论进入代码前必须搭桥
+
+理论已经讲懂，不代表读者看到一组 function signatures 就会自动知道整份程序怎样运转。任何 T module 开始要求写程序时，必须在 public contract 之前完成下面四件事：
+
+```text
+1. 用一句白话说明最终 artifact 是什么、替谁解决什么问题
+2. 用 5~10 行 text graph 画出 runtime dataflow
+3. 给第一次出现的 function/object 标明角色
+4. 先跑通一次 concrete call，再从重复动作抽象出 generic API
+```
+
+角色说明至少覆盖当前真正出现的类别：
+
+```text
+model：持有/引用 parameters 与 persistent state，定义 forward mapping
+forward：从 inputs/state/parameters 计算 output
+objective / loss：产生 optimization 要最小化的 scalar
+metric：用于评价，不负责 backward，也不一定可微
+optimizer：读取 gradients/state，修改 parameters
+sampler / policy：根据 distribution 或 scores 产生选择
+checker / helper：检查或组织其他计算，本身不是 model/loss/optimizer
+checkpoint / artifact：持久 state，不是正在执行的 model object
+```
+
+第一次出现一个重要 function/object 时，还要用当前程序回答：它消费什么、产生什么、谁调用它、属于 training/evaluation/inference 哪个阶段，以及 state 是 temporary 还是 persistent。不是每篇都要硬塞同一张大表，但这些关系不能让读者靠函数名猜。
+
+数学进入代码时还要给最小映射，并标明哪些量被求导、哪些固定、哪些是 temporary activation、哪些是 persistent state。例如：
+
+```text
+theta -> parameters          被求导 / 被更新
+X     -> features            当前 batch fixed input
+y     -> labels              当前 batch fixed target
+z/Z   -> logits              temporary forward output
+L/J   -> loss                scalar objective
+grad  -> parameter gradient  dL/dtheta
+```
+
+凡是 gradient 代码，都必须回答：gradient of what、with respect to what、holding what fixed。抽象 API 不能承担第一次理解；先用当前具体 loss/sample/tensor 走一遍，再说明这个工具还能接收更通用的 function。
+
+Implementation Bridge 不是泄露核心算法。可以公开 artifact、输入输出语义、调用关系与完整 dataflow；仍把关键公式、实现组织、核心数值技巧和真正值得独立撞的设计墙留给 Round1。Reading Gate 保护 mechanism discovery，不能靠隐藏题意制造难度。
+
+当前风格基准：`T9` 从 storage address 问题推出 stride，`T10` 从 loose state 的部署问题推出 `nn.Module`，`T11` 从手推 gradient 推出 autograd bookkeeping。以后发布前还要检查：即使读者忘了给定函数签名，是否仍能根据完整程序目标重新设计出合理组件；若不能，代码部分仍像 API specification，需要重写。
+
 外部链接放在对应概念之后，标明“查证 / 选看 / 延伸”；除非某一课程片段确实比文字讲义更适合承担主讲，否则不把跳出文档阅读设成必经闸门。
 
 ### Round / Reading Gate 的使用判定
