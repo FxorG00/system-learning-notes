@@ -3160,7 +3160,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-09-30 当前学习状态：系统主线 Week1~Week10 已完成，Week11 Day1~Day6 均已正式通过；Day6 最终评分 `96/100`。下一步进入 Week11 Day7，整理本周 HTTP Server V1 的 claim-to-evidence ledger、已知限制和项目表达。AI Theory T1~T3 已正式通过，下一模块为 T4；ML 自学已到多变量线性回归，Ex1 可在完成后作为 T7 等价产出。
+2026-10-01 当前学习状态：系统主线 Week1~Week11 已完成，Week10 Reactor V1 与 Week11 HTTP Server V1 均已正式通过。下一步进入 Week12 RESP incremental parser 与 Mini Redis V1，直接复用现有 Buffer、EventLoop、Channel、Acceptor、Connection、output drain 与 deferred cleanup。AI Theory T1~T3 已正式通过，下一模块为 T4；ML 自学已到多变量线性回归，Ex1 可在完成后作为 T7 等价产出。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -7264,3 +7264,15 @@ R1 最终评分 `95/100`，正式通过。扣分只保留为表达精度：appli
 用户阅读完按 R1 定向润色的 R2/R3 后确认 Day7 可以收口。本日没有新增 feature、source、test、README 或 benchmark；这是符合 Day7 复盘定位的选择，不把重复运行已有 evidence 当作学习增量。三张 runtime flow、ownership/state table、用户口述与教程中的 claim-to-evidence ledger 共同覆盖四项出口：byte-to-response 主链、state ownership、terminal flush/deferred erase/fd close，以及 unit/integration/tool evidence 的责任边界。
 
 Day7 最终评分保持 `95/100`，正式通过；Week11 HTTP Server V1 整周正式完成。未扣成阻塞项的内容只有图示压缩：route/encode 与完整 cleanup 没有分别展开成独立节点，但用户能够准确解释，不影响模型验收。下一步进入 Week12 RESP incremental parser 与 Mini Redis V1，直接复用已通过的 Buffer、EventLoop、Channel、Acceptor、Connection、NeedMore/Complete/Error、output drain 和 deferred cleanup 模型。
+
+## 2026-10-01：Week12 周规划生成
+
+已生成 `week12/week12.md`。Week12 的唯一系统主线是 RESP2 incremental parser 与 Mini Redis V1：在 Ubuntu 现有 `~/code/system-learning/cpp/week10` canonical project 上新增 RESP encoder、top-level Array-of-Bulk-Strings request parser、`PING/ECHO/SET/GET/DEL/EXISTS` command layer、server-lifetime string KV store 与 `mini_redis_server`，不重写 Reactor，也不在本周提前实现 TTL、AOF、persistence、multi-thread command execution 或完整 Redis data types。
+
+本周固定架构边界：每个 `Connection` 独立拥有 fd、input/output 与 transport state；parser 只解释当前 input prefix；command dispatcher 检查 command/arity；一份 application-owned KV store 被所有 clients 共享；RESP encoder 产生 reply bytes。EventLoop 仍单线程，因此当前 store mutation 串行，不加 mutex，但不能把 `KvStore` 描述成一般意义上的 thread-safe class。Protocol malformed 采用 error reply + close-after-flush；unknown/wrong arity 属于 command error，回复后保持连接。
+
+七天增量固定为：Day1 reply encoder；Day2 request parser V1；Day3 arbitrary fragmentation/coalescing/binary/limits hardening；Day4 KV store + dispatcher；Day5 Reactor integration；Day6 multi-client/pipelining/failure isolation 与 sanitizer evidence；Day7 architecture/evidence exit、真实 Redis 主路径对照和 MySQL B+ tree/EXPLAIN 第一层。MySQL 环境若不存在，不让安装故障阻塞 Mini Redis V1，但三组 EXPLAIN 作为 Week12~13 storage supplement 欠账保留。
+
+Week12 继续使用系统主线 daily 的三 Part、R1 progressive disclosure、R1 后按真实 source/note/tests 定向润色与用户内容保护规则。机械 GoogleTest/Python harness 可在用户明确授权后由 Codex 补充；RESP parser state model、command/store core code 与 oracle 解释仍由用户掌握。周规划不加入 `DAILY_INDEX.md`，只有实际生成或修改 daily 后才同步目录。
+
+AI Theory 真实进度仍为 T1~T3 通过、T4 下一步。旧协调目标希望 Week12 到 T8，但本周不通过压缩 T4~T8 伪造追平；Week12 理论线以正式完成 T4 为必达，有余力再进入 T5。Ex1 与 T7 继续只实现一次。

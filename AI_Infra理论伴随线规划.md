@@ -1,7 +1,7 @@
 # AI Infra 理论伴随线规划
 
-> 版本：2026-09-30，ML 讲义 / 经典作业 / T module 去重校准版
-> 适用对象：FxorG，中山大学计算机科学与技术专业；系统主线已完成 Week10、正在 Week11，理论线 T1~T3 已通过、下一模块为 T4
+> 版本：2026-10-01，Week12 真实进度同步版
+> 适用对象：FxorG，中山大学计算机科学与技术专业；系统主线已完成 Week11、正在 Week12，理论线 T1~T3 已通过、下一模块为 T4
 > 职业目标：本科就业，主攻 LLM inference systems / serving 与 CUDA/Triton kernel optimization
 > 本文件定位：`plan_strengthened.md` 的 AI Infra 理论伴随线，不替代 C++ / Linux / OS / 网络 / Reactor / Mini Redis 主线
 
@@ -163,9 +163,9 @@ AI Theory T module：只补 NumPy/PyTorch、数值稳定性、framework mechanis
 当前系统主线位置：
 
 ```text
-Week1 ~ Week10 已完成
-当前：Week11 HTTP Server V1
-后续：Mini Redis -> 项目证据与投递
+Week1 ~ Week11 已完成
+当前：Week12 RESP parser 与 Mini Redis V1
+后续：TTL / AOF / tests / benchmark / README -> 项目证据与投递
 ```
 
 理论线从 `T1` 开始。文件继续使用 `T1~T24` 编号，但从现在起：

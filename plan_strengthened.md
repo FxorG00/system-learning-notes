@@ -1,8 +1,8 @@
 # C++ 系统工程 / AI Infra 求职总规划
 
-> 版本：2026-09-30，Week11 / T3 / ML-Theory 去重与真实进度校准版
+> 版本：2026-10-01，Week12 Mini Redis V1 启动与真实进度校准版
 > 学习者：FxorG，中山大学计算机科学与技术专业，按当前学制为 2029 届
-> 当前进度：Week1 ~ Week10 已完成，Reactor V1 已闭环；Week11 Day1~Day5 已通过，Day6 教程已生成。AI Theory T1~T3 已通过，下一模块为 T4；ML 自学已到多变量线性回归
+> 当前进度：Week1 ~ Week11 已完成，Reactor V1 与 HTTP Server V1 均已闭环；当前进入 Week12 RESP parser 与 Mini Redis V1。AI Theory T1~T3 已通过，下一模块为 T4；ML 自学已到多变量线性回归
 > 近期目标：2026 年 12 月形成第一版简历，2027 年 1 月开始投递后台开发、C++ Infra 与 AI 业务基础设施相关实习
 > 长期目标：本科就业进入 AI Infra，重点发展 LLM inference systems / serving 与 CUDA kernel optimization
 
@@ -51,7 +51,7 @@ C++
 
 ## 2. 当前真实能力基线
 
-### 2.1 已完成的 Week1 ~ Week10
+### 2.1 已完成的 Week1 ~ Week11
 
 | 阶段 | 已完成内容 | 已形成的证据 |
 |---|---|---|
@@ -65,8 +65,9 @@ C++
 | Week8 | ThreadPool、future、AsyncLogger、GoogleTest、CMake | 组件代码、CTest、TSan、benchmark、integration harness |
 | Week9 | non-blocking I/O、epoll、LT/ET、partial I/O | Epoll Echo Server、`ss` / `strace`、LT/ET 与 half-close 实验 |
 | Week10 | Buffer、Channel、EventLoop、Acceptor、Connection | Reactor Echo Server、CTest、ASan/UBSan、100 clients 与 fd-count evidence |
+| Week11 | HTTP incremental parser、response encoder、route、keep-alive、pipelining | HTTP Server V1、CTest 54/54、raw client、curl、ASan/UBSan、ownership/runtime flow |
 
-Week1 ~ Week10 已正式通过。以后只在项目需要或面试复盘时回查，不再把这些周的完整 daily 复制进总规划。Week11 已生成周规划与 Day1 教程，但仍按真实学习和验收推进，不能把“教程存在”记成“HTTP 已完成”。
+Week1 ~ Week11 已正式通过。以后只在项目需要或面试复盘时回查，不再把这些周的完整 daily 复制进总规划。Week12 已生成周规划，但仍按真实学习和逐日验收推进，不能把“周规划存在”记成“Mini Redis V1 已完成”。
 
 ### 2.2 当前优势
 
@@ -85,7 +86,6 @@ NOIP / CSP-S / CSP-J 奖项
 ### 2.3 当前短板
 
 ```text
-HTTP protocol parser 与 HTTP Server V1 尚未闭环
 Mini Redis 的 RESP、KV、TTL、AOF 与完整项目证据尚未形成
 数据库与 Redis 使用、持久化语义还未形成工程证据
 项目还缺稳定的性能数据、故障案例和简历表达
@@ -96,7 +96,7 @@ CUDA、推理框架、算子优化尚未开始正式 gate
 缺少真实团队协作、代码评审和线上环境经验
 ```
 
-HTTP/Mini Redis、数据库第一层、性能证据、口述闭环和 memory model 由 Week11 ~ Week16 的项目与 milestone exit review 解决；Python/PyTorch 继续走 AI 伴随线；CUDA 和 serving framework 继续等待正式 gate；真实协作只能由实习、实验室、开源协作或多人项目补齐。
+Mini Redis、数据库第一层、性能证据、口述闭环和 memory model 由 Week12 ~ Week16 的项目与 milestone exit review 解决；Python/PyTorch 继续走 AI 伴随线；CUDA 和 serving framework 继续等待正式 gate；真实协作只能由实习、实验室、开源协作或多人项目补齐。
 
 ---
 
@@ -446,7 +446,7 @@ alignment、cache line、false sharing 第一层
 atomic 与 mutex/volatile 的边界、CAS、acquire/release、happens-before 第一层
 ```
 
-### Milestone C / Week11：HTTP Server V1（进行中）
+### Milestone C / Week11：HTTP Server V1（已通过）
 
 核心问题：
 
@@ -475,7 +475,7 @@ curl 可复现实验
 能解释 HTTP/1.0、HTTP/1.1、HTTPS 的边界，以及 TLS 保护了什么
 ```
 
-### Milestone D / Week12：Mini Redis V1 - RESP 与 KV
+### Milestone D / Week12：Mini Redis V1 - RESP 与 KV（进行中）
 
 ```text
 RESP2 最小 parser / encoder
