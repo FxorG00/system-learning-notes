@@ -876,6 +876,8 @@ client 收到 bytes 时不需要先猜 command：
 
 command 决定 server 应该选择哪一种 reply；marker 让 client 知道 server 实际发送的是哪一种。
 
+对照你的 R1，五个 public functions 已经直接把 marker 写死在各自实现里：Simple String 使用 `+`，Error 使用 `-`，Integer 使用 `:`，两类 Bulk String 使用 `$`。你没有额外保存 runtime type field，这是合适的；function name 已经完成 application result 到 wire type 的选择。
+
 ---
 
 ## 22. Simple String：低开销的短状态文本
@@ -904,6 +906,14 @@ Simple String 的形状：
 ```
 
 这里的验证属于 encoder contract，因为只有 encoder 知道 caller 正在选择 line-based wire form。
+
+你的实现使用 `string_view::find()` 检查 CR/LF，再直接构造：
+
+```cpp
+"+" + std::string(value) + "\r\n"
+```
+
+这与当前 contract 完全对应。源码中最好把比较常量写成 `std::string_view::npos`，并直接 `#include <stdexcept>`；当前使用 `std::string::npos` 的数值结果相同、fresh build 也通过，但类型名和直接 include 应与实际 API 对齐。
 
 ---
 
@@ -939,6 +949,8 @@ command layer：决定为什么失败、message 是什么
 encoder：决定 error message 怎样变成 RESP bytes
 ```
 
+你的第一版 Error 分支把 `what()` 误写成了 Simple String 的文本；外部 checker 因 exact message comparison 抓到了这一点。修正为 `RESP error must not contain CR or LF` 后，Error 的正常与异常路径均通过。这正说明这里的测试不是在验证复杂算法，而是在锁住稳定 public contract。
+
 ---
 
 ## 24. Integer：decimal text 也是明确的 protocol representation
@@ -972,6 +984,8 @@ INT64_MIN ... INT64_MAX
 ```
 
 不要给负数添加业务限制。未来 `DEL/EXISTS` 正常只产生非负结果，但 encoder 是 protocol component，应正确表示整个 signed integer domain。
+
+你的实现使用 `std::ostringstream` 生成 `:<value>\r\n`。外部 checker 已覆盖 `-12`、`INT64_MIN` 与 `INT64_MAX`，当前不需要为数字转换重写 helper。
 
 ---
 
@@ -1018,6 +1032,8 @@ $$1 + \operatorname{digits}(N) + 2 + N + 2$$
 当 $N=3$ 时，总长度是 9 bytes。
 
 这里 `\0` 只是 payload 中普通的一个 byte。因为 `std::string_view` 保存 explicit size，encoder 不需要也不应该寻找 null terminator。
+
+你的实现把 `value.size()` 写入 length prefix，并用 `std::string(value)` 复制完整 range。外部 checker 已实际证明 embedded NUL、payload 内部 CRLF、empty payload 和普通 ASCII 都按 exact length 保留；因此不再要求你重复手写同类 cases。
 
 这解释了第二、三个问题：
 
@@ -1076,6 +1092,8 @@ encode_resp_bulk_string("")
 encode_resp_null_bulk_string()
 ```
 
+你的两个接口分别产生 `$0\r\n\r\n` 与 `$-1\r\n`，外部 exact-byte checker 已确认二者没有混淆。
+
 ---
 
 ## 27. `std::string_view` 与 returned `std::string` 的 ownership
@@ -1108,6 +1126,8 @@ wire
 > **input range 由 caller 拥有；encoder 在调用期间读取；returned string 独立拥有 wire bytes。**
 
 因此这些函数不能标 `noexcept`：构造 returned `std::string` 需要分配 memory，allocation 可能失败。
+
+正式检阅还做了 ownership 反例：先从 mutable input 编码得到 `wire`，随后覆盖原 input，returned wire 仍保持 `$5\r\nhello\r\n`。这证明你的函数返回 owning `std::string`，没有保存 caller 的 `string_view`。
 
 ---
 
@@ -1195,62 +1215,30 @@ custom allocator
 
 `reserve()` 可以减少中间 reallocations，但它不是 correctness 条件。先用 tests 证明 exact bytes，再谈 allocation behavior。
 
+你当前 Simple String/Error 使用 string concatenation，Integer/Bulk String 使用 `std::ostringstream`。它们都可能产生中间 allocation，但 Day1 payload 和目标只是 correctness reference；本轮不为减少一次 allocation 改写已经正确的 code。
+
 ---
 
 # Part 3：收尾、Round3 与验收
 
-## 31. Round3：从“几个例子正确”升级成稳定 component
+## 31. Round3：只剩一个明确的工程动作
 
-R1 通过后，不重写 encoder。只在同一 test file 补齐能够暴露边界的 matrix。
-
-### 31.1 Simple String matrix
+你的 encoder 不需要重写。正式检阅已经在 `/tmp` 外部 checker 中覆盖：
 
 ```text
-"OK"       -> "+OK\r\n"
-"PONG"     -> "+PONG\r\n"
-""         -> "+\r\n"
-"A\rB"     -> exact invalid_argument
-"A\nB"     -> exact invalid_argument
+Simple String / Error exact bytes
+Integer -12 / INT64_MIN / INT64_MAX
+embedded NUL / empty / internal CRLF Bulk String
+Null Bulk String
+returned string ownership
+Simple String / Error exact exception type and message
 ```
 
-### 31.2 Error matrix
+十二项最终全部通过，说明继续由你手写同类 cases 只是机械劳动。
 
-```text
-"ERR bad"  -> "-ERR bad\r\n"
-"WRONGTYPE Operation against a key" -> exact bytes
-message 含 CR/LF -> exact invalid_argument
-```
+但仓库里的 `resp_encoder_test.cpp` 目前只是打印 `$5\r\nhello\r\n` 的使用样例；它带有自己的 `main()`，却又链接 GTest 并调用 `gtest_discover_tests()`，所以 CTest 实际没有发现任何 RESP test。Round3 唯一值得保留的工程动作是：**把外部已经验证过的最小矩阵整理成真正的 GoogleTest，让后续 Day2~Day6 修改工程时能够自动回归。**
 
-### 31.3 Integer matrix
-
-```text
-0
-1
--1
-INT64_MAX
-INT64_MIN
-```
-
-这里只验证 decimal encoding，不把未来 command 的业务 range 塞进 encoder。
-
-### 31.4 Bulk String matrix
-
-```text
-empty payload
-ordinary ASCII
-embedded NUL
-payload 内含 CRLF
-non-ASCII UTF-8 bytes
-```
-
-Bulk String 的 oracle 是 exact bytes 和 exact total size，不是 terminal 显示。
-
-### 31.5 Null Bulk
-
-```text
-exact "$-1\r\n"
-与 empty bulk "$0\r\n\r\n" 明确不同
-```
+这项 test harness 可以委托 Codex，不要求你再次练习相同的 string comparison。持久化时不修改 `resp_encoder.cpp`，也不扩张到 Array/request parser/socket tests。
 
 ---
 
@@ -1258,11 +1246,11 @@ exact "$-1\r\n"
 
 | Test | 能证明 | 不能单独证明 |
 |---|---|---|
-| exact string compare | marker、decimal text、CRLF 与 payload 顺序正确 | socket 能发送完整 reply |
+| 外部 exact checker | 当前实现的 marker、decimal text、binary payload、ownership 与异常契约正确 | 以后修改仓库时自动回归 |
+| 持久化 GoogleTest | 后续 build 能重复验证 Day1 contract | socket 能发送完整 reply |
 | embedded NUL case | encoder 按 explicit length 复制 bytes | parser 能读取 binary request |
 | exception type/message | invalid line payload 被稳定拒绝 | 整个 server 的 error policy |
-| INT64 boundary | protocol integer conversion 覆盖完整 API domain | DEL/EXISTS 业务计数一定正确 |
-| full CTest | 新 target 没破坏已有 test graph | 未覆盖输入全部正确 |
+| full CTest | 现有 54 项 Week10/11 evidence 没有被 CMake 改动破坏 | 当前未注册的 RESP behavior |
 
 不要把“ASan 没报错”当成 wire format 正确；也不要把 exact-byte test 通过当成 network integration 已完成。
 
@@ -1308,22 +1296,22 @@ sanitizer clean 只说明实际执行路径没有观察到对应报告；protoco
 
 ## 35. 今日完成标准
 
-### R1 必须完成
+### R1 已正式通过
 
 ```text
-五个 encoder functions
-三组核心 tests
-CMake/CTest integration
-零 warning build
-full CTest PASS
+五个 encoder functions 已完成
+fresh build 零 warning
+外部 12 项 exact-byte/exception/ownership checker PASS
+既有 full CTest 54/54 PASS
+CMake target 已进入 build graph
 ```
 
-### R1 正式通过后完成
+### 今天最终收口前只剩
 
 ```text
-按真实实现定向阅读 Round2
-补 Round3 高价值 edge matrix
-必要时运行 ASan/UBSan focused evidence
+按真实实现阅读本版 Round2
+将外部最小 matrix 持久化为真正的 GoogleTest
+不重复增加同类手写 cases
 ```
 
 ### 今天明确不做

@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-01）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`，用户能从 readable readiness 讲到 MessageCallback、parser/route/encoder、Connection output、writable drain、deferred cleanup 与 RAII close，并正确区分 transport bytes、HTTP policy 和 owner lifetime。Week12 Day1 已生成，当前等待用户独立完成 RESP2 reply encoder 的 Round1；本日只做纯内存 encoder，不改 Reactor、不接 socket、不提前写 request parser 或 KV store。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-02）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1 RESP2 reply encoder Round1 已正式通过，当前下一步是阅读按真实实现定向润色的 R2/R3，并把已经由外部 checker 验证的最小 exact-byte matrix 持久化为真正的 GoogleTest；Day2 request parser 尚未开始。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -3160,7 +3160,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-10-01 当前学习状态：系统主线 Week1~Week11 已完成，Week10 Reactor V1 与 Week11 HTTP Server V1 均已正式通过。Week12 Day1 教程已生成，当前下一步是独立完成 RESP2 reply encoder Round1；Round1 正式通过后，再按真实 source、tests、note 与 diff 定向润色 R2/R3。Day2 incremental request parser 尚未开始。AI Theory T1~T4 已正式通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 regularization，Ex1 可在完成后作为 T7 等价产出。
+2026-10-02 当前学习状态：系统主线 Week1~Week11 已完成，Week10 Reactor V1 与 Week11 HTTP Server V1 均已正式通过。Week12 Day1 RESP2 reply encoder Round1 已正式通过，下一步阅读定向 R2/R3，并将外部已通过的最小 exact-byte matrix 持久化为 `resp_encoder_test.cpp` 的真实 GoogleTest；Day2 incremental request parser 尚未开始。AI Theory T1~T4 已正式通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 regularization，Ex1 可在完成后作为 T7 等价产出。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -7346,3 +7346,15 @@ R1 通过后已从用户当前 `T4.md` 版本定向润色完整 R2/R3，并原�
 用户对 epsilon 的解释正确：$f_+$ 与 $f_-$ 极接近时，leading digits 相消使有效信息减少，随后除以很小的 $2\epsilon$ 会放大 rounding/cancellation error。R3 无需再重复口述：source 清楚证明 numerical path 只调用 forward objective、不复用 analytic formula；$d$ 个 coordinates 各做 plus/minus 两次 forward，成本约为 $2d$，因此 gradient checker 是小 reference/抽样 correctness oracle，而不是 backward 或 optimizer 的替代品。
 
 T4 最终评分 `96/100`，正式通过；AI Theory 当前进度更新为 T1~T4 正式通过，下一模块为 T5。`T4.md` 已再次按最终 copy-isolated implementation 定向更新：记录实现演化、异常反例、精确 copy 语义和完成状态，不要求用户删除无害的局部 restore、重复第二套 tests 或增加 README/pytest/benchmark。用户的 Ubuntu source 仍只由用户修改，Codex 没有改动任何 production code。
+
+## 2026-10-02：Week12 Day1 Round1 正式通过
+
+用户在 Ubuntu canonical project `~/code/system-learning/cpp/week10` 独立实现 RESP2 reply encoder：五个 free functions 分别编码 Simple String、Error、signed Integer、binary-safe Bulk String 与 Null Bulk String。实际 representation 很直接：Simple String/Error 使用 line payload validation + string concatenation；Integer/Bulk String 使用 `std::ostringstream`；Bulk length 来自 `string_view::size()`，returned `std::string` 拥有完整 wire bytes。本日没有新增 parser、command、KV store 或 socket flow。
+
+第一次只读检阅发现一个真实 contract bug：`encode_resp_error()` 对 CR/LF 输入虽然正确抛 `std::invalid_argument`，但 `what()` 误复制为 `RESP simple string must not contain CR or LF`，不符合教程固定的 Error message。用户已亲自改为 `RESP error must not contain CR or LF`。剩余非阻塞代码整理是直接 `#include <stdexcept>`，并把 `string_view::find()` 的比较常量从数值等价的 `std::string::npos` 写成语义对应的 `std::string_view::npos`。
+
+用户明确认为手写重复 exact comparisons 属于机械工作，没有编写 GoogleTest。Codex 没有因此凭感觉放行，而是在 `/tmp` 建立不修改仓库的 external checker，覆盖 Simple String/Error、`-12`、`INT64_MIN/MAX`、embedded NUL、empty/internal-CRLF Bulk String、Null Bulk、returned ownership，以及两条 exact exception type/message；修复后十二项全部 PASS。fresh Debug 全量 build 零 warning，固定入口 `cmake -E chdir /tmp/week12-day1-r1-review ctest --output-on-failure` 得到既有 `54/54 PASS`。
+
+当前 `tests/resp_encoder_test.cpp` 只是打印 `$5\r\nhello\r\n` 的示例 `main()`，虽然 target 链接 GTest 并调用 `gtest_discover_tests()`，CTest 实际没有发现 RESP test。这个缺口不再要求用户亲手重复练习，因此不阻塞 R1 mechanism pass；但它是 Day1 最终收口前唯一明确的工程动作：把 external checker 的最小高价值 matrix 持久化为真正的 GoogleTest，避免一个名为 test 的 target 实际没有 regression evidence。修改 test harness 仍需遵守用户代码默认只读规则，在用户明确授权后执行，不顺手改 production source。
+
+R1 最终评分 `92/100`，正式通过。扣分集中在 permanent test 尚未注册，以及 production source 依赖 transitive `<stdexcept>` include / `std::string::npos` 命名不精确；不因用户没有亲手写机械测试额外扣分。R1 通过后已从当前磁盘版定向润色完整 R2/R3：逐节映射 marker、line validation、ostringstream、explicit binary length、empty/null distinction、ownership 与当前 complexity；记录 exact Error 修复和真实外部 evidence；Round3 收敛为一个确定动作，不再让用户重新完成整张通用 edge matrix。Day1 尚未整体完成，下一步阅读 R2/R3并持久化最小 GoogleTest。
