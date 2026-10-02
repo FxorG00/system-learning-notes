@@ -1221,7 +1221,7 @@ custom allocator
 
 # Part 3：收尾、Round3 与验收
 
-## 31. Round3：只剩一个明确的工程动作
+## 31. Round3：今天不再重复实现
 
 你的 encoder 不需要重写。正式检阅已经在 `/tmp` 外部 checker 中覆盖：
 
@@ -1236,9 +1236,9 @@ Simple String / Error exact exception type and message
 
 十二项最终全部通过，说明继续由你手写同类 cases 只是机械劳动。
 
-但仓库里的 `resp_encoder_test.cpp` 目前只是打印 `$5\r\nhello\r\n` 的使用样例；它带有自己的 `main()`，却又链接 GTest 并调用 `gtest_discover_tests()`，所以 CTest 实际没有发现任何 RESP test。Round3 唯一值得保留的工程动作是：**把外部已经验证过的最小矩阵整理成真正的 GoogleTest，让后续 Day2~Day6 修改工程时能够自动回归。**
+仓库里的 `resp_encoder_test.cpp` 目前只是打印 `$5\r\nhello\r\n` 的使用样例；它带有自己的 `main()`，却又链接 GTest 并调用 `gtest_discover_tests()`，所以 CTest 实际没有发现任何 RESP test。
 
-这项 test harness 可以委托 Codex，不要求你再次练习相同的 string comparison。持久化时不修改 `resp_encoder.cpp`，也不扩张到 Array/request parser/socket tests。
+这不再阻塞 Day1。把外部已经验证过的最小矩阵整理成真正的 GoogleTest，记为 **Week12 出口前的非阻塞工程整理项**：它用于以后自动回归，不代表今天的 encoder 机制尚未掌握。这项 test harness 可以委托 Codex，不要求你再次练习相同的 string comparison；持久化时不修改 `resp_encoder.cpp`，也不扩张到 Array/request parser/socket tests。
 
 ---
 
@@ -1296,7 +1296,7 @@ sanitizer clean 只说明实际执行路径没有观察到对应报告；protoco
 
 ## 35. 今日完成标准
 
-### R1 已正式通过
+### Day1 已正式通过
 
 ```text
 五个 encoder functions 已完成
@@ -1304,14 +1304,18 @@ fresh build 零 warning
 外部 12 项 exact-byte/exception/ownership checker PASS
 既有 full CTest 54/54 PASS
 CMake target 已进入 build graph
+按真实实现定向润色的 R2/R3 已阅读完成
 ```
 
-### 今天最终收口前只剩
+R2/R3 本次没有要求再造一套 encoder。它们主要把 R1 已经做出的设计说明白：marker 与 boundary、binary-safe length、empty 与 null 的区别、returned ownership，以及各种 evidence 各自能证明什么。你在 R1 已经把这些机制落实到 code 和 checker，所以读完后没有明显的新实现任务是正常的。
+
+### Week12 出口前的非阻塞整理项
 
 ```text
-按真实实现阅读本版 Round2
 将外部最小 matrix 持久化为真正的 GoogleTest
+该项可以委托 Codex
 不重复增加同类手写 cases
+不阻塞 Day1 通过或进入 Day2
 ```
 
 ### 今天明确不做

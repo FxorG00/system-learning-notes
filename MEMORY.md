@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-02）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1 RESP2 reply encoder Round1 已正式通过，当前下一步是阅读按真实实现定向润色的 R2/R3，并把已经由外部 checker 验证的最小 exact-byte matrix 持久化为真正的 GoogleTest；Day2 request parser 尚未开始。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-02）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1 RESP2 reply encoder 已以 `94/100` 正式完成，下一步进入 Day2 incremental request parser。外部 checker 已验证的最小 exact-byte matrix 后续应持久化为真正的 GoogleTest，但它是 Week12 出口前的非阻塞工程整理项，不要求用户重复手写，也不阻塞 Day2。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -3160,7 +3160,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-10-02 当前学习状态：系统主线 Week1~Week11 已完成，Week10 Reactor V1 与 Week11 HTTP Server V1 均已正式通过。Week12 Day1 RESP2 reply encoder Round1 已正式通过，下一步阅读定向 R2/R3，并将外部已通过的最小 exact-byte matrix 持久化为 `resp_encoder_test.cpp` 的真实 GoogleTest；Day2 incremental request parser 尚未开始。AI Theory T1~T4 已正式通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 regularization，Ex1 可在完成后作为 T7 等价产出。
+2026-10-02 当前学习状态：系统主线 Week1~Week11 已完成，Week10 Reactor V1 与 Week11 HTTP Server V1 均已正式通过。Week12 Day1 RESP2 reply encoder 已以 `94/100` 正式完成，下一步进入 Day2 incremental request parser。将 external checker 的最小 exact-byte matrix 持久化为 `resp_encoder_test.cpp` 的真实 GoogleTest，保留为 Week12 出口前的非阻塞整理项，可委托 Codex，不要求用户重复练习。AI Theory T1~T4 已正式通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 regularization，Ex1 可在完成后作为 T7 等价产出。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
 
@@ -7358,3 +7358,9 @@ T4 最终评分 `96/100`，正式通过；AI Theory 当前进度更新为 T1~T4 
 当前 `tests/resp_encoder_test.cpp` 只是打印 `$5\r\nhello\r\n` 的示例 `main()`，虽然 target 链接 GTest 并调用 `gtest_discover_tests()`，CTest 实际没有发现 RESP test。这个缺口不再要求用户亲手重复练习，因此不阻塞 R1 mechanism pass；但它是 Day1 最终收口前唯一明确的工程动作：把 external checker 的最小高价值 matrix 持久化为真正的 GoogleTest，避免一个名为 test 的 target 实际没有 regression evidence。修改 test harness 仍需遵守用户代码默认只读规则，在用户明确授权后执行，不顺手改 production source。
 
 R1 最终评分 `92/100`，正式通过。扣分集中在 permanent test 尚未注册，以及 production source 依赖 transitive `<stdexcept>` include / `std::string::npos` 命名不精确；不因用户没有亲手写机械测试额外扣分。R1 通过后已从当前磁盘版定向润色完整 R2/R3：逐节映射 marker、line validation、ostringstream、explicit binary length、empty/null distinction、ownership 与当前 complexity；记录 exact Error 修复和真实外部 evidence；Round3 收敛为一个确定动作，不再让用户重新完成整张通用 edge matrix。Day1 尚未整体完成，下一步阅读 R2/R3并持久化最小 GoogleTest。
+
+## 2026-10-02：Week12 Day1 正式完成
+
+用户已阅读按真实 R1 定向润色的 R2/R3，并确认其中主要是对 R1 已实现机制的解释、复核与收口，没有值得重复实现的新功能。这个判断成立：marker/boundary、binary-safe explicit length、empty/null 区分、returned ownership 和 evidence boundary 均已由用户代码、外部 12 项 checker、fresh zero-warning build 与既有 `54/54` CTest 共同覆盖。
+
+Day1 最终评分 `94/100`，正式通过，下一步进入 Week12 Day2 incremental request parser。分数较 R1 提升来自完成 R2/R3 的机制复核；没有把未注册的 permanent RESP GoogleTest 假装成已经完成。该 regression harness 调整为 Week12 出口前的非阻塞工程整理项，可由 Codex 在用户明确授权修改 test file 后完成，不要求用户重复手写 string comparisons，也不阻塞 Day2。`<stdexcept>` direct include 与 `std::string_view::npos` 仍只是轻量 source hygiene 建议，不要求为此回头重写 Day1。
