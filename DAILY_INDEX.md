@@ -1,8 +1,8 @@
 # Daily 教程总目录
 
-> 更新日期：2026-10-01
+> 更新日期：2026-10-02
 >
-> 收录范围：主线 Week1 Day1 至 Week12 Day1，共 78 份正式 daily 教程。
+> 收录范围：主线 Week1 Day1 至 Week12 Day2，共 79 份正式 daily 教程。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week11 已通过
-Week12 Day1 教程已生成，等待 Round1
+Week12 Day1 已正式完成；Day2 教程已生成，等待 Round1
 ```
 
 ---
@@ -205,6 +205,7 @@ Week12 Day1 教程已生成，等待 Round1
 | Day | 主要内容 | 主要产出 / 观察 | 检索关键词 |
 |---|---|---|---|
 | [Day1：RESP2 reply encoder](week12/day1/day1.md) | 从 type marker、CRLF 与 length prefix 建立 RESP2 reply wire model；区分 Simple String、Error、Integer、Bulk String 与 Null Bulk String，并明确 `string_view` input 和 owning output | `resp_encoder.hpp/.cpp` + exact-byte tests + CMake/CTest target | RESP2, encoder, serialization, wire bytes, Simple String, Bulk String, Null Bulk, binary-safe, string_view |
+| [Day2：RESP2 request parser V1](week12/day2/day2.md) | 从累计 Buffer prefix 解析第一条 Array of Bulk Strings；区分 NeedMore/Complete/Error，并用 exact consumed_bytes 保留下一条 command suffix | `resp_request_parser.hpp/.cpp` + focused parser tests + CMake/CTest target | RESP2, request parser, Array, Bulk String, NeedMore, Complete, Error, consumed_bytes, framing |
 
 ---
 
@@ -287,6 +288,8 @@ HTTP claim / evidence / limitation         -> Week11 Day7
 RESP2 reply / serialization / encoder      -> Week12 Day1
 Simple String / Bulk String / Null Bulk    -> Week12 Day1
 binary-safe reply / string_view ownership  -> Week12 Day1
+RESP2 request / Array of Bulk Strings       -> Week12 Day2
+NeedMore / Complete / Error / consumed      -> Week12 Day2
 ```
 
 ## 并发与工程工具
