@@ -1,8 +1,8 @@
 # C++ 系统工程 / AI Infra 求职总规划
 
-> 版本：2026-10-01，Week12 Mini Redis V1 启动与真实进度校准版
+> 版本：2026-10-03，Week12 Redis / MySQL 及时补课校准版
 > 学习者：FxorG，中山大学计算机科学与技术专业，按当前学制为 2029 届
-> 当前进度：Week1 ~ Week11 已完成，Reactor V1 与 HTTP Server V1 均已闭环；当前进入 Week12 RESP parser 与 Mini Redis V1。AI Theory T1~T3 已通过，下一模块为 T4；ML 自学已到多变量线性回归
+> 当前进度：Week1 ~ Week11 已完成，Reactor V1 与 HTTP Server V1 均已闭环；Week12 Day1 RESP encoder 已通过，当前推进 Day2 RESP parser。AI Theory T1~T4 已通过，下一模块为 T5；ML 自学已到多变量线性回归
 > 近期目标：2026 年 12 月形成第一版简历，2027 年 1 月开始投递后台开发、C++ Infra 与 AI 业务基础设施相关实习
 > 长期目标：本科就业进入 AI Infra，重点发展 LLM inference systems / serving 与 CUDA kernel optimization
 
@@ -321,6 +321,43 @@ event-loop latency / throughput 分析
 没有数据支撑的“高性能”描述
 ```
 
+#### 4.2.1 Redis / MySQL 基础怎样进入主线
+
+当前真实基础不是“已经系统学过 Redis/MySQL”，而是知道它们大致解决什么问题、接触过少量用法，但知识已经不成体系。规划因此采用 **项目走到哪里，理论补到哪里**，不暂停 Mini Redis 去平行通关两门数据库课。
+
+```text
+Week12 Day1~Day3：先完成 RESP 编码、解析与 framing；这里不要求先会 Redis 内部实现
+
+Week12 Day4 开工前：补 Redis 第一层
+-> database / cache / in-memory KV store 分别在解决什么问题
+-> client、server、keyspace、key、value、command、reply 的关系
+-> Redis String 是 binary-safe byte sequence；Mini Redis V1 只实现 string -> string 子集
+-> PING / ECHO / SET / GET / DEL / EXISTS 怎样改变或观察 server state
+-> cache 与 authoritative database 的边界，memory-only 与 persistence 的边界
+
+Week12 Day7：把本周实现与真实 Redis 做第一次对照
+-> data types、event loop、expiration、persistence 只建立地图，不完整展开
+
+Mini Redis V1 收口后、Week13 开头：补 MySQL 第一层
+-> table / row / column / schema / primary key
+-> SELECT / WHERE 的最小读法
+-> index 为什么存在，B+ tree 与 page/range scan 的直觉
+-> clustered / secondary / covering index 与回表
+-> 用 EXPLAIN 观察 optimizer 选择，不靠猜测“是否走索引”
+
+Week13~Week14 按项目需要继续：
+-> expiration 与 eviction
+-> transaction / ACID / isolation / MVCC / lock
+-> AOF/RDB 与 redo/undo/binlog
+```
+
+这条安排有两个硬边界：
+
+1. Redis 第一层必须在写 `KvStore` 与 command dispatcher 前讲，不再默认已有基础。
+2. MySQL 的术语、表模型和最小 SQL 必须先于 B+ tree / `EXPLAIN` 实验；不能把一串索引名词当作数据库入门。
+
+参考入口以官方资料为准：[Redis data types](https://redis.io/docs/latest/develop/data-types/)、[Redis keyspace](https://redis.io/docs/latest/develop/using-commands/keyspace/)、[Redis Strings](https://redis.io/docs/latest/develop/data-types/strings/)、[MySQL EXPLAIN](https://dev.mysql.com/doc/refman/8.4/en/explain.html)。官方文档用于查证；daily 负责把当前项目需要的内容顺着讲清楚。
+
 ### 4.3 副证据：Reactor / HTTP / 并发组件
 
 简历表达方式：
@@ -485,17 +522,23 @@ SET / GET / DEL / EXISTS
 协议测试
 ```
 
-出口：网络层、协议层、命令层和存储层边界清楚；同时能对照经典 Redis 的主要命令执行路径解释常见数据类型和事件循环为什么高效，知道现代 Redis 还包含 I/O threads 与后台任务，并准确说明本项目只实现了哪些语义。
+Day1~Day3 不回退补完整 Redis 课程。Day4 写 `KvStore` 前，daily 必须先从 database/cache/KV store 的问题出发，讲清 client、server、keyspace、String value、command/reply 和本周六条命令的状态语义；再让用户独立设计 command/store V1。
 
-伴随补缺，不新增数据库项目：
+出口：网络层、协议层、命令层和存储层边界清楚；能解释自己的 `unordered_map<string,string>` 在 server 中扮演什么角色；同时能对照经典 Redis 的主要命令执行路径解释常见数据类型和事件循环，知道现代 Redis 还包含 I/O threads 与后台任务，并准确说明本项目只实现了哪些语义。
+
+Week12 只为 MySQL 建立一座桥：Redis 当前是内存 KV 模型，MySQL 是关系模型，二者不是“换个命令的同一种数据库”。本周不要求在尚未理解 table/row/index 的前提下硬做 `EXPLAIN`。
+
+### Milestone E / Week13：Mini Redis V2 - 生命周期与 TTL
+
+Week13 开头先用一个窄教程补 MySQL 第一层，再进入索引实验：
 
 ```text
+table / row / column / schema / primary key
+SELECT / WHERE 的最小语义
 MySQL B+ tree index、clustered/secondary index、covering index、回表第一层
 EXPLAIN 的目的与“是否走索引不能只靠猜”
 最小实验：同一个小表对比一次 full scan、普通 index query 和 covering index query 的 EXPLAIN
 ```
-
-### Milestone E / Week13：Mini Redis V2 - 生命周期与 TTL
 
 ```text
 TTL / EXPIRE / PTTL 中选择最小命令集合
@@ -581,7 +624,7 @@ atomic/CAS、acquire/release、happens-before 第一层
 
 ## 6. 2026-08 到 2027-03 双线时间表
 
-截至 2026-10-01 的真实状态：系统主线已完成 Week11 Reactor + HTTP Server V1，下一步进入 Week12 RESP parser 与 Mini Redis V1；AI Theory 已通过 T1~T3，T4 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
+截至 2026-10-03 的真实状态：系统主线已完成 Week11 Reactor + HTTP Server V1；Week12 Day1 RESP encoder 已通过，当前推进 Day2 RESP parser。AI Theory 已通过 T1~T4，T5 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
 
 | 时间 | 系统主线 | AI 理论伴随线 | 必须形成的结果 |
 |---|---|---|---|
@@ -696,8 +739,8 @@ replication / sharding / consistency / RPC 的最低系统词汇
 | Week9 | TCP、non-blocking、epoll、LT/ET、系统调用 | Epoll Echo Server、`ss/strace` |
 | Week10 | ownership、virtual/object layout、thread/atomic/memory order | Reactor lifetime、Week7~8 并发代码 |
 | Week11 | HTTP versions、HTTPS/TLS、协议 parser | HTTP Server、curl/抓包 |
-| Week12 | Redis data model、B+ tree/index | KV implementation、三组 EXPLAIN 对照 |
-| Week13 | expiration/eviction、transaction/MVCC/locks | TTL tests、可控时钟 |
+| Week12 | Redis/KV/cache 第一层、真实 Redis 数据模型地图 | KV implementation、真实 Redis 对照 |
+| Week13 | MySQL 表模型、B+ tree/index、expiration/eviction | 三组 EXPLAIN 对照、TTL tests、可控时钟 |
 | Week14 | AOF/RDB、WAL/recovery、replication/consistency | restart/fault experiment |
 | Week15 | CPU/memory/I/O/lock bottleneck、工具选择 | benchmark 与排查链 |
 | Week16 | project deep dive、system trade-off、行为问题 | README、代码、指标和时间说明 |
@@ -1109,9 +1152,9 @@ CUDA kernel correctness + profiler + benchmark
 ## 13. 当前下一步
 
 ```text
-1. 进入 Week12 RESP parser 与 Mini Redis V1，直接复用 Week10 Reactor 与 Week11 HTTP 的 framing/lifetime 底座
-2. AI Theory 进入 T4，把已有微积分映射到 gradient / chain rule / finite difference
-3. Week12 先形成可运行的 RESP incremental parser、encoder 与最小 PING/ECHO/SET/GET KV 闭环
+1. 继续 Week12 Day2 RESP parser，直接复用 Week10 Reactor 与 Week11 HTTP 的 framing/lifetime 底座
+2. AI Theory 进入 T5；T1~T4 不重复学习
+3. Day4 开工前完成 Redis/KV/cache 第一层，再形成 PING/ECHO/SET/GET KV 闭环
 4. T20~T24 到达前只维护 serving 资料索引，不启动完整 vLLM/SGLang 源码主线
 5. 每个系统 milestone 继续保留 correctness、sanitizer、failure case 与可复现实验
 6. 到 Theory Gate 3 后先读 mini-sglang，再决定 production framework 的一个窄路径

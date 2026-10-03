@@ -501,7 +501,7 @@ negative length 的允许分支与拒绝分支
 | Day4 | command 怎样改变共享 KV state？ | `KvStore` + command dispatcher |
 | Day5 | 怎样接入现有 Reactor？ | 可运行 `mini_redis_server` |
 | Day6 | 多 clients、pipelining 和坏 client 是否互不破坏？ | process-external integration evidence |
-| Day7 | 怎样证明 Mini Redis V1 完成，并看懂它与真实 Redis/MySQL 的边界？ | architecture/evidence review + EXPLAIN 第一层 |
+| Day7 | 怎样证明 Mini Redis V1 完成，并看懂它与真实 Redis 的边界？ | architecture/evidence review + 真实 Redis 地图 |
 
 每一天仍按主线 daily 的三 Part、R1/R2/R3 规则生成；本文件只规定周目标，不提前把未来每天的完整答案摊开。
 
@@ -694,6 +694,49 @@ parser tests 是本日主课，不全部归类为 dirty work；重复 case scaff
 parser 已经交付 ["SET", "name", "FxorG"]；
 谁检查 command semantics，谁真正拥有 name -> FxorG？
 ```
+
+## 14.0 Part1 先补 Redis 第一层
+
+Day1、Day2 已经能直接学习 RESP，因为它们解决的是 byte framing；不需要倒回去先学完整 Redis。Day4 开始写共享 state 前，daily 必须先把下面这条主线讲清楚：
+
+```text
+client 发送 command
+-> Redis server 解释 command
+-> command 读取或修改 server-lifetime state
+-> server 编码 reply
+-> client 收到结果
+```
+
+从一个具体问题出发：
+
+> 多个 clients 都执行 `SET name FxorG` 和 `GET name` 时，`name -> FxorG` 究竟存在哪里，为什么换一条 connection 仍然能够读到？
+
+Day4 Part1 必须顺着这个问题讲清：
+
+```text
+database：有组织地保存和查询 data 的系统
+cache：为了更快访问而保存的一份临时/可替代数据；不是所有 Redis 用法都只是 cache
+KV store：通过 unique key 查找 value 的存储模型
+in-memory：主要 working state 在 memory 中；不等于永远不能持久化
+keyspace：当前 database 中全部 keys 构成的名字空间
+command：client 请求 server 执行的操作
+reply：server 对一条 command 返回的协议结果
+```
+
+随后用一份最小 state trace 建立直觉：
+
+```text
+初始 store = {}
+SET name FxorG  -> store = {name: FxorG}，reply = success
+GET name        -> store 不变，reply = "FxorG"
+EXISTS name     -> store 不变，reply = 1
+DEL name        -> store = {}，reply = 1
+GET name        -> store 不变，reply = null
+```
+
+必须明确当前产品边界：真实 Redis 是 data structure server，支持 Strings、Hashes、Lists、Sets 等多种 data types；本周 Mini Redis 只实现 **binary-safe string key -> binary-safe string value**。`PING`/`ECHO` 不访问 store；`SET` 修改 state；`GET`/`EXISTS` 观察 state；`DEL` 删除 state。TTL、eviction、AOF/RDB 与 transaction 仍留给后续周。
+
+教程正文负责把这条链讲完整，不把“去看 Redis 官网”当讲解。官方资料只作查证：[Redis data types](https://redis.io/docs/latest/develop/data-types/)、[Redis keyspace](https://redis.io/docs/latest/develop/using-commands/keyspace/)、[Redis Strings](https://redis.io/docs/latest/develop/data-types/strings/)。
 
 ## 14.1 Round1
 
@@ -910,6 +953,8 @@ pending close requests
 
 ## 17.2 Round2：和真实 Redis 对照
 
+这不是用户第一次接触 Redis 概念。Day4 已经建立 KV state 与六条命令的第一层；这里负责把自己的实现放回真实 Redis 地图中，确认哪些思想相同、哪些能力没有实现。
+
 只读一条主路径，不读完整源码：
 
 ```text
@@ -952,34 +997,38 @@ event loop
 
 ---
 
-## 18. 本周的 MySQL / B+ tree 伴随补缺
+## 18. MySQL 放到正确的入口再学
 
-这不是第二个数据库项目，也不要求实现 B+ tree。
+用户当前只知道 MySQL 的大致用途，没有稳定的关系数据库模型。直接从 clustered index、covering index 和 `EXPLAIN` 开始，会把数据库入门写成术语清单。因此 Week12 不再要求 Day7 硬塞 30~60 分钟 MySQL 实验。
 
-它只回答一个面试与系统基础问题：
-
-> `unordered_map` 适合当前内存 KV point lookup；关系数据库为什么常用 B+ tree index，optimizer 又怎样决定是否使用它？
-
-Week12 Day7 安排 30~60 分钟完成第一层：
+Day7 只建立一条连接：
 
 ```text
-B+ tree 适合 page-oriented storage 与 range scan 的直觉
-clustered index
-secondary index
-covering index
-回表
-EXPLAIN 的作用
+Mini Redis V1：key -> value 的内存 KV 模型
+MySQL：table / row / column 构成的关系模型
 ```
 
-若 Ubuntu 已有可用 MySQL 环境，建立同一个小表，观察三条 query：
+Week13 开头再安排独立的 database foundation 小节，顺序固定为：
 
 ```text
-1. unindexed column predicate -> full table scan candidate
-2. secondary-index predicate + 读取非覆盖列 -> index lookup + row lookup
-3. secondary-index predicate + 只读取 index 中已有列 -> covering index candidate
+1. table / row / column / schema / primary key
+2. SELECT / WHERE 的最小语义
+3. index 为什么存在
+4. B+ tree 适合 page-oriented storage 与 range scan 的直觉
+5. clustered / secondary / covering index 与回表
+6. EXPLAIN 怎样展示 optimizer 选择的 execution plan
+7. 同一小表上的三组 plan 对照
 ```
 
-只记录：
+三组 plan 仍保留：
+
+```text
+unindexed predicate -> full table scan candidate
+secondary-index predicate + 非覆盖列 -> index lookup + row lookup
+secondary-index predicate + 只读取 index 中已有列 -> covering index candidate
+```
+
+观察字段仍只取：
 
 ```text
 type
@@ -989,9 +1038,9 @@ rows
 Extra
 ```
 
-不能从很小的数据表和一次 `EXPLAIN` 宣称真实性能提升。`EXPLAIN` 说明 optimizer plan；它不等于严格 benchmark。
+`EXPLAIN` 展示 query execution plan，不等于严格 benchmark；很小的数据表也可能让 optimizer 合理选择 full scan。参考入口：[MySQL EXPLAIN](https://dev.mysql.com/doc/refman/8.4/en/explain.html) 与 [EXPLAIN output](https://dev.mysql.com/doc/refman/8.4/en/explain-output.html)。
 
-若本机没有现成 MySQL server，不让安装与环境故障抢掉 Mini Redis 出口。记录环境状态，把 exact 三组实验放到 Week13 开头补齐；这不影响 Mini Redis V1 的系统主线通过，但属于 Week12~13 storage supplement 欠账。
+Week13 的 database foundation 是伴随补缺，不是第二个数据库项目，也不要求实现 B+ tree。transaction、isolation、MVCC 与 lock 放在概念真正出现的后续阶段，不和 Week12 Mini Redis V1 抢注意力。
 
 ---
 
@@ -1236,7 +1285,7 @@ Mini Redis 的正确性不依赖 T4 完成，两条线分别验收；也不能�
 11. protocol error 为什么通常 close-after-flush，而 wrong arity 可以继续连接？
 12. client A 的 partial frame 为什么不会污染 client B？
 13. 本项目和真实 Redis 在 event loop、data model、threading 上分别有哪些相同与不同？
-14. `EXPLAIN` 能证明什么，不能证明什么？
+14. database、cache、in-memory KV store 与 persistence 的边界分别是什么？
 
 ---
 
@@ -1286,7 +1335,7 @@ ASan/UBSan covered paths 无 report
 没有 multi-thread command execution
 没有 production benchmark
 没有完整 README/interview 文档
-MySQL 环境缺失时三组 EXPLAIN 延到 Week13 开头
+MySQL foundation 与三组 EXPLAIN 已明确排到 Week13 开头
 AI Theory 尚未追到 T8
 ```
 
@@ -1338,6 +1387,8 @@ expiration 与 eviction 有什么区别？
 ```
 
 所以 Week12 不提前偷偷实现 TTL。先让 protocol、command、store 与 multiple-client sharing 站稳，Week13 才能只增加 lifecycle，而不是同时修 framing。
+
+Week13 开始 TTL 前还会先完成一个窄的 database foundation：只补 table/row/index/`EXPLAIN` 到可理解实验的程度，不展开完整 MySQL 课程。它与 TTL 分开成两个清晰小节，避免数据库术语和 expiration lifecycle 混成一团。
 
 ---
 
