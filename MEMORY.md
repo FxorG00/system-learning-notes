@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-04）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1 RESP2 reply encoder 已以 `94/100` 正式完成；Day2 RESP2 incremental request parser R1 已以 `95/100` 正式通过，当前下一步是阅读按真实实现定向润色的 R2/R3，再决定 Day2 最终收口。Day1 external checker 的最小 exact-byte matrix 后续应持久化为真正的 GoogleTest，但它是 Week12 出口前的非阻塞工程整理项。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-04）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1 RESP2 reply encoder 已以 `94/100` 正式完成；Day2 RESP2 incremental request parser 已以 `96/100` 正式完成，下一步进入 Day3 fragmentation、binary payload、overflow 与 limits hardening。Day1 external checker 的最小 exact-byte matrix 后续应持久化为真正的 GoogleTest，但它是 Week12 出口前的非阻塞工程整理项。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -7404,3 +7404,9 @@ MySQL 第一层不能直接从 clustered/covering index 起步。先建立关系
 修复后 fresh build 零 warning，focused parser tests `13/13 PASS`，全量 CTest `67/67 PASS`。R1 最终评分 `95/100`，正式通过。剩余边界明确后置 Day3：`from_chars` 的 `ec/ptr` 与 numeric overflow、ctype 的 unsigned-char 前置条件、`cursor + byte_count` checked arithmetic、每个 byte split point、binary payload 和 element/bulk/frame limits。这些不是 Day2 R1 blocker，也不能被当前 13 个 examples 假装已经证明。
 
 R1 通过后已从用户当前磁盘版本定向重写 `week12/day2/day2.md` 的完整 R2/R3：保留 R1 原文和用户 note，逐节解释真实 call chain、cursor 证明含义、三态数字解析、四个失败如何被 warning/tests 捕获、Interval transaction、suffix test 与 ownership boundary；Round3 直接登记 `13/13`、`67/67` 和零 warning，不要求用户重抄 tests 或重写 parser。当前状态是 Day2 R1 正式通过，尚未把 Day2 整体标为完成；下一步阅读定向 R2/R3 后再最终验收。
+
+## 2026-10-04：Week12 Day2 正式完成
+
+用户已阅读按真实 R1 定向润色的 R2/R3，并确认后半部分主要是在为已经写出的机制命名、解释与收口，没有需要重复实现的新功能。该判断成立：`parse_digits` 的三态判断、cursor 证明边界、Interval 延迟提交、first-frame consumed boundary、ownership 分工和 Error-path 修复均已由用户 source/note、永久 `13/13` parser tests、fresh zero-warning build 与全量 `67/67` CTest 覆盖。
+
+Day2 最终评分 `96/100`，正式通过。较 R1 的提升来自完成真实实现复盘并能确认哪些内容只是已有设计的抽象表达；没有把 Day3 尚未完成的 all-split、binary payload、numeric overflow、checked arithmetic 和 limits 假装成 Day2 evidence。`week12/day2/day2.md` 与用户 note 从此进入冻结状态，除真实技术错误或用户明确要求外不再修改。下一步进入 Week12 Day3，在同一份 parser 上做 hardening，不重写第二份实现。
