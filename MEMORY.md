@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-03）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1 RESP2 reply encoder 已以 `94/100` 正式完成；Day2 RESP2 incremental request parser 教程已生成，用户正在推进 Day2。Day1 external checker 的最小 exact-byte matrix 后续应持久化为真正的 GoogleTest，但它是 Week12 出口前的非阻塞工程整理项。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-04）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1 RESP2 reply encoder 已以 `94/100` 正式完成；Day2 RESP2 incremental request parser R1 已以 `95/100` 正式通过，当前下一步是阅读按真实实现定向润色的 R2/R3，再决定 Day2 最终收口。Day1 external checker 的最小 exact-byte matrix 后续应持久化为真正的 GoogleTest，但它是 Week12 出口前的非阻塞工程整理项。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -7392,3 +7392,15 @@ Day4 的 Redis 第一层必须从“多个 clients 为什么能读到同一份 `
 MySQL 第一层不能直接从 clustered/covering index 起步。先建立关系模型与最小 SQL，再解释 index 为什么存在，最后运行三组 `EXPLAIN` plan 对照。`EXPLAIN` 证明 optimizer 选择的 plan，不等于严格性能 benchmark；小表选择 full scan 可能合理。Week12 不再把 MySQL 实验设为 Mini Redis V1 的出口阻塞项。
 
 本次调整只修改 `plan_strengthened.md`、`week12/week12.md` 与 MEMORY；Day1、Day2 daily 和用户代码均保持不变。它补的是教学入口与顺序，不扩张 Mini Redis V1 的实现范围，也不新增第二个数据库项目。
+
+## 2026-10-04：Week12 Day2 Round1 正式通过
+
+用户在 Ubuntu canonical project `~/code/system-learning/cpp/week10` 独立完成 RESP2 request parser V1。真实实现不是通用教程假设的 temporary strings，而是 `parse -> parse_one_resp_request -> parse_digits`：一个 cursor 统一推进 Array/Bulk 数字行与 payload boundary，局部 `vector<Interval>` 先记录每个 payload 的 `[begin,end)`，只有整条 frame 完整合法后才构造 owning `std::string` 并提交到 result。这一 representation 同时保证 NeedMore/Error 不泄漏 partial arguments、parser 不保存 input pointer、Complete 的 arguments 不受后续 Buffer retrieve/reallocation 影响。
+
+用户的 note 准确抓住了本日难点：带可选负号的数字行不能一见不完整就判 Error，必须根据当前 cursor 与 available bytes 判断“证据不足”还是“已经证明非法”；数字至少包含一个 digit，terminator 必须是完整 CRLF。后续教程不能再用一套抽象 parser 覆盖这份真实设计，必须逐节映射 `RespFlag`、reference cursor、`parse_digits`、Interval 延迟提交和 first-frame boundary。
+
+经用户明确授权，Codex 只修改了机械测试文件 `tests/resp_request_parser_test.cpp`，没有改 production parser。永久 GoogleTest 现有 13 个 cases，覆盖 empty/partial、PING/SET、错误 top-level/element marker、first-frame suffix boundary、empty/null/negative Array、null Bulk String 和两类 numeric terminator error。第一次 fresh build/test 真实暴露四项问题：三个 Error 分支误写 `output.status == RespParseStatus::Error`，以及 `*0` 被错误归因为 null array。用户亲自将比较改为赋值并修正 stable reason；同时清除了 empty-input aggregate initialization warnings。
+
+修复后 fresh build 零 warning，focused parser tests `13/13 PASS`，全量 CTest `67/67 PASS`。R1 最终评分 `95/100`，正式通过。剩余边界明确后置 Day3：`from_chars` 的 `ec/ptr` 与 numeric overflow、ctype 的 unsigned-char 前置条件、`cursor + byte_count` checked arithmetic、每个 byte split point、binary payload 和 element/bulk/frame limits。这些不是 Day2 R1 blocker，也不能被当前 13 个 examples 假装已经证明。
+
+R1 通过后已从用户当前磁盘版本定向重写 `week12/day2/day2.md` 的完整 R2/R3：保留 R1 原文和用户 note，逐节解释真实 call chain、cursor 证明含义、三态数字解析、四个失败如何被 warning/tests 捕获、Interval transaction、suffix test 与 ownership boundary；Round3 直接登记 `13/13`、`67/67` 和零 warning，不要求用户重抄 tests 或重写 parser。当前状态是 Day2 R1 正式通过，尚未把 Day2 整体标为完成；下一步阅读定向 R2/R3 后再最终验收。

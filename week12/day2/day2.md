@@ -694,11 +694,21 @@ R1 正式通过后，我会以你磁盘上的真实版本为基线：
 
 ---
 
-# Round 2：把 parser 的完整因果链串起来
+# Round 2：沿着你的真实实现，把完整因果链串起来
 
-> 下面是 R1 通过后阅读的机制讲解。当前仍按通用模型写；正式验收 R1 后会根据你的真实实现定向润色。
+你的 R1 已经正式通过。下面不再假设一种“标准答案”，而是直接解释你现在这版：
 
-## 24. 手推一次 `SET name FxorG`
+```text
+parse
+-> parse_one_resp_request
+-> parse_digits
+-> 记录每个 payload 的 Interval
+-> 整条 frame 被证明完整后，才构造 owning strings
+```
+
+这版设计的关键不是 helper 名字，而是：**cursor 负责推进证明，Interval 负责延迟提交。**
+
+## 24. 你的 `SET name FxorG` 实际怎样被解析
 
 输入：
 
@@ -706,252 +716,293 @@ R1 正式通过后，我会以你磁盘上的真实版本为基线：
 *3\r\n$3\r\nSET\r\n$4\r\nname\r\n$5\r\nFxorG\r\n
 ```
 
-先读 `*3\r\n`，此时只知道后面应该出现 3 个 elements，还没有 command 可以提交。
+`parse()` 先建立一份默认 result，然后把工作交给 `parse_one_resp_request()`。后者确认首 byte 是 `*`，把 cursor 放到 Array length 的起点，再调用：
 
-读取 `$3\r\nSET\r\n`：`$3` 说明 payload 占 3 bytes；精确取得 `SET` 后，还必须确认 payload 后的 `\r\n`。
+```text
+parse_digits(..., RespFlag::TopLevelArray)
+```
 
-再依次得到 `name` 和 `FxorG`。只有第三个 element 完整结束后，parser 才一次性提交：
+得到 element count `3` 后，循环三次。每轮都完成同一条链：
+
+```text
+确认当前 marker 是 '$'
+-> parse_digits(..., RespFlag::BulkString)
+-> 得到 payload byte count
+-> 检查 payload bytes 是否已经到齐
+-> 记录 [payload_begin, payload_end) Interval
+-> 检查 payload 后 exact CRLF
+-> cursor 前进到下一个 element
+```
+
+三轮全部成功后，你才遍历 `arguments_interval`，用每个 range 构造 `std::string`：
 
 ```text
 ["SET", "name", "FxorG"]
 ```
 
-```text
-read array count 3
--> parse bulk 0
--> parse bulk 1
--> parse bulk 2
--> all declared elements complete
--> commit arguments
--> return Complete and frame length
-```
+最后设置 `consumed_bytes = cursor` 和 `status = Complete`。这条命令在此前任何一个检查点停下，都不会把半成品 arguments 暴露给 caller。
 
 ---
 
-## 25. cursor 表达“已经证明到哪里”
+## 25. 你的 cursor 不是“读到哪”，而是“已经证明到哪”
 
-parser 不删除 input bytes。一次调用中只维护当前位置：
-
-```text
-cursor = 0
-```
-
-每证明一段 grammar 完整，cursor 向后推进：
+你没有修改 input，也没有保存 input pointer。`cursor` 只在本次 `parse()` 调用里存在，并按 reference 交给 `parse_digits()` 推进。
 
 ```text
-Array header end
--> Bulk header end
--> payload end
--> payload CRLF end
--> next element
+首 byte '*' 已确认
+-> cursor 指向 Array 数字
+-> Array 数字和 CRLF 已确认
+-> cursor 指向第一个 '$'
+-> Bulk length、payload、payload CRLF 逐段确认
+-> cursor 指向下一个 element
 ```
 
-最后 `consumed_bytes = cursor`。Buffer 仍拥有原始 bytes，caller 只在 `Complete` 后 retrieve。
+因此最终的 `cursor` 恰好就是第一条 frame 的终点。parser 返回后，真正执行 `Buffer::retrieve(consumed_bytes)` 的仍然是 caller。
 
 ---
 
-## 26. 数字行有三种状态
+## 26. 你的 `parse_digits()` 怎样区分三种结论
 
-看到 `$12` 不能马上说 bulk length 是 12，因为 terminator 还没出现：
-
-```text
-$12\r\n   合法
-$12x\r\n  非法
-```
+这次你最费脑子的地方，就是数字可能带负号、可能只来了一半，也可能已经足够证明非法。你的 helper 实际按下面顺序工作：
 
 ```text
-CRLF 尚未到齐 -> NeedMore
-CRLF 已到齐，token 全部是合法 decimal syntax -> 得到 value
-CRLF 已到齐，token 非法或 out of range -> Error
+可选 '-' -> cursor 前进
+-> 从当前 cursor 连续扫描 decimal digits
+-> 一个 digit 都没有：Error
+-> digits 后已经到 input 末尾：NeedMore
+-> 只看到了 '\r'，还没有下一 byte：NeedMore
+-> 后面不是 exact '\r\n'：Error
+-> CRLF 完整：转换数字并返回
 ```
 
-`from_chars` 的 `ptr` 必须到达 token 末尾，才能证明整段 token 合法。
+这正对应你 note 里的核心判断：**不是看到不完整就一律 Error，而是看当前 bytes 是否已经足以作出最终判决。**
+
+你当前 `to_digits()` 使用 `std::from_chars` 完成转换；不过它还没有检查 `ec` 与 `ptr`。普通大小的数字已经由前面的 digit scan 保证语法，但超大数字的 overflow 仍要在 Day3 补上。这里不要把“语法扫描正确”和“数值一定可表示”混成一件事。
 
 ---
 
-## 27. CRLF 是 protocol bytes，不是随便跳过的 whitespace
+## 27. 这轮四个失败，为什么恰好证明 Error path 值得测
 
-RESP 使用 exact `\r\n` 分隔各部分。payload length 声明为 4 时，parser 精确读取四个 payload bytes 后，必须验证结尾 CRLF。
+第一次 fresh build 时，三个错误分支写成了比较：
 
-当前只剩 `\r` 是 `NeedMore`；已经有 `\rX` 则是 `Error`。
+```cpp
+output.status == RespParseStatus::Error;
+```
+
+表达式会计算，却不会修改 `status`。因此普通 PING/SET 主路径可以成功，malformed inputs 却返回了错误的状态。修正为赋值后，相关 tests 才通过：
+
+```cpp
+output.status = RespParseStatus::Error;
+```
+
+这不是协议理解错误，而是 C++ 中很小、但会改变 observable behavior 的实现错误。`-Wall -Wextra` 给出了 `statement has no effect` warning，GoogleTest 则进一步证明了具体哪些 Error contract 被破坏。
+
+第四个失败是 `*0\r\n` 的 error message。它不是 null array `*-1`，而是空 command array，因此你把 reason 修正为：
+
+```text
+command array must not be empty
+```
+
+这也说明 stable error reason 不是装饰：它能迫使实现区分两个不同的 protocol fact。
 
 ---
 
 ## 28. declaration 到齐，不等于 payload 到齐
 
+你的 Bulk String 路径在拿到 `byte_count` 后，继续检查：
+
+```text
+cursor + byte_count 是否仍在 input range 内
+-> payload 后是否至少还有两个 bytes
+-> 这两个 bytes 是否 exact '\r\n'
+```
+
+所以：
+
 ```text
 $100\r\nabc
 ```
 
-length line 完整，只能证明接下来需要 100 payload bytes。当前只有 3 bytes，因此仍是 `NeedMore`。
+只能证明 length declaration 完整，还不能证明 payload 完整，结果必须是 `NeedMore`。
 
-```text
-length declaration valid
--> remaining bytes 是否至少包含 payload length
--> payload 后是否还有完整 CRLF
--> 当前 Bulk String 才算完整
-```
-
-这和 Week11 的 `Content-Length` body framing 是同一个模型。
+当前表达式 `cursor + byte_count` 在正常范围内工作；对攻击者提供的极大 length，还需要 Day3 的 checked arithmetic，避免 size calculation 自身 overflow。
 
 ---
 
-## 29. 为什么先存在 temporary arguments 里
+## 29. 你的 transaction 不是 temporary strings，而是 temporary intervals
 
-Array 声明 3 个 elements，前两个 complete、第三个 incomplete 时，整条 command 仍未完成。
-
-V1 的 transaction model：
+通用版本原本写的是“先放进 temporary arguments”。你的实现更具体：先把每个完整 payload 的范围记成 `Interval`：
 
 ```text
-本次调用的 local temporary arguments
--> 所有 elements 完整合法
--> 一次性 move/copy 到 Complete result
+Interval{begin, end}
 ```
 
-任何 `NeedMore` 或 `Error`：temporary 自动销毁，public result empty，input Buffer 不变。
+即使前两个 payload 已经得到 Interval，只要第三个 payload 仍是 `NeedMore`，整个 `arguments_interval` 都只是本次调用的局部状态；函数返回后自动销毁，public result 仍然没有 partial arguments。
+
+只有完整 frame 被证明后，你才执行真正的 commit：
+
+```text
+Interval ranges
+-> std::string(data + begin, length)
+-> output.arguments
+```
+
+这就是你的代码里最值得保留的设计：**先记录证据，最后一次性提交 owning result。**
 
 ---
 
-## 30. Complete 为什么只覆盖第一条 frame
+## 30. 你的 suffix test 证明了第一条 frame 的边界
 
-输入 `[frame A][frame B]` 时，parser 在 A 结束处已经获得完整 command，不需要理解 B。
-
-```text
-arguments = A 的 arguments
-consumed_bytes = A 的 exact size
-```
-
-caller retrieve A 后，可以在同一个 callback 中再次 parse B：
+永久测试把完整 PING 后面接上下一条命令的 prefix：
 
 ```text
-parse A -> execute A -> enqueue reply A
-parse B -> execute B -> enqueue reply B
+[complete PING][*2\r\n$3\r\nGET]
 ```
+
+你的 parser 返回：
+
+```text
+arguments = ["PING"]
+consumed_bytes = PING frame 的 exact size
+```
+
+它不要求后面的 GET 已经完整，也不把 GET prefix 算进 consumed。将来 caller retrieve 第一条 frame 后，可以继续对剩余 prefix 调用同一个 parser。
 
 ---
 
-## 31. parser、Buffer 与 caller 的责任边界
+## 31. 你的四层责任现在已经分开
 
-| 对象 | 负责什么 | 不负责什么 |
-|---|---|---|
-| `Buffer` | 拥有累计 raw bytes；按 caller 指示 retrieve | 不理解 RESP |
-| `RespRequestParser` | 解释第一条 frame；返回 result | 不修改 Buffer；不执行 command |
-| caller/session | 根据 status 决定 retrieve、等待或关闭 | 不重新实现 RESP grammar |
-| dispatcher | 解释 `arguments[0]` 和 arity | 不寻找 wire boundary |
+| 对象 | 你当前让它负责什么 |
+|---|---|
+| `Buffer` | 拥有 Connection 累积收到的 raw bytes |
+| `RespRequestParser` | 只观察 pointer + length，证明第一条 frame 的 status、arguments 和边界 |
+| caller/session | 根据 status 决定等待、retrieve、dispatch 或关闭 |
+| dispatcher | 将 `arguments[0]` 解释为 PING、SET、GET 等 command |
+
+你的 parser 返回 owning `std::string`，也没有保存 `data` pointer。因此 caller 后续 retrieve 或 Buffer reallocation，不会让已经完成的 arguments 悬空。
 
 ```text
 Connection recv -> Buffer append
--> parser observes prefix
--> Complete returns command + consumed_bytes
--> caller retrieves exactly that prefix
+-> parser observes current prefix
+-> Complete returns owning arguments + consumed_bytes
+-> caller retrieves exact prefix
 -> dispatcher executes command
 ```
 
 ---
 
-## 32. 为什么 V1 可以每次从 prefix 开头重新解析
+## 32. 为什么你现在不需要跨调用 parser state
 
-逐 byte fragmentation 下，stateless parser 会重复扫描已看过的 prefix，理论上可能产生额外工作。
+你的 `RespRequestParser` 当前是 stateless 的：每次都从 Buffer 当前 readable prefix 的开头重新扫描。
 
-但 Day2 V1 的优先级是状态简单、ownership 清楚、NeedMore 不污染、Complete boundary 正确。Week12 还有固定 frame limits。只有 benchmark 证明 rescanning 成为热点，才值得引入跨调用 state。
+逐 byte 到达时确实会重复看旧 bytes，但 Day2 首先换来了三个更重要的性质：
+
+```text
+NeedMore 不污染下一次调用
+parser object 不拥有 input lifetime
+每次结果都只由当前完整 prefix 决定
+```
+
+Week12 还会加入 frame limits。只有后续 benchmark 证明 rescanning 成为真实热点，才值得用更复杂的跨调用 state 换性能。
 
 ---
 
-## 33. Day2 与 Day3 的分工
+## 33. Day3 只加固这份实现，不重写 parser
 
-Day2 证明 grammar 主路径、三种 status contract 和第一条 frame boundary。
-
-Day3 专门证明：
+你已经拥有正确的主干。Day3 的工作应直接落到目前几个尚未被证明的边界：
 
 ```text
-每一个 byte split point 都正确
-embedded NUL / CR / LF payload 正确
-numeric overflow 正确
-max bulk / element count / frame size boundaries 正确
-coalesced commands 的 suffix 一直保留
+对合法 frame 的每一个 byte split point 验证 NeedMore -> Complete
+验证 payload 内含 '\0'、'\r'、'\n' 时仍严格按 length 解析
+检查 std::from_chars 的 ec 与 ptr，拒绝 numeric overflow
+调用 isdigit 前转换为 unsigned char，避免 ctype 前置条件问题
+对 cursor + byte_count 使用 checked arithmetic
+加入 element count、bulk length 与 total frame limits
+继续验证 coalesced suffix 原样保留
 ```
 
-这是同一份 parser 的 hardening，不是再写第二份实现。
+这些是你现有 `parse_digits`、cursor 与 Interval 结构上的增量修复，不是第二份 parser。
 
 ---
 
 # Part 3：收尾、Round3 与验收
 
-## 34. Round3 最小复检矩阵
+## 34. R1 已建立的永久测试证据
 
-| Case | 关键 oracle |
+你不需要重写 tests。当前 `resp_request_parser_test.cpp` 已有 13 个永久 cases：
+
+| 证据组 | 已覆盖行为 |
 |---|---|
-| PING complete | 一个 owning argument，exact consumed bytes |
-| SET complete | 三个 arguments 顺序与内容 exact |
-| 缺最后一个 byte | NeedMore，result 其余字段 empty/zero |
-| 错 top-level marker | exact Error reason |
-| Array element 不是 bulk | exact Error reason |
-| complete frame + suffix | consumed 只到第一条 frame |
+| empty / partial | 空 input、缺最后一个 newline 都返回 NeedMore，且没有 partial output |
+| complete | PING、SET arguments 和 consumed bytes exact |
+| marker errors | 错 top-level marker、非 Bulk Array element |
+| frame boundary | complete PING 后有 next-frame prefix，只消费第一条 |
+| Array edge | `*0`、`*-1`、其他负数分别返回对应 Error |
+| numeric terminator | `*1x\r\n`、`*1\rX` 返回 Error |
+| Bulk edge | `$-1` null Bulk String 被拒绝 |
 
-R1 tests 已覆盖的行不重复写。全 split、binary payload 和 limits 留到 Day3。
+这批测试由 Codex 补机械结构，你负责的仍是 parser 设计、实现和三处状态赋值修复。
 
 ---
 
-## 35. Tests 能证明什么
+## 35. 当前 evidence 能证明什么
 
-| Evidence | 能证明 | 不能单独证明 |
-|---|---|---|
-| complete cases | Array/Bulk 主路径和 owning arguments 正确 | 任意 fragmentation 都正确 |
-| NeedMore case | 一个 partial prefix 不会提交 | 所有 split points 都正确 |
-| marker errors | 两条 malformed paths 稳定返回 Error | 全部数字和 CRLF errors |
-| suffix case | 第一条 frame consumed boundary 正确 | Reactor callback 已正确循环 parse |
-| full CTest | 新 target 没破坏已有工程 | process-external Mini Redis 已可用 |
+| Evidence | 这次实际结果 | 能证明 |
+|---|---:|---|
+| fresh build | 零 warning | 当前编译路径没有残留 warning |
+| focused parser tests | `13/13 PASS` | R1 的 complete、NeedMore、Error 与 first-frame boundary contract 成立 |
+| full CTest | `67/67 PASS` | 新 parser target 没破坏已有 Buffer、Reactor、HTTP 等组件 |
 
-今天不拿有限 examples 冒充 Day3 的 exhaustive split evidence。
+它们还不能证明 arbitrary fragmentation、binary payload、numeric overflow 和 length limits；这些正是 Day3，而不是今天假装已经完成的工作。
 
 ---
 
 ## 36. Sanitizer 边界
 
-parser 处理 untrusted lengths 和 pointer ranges，ASan/UBSan 有价值，但 exact result tests 是第一证据。
+本轮没有把 sanitizer clean 当作已经取得的证据。parser 处理 untrusted lengths，Day3 在补完 checked arithmetic 和完整边界矩阵后，再运行 ASan/UBSan 更有价值。
 
 ```text
-ASan：检查 covered paths 的越界、use-after-free
-UBSan：检查 covered paths 的整数/指针等 undefined behavior
+ASan：检查 covered paths 的越界与 lifetime errors
+UBSan：检查 covered paths 的 integer / pointer undefined behavior
+TSan：今天不需要；parser 没有新增 shared mutable state
 ```
 
-TSan 今天不需要：parser 没有新增 thread，也没有 shared mutable state。
-
-sanitizer clean 不证明 protocol grammar 正确，只说明执行路径没有观察到对应 report。
+sanitizer 只能说明已执行路径没有观察到对应 report，不能替代 protocol result tests。
 
 ---
 
-## 37. 今日验收问题
+## 37. 你的代码和 note 已经回答了哪些验收问题
 
-不要求逐题抄写。代码、tests 或口述能证明即可。
+不再要求把答案重抄一遍：
 
-1. `*3` 与 `$5` 分别数什么？
-2. 为什么缺最后一个 `\n` 是 `NeedMore`，而首 byte 为 `+` 是 `Error`？
-3. 为什么 `NeedMore` 时不能返回 partial arguments？
-4. `consumed_bytes` 怎样防止 parser 吞掉下一条 command？
-5. 为什么 Bulk payload 可以包含 `\0` 和 CRLF？
-6. parser、Buffer 和 caller 分别拥有、修改什么？
-7. 为什么 malformed client input 应返回 result state，而不是让 exception 终止 server？
-8. Day2 的 tests 为什么还不能证明 arbitrary fragmentation？
+1. `*3` 与 `$5` 分别数 element count 和 payload byte count：已体现在两个 `RespFlag` 分支。
+2. NeedMore 与 Error 的分界：你在 note 中已经用 cursor 和“当前证据是否足够”解释。
+3. partial arguments 不提交：`arguments_interval` 是局部状态，完整后才构造 output strings。
+4. consumed boundary：suffix test 已给出 exact evidence。
+5. parser 不拥有 input：接口只接收 pointer + length，类中不保存 pointer。
+6. malformed input 返回 result state：三条 `status = Error` 路径及永久 tests 已证明。
+
+今天尚未回答的是“任意切分和任意二进制 payload 是否都正确”。不要靠口述补答案，Day3 用系统 tests 回答。
 
 ---
 
-## 38. 今日完成标准
+## 38. R1 正式验收结论
 
-### 核心通过
+**评分：95/100，正式通过。**
+
+通过依据：
 
 ```text
-RespRequestParser public contract 落地
-PING / SET complete cases 正确
-NeedMore 不提交 partial arguments
-两类基本 protocol errors 有 exact reason
-Complete 只报告第一条 frame consumed_bytes
-result arguments 独立拥有 payload bytes
+cursor + reusable parse_digits 主干成立
+Interval 延迟提交保证 NeedMore/Error 不泄漏 partial arguments
+PING / SET / suffix boundary 正确
+第一次测试暴露的三处 ==/ = 错误与 *0 reason 已由你修复
 fresh build 零 warning
-focused test PASS
-全量 CTest PASS
-能够解释 parser / Buffer / caller 三者边界
+focused tests 13/13 PASS
+full CTest 67/67 PASS
 ```
+
+剩余 5 分不是否定 R1，而是留给 Day3 的真实 hardening：numeric conversion result、checked arithmetic、ctype 前置条件、all-split、binary payload 和 limits。
 
 ### 今天明确不做
 
@@ -959,8 +1010,6 @@ focused test PASS
 执行 PING / SET
 访问 KV store
 接入 Connection callback
-全 split-point loop
-完整 binary/limit/malformed matrix
 RESP3 / nested Array / inline protocol
 zero-copy argument views
 benchmark / README / interview 文档
@@ -968,17 +1017,19 @@ benchmark / README / interview 文档
 
 ---
 
-## 39. Note 只记录真正的新东西
+## 39. 你的 note 已经够用
+
+你已经记录了本日真正的新东西：
 
 ```text
-我的 parser representation 和主要 state
-一个 NeedMore 与 Error 的分界
-我怎样保证 partial arguments 不提交
-consumed_bytes 怎样定位第一条 frame
-Questions
+cursor 作为统一推进位置
+带可选负号的数字解析
+当前 bytes 是否足以区分 NeedMore / Error
+至少一个 digit 的必要条件
+CRLF 完整性
 ```
 
-代码和 tests 已精确证明的结论，不再把所有 cases 复制到 note。
+不需要再把 13 个 tests 抄进 note。唯一值得在 Day3 继续记录的，是届时真正改变判断模型的 overflow、limit 或 binary case。
 
 ---
 
@@ -995,10 +1046,9 @@ Questions
 ## 41. 今日压缩记忆
 
 ```text
-RESP request = Array of Bulk Strings
-
-Array length counts elements
-Bulk length counts payload bytes
+parse_digits 推进 cursor
+Interval 暂存 payload ranges
+完整 frame 后才构造 owning arguments
 
 NeedMore -> input 不动，结果不提交
 Complete -> arguments + exact consumed_bytes
@@ -1009,4 +1059,4 @@ Buffer 拥有 bytes
 caller 决定 retrieve
 ```
 
-Day2 的目标不是把所有恶意输入一次测完，而是先得到一份责任清楚、能够正确切出第一条 command 的 parser V1。Day3 再用 fragmentation、binary 与 limits 把它压实。
+Day2 已经得到一份责任清楚、能够正确切出第一条 command 的 parser V1。Day3 不推倒重来，只把这份实现放到 arbitrary fragmentation、binary payload、overflow 和 limits 下继续压实。
