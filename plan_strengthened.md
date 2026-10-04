@@ -624,7 +624,7 @@ atomic/CAS、acquire/release、happens-before 第一层
 
 ## 6. 2026-08 到 2027-03 双线时间表
 
-截至 2026-10-03 的真实状态：系统主线已完成 Week11 Reactor + HTTP Server V1；Week12 Day1 RESP encoder 已通过，当前推进 Day2 RESP parser。AI Theory 已通过 T1~T4，T5 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
+截至 2026-10-04 的真实状态：系统主线已完成 Week11 Reactor + HTTP Server V1；Week12 Day1 RESP encoder 与 Day2 request parser V1 已通过，Day3 parser hardening 教程已生成并等待 R1。AI Theory 已通过 T1~T4，T5 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
 
 | 时间 | 系统主线 | AI 理论伴随线 | 必须形成的结果 |
 |---|---|---|---|
@@ -1152,7 +1152,7 @@ CUDA kernel correctness + profiler + benchmark
 ## 13. 当前下一步
 
 ```text
-1. 继续 Week12 Day2 RESP parser，直接复用 Week10 Reactor 与 Week11 HTTP 的 framing/lifetime 底座
+1. 进入 Week12 Day3，在 Day2 同一份 RESP parser 上完成 arbitrary fragmentation、binary payload、overflow 与 limits hardening
 2. AI Theory 进入 T5；T1~T4 不重复学习
 3. Day4 开工前完成 Redis/KV/cache 第一层，再形成 PING/ECHO/SET/GET KV 闭环
 4. T20~T24 到达前只维护 serving 资料索引，不启动完整 vLLM/SGLang 源码主线
