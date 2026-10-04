@@ -7424,3 +7424,47 @@ Day3 R1 保留 `parse(pointer,length)` public API，新增三个可由 tests 引
 本日 tests 本身是主课，不能仅因重复而整体委托：用户必须理解累计 prefix、explicit-length binary oracle、numeric range 与 product limit 的两阶段判断，以及 first-frame boundary。R1 通过后，limit - 1/limit/limit + 1 builders、重复 malformed table 和 invariant helpers 可以由 Codex 协助补全。R2 才解释 `from_chars` 的 `ec/ptr`、`isdigit` unsigned-char 前置条件、remaining-space checked arithmetic、three-limit cost model 与 Interval transactional output；闸门前没有提供 production control flow 或完整修法。
 
 教程严格保持系统主线三 Part、明确教程开始、R1 progressive disclosure 与 R1 后按真实 source/tests/note 定向润色规则。Round3 固定 deterministic matrix、test-builder independence、fresh full regression 与 ASan/UBSan；TSan 不进入无 shared mutable state 的 parser 日。发布前已在 Ubuntu 复跑教程中的 baseline 入口：focused executable `13/13 PASS`，全量固定 CTest 入口 `67/67 PASS`，确认 target 名称和命令真实可用；这只证明 Day2 baseline，没有冒充 Day3 hardening evidence。`DAILY_INDEX.md` 已同步至 80 份教程，总规划当前下一步已从 Day2 更新为 Day3。生成不修改 Ubuntu production code、tests 或 Day2 冻结文件；当前状态只是 Day3 教程已生成、等待 R1，不能提前标记通过。
+
+## 2026-10-05：量化 / 明汯面经学长关于 C++ Dev Infra 与性能工程的经验
+
+用户确认，本次建议来自此前分享量化方向面经、涉及明汯等公司的同一位牛客学长。该学长面试方向覆盖 quantitative development、交易系统开发和 infrastructure，经验对高性能 C++ 很有价值，但属于个人面试与项目判断，不能直接当作所有 C++ 后台或 AI Infra 实习的统一录取线。
+
+学长给出的 C++ 项目分类是：一类偏 high-performance runtime，包括通信、存储、训练/推理 HPC 与高频交易；另一类偏 embedded、RTOS、ROSA、FPGA 和软硬件协同。用户当前目标明确属于前一类，并继续收敛到 C++ Dev Infra / AI Infra，不开启嵌入式支线。
+
+简历项目必须“垂直”。不能把线程池、Reactor、parser、KV store、benchmark 等并排列成互不关联的 feature list；要围绕一个真实 workload 说明它们共同解决什么问题。当前 Mini Redis 的垂直定位是：
+
+```text
+C++ high-performance network/storage service
+-> epoll/Reactor 负责连接与事件驱动 I/O
+-> Buffer/Connection 负责 byte ownership 与 non-blocking transport
+-> RESP parser/encoder 负责 application protocol framing
+-> command/KV layer 负责共享 server state
+-> benchmark/profile 负责证明性能与定位瓶颈
+```
+
+Reactor、HTTP Server、BlockingQueue、ThreadPool 与 AsyncLogger 是这条主项目的演进和底层证据，不再分别包装成多个“简历大项目”。以后 AI Infra 方向的第二个垂直项目再围绕 tensor/operator、memory planning、batching/scheduling、KV Cache、CPU/CUDA kernels 和 serving workload 形成独立闭环。
+
+学长最重要的方法论是：高性能项目关注 measured performance，不关注为了显得高级而堆 fancy features。代码规范和性能直觉只能产生 hypothesis，不能构成优化证据。固定采用以下循环：
+
+```text
+先完成最小正确版本并冻结 correctness evidence
+-> 定义稳定、可重复的 workload
+-> 测量 baseline
+-> sample/profile/trace/heap allocation 观察真实瓶颈
+-> 一次只改变一个主要因素
+-> 在同一 workload 与环境下重新测量
+-> 同时核对 correctness、throughput、tail latency、CPU 和 memory
+-> 只有 before/after evidence 成立才保留优化并写进简历
+```
+
+“写代码之前要有 harness”在本路线中的准确执行方式是：不要求在尚无 dataflow 时先造完整性能平台；但在开始任何“性能优化”之前，必须已有可重复的 correctness tests、protocol-aware end-to-end benchmark 与 baseline。不得先凭直觉改 allocator、lock-free structure、PGO 或 cache layout，再倒推一个能证明自己正确的 workload。
+
+Mini Redis 后续性能阶段至少固定记录：workload 定义、client/connection 数、GET/SET 比例、key/value 大小、pipeline depth、运行时长、warm-up、repeat/median、编译模式、CPU/VM 环境，以及 operations per second、p50/p95/p99 latency、CPU usage、RSS/peak memory 和 allocation behavior。QPS/OPS 上升不能单独代表项目变好；若吞吐提高但 p99、内存或 correctness 退化，必须明确 trade-off。
+
+工具选择要匹配被测对象：`sockperf` 可以观察 socket/network path 的 latency/throughput，但它不理解 Mini Redis 的 RESP、command dispatch 与 KV semantics，因此不能单独充当主项目 E2E benchmark。Mini Redis 应优先使用自己的 protocol-aware benchmark client，或在兼容程度足够后使用 `redis-benchmark` / `memtier_benchmark`；`perf`/FlameGraph 用于 sampling profile，trace 用于观察 syscall、scheduler 与事件时序，`heaptrack` 用于 allocation/heap evidence。causal profiling 的第一层含义是实验判断“加速某处是否真的改善 end-to-end progress”，不能把 hottest function 自动等同于最值得优化的函数。
+
+AI 时代的能力重心发生了迁移，但这不等于基础编码不再需要。AI 能快速生成大量表面完整的 C++，因此简历区分度从“写了多少代码”进一步下沉到：能否审查 correctness/UB/lifetime/concurrency，能否设计 workload 与 oracle，能否定位瓶颈，能否结合 CPU/OS/compiler 解释现象，以及能否用可复现实验决定优化是否成立。用户仍需亲手完成核心机制、关键设计与性能敏感路径；重复 CMake glue、机械 test expansion 和脚手架可委托 AI，但用户必须拥有 benchmark 设计、profile interpretation、optimization decision 与最终 claim。
+
+学长列出的 KCP、brpc、Asio、DPDK、RDMA、io_uring coroutine、LSM/LevelDB、braft、PyTorch ATen、C++ mini-torch、CUDA MLP kernel、PMR、RCU、futex、work stealing、PGO 等只作为方向地图，不构成当前待办清单。近期绝不因此打断 Week12 Mini Redis：先完成 correctness V1，再进入 existing Milestone D 已规划的 benchmark/profile/optimization；Mini Redis V1 后可用 LSM/LevelDB 补存储纵深，用 tiny inference runtime / serving engine 补 AI Infra 纵深。DPDK/RDMA、lock-free hash map、epoch RCU、LLVM backend 与 C++26 proposals 属于后续岗位定向深挖，不作为 2027 年初第一次实习投递的前置条件。
+
+以后生成 Mini Redis performance daily、项目 README 和简历 bullet 时，必须沿用上述证据纪律。高性能 claim 必须包含 workload、baseline、具体 modification、before/after metrics、工具与边界；不能只写“使用 epoll/线程池/零拷贝显著提升性能”，也不能把 sanitizer clean、unit tests PASS 或一次 QPS 输出冒充完整性能结论。
