@@ -7468,3 +7468,16 @@ AI 时代的能力重心发生了迁移，但这不等于基础编码不再需�
 学长列出的 KCP、brpc、Asio、DPDK、RDMA、io_uring coroutine、LSM/LevelDB、braft、PyTorch ATen、C++ mini-torch、CUDA MLP kernel、PMR、RCU、futex、work stealing、PGO 等只作为方向地图，不构成当前待办清单。近期绝不因此打断 Week12 Mini Redis：先完成 correctness V1，再进入 existing Milestone D 已规划的 benchmark/profile/optimization；Mini Redis V1 后可用 LSM/LevelDB 补存储纵深，用 tiny inference runtime / serving engine 补 AI Infra 纵深。DPDK/RDMA、lock-free hash map、epoch RCU、LLVM backend 与 C++26 proposals 属于后续岗位定向深挖，不作为 2027 年初第一次实习投递的前置条件。
 
 以后生成 Mini Redis performance daily、项目 README 和简历 bullet 时，必须沿用上述证据纪律。高性能 claim 必须包含 workload、baseline、具体 modification、before/after metrics、工具与边界；不能只写“使用 epoll/线程池/零拷贝显著提升性能”，也不能把 sanitizer clean、unit tests PASS 或一次 QPS 输出冒充完整性能结论。
+
+学长随后针对 KV cache 补充了两个具体观察方向：一是 I/O / concurrency path，可了解 `io_uring`、`mmap` 与 lock-free；二是 memory fragmentation / peak，可观察 SSO、memory pool 与 TTL workload。这里的 `KV cache` 指当前 key-value cache / Mini Redis 语境，不与 Transformer inference 中的 attention KV Cache 混为一谈。原消息中的“并发摸底”很可能是“并发模型”或“先对并发路径做摸底”的输入误差，教程中不照抄这个模糊词。
+
+技术上必须进一步拆开这些对象：
+
+- `io_uring` 是 Linux asynchronous I/O submission/completion interface，可以作为后续 I/O backend 对照；它不是 lock-free container，也不是当前 epoll Reactor 必须替换的升级版。
+- `mmap` 是 virtual memory mapping mechanism，可能服务 file-backed persistence、data access 或减少显式 copy；它本身不是 concurrency control primitive。没有 AOF/snapshot/file-backed workload 前，不为展示技术而加入。
+- lock-free 只在 shared-state contention 已被 profile/benchmark 证明时评估；single-thread Reactor 或 sharded owner model 可能比通用 lock-free map 更简单、更快、更容易证明正确。
+- SSO 是 `std::string` implementation 常见的 short-string storage optimization，具体 threshold 与实现相关。Mini Redis 可以通过 allocation evidence 观察它的影响，不能在 portable contract 或简历中假定固定阈值。
+- memory pool 可能降低 allocator overhead 和 fragmentation，也可能因为 retention 增大 RSS/peak memory；必须同时测 allocation count、latency、RSS 与 peak，而不是只看 QPS。
+- TTL 不只是 command feature，还会改变 object lifetime、churn、expiration burst、memory reclamation 与 peak behavior。后续应分别比较无 TTL、均匀过期和集中同时过期 workload，并观察 latency spike、expired-key cleanup cost 与 memory release behavior。
+
+Mini Redis 的性能实验顺序因此固定为：先保留 `epoll + std::unordered_map + std::string + 普通 allocator` 作为最小正确 baseline；再通过 connection concurrency、pipeline depth、GET/SET ratio、value-size distribution 与 TTL churn 暴露不同瓶颈；使用 `perf`/trace/heaptrack/RSS evidence 决定是否值得单独尝试 memory pool、sharding/lock strategy、io_uring backend 或 mmap-backed persistence。每次实验只改变一个主要变量，不能一次把 io_uring、lock-free 和 memory pool 全加上后只报告总 QPS。
