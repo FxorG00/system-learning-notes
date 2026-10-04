@@ -235,24 +235,129 @@ static constexpr std::size_t kMaxRequestFrameBytes = 2U * 1024U * 1024U;
 
 ---
 
-## 11. R1 新增的 error contract
+## 11. 先把三个“大小”分别指向具体对象
+
+这里原先使用了 `Array magnitude` 和 `Bulk magnitude`。`magnitude` 只是“数值大小”，但这个词没有说清楚数值来自哪里，反而把三个不同对象混到了一起。R1 直接按下面三个对象理解。
+
+### 11.1 Array element count：`*` 后面的元素数量
+
+```text
+*3\r\n
+```
+
+这里的 decimal token（十进制文本）是 `"3"`。它表示：**当前 top-level Array 声明自己包含 3 个 elements**。
+
+parser 把它转换为：
+
+```cpp
+std::size_t element_count = 3;
+```
+
+这个值先要能放进 `std::size_t`，然后再与下面的项目上限比较：
+
+```cpp
+kMaxCommandElements == 1024
+```
+
+它不是整条 request 的 byte length，也不是某个 Bulk payload 的 byte length。
+
+### 11.2 Bulk byte count：`$` 后面的 payload 字节数
+
+```text
+$5\r\nhello\r\n
+```
+
+这里的 decimal token 是 `"5"`。它表示：**紧随其后的这个 Bulk String payload 恰好有 5 bytes**。
+
+parser 把它转换为：
+
+```cpp
+std::size_t byte_count = 5;
+```
+
+这个值先要能放进 `std::size_t`，然后再与下面的项目上限比较：
+
+```cpp
+kMaxBulkBytes == 1024U * 1024U
+```
+
+它不表示 Array 中有几个 elements。
+
+### 11.3 First-frame byte count：第一条完整 encoded frame 占多少 bytes
+
+这个大小**不是 wire 中某一个 `*...` 或 `$...` 字段直接声明的数字**。parser 在推进 cursor、找到第一条完整 request 的终点后，才能得到：
+
+```text
+从第一条 frame 的起点
+到第一条 frame 的结束位置
+= 第一条 encoded frame 的总 byte count
+```
+
+它与下面的项目上限比较：
+
+```cpp
+kMaxRequestFrameBytes == 2U * 1024U * 1024U
+```
+
+所以三个常量是一一对应的：
+
+| 被限制的对象 | 数值来自哪里 | 对应常量 |
+|---|---|---|
+| top-level Array 的 element count | `*` 后的 decimal token | `kMaxCommandElements` |
+| 单个 Bulk payload 的 byte count | `$` 后的 decimal token | `kMaxBulkBytes` |
+| 第一条完整 request frame 的 encoded byte count | parser 根据第一帧终点推导 | `kMaxRequestFrameBytes` |
+
+### 11.4 “不能由 `std::size_t` 表示”是什么意思
+
+wire 上的 decimal token 可以有任意多位，例如：
+
+```text
+184467440737095516160000000000
+```
+
+但 `std::size_t` 是固定宽度的 unsigned integer type（无符号整数类型），最大只能表示：
+
+```cpp
+std::numeric_limits<std::size_t>::max()
+```
+
+因此 parser 不能看到一串合法 digits 就默认转换一定成功。`std::from_chars` 会通过返回值告诉你结果：
+
+```text
+ec == std::errc{}
+-> decimal token 成功转换为 std::size_t
+
+ec == std::errc::result_out_of_range
+-> 这串 digits 表示的数学整数超过 std::size_t 的可表示范围
+```
+
+这里不需要自己根据“有多少位”猜是否溢出；应读取 conversion result。R2 再完整拆解 `from_chars_result` 中的 `ptr` 与 `ec`。
+
+### 11.5 Machine range 与 product limit 是两层不同判断
+
+以 `*1025\r\n` 为例：`1025` 完全可以放进 `std::size_t`，所以它没有 numeric overflow；但它超过项目规定的 1024 elements，因此属于 product limit violation（产品上限违规）。
+
+完整判断链是：
+
+```text
+读到 Array/Bulk 的 decimal token
+-> digits syntax 是否合法
+-> 能否转换成 std::size_t
+   -> 不能：out of range
+-> 转换成功后，与该字段对应的项目常量比较
+   -> 太大：exceeds limit
+-> 再安全地推进 cursor，并约束第一条 frame 的总 encoded bytes
+```
+
+因此 R1 的 error contract 是：
 
 | 已证明的事实 | `error_message` |
 |---|---|
-| Array magnitude 不能由 `std::size_t` 表示 | `RESP array length is out of range` |
-| Bulk magnitude 不能由 `std::size_t` 表示 | `RESP bulk string length is out of range` |
-| element count 大于 1024 | `RESP array element count exceeds limit` |
-| single Bulk length 大于 1 MiB | `RESP bulk string length exceeds limit` |
-| 第一条 encoded frame 必然大于 2 MiB | `RESP request frame exceeds limit` |
-
-判断顺序属于 contract：
-
-```text
-decimal syntax
--> numeric range
--> field-specific limit
--> first-frame limit
-```
+| `*` 后的 Array count token 表示的整数放不进 `std::size_t` | `RESP array length is out of range` |
+| `$` 后的 Bulk length token 表示的整数放不进 `std::size_t` | `RESP bulk string length is out of range` |
+| 已成功转换的 Array element count 大于 1024 | `RESP array element count exceeds limit` |
+| 已成功转换的单个 Bulk byte count 大于 1 MiB | `RESP bulk string length exceeds limit` |
+| parser 已能证明第一条 encoded frame 必然大于 2 MiB | `RESP request frame exceeds limit` |
 
 既有 negative policy 不变：
 
@@ -319,25 +424,7 @@ input = frame A + frame B
 
 ## 14. 核心场景 C：numeric range 与 product limit 分开
 
-至少自行建立四个 cases：
-
-```text
-Array magnitude 超出 size_t
--> RESP array length is out of range
-
-Bulk magnitude 超出 size_t
--> RESP bulk string length is out of range
-
-*1025\r\n
--> RESP array element count exceeds limit
-
-*1\r\n$1048577\r\n
--> RESP bulk string length exceeds limit
-```
-
-后两项 declaration 到齐后就能判 Error，不应该等待 client 真发来 1025 个 elements 或超大 payload。
-
-生成 out-of-range token 时，可以从 `std::numeric_limits<std::size_t>::max()` 生成 decimal text，再追加一个 `0`，得到必然超出本机 `size_t` 的 magnitude：
+先生成一个必然无法放进本机 `std::size_t` 的 decimal token：
 
 ```cpp
 #include <limits>
@@ -348,6 +435,30 @@ const std::string too_large =
 ```
 
 `std::numeric_limits<T>::max()` 返回类型 `T` 能表示的最大有限值；这里用它避免把 64-bit 常量写死在 test 中。
+
+然后建立四个含义不同的 cases：
+
+```text
+"*" + too_large + "\r\n"
+-> Array count 的 decimal syntax 合法，但无法转换为 std::size_t
+-> RESP array length is out of range
+
+"*1\r\n$" + too_large + "\r\n"
+-> Bulk byte count 的 decimal syntax 合法，但无法转换为 std::size_t
+-> RESP bulk string length is out of range
+
+*1025\r\n
+-> 1025 可以转换为 std::size_t，但超过 kMaxCommandElements
+-> RESP array element count exceeds limit
+
+*1\r\n$1048577\r\n
+-> 1048577 可以转换为 std::size_t，但超过 kMaxBulkBytes
+-> RESP bulk string length exceeds limit
+```
+
+后两项 declaration 到齐后就能判 Error，不应该等待 client 真发来 1025 个 elements 或超大 payload。
+
+第三个常量 `kMaxRequestFrameBytes` 不对应一个独立 decimal token，因此不放进这四个 numeric cases。它由下一节的“small first frame + huge suffix”与“oversized first frame”两组场景验证。
 
 ---
 
