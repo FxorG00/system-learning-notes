@@ -7481,3 +7481,17 @@ AI 时代的能力重心发生了迁移，但这不等于基础编码不再需�
 - TTL 不只是 command feature，还会改变 object lifetime、churn、expiration burst、memory reclamation 与 peak behavior。后续应分别比较无 TTL、均匀过期和集中同时过期 workload，并观察 latency spike、expired-key cleanup cost 与 memory release behavior。
 
 Mini Redis 的性能实验顺序因此固定为：先保留 `epoll + std::unordered_map + std::string + 普通 allocator` 作为最小正确 baseline；再通过 connection concurrency、pipeline depth、GET/SET ratio、value-size distribution 与 TTL churn 暴露不同瓶颈；使用 `perf`/trace/heaptrack/RSS evidence 决定是否值得单独尝试 memory pool、sharding/lock strategy、io_uring backend 或 mmap-backed persistence。每次实验只改变一个主要变量，不能一次把 io_uring、lock-free 和 memory pool 全加上后只报告总 QPS。
+
+### 性能阶段的固定协作边界
+
+用户认同并固定以下原则：**最终性能结论必须由用户自己独立捍卫。** 用户必须拥有性能问题、workload 含义、baseline、profile interpretation、bottleneck hypothesis、核心优化、before/after 结果、trade-off 与保留/撤销决策；不能只运行 Codex 给出的命令并复述结论。Codex 可以承担重复 benchmark client 代码、correctness regression cases、CMake/build glue、批量运行脚本、统计与绘图、结果整理和环境记录，也负责审计 benchmark 是否混入 warm-up、thread/process startup、logging、debug build、VM noise 或其他 confounders。
+
+第一次正式性能实验采用 guided ownership：Codex 可以讲清工具、指标和最小 harness，用户亲自运行并解释；第二次由用户提出 workload/hypothesis，Codex 审查并补机械脚手架；之后逐渐过渡为用户独立测量、定位和优化，Codex 做反向挑刺。判断是否可以委托的标准不是“这个文件是不是 test”，而是它是否承载当天新增的 measurement reasoning：重复 case expansion 和 harness plumbing 可委托，workload/oracle/metric/结论不可外包。
+
+### AI 时代亲手写 parser 的新理解
+
+用户经过 HTTP parser 与 RESP parser 的连续实现，第一次从性能角度真正理解亲手写 parser 的意义：它不只训练规则模拟，还训练对 byte traversal、重复扫描、copy/allocation、cursor state 和 incremental boundary 的判断。HTTP parser 即使可以写成 asymptotic $O(n)$，反复 `find`、从旧位置重新查找或创建临时 substring 仍可能带来更大的常数、额外 allocation 和 cache traffic；若每次新到少量 bytes 都从头扫描累计 prefix，跨多次 parse calls 的 aggregate work 甚至可能在最坏 fragmentation 下接近 $O(n^2)$。
+
+当前 RESP parser 的真实优势必须精确表述：在**一次 parse invocation 内**，reference cursor 单调向前，Array/Bulk number line 与 payload boundary 不需要反复从头 `find`，因此主要扫描路径是 linear pass，且常数有机会更小；但 parser 目前是 stateless over cumulative input，`NeedMore` 后下一次调用仍可能从 frame 起点重新解析。因此不能未经测量就写成“整个网络接收生命周期只扫描一次”或宣称一定快于 HTTP parser。Day3 all-split test 证明 fragmentation correctness，不证明 aggregate linear complexity。
+
+以后 parser performance review 必须分开四层：单次调用的 asymptotic complexity、跨 incremental calls 的 aggregate work、copy/allocation count、真实 workload 下的 latency/throughput。代码审查先形成 hypothesis，随后用不同 frame size、chunk size、header/argument count 和 coalescing pattern 的 benchmark 验证；只有 measurement 成立，才把“single-pass cursor 降低扫描成本”写进项目 README 或简历。这正是 AI 时代仍需亲自实现核心 parser 的价值：用户必须能判断 AI 生成代码是否重复扫描、为何慢、如何验证以及修改后是否真的改善，而不只是让 AI 交付一份能 PASS 的 parser。
