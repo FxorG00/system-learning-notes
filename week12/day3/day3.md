@@ -127,7 +127,7 @@ Day2 的“缺最后一个 newline”只证明一个 split point（切分点）�
 
 ### 5.7 `oracle`（判定标准）
 
-test 用来判断结果对错的独立规则。all-split test 的 oracle 是：
+test 用来判断结果对错的独立规则。all-split test（全部切分点测试）会逐个检查一条合法 frame 的每个不完整前缀及完整输入，其 oracle 是：
 
 ```text
 每个 proper prefix -> NeedMore 且 public output 未污染
@@ -189,7 +189,9 @@ ASan/UBSan representative paths
 
 > **教程开始：从 Day2 的真实 cursor/Interval parser 出发，先独立完成 R1，再阅读闸门后的机制。**
 
-# Round 1：在现有 parser 上独立完成 hardening
+# Round 1：在现有 parser 上独立完成 hardening（加固）
+
+**hardening 是补强组件面对异常输入时的保护能力。** 今天具体补强数值转换、大小计算和资源上限，让 parser 能安全处理网络传来的 bytes。
 
 ## 8. R1 最终要造什么
 
@@ -202,7 +204,7 @@ NeedMore  -> 当前仍可能成为合法第一帧
 Complete  -> 第一帧已完整，返回 owning arguments 与 exact consumed_bytes
 Error     -> 当前 bytes 已证明 malformed 或违反资源上限
 
-额外保证：任何 size calculation 都不能先发生 unsigned wraparound
+额外保证：任何 size calculation 都不能先发生 unsigned wraparound（无符号回绕：结果超过类型上限后折回较小的值）
 ```
 
 R1 继续只处理 top-level non-empty Array of non-null Bulk Strings。
@@ -487,11 +489,13 @@ arguments empty
 consumed_bytes == 0
 ```
 
-R1 不要求为 exact 2 MiB 边界手算 header bytes。Round3 再用 builder 做 `limit - 1 / limit / limit + 1`。
+R1 不要求为 exact 2 MiB 边界手算 header bytes。Round3 再用 test builder（测试数据构造函数：按指定内容或大小生成输入 bytes）做 `limit - 1 / limit / limit + 1`。
 
 ---
 
 ## 16. R1 result invariant 继续成立
+
+result invariant（返回结果的不变量）——**无论传入哪种输入，对应状态的返回字段都必须满足下面这些固定条件。**
 
 ### `NeedMore`
 
@@ -529,7 +533,7 @@ overflow 或 limit error 也不能提交此前识别出的 partial arguments。
 ```text
 保留 to_digits 还是合并进 parse_digits
 numeric helper 返回 enum、struct 还是复用 DigitsParseResult
-怎样表达 checked endpoint
+怎样表达 checked endpoint（经过边界检查的结束位置）
 何时检查 frame limit
 tests 怎样构造 binary frame 与 large frame
 ```
@@ -627,11 +631,26 @@ R1 正式通过后，我会以你磁盘上的当前 `day3.md`、source、tests�
 
 ---
 
-# Round 2：R1 后再看完整 hardening 机制
+# Round 2：沿你已经通过的 cursor/Interval 实现补强边界
+
+你的 R1 已于 2026-10-08 正式通过，评分 `95/100`。本次 fresh Debug build 零 warning，全量 CTest `71/71 PASS`，其中 RESP parser 永久 tests 为 `17/17 PASS`。四组新增 GTest 由 Codex 根据你口述的 oracle 补充；parser 的核心设计和实现由你完成。
+
+你保留 Day2 的结构，把 numeric conversion 和产品限制接入同一条调用链：
+
+```text
+parse
+-> parse_one_resp_request
+-> parse_digits：syntax / conversion / negative policy / field limit
+-> local vector<Interval>：记录 payload ranges
+-> 检查完整第一帧的 cursor
+-> 构造 owning strings，提交 Complete
+```
+
+下面逐节对应这份真实实现。已经通过的 A~D 不重新布置；R2 才引入的接口限制和更强的防御方式，在后半段明确学习和升级。
 
 ## 22. parser 判断的是当前 prefix 能证明什么
 
-对一条固定合法 frame，任何 proper prefix 都不能是 `Error`：未来追加 bytes 仍可能把它补完整。
+你的 `parse_digits` 已根据 `cursor == length` 返回 `NeedMore`，错误数字行 terminator 则返回 `Error`。对一条**符合本项目资源限制**的合法 frame，任何 proper prefix 都应是 `NeedMore`；已解析 declaration 证明违反产品上限时则是 `Error`。
 
 ```text
 合法 frame 的 proper prefix -> NeedMore
@@ -639,7 +658,7 @@ R1 正式通过后，我会以你磁盘上的当前 `day3.md`、source、tests�
 已到齐的 byte 已违反 grammar -> Error
 ```
 
-例如 `*1x\r\n` 中的 `x` 已经证明 Array length line 不合法，未来 suffix 无法改写已结束的 prefix。
+你的 `RejectsInvalidArrayLengthTerminator` 用 `*1x\r\n` 验证 syntax error；`DistinguishesNumericRangeFromProductLimits` 用 `*1025\r\n` 验证语法合法但超出产品限制的另一条 Error path。
 
 `incremental parser`（增量解析器）的返回值描述当前 prefix 的证明状态，不猜 client 下一步想发什么。
 
@@ -647,7 +666,7 @@ R1 正式通过后，我会以你磁盘上的当前 `day3.md`、source、tests�
 
 ## 23. all-split loop 到底证明什么
 
-假设完整 frame 长度为 `N`：
+你口述的 A 正确：caller 累积输入，parser 每次判断当前 prefix。实际 `HandlesEveryByteSplitOfBinaryCommand` 构造 `SET / key / A\0\r\n B`，保持 `frame.data()` 不变并逐个增加 `prefix_size`。完整 frame 长度为 `N` 时：
 
 ```text
 split = 0 ... N - 1 -> NeedMore
@@ -656,7 +675,7 @@ split = N           -> Complete
 
 它一次覆盖 marker 后、decimal token 中间、CR 后、payload 中间、payload 自带 CRLF 中间，以及真正 terminator 的 CR 后。
 
-它不模拟 N 个独立 chunks。真实 caller 把之前 bytes 保存在 Buffer 中，所以每次 parser 看到的是从 frame 起点开始、长度逐渐增长的累计 prefix。
+网络接回后，承担累积责任的是 `Connection` 的 input Buffer。你的 parser 仍是 stateless（跨调用不保存解析状态），每次从当前 frame 起点解析；不能把这个 all-split PASS 当成整个接收生命周期只扫描一次的性能证据。
 
 all-split 仍不能证明 malformed、overflow 和 limits；它只为一个固定合法 frame 的全部切分建立证据。
 
@@ -670,13 +689,13 @@ Bulk String 是：
 $<length>\r\n<payload bytes>\r\n
 ```
 
-一旦 length 是 6，接下来的六个 bytes 都属于 payload：
+你的实现由 `parse_digits` 得到 `byte_count`，保存 payload Interval，最终通过 `std::string(pointer, count)` 构造 argument。一旦 length 是 6，接下来的六个 bytes 都属于 payload：
 
 ```text
 41 00 0D 0A 20 42
 ```
 
-`00` 不结束 `std::string`，中间的 `0D 0A` 也不是 terminator。parser 先跨过六个 payload bytes，之后的 CRLF 才有 framing meaning。
+`00` 和中间的 `0D 0A` 都保存在 Interval 内。cursor 按 byte_count 跨过 payload，再检查其后的 CRLF；binary test 正在验证这条真实路径。
 
 binary-safe 要求：
 
@@ -688,7 +707,9 @@ equality oracle 比较完整 size 和 bytes
 
 ---
 
-## 25. `std::from_chars` 必须检查 `ec` 与 `ptr`
+## 25. 你的 `to_digits` 已经接住 conversion failure
+
+你已把 Day2 的“忽略转换结果”改成 `std::optional<std::size_t>`：成功返回数字，失败返回 `nullopt`。`parse_digits` 再通过 `RespFlag` 选择 Array/Bulk 的 exact out-of-range message。场景 C 已证明这项修复，helper 不需要重写。
 
 `std::from_chars(first, last, value)` 返回：
 
@@ -729,13 +750,17 @@ if (result.ec == std::errc::result_out_of_range) {
 }
 ```
 
-你 Day2 的 `to_digits()` 忽略返回结果，overflow 时 `value` 保持原值，后续可能把巨大 declaration 错当成 0。Day3 要让 conversion result 进入 parser decision。
+当前 helper 先转换到 `uint64_t`，再 cast 到 `size_t`。在本次 x86_64 Ubuntu 上二者对应相同 unsigned range，所以 R1 cases 成立。后续直接转换到 `std::size_t`，让 range 判断与真正保存 count 的类型一致。
+
+当前 token 已由 `parse_digits` 扫描为连续 digits，不能把“没有单独检查 ptr”直接判成接受了尾部垃圾。升级 helper 时同时检查 `ec` 与 `ptr == last`，使它自身也能证明完整转换。
 
 ---
 
 ## 26. ASCII digit 与 `std::isdigit` 的前置条件
 
 `std::isdigit` 属于 character classification（字符分类）接口。除 `EOF` 外，传入值必须能表示为 `unsigned char`。如果 plain `char` 为 signed，而网络 byte 大于 `0x7F`，直接传入可能违反前置条件。
+
+你的数字扫描当前调用 `isdigit(data[next_cursor + 1])`。**这个参数限制到本节才完整讲解，不倒算为 R1 漏做的任务；最终版本仍需要修复。** [Linux character-classification manual](https://man7.org/linux/man-pages/man3/isdigit.3.html) 明确列出了这项要求。
 
 两种窄修法：
 
@@ -755,19 +780,21 @@ if (ch >= '0' && ch <= '9') {
 }
 ```
 
-这里不要让 payload 的 arbitrary bytes 进入数字 classification path。
+按你的 RESP 用途，后续采用第二种 ASCII 范围判断。payload 仍按 length 跨过；malformed header 的 high-bit byte（最高位为 1、数值在 `0x80` 到 `0xFF` 之间的字节）则稳定归为 invalid length。
 
 ---
 
 ## 27. checked arithmetic 要在加法前证明
 
-现有表达式：
+你的当前 payload 判断是：
 
 ```cpp
 cursor + byte_count > length
 ```
 
-如果 `cursor + byte_count` 已经 unsigned wraparound，再比较就太晚了。
+它前面已经经过 `parse_digits` 的 Bulk guard，`byte_count` 最大为 1 MiB。先前直接说“这会溢出”太绝对：必须结合 cursor、有效 input range 和平台判断，本次没有复现可达回绕。
+
+R2 将安全证明写得更局部：**先证明 remaining space（剩余可访问空间，即 `length - cursor` 个 bytes）足够，再计算 endpoint。** 未来修改产品上限时，这个证明也仍然成立。
 
 当已知 `cursor <= length` 时，可改写为：
 
@@ -775,7 +802,7 @@ cursor + byte_count > length
 byte_count > length - cursor
 ```
 
-然后还要单独证明 payload 后的 CRLF 有空间，之后才计算新 endpoint。
+在你的原文件中，保持 `cursor <= length`，先比较 payload 与 remaining bytes，再记录 Interval 和推进 cursor。其后的两个 CRLF bytes 继续分别检查，保留 all-split 已通过的分片 `NeedMore` 路径。
 
 核心思路是：**把“我要算 endpoint”改成“remaining space 是否足够”。**
 
@@ -787,13 +814,19 @@ byte_count > length - cursor
 
 `*1025\r\n` 已足够证明超出 element policy，不需要等待 elements。
 
+你已在 `parse_digits(..., RespFlag::TopLevelArray)` 拒绝它，没有进入 element loop；场景 C 已验证 exact Error。
+
 ### 28.2 Bulk length
 
 `$1048577\r\n` 已足够证明单个 payload 超过 1 MiB，不需要等待 payload。
 
+你已在 BulkString 分支先检查产品限制，成功后 caller 才获取 `byte_count`。分析算术时必须一起考虑这个前置 guard。
+
 ### 28.3 first-frame bytes
 
 每个 Bulk 都不超过 1 MiB，仍可能由多个 arguments 合成超过 2 MiB 的 command。
+
+你当前在整帧解析完后检查 `cursor > kMaxRequestFrameBytes`。两个 1 MiB payload 的 R1 fixture（测试夹具，这里就是专门构造的输入帧）已证明完整超大第一帧被拒绝，且不提交 arguments。
 
 ```text
 element limit 管数量
@@ -813,11 +846,19 @@ Buffer 可能是：
 
 当前 `length` 超过 2 MiB，但第一条 frame 只有 14 bytes。parser 应 Complete PING，把 suffix 留给 caller。
 
-正确判断对象是第一帧 endpoint 或由 declaration 推导出的 required endpoint，不是整个 readable Buffer length。
+你的 D 已让 `[PING][超过 2 MiB 的 suffix]` 返回 Complete，消费量仍为 PING size：检查对象是第一帧 cursor，整个 `length` 没被误当成 frame size。
+
+下一步只加强拒绝时机：**第一帧已由解析出的长度证明必然超限时，立即 Error，不等待其余 payload。** 当前检查在整帧完成后，这一更强的用例留到 R2/R3，不能说 R1 的完整-frame fixture 已经覆盖它。
+
+例如第一帧声明两个各 1 MiB 的 Bulks。第一个 payload 和第二个长度行已到齐时，第二个 payload 加 framing bytes 已能证明总长度超限。判断只使用这条第一帧的信息；巨大下一帧 suffix 仍不影响 PING。
 
 ---
 
-## 30. limits 不能破坏 transactional output
+## 30. limits 不能破坏 transactional output（事务式输出）
+
+transactional output——**整帧解析成功后才一次性交付完整结果；NeedMore 或 Error 时不交付部分 arguments，consumed_bytes 保持 0。**
+
+也就是：先把中间结果留在本次调用的局部变量中，确认整条 request 成功后，再把完整结果发布到返回对象。
 
 如果前三个 arguments 中前两个完整、第三个 Bulk length 超限，结果必须是：
 
@@ -827,7 +868,7 @@ arguments empty
 consumed_bytes == 0
 ```
 
-你的 `vector<Interval>` 天然适合这条规则：此前 ranges 只是 local evidence，整帧 Complete 后才构造 public strings。
+你已在 frame-limit 判断之后才构造 `output.arguments`。此前 `vector<Interval>` 只是局部暂存的 payload 范围，中途返回时还没有向 caller 交付部分 arguments。最后构造并发布完整结果的这一步叫 commit（提交）。这部分正确，后续升级保留提交位置。
 
 ---
 
@@ -835,28 +876,29 @@ consumed_bytes == 0
 
 ```mermaid
 flowchart TD
-    A[Readable prefix]
-    B[Parse first frame]
-    C{Parse status}
-    D[Preserve all bytes]
-    E[Consume exact prefix]
-    F[Dispatch command]
-    G[Parse remaining suffix]
-    H[Reply then close]
+    A["Connection input readable bytes"]
+    B["RespRequestParser parse"]
+    C{"result status"}
+    D["Keep accumulated input"]
+    E["Retrieve consumed_bytes"]
+    F["Use owning arguments"]
+    G["Read remaining input range"]
+    H["Application handles protocol Error"]
     A --> B
     B --> C
     C -->|NeedMore| D
     C -->|Complete| E
     E --> F
     F --> G
+    G --> B
     C -->|Error| H
 ```
 
-Day3 只证明 parser 的 `Complete -> exact consumed_bytes`。真正把 loop 放进 MessageCallback 是 Day5 integration，不在 pure parser test 中伪造 Reactor。
+你的 B 通过移动 caller 起点、缩短 range 模拟上图。两个完整 frame 依次得到 PING/ECHO；第二条 partial 则返回 NeedMore。今天没有启动 Reactor，实际 MessageCallback loop 留到 Day5 接回。
 
 ---
 
-## 32. 你的 Day2 representation 怎样承接修复
+## 32. R2 后明确做四项升级
 
 | 当前设计 | Day3 继续承担什么 |
 |---|---|
@@ -866,17 +908,26 @@ Day3 只证明 parser 的 `Complete -> exact consumed_bytes`。真正把 loop �
 | local `vector<Interval>` | 延迟 public argument commit |
 | `consumed_bytes = cursor` | 固定第一帧边界 |
 
-R1 后需要决定的是 numeric result 和 limits 最自然地放进哪些 helper/result state。不要为了迎合教程改名或重排正确结构。
+保留表中结构，在同一 implementation 完成四项改动：
+
+1. `to_digits` 直接转换到 `std::size_t`，检查 ec/ptr，保留 optional 与现有 English errors。
+2. `parse_digits` 使用 ASCII `'0'` 到 `'9'` 判断数字，稳定处理 high-bit malformed header。
+3. payload availability 先比较 remaining bytes，再计算 Interval endpoint，保留 CRLF 分片路径。
+4. 第一帧已能证明超限时提前 frame-limit Error，不等待余下 payload，也不检查无关 suffix。
+
+未使用的 `STDSIZETMAX` macro 可顺手删除，不新增组件或第二份 parser。
 
 ---
 
 # Part 3：收尾、Round3 与验收
 
-## 33. Round3 deterministic matrix
+## 33. Round3 deterministic matrix（确定性测试矩阵）
 
-R1 通过后用 builders 补齐；已有 case 不写第二份。
+deterministic matrix——**用可重复构造的固定输入，逐项检查明确的预期结果。** 下面按输入类别列出这些 cases。
 
-| Category | Case | Oracle |
+17 个永久 tests 已覆盖 R1 主场景和 Day2 regression。复用同一 test file，已通过的 A~D 不重写；机械 builders 可以继续由 Codex 实现，你负责新增 oracle 与 production 修法。
+
+| Category | Case | Oracle 判定标准 |
 |---|---|---|
 | split | binary SET 的所有 proper prefixes | 全部 NeedMore，output 未污染 |
 | split | 完整 binary SET | Complete，arguments/consumed exact |
@@ -894,6 +945,8 @@ R1 通过后用 builders 补齐；已有 case 不写第二份。
 
 “允许”不总等于 `Complete`。只有 declaration、payload 尚未到齐时，正确结果可能是 `NeedMore`，重点是不能误判为超限。
 
+新增 evidence 集中在 exact-limit 三点边界、empty/high-bit binary arguments、malformed high-bit 数字行，以及第一帧已知超限但尚未收齐的 Error。最后一项先证明 fixture 的完整第一帧必然超限，再只给到第二个长度行的 prefix。
+
 ---
 
 ## 34. Test builder 应减少机械错误
@@ -902,13 +955,12 @@ R1 通过后用 builders 补齐；已有 case 不写第二份。
 
 ```text
 encode_bulk(payload)
-encode_command(arguments)
+encode_array(arguments)
 expect_need_more(result)
 expect_error(result, message)
-expect_complete(result, arguments, consumed)
 ```
 
-这些 helper 只属于 tests，不应被 production parser 调用。否则 oracle 与被测实现可能共享同一错误逻辑。
+当前 test file 已有前四个 helpers。`encode_bulk/encode_array` 独立按 RESP grammar 构造 fixture，没有调用 `parse_digits` 或 production reply encoder；结果再与原始 arguments 和 fixture size 对照。
 
 对于 exact frame boundary，先 assertion 证明 fixture 自己确实位于目标大小，再调用 parser。测试名称不能代替 fixture 真正建立了该状态。
 
@@ -918,19 +970,27 @@ expect_complete(result, arguments, consumed)
 
 normal focused/full tests 通过后，建立独立 sanitizer build：
 
+R1 本次尚未运行 sanitizer。先完成第 32 节升级，再运行下面这一轮；normal PASS 不能写成 sanitizer clean。
+
 ```bash
-cmake -S . -B build-day3-sanitize -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
-cmake --build build-day3-sanitize -j2
-cmake -E chdir build-day3-sanitize ctest --output-on-failure
+mkdir -p /tmp/week12-day3-sanitize
+cd /tmp/week12-day3-sanitize
+cmake -S ~/code/system-learning/cpp/week10 -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+cmake --build build -j2
+cmake -E chdir build ctest --output-on-failure
 ```
 
 重点覆盖 malformed high-bit header byte、numeric overflow、payload endpoint calculation、all-split prefixes 和 large accepted payload。
 
 ASan/UBSan clean 只说明已执行路径没有观察到对应 memory/undefined-behavior failure；协议语义仍由 exact test oracle 证明。TSan 今天不需要。
 
+尤其不能让 sanitizer 替代 `isdigit` 参数前置条件的代码审查，某些 libc 路径可能没有对应报告。ASCII 判断保证分类规则，malformed-header tests 验证 exact Error。
+
 ---
 
-## 36. Claim-to-evidence ledger
+## 36. Claim-to-evidence ledger（结论与证据对照表）
+
+这张表把每条 claim（待证明的结论）与能实际检验它的 evidence（证据）配在一起：你说 parser 做到了什么，就用哪条测试或工具结果支撑。
 
 | Claim | 最强 evidence |
 |---|---|
@@ -944,6 +1004,8 @@ ASan/UBSan clean 只说明已执行路径没有观察到对应 memory/undefined-
 | hardening 没破坏旧工程 | fresh build + full CTest |
 | covered size paths 无 memory/UB report | ASan/UBSan matrix |
 
+R1 已有 all-split、binary、coalescing、range、基本 product-limit 和 fresh `71/71` evidence。exact-limit 三点边界、提前拒绝和 sanitizer 仍待 R3，不能把这张 ledger 的全部 claims 提前记为完成。
+
 一个 claim 要对应真正能让错误实现失败的 evidence。
 
 ---
@@ -951,6 +1013,8 @@ ASan/UBSan clean 只说明已执行路径没有观察到对应 memory/undefined-
 ## 37. 今日验收问题
 
 不要求逐题抄写。代码、tests、note 或口述能证明即可。
+
+你的 A 对应题 1，B 对应 suffix/caller boundary，C 对应题 3，D 对应题 5，判断正确。题 2/7 由 length-aware Interval 与延迟提交代码证明。题 4 是 R2 的后续安全证明，题 6/8 阅读后简短复述即可。
 
 1. all-split test 为什么传累计 prefix，而不是每次只传新 chunk？
 2. payload 中的 `\r\n` 为什么不会提前结束 Bulk String？
@@ -964,6 +1028,8 @@ ASan/UBSan clean 只说明已执行路径没有观察到对应 memory/undefined-
 ---
 
 ## 38. 今日完成标准
+
+**R1 已通过；以下是 Day3 整体收口标准。** 完成第 32 节四项升级、新增 boundary matrix 和 sanitizer 后再最终验收，已有 cases 直接复用。
 
 ### 核心通过
 
@@ -1000,6 +1066,8 @@ fuzzing（模糊测试）未来可以扩展 malformed input space，但今天先
 ---
 
 ## 39. Note 只记录真正改变判断模型的东西
+
+本次目录没有独立 `day3_note.md`，四组口述作为理解证据，代码注释作为实现证据。后续只记新卡点，不要求把口述重抄成 note。
 
 建议只记：
 

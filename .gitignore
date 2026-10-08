@@ -7,3 +7,6 @@
 /ML/official_assignments/classic_ml_python/
 /ML/official_assignments/original_handouts/
 /ML/kaggle/*/data/
+
+# Disposable review scaffolding; keep formal tests with the source project.
+/.review_tmp/

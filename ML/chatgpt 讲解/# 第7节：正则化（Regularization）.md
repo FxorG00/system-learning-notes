@@ -271,7 +271,7 @@ $$
 \nabla_{\mathbf w} J_{\text{reg}} = \frac{1}{m} X^T (\hat{\mathbf y} - \mathbf y) + \frac{\lambda}{m} \mathbf w
 $$
 
-这正是讲义 7.6 的意思：**model 的 data loss 可以变，但 regularization 是附加在 objective 上的独立约束。**
+这正是讲义 7.6 的意思：**model 的 data loss 可以变，但 regularization 是附加在 objective 上的独立约束。你只是加上去了，那你求偏导的时候也是相加啊，没啥影响，再原先 BCE 的梯度上加 regularization gradient 即可**
 
 ---
 

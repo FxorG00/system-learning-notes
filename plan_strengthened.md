@@ -1,8 +1,8 @@
 # C++ 系统工程 / AI Infra 求职总规划
 
-> 版本：2026-10-03，Week12 Redis / MySQL 及时补课校准版
+> 版本：2026-10-08，Week12 Day4 教程生成同步版
 > 学习者：FxorG，中山大学计算机科学与技术专业，按当前学制为 2029 届
-> 当前进度：Week1 ~ Week11 已完成，Reactor V1 与 HTTP Server V1 均已闭环；Week12 Day1 RESP encoder 已通过，当前推进 Day2 RESP parser。AI Theory T1~T4 已通过，下一模块为 T5；ML 自学已到多变量线性回归
+> 当前进度：Week1 ~ Week11 已完成，Reactor V1 与 HTTP Server V1 均已闭环；Week12 Day1~Day3 已通过，Day3 最终 96/100，Day4 教程已生成、等待 R1 检阅；Day3 normal/sanitizer 全量 71/71、补充精确边界 15/15 均通过。AI Theory T1~T4 已通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 L2 regularization，Ex1 尚未提交 executable evidence
 > 近期目标：2026 年 12 月形成第一版简历，2027 年 1 月开始投递后台开发、C++ Infra 与 AI 业务基础设施相关实习
 > 长期目标：本科就业进入 AI Infra，重点发展 LLM inference systems / serving 与 CUDA kernel optimization
 
@@ -624,7 +624,7 @@ atomic/CAS、acquire/release、happens-before 第一层
 
 ## 6. 2026-08 到 2027-03 双线时间表
 
-截至 2026-10-04 的真实状态：系统主线已完成 Week11 Reactor + HTTP Server V1；Week12 Day1 RESP encoder 与 Day2 request parser V1 已通过，Day3 parser hardening 教程已生成并等待 R1。AI Theory 已通过 T1~T4，T5 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
+截至 2026-10-08 的真实状态：系统主线已完成 Week11 Reactor + HTTP Server V1；Week12 Day1~Day3 已通过，Day3 最终 `96/100`，Day4 教程已生成、等待学习与 R1 检阅。Day3 normal/ASan/UBSan 全量 CTest 均 `71/71 PASS`，独立精确边界 checker 均 `15/15 PASS`；包含尾部 CRLF 的第一帧声明阶段判断已经闭环。AI Theory 已通过 T1~T4，T5 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
 
 | 时间 | 系统主线 | AI 理论伴随线 | 必须形成的结果 |
 |---|---|---|---|
@@ -1152,9 +1152,9 @@ CUDA kernel correctness + profiler + benchmark
 ## 13. 当前下一步
 
 ```text
-1. 进入 Week12 Day3，在 Day2 同一份 RESP parser 上完成 arbitrary fragmentation、binary payload、overflow 与 limits hardening
+1. 学习已生成的 Week12 Day4 并提交 R1：在已通过的 RESP encoder/parser 上独立形成 KvStore 与六条命令；教程提供小 checker 与 CMake，不提供内部存储/分发实现。Day3 临时精确边界测试的持久化可委托 Codex，作为本周出口前非阻塞整理
 2. AI Theory 进入 T5；T1~T4 不重复学习
-3. Day4 开工前完成 Redis/KV/cache 第一层，再形成 PING/ECHO/SET/GET KV 闭环
+3. Day4 Part1 完成 Redis/KV/cache 第一层，再形成 PING/ECHO/SET/GET/DEL/EXISTS KV 闭环；Day5 接入 Reactor，纯内存 tests 不冒充网络集成证据
 4. T20~T24 到达前只维护 serving 资料索引，不启动完整 vLLM/SGLang 源码主线
 5. 每个系统 milestone 继续保留 correctness、sanitizer、failure case 与可复现实验
 6. 到 Theory Gate 3 后先读 mini-sglang，再决定 production framework 的一个窄路径

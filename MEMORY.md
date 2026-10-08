@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-04）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1 RESP2 reply encoder 已以 `94/100` 正式完成；Day2 RESP2 incremental request parser 已以 `96/100` 正式完成；Day3 parser hardening 教程已生成，等待 R1。Day1 external checker 的最小 exact-byte matrix 后续应持久化为真正的 GoogleTest，但它是 Week12 出口前的非阻塞工程整理项。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-08）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1 已以 `94/100`、Day2 与 Day3 均已以 `96/100` 正式完成；Day4 教程已生成，下一步学习并提交 KvStore/六条命令的 R1，Day4 尚未通过。Day3 已落实 size_t conversion、ec/ptr、unsigned-char classification、remaining-space 检查，以及包含 payload 尾部 CRLF 的第一帧声明阶段超限拒绝。最新 source 的 normal 与 ASan/UBSan 全量 CTest 均 `71/71 PASS`；临时精确边界 checker 均 `15/15 PASS`，合法 exact-limit complete/incomplete 均保持正确。当前没有 Day3 核心阻塞项。Day1 external checker 的最小 exact-byte matrix 后续应持久化为真正的 GoogleTest，Day3 临时边界 cases 也可合并进永久 parser tests；均属可委托的 Week12 出口前非阻塞工程整理。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -1740,7 +1740,7 @@ CMU 10-414/714 或 ML systems：由 AI 理论 Gate 接管；Theory Gate 前不�
 
 ## 7. 英文术语和命名解释规则
 
-用户需要通过英文原词建立记忆。英文术语、缩写、系统调用和陌生函数名第一次出现时，必须说明：
+用户需要通过英文原词建立记忆。本规则同时适用于主线 daily、AI Theory 的 Txx.md、ML 讲义和日常回答：英文术语、缩写、系统调用和陌生函数名第一次实际使用时，就要在该处解释。完整机制可按下面的维度说明；正文中的小术语用一两句话讲清准确含义和当前作用即可，不机械展开成七项清单：
 
 ```text
 1. 原始英文或正式完整描述
@@ -1753,6 +1753,10 @@ CMU 10-414/714 或 ML systems：由 AI 理论 Gate 接管；Theory Gate 前不�
 ```
 
 解释重心必须放在**它是什么、内部发生什么物理动作、使用者遇到它应该怎么处理**。不能把术语段落写成连续的“它不是 A、不是 B、也不是 C”；负向排除不是固定栏目。正向定义讲清后，只有某个混淆会真实改变 ownership、lifetime、state、error contract 或 API 用法时，才补一句必要边界。
+
+**“必要术语”不是解释新词的唯一位置。** 正文、标题、表格或流程图中临时用到的新术语，也必须在首次使用处紧跟中文说明，再用短句或破折号解释它在当前场景的具体动作。不能因为它只是一个普通英文单词，或出现在 R2/R3、验收段落，就默认用户已经理解；也不能让用户跳回术语表寻找答案。
+
+例如：`transactional output（事务式输出）`——**整帧解析成功后才一次性交付完整结果；NeedMore/Error 时不交付部分 arguments，consumed_bytes 保持 0。** 这句就放在该词首次出现的正文旁，不另开一节讲事务。已经在前文或此前学习中确认掌握的词可直接复用；同一个词承担新技术含义时再补说明。
 
 例如：
 
@@ -1775,7 +1779,7 @@ predicate：读取受保护 shared state 后得到的布尔条件，不是 condi
 - Linux/POSIX 接口优先查 man page。
 - 课程内容优先查课程官网、讲义或指定翻译资料。
 - 如果权威资料没有给缩写展开或词源存在争议，明确说“正式文档未展开”或“历史命名”，不能为了好记而编造。
-- 原词在第一次真正需要它的位置解释。Part 1 应先用目标和具体例子建立直觉，再告诉用户“这个对象/动作叫 xxx”；不强制在用户还不知道问题是什么时先读完整术语表。正文再次出现时用一句话唤起，不让用户来回猜名字。
+- 原词在第一次真正需要它的位置解释。Part 1 应先用目标和具体例子建立直觉，再告诉用户“这个对象/动作叫 xxx”；不强制在用户还不知道问题是什么时先读完整术语表。后续重复出现可直接使用英文，只有跨度很大或语义改变时才用一句话唤起，不机械重复注解。
 
 ---
 
@@ -2909,7 +2913,7 @@ Week8 Day2~Day4 全量勘误复核：
 [ ] 若篇幅相较同阶段教程异常缩短，是否确认没有遗漏主线、具体状态轨迹、API 语义或练习目的？
 [ ] 每个练习 `.cpp` 是否先说明了程序用途、输入、输出、完整生命周期、成功标准和能力边界？
 [ ] 三个 Part 是否顺序正确，“教程开始”是否明确？
-[ ] 首次出现的英文术语是否有原词、含义和实际作用？
+[ ] 正文、标题、表格和流程图首次使用的新英文术语，是否在该处给出中文含义与当前作用，而不只是检查“必要术语”一节？
 [ ] 每个关键关系是否说明两端对象、方向、归属和失效条件？
 [ ] 是否写清操作前、操作后以及保持不变的状态？
 [ ] hardware / kernel / user space 的责任是否分开？
@@ -3046,6 +3050,7 @@ Round 3：补 deterministic tests、TSan/stress/benchmark、README 与最终证�
 - 用户代码文件默认只读。检阅、编译、运行和定位问题时只报告发现，不自动替用户修复、重构或格式化；只有用户在当前请求中明确授权修改某个文件或某组测试时，才可在该精确范围内动手。
 - 任何获准修改开始前都必须重新读取用户已经保存的最新版。只做最小增量 patch，保留用户已有代码、注释、命名、笔记和每一轮新增内容；禁止用旧 Git baseline、旧临时副本或先前生成版本覆盖用户修改。
 - 用户明确授权“帮我写测试”时，可以新增约定的测试与测试辅助代码，但不能顺手修改 production code 让测试通过。若发现 production code 编译错误或行为缺陷，先报告并等待该部分的单独授权。
+- correctness test 是否必须亲手写，按新增推理判断，而不是按“核心 test”标签判断。用户能独立口述 input、状态建立、oracle 来源、PASS/FAIL 各证明什么时，可授权 Codex 将这些场景落成机械 GTest、loop 和 fixtures；不因委托语法/脚手架扣分。状态判断与 production 修法仍由用户掌握，性能 workload、瓶颈判断与最终结论另按性能协作规则执行。
 - 冻结后的 `daily.md`、用户已经编辑过的教程和 note 在普通问答、普通 review 与评分时默认只读；用户当轮显式要求修改，或 R1 正式通过触发既定的 Round2/Round3 定向润色流程时，才允许编辑。两种情况下都必须以磁盘最新版为底稿，保留用户修改，只调整被授权的部分。R1 正式通过本身就是后半教程定向润色的 standing authorization，不能因“默认只读”而跳过。
 
 完成日验收流程：
@@ -3084,6 +3089,7 @@ Round 3：补 deterministic tests、TSan/stress/benchmark、README 与最终证�
 5. 评分主要看当天核心机制、验收题、代码正确性和验证证据；工程增强项只做小幅扣分
 6. 按实际修正幅度调整复评分数，不能为了鼓励机械加分，也不能无视已经完成的修正
 7. 用户只记录真正不熟悉的内容是允许的，不因省略重复 work 扣分
+8. Round 验收先定位闸门前明示要求与允许暂缺项。R2/R3 才首次讲到的接口前置条件或进阶机制，要纳入后续升级，不能不分层地当成“R1 明示任务未完成”。算术/lifetime 等问题须结合前置 guard、类型和可达路径判断；危险写法不能自动等同于已经证明存在可达故障。
 ```
 
 每次学习进度发生变化时，必须在同一轮同步更新 `MEMORY.md`。触发事件包括：
@@ -3160,9 +3166,9 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-10-03 当前学习状态：系统主线 Week1~Week11 已完成，Week10 Reactor V1 与 Week11 HTTP Server V1 均已正式通过。Week12 Day1 RESP2 reply encoder 已以 `94/100` 正式完成；Day2 RESP2 incremental request parser 教程已生成，用户正在推进 parser V1。Day1 external checker 的最小 exact-byte matrix 仍是 Week12 出口前的非阻塞整理项，可委托 Codex。AI Theory T1~T4 已正式通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 regularization，Ex1 可在完成后作为 T7 等价产出。
+2026-10-08 当前学习状态：系统主线 Week1~Week11 已完成。Week12 Day1 已以 `94/100`、Day2 与 Day3 均已以 `96/100` 正式完成；Day4 教程已生成，下一步学习其 Part1/R1，独立完成 KvStore 与六条命令，再提交检阅。Day4 尚未通过，Day5 网络集成尚未开始。用户最终补上 `cursor + byte_count + 2`，第一帧必需的 payload 与尾部 CRLF 均计入声明阶段判断，之前两轮反例全部通过。normal/sanitizer full CTest 均 `71/71 PASS`、零 warning；Codex 临时精确边界 checker 均 `15/15 PASS`，执行路径无 sanitizer 诊断。合法 exact-limit complete/incomplete 保持正确，Day3 当前没有核心阻塞项。永久 parser tests 仍为 `17/17`；临时 checker 不冒充新增永久测试，其机械持久化可委托，作为 Week12 出口前非阻塞整理。Day1 external checker 的最小 exact-byte matrix 同样待持久化，可委托 Codex。note 唯一 R3 部分仍只描述已走过 cursor 的检查，代码及用户本轮补充已证明必需 CRLF 的提前检查，不要求为此重复抄写。AI Theory T1~T4 已正式通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 regularization，Ex1 可在完成后作为 T7 等价产出。
 
-用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。本轮已执行该规则。
+用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。Day3 R1 正式通过时已执行该规则；Day4 待 R1 正式通过后再定向修订其后续内容。
 
 总规划已在 2026-08-26 完成 Week9 校准：
 
@@ -3638,7 +3644,7 @@ Week8 Day5 用户增补与 daily/Round 编写经验：
 ```text
 review daily 时必须先定位首次生成 baseline，再实际 diff 用户改过的 daily；不能只读 note 和 code。把改动按 terminology gap、mechanism gap、API/tool operational gap、task-brief gap 分类，提炼为后续教程规则
 本次用户主动补充 latency、logger-owned、synchronous、business thread、by-value ownership、associated stream buffer、synchronization operation、stream failure state、write_failed/join visibility 与 CMake source/library/link 关系，说明“小英文词”也可能中断机制主线
-以后英文术语是否需要解释，不能只凭作者觉得它简单；先核对 plan/MEMORY、此前 daily/note 和用户真实使用记录。未确认出现过，或虽出现但当前承担新的技术含义时，首次使用就给中文直译、当前作用和一句边界；避免连续堆出一长串未落地英文
+以后英文术语是否需要解释，不能只凭作者觉得它简单；先核对 plan/MEMORY、此前 daily/note 和用户真实使用记录。未确认掌握，或虽出现但当前承担新的技术含义时，按第 7 节在首次使用处给中文含义和当前作用；仅在确有混淆风险时补一句边界，避免连续堆出一长串未落地英文
 术语解释不必把正文变成字典：优先处理会改变 ownership、lifetime、synchronization、error contract、build/test 操作理解的词；已经稳定使用过的词可直接复用
 本次 by-value 增补总体正确，但措辞应保持精确：std::move 后原 string 是 valid but unspecified state，不保证一定为空；push 拒绝表示 record 未进入 queue/accepted set，不能写成“没有进入 logger”，因为 log parameter 已经构造并进入调用
 Round 教程继续使用 progressive disclosure，但不是只生成 R1：首次生成 daily 时必须把 R1、R2、R3 三部分都完整生成并完成同等质量审计。R1 要自包含且设置阅读闸门；R2/R3 也必须是可直接学习的完整初版，不能只留目标、标题或占位符
@@ -7421,7 +7427,7 @@ Day3 R1 保留 `parse(pointer,length)` public API，新增三个可由 tests 引
 
 可复用规则：协议教程出现 length/count/size、overflow 与 limit 时，不能只列抽象 error table。必须先用一条具体 wire example 说明“这个数字写在什么 marker 后、数的是什么对象、转换成哪个 C++ type、对应哪个项目常量”；再明确分开 syntax validity、machine representability、field-specific product limit 和 derived aggregate limit。`magnitude`、`size` 等泛词如果不能唯一指向一个对象，就改成 `Array element count`、`Bulk payload byte count`、`first-frame encoded byte count` 这样的具体名称。还要说清 parser 如何获得证据，例如 `std::from_chars_result::ec == std::errc::result_out_of_range`，不能让学习者靠数字位数猜 overflow。
 
-本日 tests 本身是主课，不能仅因重复而整体委托：用户必须理解累计 prefix、explicit-length binary oracle、numeric range 与 product limit 的两阶段判断，以及 first-frame boundary。R1 通过后，limit - 1/limit/limit + 1 builders、重复 malformed table 和 invariant helpers 可以由 Codex 协助补全。R2 才解释 `from_chars` 的 `ec/ptr`、`isdigit` unsigned-char 前置条件、remaining-space checked arithmetic、three-limit cost model 与 Interval transactional output；闸门前没有提供 production control flow 或完整修法。
+生成时要求用户掌握累计 prefix、explicit-length binary oracle、numeric range 与 product limit 的两阶段判断，以及 first-frame boundary。2026-10-08 根据明确反馈细化协作：这些推理与 oracle 由用户掌握，能独立口述解释后，核心 A~D 的机械 GTest 也可授权 Codex 实现，不必等 R1 通过才委托。limit builders、malformed table 与 invariant helpers 同样可协助。R2 才解释 `from_chars` 的 `ec/ptr`、`isdigit` unsigned-char 前置条件、remaining-space checked arithmetic、three-limit cost model 与 Interval transactional output；闸门前没有提供 production control flow 或完整修法。
 
 教程严格保持系统主线三 Part、明确教程开始、R1 progressive disclosure 与 R1 后按真实 source/tests/note 定向润色规则。Round3 固定 deterministic matrix、test-builder independence、fresh full regression 与 ASan/UBSan；TSan 不进入无 shared mutable state 的 parser 日。发布前已在 Ubuntu 复跑教程中的 baseline 入口：focused executable `13/13 PASS`，全量固定 CTest 入口 `67/67 PASS`，确认 target 名称和命令真实可用；这只证明 Day2 baseline，没有冒充 Day3 hardening evidence。`DAILY_INDEX.md` 已同步至 80 份教程，总规划当前下一步已从 Day2 更新为 Day3。生成不修改 Ubuntu production code、tests 或 Day2 冻结文件；当前状态只是 Day3 教程已生成、等待 R1，不能提前标记通过。
 
@@ -7495,3 +7501,77 @@ Mini Redis 的性能实验顺序因此固定为：先保留 `epoll + std::unorde
 当前 RESP parser 的真实优势必须精确表述：在**一次 parse invocation 内**，reference cursor 单调向前，Array/Bulk number line 与 payload boundary 不需要反复从头 `find`，因此主要扫描路径是 linear pass，且常数有机会更小；但 parser 目前是 stateless over cumulative input，`NeedMore` 后下一次调用仍可能从 frame 起点重新解析。因此不能未经测量就写成“整个网络接收生命周期只扫描一次”或宣称一定快于 HTTP parser。Day3 all-split test 证明 fragmentation correctness，不证明 aggregate linear complexity。
 
 以后 parser performance review 必须分开四层：单次调用的 asymptotic complexity、跨 incremental calls 的 aggregate work、copy/allocation count、真实 workload 下的 latency/throughput。代码审查先形成 hypothesis，随后用不同 frame size、chunk size、header/argument count 和 coalescing pattern 的 benchmark 验证；只有 measurement 成立，才把“single-pass cursor 降低扫描成本”写进项目 README 或简历。这正是 AI 时代仍需亲自实现核心 parser 的价值：用户必须能判断 AI 生成代码是否重复扫描、为何慢、如何验证以及修改后是否真的改善，而不只是让 AI 交付一份能 PASS 的 parser。
+
+## 2026-10-08：Week12 Day3 R1 重新验收正式通过
+
+R1 最终评分 `95/100`，正式通过；Day3 整体尚未收口。用户独立保留 reference cursor、`RespFlag`、`parse_digits`、local `vector<Interval>`，新增 `optional<size_t>` conversion failure、三个 public limits 和 stable English errors。array/bulk declaration 超限时先拒绝，完整第一帧由 cursor 判断 frame limit；arguments 在所有检查成功后 owning commit。
+
+用户 A~D 的口述 oracle 正确：A 为累计 prefix 从 NeedMore 到 exact Complete，B 为 consumed boundary 与 suffix 继续解析，C 为机器可表示范围与产品上限两层判断，D 为 first-frame encoded size 与整个 input range 分离。补充精度：跨 recv 累积属于 caller/Connection input Buffer，stateless parser 自身不保存或拼接 chunks。没有独立 day3_note，不能把口述或 Codex 动态输出伪装成用户笔记。
+
+经用户明确授权，上一轮 Codex 只在 `tests/resp_request_parser_test.cpp` 补四组机械 correctness cases，未改 production。本轮重新读取 source/header/tests，比较 Day3 首次 Git baseline 与当前版本：变化为用户要求的第 11/14 节具体大小对象与 range 解释，已全部保留。独立 `/tmp/week12-day3-r1-rereview-20261008/build` fresh GCC 10.5 Debug build 零 warning；固定 `cmake -E chdir build ctest --output-on-failure` 本次 `71/71 PASS`，其中 parser `17/17 PASS`。本轮尚未运行 ASan/UBSan，不把 normal PASS 写成 sanitizer clean。
+
+撤销上一轮 `91/100` 和两项 blocker：`isdigit` 前置条件到 R2 第 26 节才完整讲解，作为后续必学修复；`cursor + byte_count` 之前已有 1 MiB Bulk guard，必须结合有效范围、cursor 与平台分析，不能凭加法宣布实际溢出。本次未复现可达回绕，最终仍通过 remaining-space check 建立独立局部证明。`uint64_t -> size_t` 在本机满足 R1 range cases，直接转换到 size_t 为后续 portable helper 升级。
+
+R1 通过后按 standing authorization 逐节定向润色 R2/R3，保持前半段和用户增补的原文指纹。后续四项明确升级：直接 size_t conversion 并检查 ec/ptr、ASCII digit、remaining-space endpoint proof，以及第一帧已由解析信息证明超限时提前 Error。最后一项补强当前只在完整 frame 后检查的拒绝时机；不让完整-frame fixture 冒充 partial oversized evidence。R3 复用 17 个 tests，只补 exact-limit/high-bit/partial-oversized/binary-empty 和 sanitizer。机械测试可由 Codex 实现，用户拥有 oracle 与 production 修法。DAILY_INDEX 的路径、主题和检索范围不变，无需修改；普通 review 不自动 commit/push，不修改用户 source/note 或无关 ML 文件。
+
+## 2026-10-08：Week12 Day3 整日复检
+
+整日暂评 `92/100`，尚未正式通过；此前 R1 `95/100` 通过不撤销。用户已改为直接 `size_t` conversion，检查 `ec` 与 `ptr`；`isdigit(static_cast<unsigned char>(...))` 修复了分类接口的参数前置条件，属于第 26 节允许的有效替代，不因没有照选 ASCII 手写判断扣分；payload availability 使用 `byte_count > length - cursor`，在可用范围内才计算 endpoint。三个上限、owning arguments、first-frame consumed boundary 均保留。
+
+重新读取 `day3_note.md` 唯一 R3 部分：旧版完成后检查的描述正确，已消费 cursor 超限要拒绝也正确，但“每次 cursor 移动后检查”不足以实现声明阶段提前拒绝。当前 cursor 只代表已经走过的 bytes；Bulk length 还证明了尚未到齐、但这条第一帧必需占用的 payload 与 CRLF。不能在代码仍允许已知超限请求等待时，把笔记记成机制完全成立。
+
+动态证据：GCC 10.5、C++17、Wall/Wextra 的 fresh Debug build 零 warning，normal 全量固定 CTest `71/71 PASS`；独立 ASan/UBSan full CTest 同样 `71/71 PASS`，无诊断。Codex 在自己的 workspace 创建临时 `boundary_probe.cpp`，通过 stdin 编译到 `/tmp/week12-day3-final-20261008a/boundary_probe`，未修改用户文件。normal 与 sanitizer 均 `12/13 PASS`：elements 1023/1024/1025、Bulk 1 MiB-1/1 MiB/1 MiB+1、frame 2 MiB-1/2 MiB/2 MiB+1、empty/binary payload、high-bit malformed header，以及合法 exact-limit incomplete frame 均正确。
+
+唯一失败：`*2\r\n$1048576\r\n[完整 1 MiB payload]\r\n$1048576\r\n`，第二段 payload 尚未提供。已收到 prefix 长度 1,048,602；声明证明完整第一帧需要 2,097,180 bytes，超过 2,097,152 上限。实际在 `src/resp_request_parser.cpp:233` 的 payload availability 分支返回 NeedMore，预期为 Error、`RESP request frame exceeds limit`、arguments empty、consumed_bytes 0。需要在等待 payload 前，用当前第一帧已知信息证明所需边界是否超限，包含 payload 后 CRLF；不改为检查整个 input length。
+
+验收题证据：1/3/5 的既有口述正确；2/7 未另写答案，但 length-aware payload 与延迟发布代码/测试正确；4 未另写答案，但 remaining-space 修法已证明；6 未单独作答，三个限制在代码中分开；8 未回答，纯 parser tests 尚不证明真实 Connection/Reactor integration。没有机械抄写答案不单独扣分，当前阻塞由实际可复现协议行为决定。
+
+daily 首次 baseline `bdd225e` 与当前版本已逐块对照；第 11/14 节是此前授权的大小对象/数值范围补讲，R2/R3 是此前按真实 R1 润色，首次术语行内说明来自用户上轮明确要求。当前新增 `Oracle 判定标准` 表头正确并保留。本轮 ordinary review 不改 daily、note、production 或永久 tests；代码/header/test 哈希检阅前后不变。更新 MEMORY、总规划当前状态及 DAILY_INDEX 的旧“等待 Round1”状态；不自动 commit/push。
+
+可复用检阅经验：提前拒绝必须用“length declaration 已完整、对应 payload 未提供”的 fixture 验证；增加 cursor 检查频次、完整超大帧 PASS、ASan/UBSan 无诊断，都不能替代这个协议 oracle。临时 checker 的通过项与失败项分别记录，不把 covered memory clean 写成全部功能通过。
+
+## 2026-10-08：Week12 Day3 CRLF 边界复检
+
+复评分数 `94/100`，Day3 尚未最终通过；R1 `95/100` 通过状态保留。重新读取用户最新 source 与 note，新增 `cursor + byte_count > kMaxRequestFrameBytes` 已修复上一轮大幅超限的声明阶段反例，原 13-case checker 全部通过。当前 guard 已限定 cursor 与 byte_count 范围，不把此加法重新误判成已证实的溢出。
+
+新增两例暴露同一剩余边界：array 有两个 Bulk，第一个 payload 为 1,048,576 bytes，第二个为 1,048,549 bytes；第二个长度行后 cursor 为 1,048,602，payload 末尾为 2,097,151，但算上尾部 CRLF 后第一帧长度为 2,097,153，超过 2,097,152 上限。尚未提供第二个 payload、以及 payload 已齐但 CRLF 尚未到齐，两种状态均错误返回 NeedMore；应提前 Error，arguments empty、consumed_bytes 0。只需补齐第一帧必需的 CRLF 两字节，不改变为检查整个 input range。
+
+本轮重新编译最新 source，normal 与 ASan/UBSan 全量固定 CTest 均 `71/71 PASS`、零 warning；扩充临时 checker normal/sanitizer 均 `13/15 PASS`，无 sanitizer 诊断。合法 exact-limit complete/incomplete、binary/empty、高位字节及三类上限其余案例均通过。note 唯一 R3 部分与上轮相同：已走过 cursor 的解释正确，但声明阶段还需计入必需 framing bytes；既有验收题证据判断不变，不要求重复抄写。只修改 Codex 自有临时 checker 和进度文档，用户 production、永久 tests、note、daily 均未修改；普通复检不自动 commit/push。
+
+## 2026-10-08：Week12 Day3 正式通过
+
+用户随后明确补充“+2了”，重新 SSH 读取最新版确认 `cursor + byte_count + 2 > kMaxRequestFrameBytes` 与解释尾部 CRLF 的注释已保存。当前 cursor 和 byte_count 的前置上限保证本机该加法可表示；不因表面加法形式另设已被前置范围排除的溢出 blocker。
+
+最新 source 重新编译后，normal 与 ASan/UBSan 全量固定 CTest 均 `71/71 PASS`、零 warning；独立临时 15-case checker 两种 build 均 `15/15 PASS`。之前缺 payload 与缺尾部 CRLF 的两个反例现在都提前 Error，error_message 正确、arguments empty、consumed_bytes 0；合法恰好上限的完整帧 Complete、不完整帧 NeedMore 均保留。撤销剩余 CRLF 扣分，最终 `96/100`，Day3 正式通过，下一步 Day4。
+
+note 唯一 R3 章节重新读取，内容未变：由完成后检查升级到 cursor 检查的说明正确，但没有展开本轮声明阶段的必需 framing bytes；最终 source、用户“+2”补充与本次实测足以证明这一点，不要求重复抄写。验收题 1/3/5 的口述正确；2/4/6/7 未另写完整答案，但对应 length-aware、remaining-space、分层 limit 与延迟发布已由代码和测试证明；8 未回答，真实 Connection/Reactor integration 留给本周后续，不把纯 parser tests 写成已证明集成。源码、header、永久 tests 分别完成只读检阅；没有替用户修改代码或笔记。临时精确边界测试持久化仍是非阻塞整理，不因委托机械测试扣分。MEMORY、总规划和索引同步为已通过；普通验收不自动 commit/push。
+
+## 2026-10-08：Week12 Day4 教程生成
+
+已生成 `week12/day4/day4.md`，承接 Day3 已通过的 parser 与 Day1 encoder。Part1 从 SET 后数据要继续存在的具体问题建立 database/cache/in-memory KV/keyspace 第一层，保留四个主问题；Part2 R1 给出所有文件用途、公开接口、六条命令、精确英文 error messages、三个可直接运行的 GTest 与完整 CMake append。内部存储容器与分发实现不在闸门前给答案。
+
+本日冻结的入口：
+
+```text
+KvStore：set / get / erase / exists / size
+get 返回 optional<string> 的 owning snapshot
+execute_command(KvStore&, const vector<string>&)
+    -> 返回已经 RESP 编码的 owning string
+
+PING / ECHO / SET / GET / DEL / EXISTS
+command name：ASCII case-insensitive，完整匹配
+key/value：binary-safe，空 key/value 合法，bytes 原样保存
+GET miss：null bulk；present empty：empty bulk
+EXISTS：重复已有 key 多次计数
+DEL：只数实际删除
+wrong arity / unknown / empty vector：稳定 command Error reply，store 不变
+allocation failure：C++ exception，不承诺 mutation+reply 的 OOM rollback
+```
+
+R2 已完整讲解 SET→GET 的对象寿命、server-owned store、缺失与空值、command name/binary 边界、command/protocol error、计数和单线程访问；R3 只补空值/ownership、binary/case、错误矩阵、真实 parser→dispatcher 四组代表路径。R1 正式通过后仍必须依据用户真实实现逐节定向润色，不把这个初始 R2/R3 当成已经对照过未来 source。
+
+发布前独立临时工程在 Ubuntu 复用用户 canonical parser/encoder，只读取用户工程，未修改 production、永久 tests、CMake、note 或旧 daily。normal 与 ASan/UBSan fresh builds 均零 warning，全量固定 CTest 均 `78/78 PASS`：已有 71 项 + Codex 参考实现的 3 个 R1 tests + 4 个补充 tests。教材里的 checker 与 CMake 已机械对照编译版本，代码 fences 平衡，Mermaid 采用 8.8.3 兼容的 quoted labels/simple graph 形式；未声称做过 Typora UI 渲染。此处仅证明教材接口与样例可运行，用户 Day4 尚未提交、没有验收分数。
+
+最后技术 check 修正了 Arity 的计数模型：Redis 官方命令元数据把 command name 计入，正文分别列出 name 后参数数量与 arguments.size()，避免入门解释污染后续源码理解。既有 encoder 的实际函数名与 target 名已写清；返回 wire bytes 的等价表示不引入新 reply class hierarchy，也不能在 Day5 重复编码。
+
+MEMORY 的当前状态/下一步、总规划与 DAILY_INDEX 同步到 Day4 已生成待学习，索引现为 81 份。仅含 Codex 临时测试副本的 `.review_tmp/` 加入 Git ignore，文件保留；用户既有 ML 笔记与 Python 笔记不改写。按新 daily 生成的既有规则进行 Git add/commit/push，不改变主线三 Part/R1/R2/R3 与理论线各自规则。
