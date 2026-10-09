@@ -1,8 +1,8 @@
 # Daily 教程总目录
 
-> 更新日期：2026-10-08
+> 更新日期：2026-10-09
 >
-> 收录范围：主线 Week1 Day1 至 Week12 Day4，共 81 份正式 daily 教程。
+> 收录范围：主线 Week1 Day1 至 Week12 Day5，共 82 份正式 daily 教程。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week11 已通过
-Week12 Day1~Day3 已正式完成；Day3 最终 96/100，normal/sanitizer 全量 71/71 与临时精确边界 15/15 均通过；Day4 教程已生成，等待学习与 R1 检阅，尚未通过
+Week12 Day1~Day4 已正式完成；Day4 最终 100/100，map/六 handlers 与分层错误、共享/隔离关系通过验收；normal/sanitizer 合并矩阵均 84/84（原工程 74 项 + 临时 10 项），头文件组合编译通过。Day5 Reactor 集成教程已生成，等待 R1；参考验证不代表用户已经完成
 ```
 
 ---
@@ -207,7 +207,8 @@ Week12 Day1~Day3 已正式完成；Day3 最终 96/100，normal/sanitizer 全量 
 | [Day1：RESP2 reply encoder](week12/day1/day1.md) | 从 type marker、CRLF 与 length prefix 建立 RESP2 reply wire model；区分 Simple String、Error、Integer、Bulk String 与 Null Bulk String，并明确 `string_view` input 和 owning output | `resp_encoder.hpp/.cpp` + exact-byte tests + CMake/CTest target | RESP2, encoder, serialization, wire bytes, Simple String, Bulk String, Null Bulk, binary-safe, string_view |
 | [Day2：RESP2 request parser V1](week12/day2/day2.md) | 从累计 Buffer prefix 解析第一条 Array of Bulk Strings；区分 NeedMore/Complete/Error，并用 exact consumed_bytes 保留下一条 command suffix | `resp_request_parser.hpp/.cpp` + focused parser tests + CMake/CTest target | RESP2, request parser, Array, Bulk String, NeedMore, Complete, Error, consumed_bytes, framing |
 | [Day3：RESP parser hardening](week12/day3/day3.md) | 在同一份 parser 上系统验证任意 byte split、二进制 payload、coalesced frames、numeric overflow 与 element/bulk/frame limits；区分 first-frame size 和整个 Buffer size | hardened request parser + all-split/binary/overflow/limit matrix + ASan/UBSan evidence | fragmentation, coalescing, binary-safe, numeric overflow, checked arithmetic, resource limit, first-frame boundary |
-| [Day4：KV 数据与六条命令](week12/day4/day4.md) | 从 database/cache/KV 用途建立共享 state；用六条命令读写 owning key/value，区分空值/缺失、命令名/二进制参数和 command error；返回已编码 RESP bytes | `KvStore` + `execute_command` + R1 小 checker/CMake + 代表性 semantics matrix | KV store, keyspace, arity, PING, ECHO, SET, GET, DEL, EXISTS, command dispatcher, optional, ownership |
+| [Day4：KV 数据与六条命令](week12/day4/day4.md) | 从 database/cache/KV 用途建立共享 state；按实际 map/六 handlers 解释 SET 复制、GET 快照、const find、二进制参数、重复计数和稳定错误；区分纯内存证据与未来网络共享 | `KvStore` + `execute_command` + R1 小 checker/CMake + 永久 tests 与独立临时 semantics matrix | KV store, keyspace, arity, PING, ECHO, SET, GET, DEL, EXISTS, command dispatcher, optional, ownership, const map, snapshot |
+| [Day5：Mini Redis 接入 TCP](week12/day5/day5.md) | 复用 Reactor、RESP parser 和 map/六 handlers；把累计 input 接到命令层，精确消费并有序回复；区分 command error 继续与 protocol error 排空后关闭 | `mini_redis_server.cpp` + CMake append + Python smoke/protocol checker + normal/ASan/UBSan 网络验证入口 | Mini Redis, Reactor integration, MessageCallback, partial frame, pipelining, shared store, protocol error, close-after-flush, deferred cleanup |
 
 ---
 
@@ -298,6 +299,9 @@ RESP element / bulk / frame limits          -> Week12 Day3
 database / cache / in-memory KV / keyspace   -> Week12 Day4
 SET / GET / DEL / EXISTS / command errors    -> Week12 Day4
 KvStore / dispatcher / empty vs missing     -> Week12 Day4
+Mini Redis TCP / MessageCallback integration -> Week12 Day5
+RESP split / command error continue / EOF    -> Week12 Day5
+shared store / close-after-flush / cleanup   -> Week12 Day5
 ```
 
 ## 并发与工程工具

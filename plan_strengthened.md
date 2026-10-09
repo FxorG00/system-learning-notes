@@ -1,8 +1,8 @@
 # C++ 系统工程 / AI Infra 求职总规划
 
-> 版本：2026-10-08，Week12 Day4 教程生成同步版
+> 版本：2026-10-09，Week12 Day5 教程生成同步版
 > 学习者：FxorG，中山大学计算机科学与技术专业，按当前学制为 2029 届
-> 当前进度：Week1 ~ Week11 已完成，Reactor V1 与 HTTP Server V1 均已闭环；Week12 Day1~Day3 已通过，Day3 最终 96/100，Day4 教程已生成、等待 R1 检阅；Day3 normal/sanitizer 全量 71/71、补充精确边界 15/15 均通过。AI Theory T1~T4 已通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 L2 regularization，Ex1 尚未提交 executable evidence
+> 当前进度：Week1 ~ Week11 已完成，Reactor V1 与 HTTP Server V1 均已闭环；Week12 Day1~Day4 已正式通过，Day4 最终 100/100，map 版 KvStore 与六条命令、分层错误处理及共享/隔离关系已确认。Normal/sanitizer 合并 CTest 均 84/84 PASS（原工程 74 项 + 临时 10 项），头文件组合编译通过，覆盖路径无 sanitizer 诊断。Day5 教程已生成，下一步独立完成 Reactor 集成 R1；用户网络产出尚未验收。AI Theory T1~T4 已通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 L2 regularization，Ex1 尚未提交 executable evidence
 > 近期目标：2026 年 12 月形成第一版简历，2027 年 1 月开始投递后台开发、C++ Infra 与 AI 业务基础设施相关实习
 > 长期目标：本科就业进入 AI Infra，重点发展 LLM inference systems / serving 与 CUDA kernel optimization
 
@@ -524,7 +524,7 @@ SET / GET / DEL / EXISTS
 
 Day1~Day3 不回退补完整 Redis 课程。Day4 写 `KvStore` 前，daily 必须先从 database/cache/KV store 的问题出发，讲清 client、server、keyspace、String value、command/reply 和本周六条命令的状态语义；再让用户独立设计 command/store V1。
 
-出口：网络层、协议层、命令层和存储层边界清楚；能解释自己的 `unordered_map<string,string>` 在 server 中扮演什么角色；同时能对照经典 Redis 的主要命令执行路径解释常见数据类型和事件循环，知道现代 Redis 还包含 I/O threads 与后台任务，并准确说明本项目只实现了哪些语义。
+出口：网络层、协议层、命令层和存储层边界清楚；能解释自己的关联容器（当前实现为 `std::map<string,string>`）在 server 中扮演什么角色；同时能对照经典 Redis 的主要命令执行路径解释常见数据类型和事件循环，知道现代 Redis 还包含 I/O threads 与后台任务，并准确说明本项目只实现了哪些语义。
 
 Week12 只为 MySQL 建立一座桥：Redis 当前是内存 KV 模型，MySQL 是关系模型，二者不是“换个命令的同一种数据库”。本周不要求在尚未理解 table/row/index 的前提下硬做 `EXPLAIN`。
 
@@ -624,7 +624,7 @@ atomic/CAS、acquire/release、happens-before 第一层
 
 ## 6. 2026-08 到 2027-03 双线时间表
 
-截至 2026-10-08 的真实状态：系统主线已完成 Week11 Reactor + HTTP Server V1；Week12 Day1~Day3 已通过，Day3 最终 `96/100`，Day4 教程已生成、等待学习与 R1 检阅。Day3 normal/ASan/UBSan 全量 CTest 均 `71/71 PASS`，独立精确边界 checker 均 `15/15 PASS`；包含尾部 CRLF 的第一帧声明阶段判断已经闭环。AI Theory 已通过 T1~T4，T5 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
+截至 2026-10-09 的真实状态：系统主线已完成 Week11 Reactor + HTTP Server V1；Week12 Day1~Day4 已正式通过，Day4 最终 `100/100`。纯内存命令/store 闭环、分层错误和未来共享 store/独立 Connection input 的关系均成立，Day5 Reactor 集成教程已生成，等待独立 R1 与用户网络实测验收。Normal/sanitizer 合并矩阵均 `84/84 PASS`、头文件组合编译通过、覆盖路径无诊断；临时 10 项尚未加入原工程的 74 项永久矩阵。AI Theory 已通过 T1~T4，T5 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
 
 | 时间 | 系统主线 | AI 理论伴随线 | 必须形成的结果 |
 |---|---|---|---|
@@ -1152,9 +1152,9 @@ CUDA kernel correctness + profiler + benchmark
 ## 13. 当前下一步
 
 ```text
-1. 学习已生成的 Week12 Day4 并提交 R1：在已通过的 RESP encoder/parser 上独立形成 KvStore 与六条命令；教程提供小 checker 与 CMake，不提供内部存储/分发实现。Day3 临时精确边界测试的持久化可委托 Codex，作为本周出口前非阻塞整理
+1. 学习已生成的 Week12 Day5，根据 Day4 的实际 map/六 handlers、RESP parser/encoder 与现有 Connection 独立实现 mini_redis_server R1，把命令层接入 Reactor；保留共享 store 与各 Connection input 的职责边界。Day1/Day3/Day4 临时代表测试的持久化可在授权后委托 Codex，作为本周出口前非阻塞整理
 2. AI Theory 进入 T5；T1~T4 不重复学习
-3. Day4 Part1 完成 Redis/KV/cache 第一层，再形成 PING/ECHO/SET/GET/DEL/EXISTS KV 闭环；Day5 接入 Reactor，纯内存 tests 不冒充网络集成证据
+3. Day4 PING/ECHO/SET/GET/DEL/EXISTS KV 核心已正式通过；Day5 用真实 TCP client 验证首条网络链，Day6 再做多客户端与 failure isolation，不用纯内存 tests 冒充网络集成证据
 4. T20~T24 到达前只维护 serving 资料索引，不启动完整 vLLM/SGLang 源码主线
 5. 每个系统 milestone 继续保留 correctness、sanitizer、failure case 与可复现实验
 6. 到 Theory Gate 3 后先读 mini-sglang，再决定 production framework 的一个窄路径

@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-08）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1 已以 `94/100`、Day2 与 Day3 均已以 `96/100` 正式完成；Day4 教程已生成，下一步学习并提交 KvStore/六条命令的 R1，Day4 尚未通过。Day3 已落实 size_t conversion、ec/ptr、unsigned-char classification、remaining-space 检查，以及包含 payload 尾部 CRLF 的第一帧声明阶段超限拒绝。最新 source 的 normal 与 ASan/UBSan 全量 CTest 均 `71/71 PASS`；临时精确边界 checker 均 `15/15 PASS`，合法 exact-limit complete/incomplete 均保持正确。当前没有 Day3 核心阻塞项。Day1 external checker 的最小 exact-byte matrix 后续应持久化为真正的 GoogleTest，Day3 临时边界 cases 也可合并进永久 parser tests；均属可委托的 Week12 出口前非阻塞工程整理。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-09）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1 已以 `94/100`、Day2 与 Day3 均已以 `96/100`、Day4 已以 `100/100` 正式完成；Day5 教程已生成，等待用户独立完成 R1；网络集成尚未作为用户产出验收。用户的 `std::map` 版 KvStore 与六个 handlers 保留；ownership、binary/empty、大小写、DEL/EXISTS 计数和 parser→dispatcher 均有实测。PING 错误文本与头文件保护的修复保持有效，完整日再次 normal/ASan/UBSan 合并 CTest 均 `84/84 PASS`、零 warning，头文件组合编译通过；其中原工程 74 项与 Codex 临时补充 10 项明确区分。用户口述第 4/5 题正确：SET k 是合法 RESP frame，但 dispatcher 返回 wrong-arity command error；共享同一 KvStore，各 Connection 分别持有自己的 partial input。第 1~3 题未另写，但代码和 tests 已证明，不要求重复抄写。Day4 R2/R3 已完成定向润色和阅读收尾；本日纯内存组件通过，不提前记成 TCP 多客户端集成或性能已验证。Day1/Day3/Day4 临时检查的代表性 cases 可在授权后持久化，作为 Week12 出口前非阻塞工程整理。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -3166,9 +3166,9 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-10-08 当前学习状态：系统主线 Week1~Week11 已完成。Week12 Day1 已以 `94/100`、Day2 与 Day3 均已以 `96/100` 正式完成；Day4 教程已生成，下一步学习其 Part1/R1，独立完成 KvStore 与六条命令，再提交检阅。Day4 尚未通过，Day5 网络集成尚未开始。用户最终补上 `cursor + byte_count + 2`，第一帧必需的 payload 与尾部 CRLF 均计入声明阶段判断，之前两轮反例全部通过。normal/sanitizer full CTest 均 `71/71 PASS`、零 warning；Codex 临时精确边界 checker 均 `15/15 PASS`，执行路径无 sanitizer 诊断。合法 exact-limit complete/incomplete 保持正确，Day3 当前没有核心阻塞项。永久 parser tests 仍为 `17/17`；临时 checker 不冒充新增永久测试，其机械持久化可委托，作为 Week12 出口前非阻塞整理。Day1 external checker 的最小 exact-byte matrix 同样待持久化，可委托 Codex。note 唯一 R3 部分仍只描述已走过 cursor 的检查，代码及用户本轮补充已证明必需 CRLF 的提前检查，不要求为此重复抄写。AI Theory T1~T4 已正式通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 regularization，Ex1 可在完成后作为 T7 等价产出。
+2026-10-09 当前学习状态：系统主线 Week1~Week11 已完成。Week12 Day1~Day4 已正式完成，分数分别为 `94/100`、`96/100`、`96/100`、`100/100`。Day4 完整验收已核对最新代码、note、daily baseline diff 与第 4/5 题口述；没有新增核心问题，无需再写业务或重复 tests。下一步学习已经生成的 Day5，按真实 map/六 handlers、现有 RESP parser/encoder 与 Connection 独立完成 R1：把纯内存命令层接入单线程 Reactor，让 callbacks 借用同一个 server-owned KvStore，并保留各 Connection 独立 input/output。Day5 教程已生成待 R1，用户 TCP 集成尚未验收；Codex 临时参考运行不算用户学习通过。最新 normal/sanitizer 合并矩阵均 `84/84 PASS`，头文件组合编译通过；原工程 74 项、本日永久 3 项、临时补充 10 项的证据范围不混淆。Day1/Day3/Day4 临时代表 cases 的永久整理可在授权后委托，不阻塞当前推进。普通验收不再修改已润色的 Day4、用户代码、tests 或 note。AI Theory T1~T4 已正式通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 regularization，Ex1 可在完成后作为 T7 等价产出。
 
-用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。Day3 R1 正式通过时已执行该规则；Day4 待 R1 正式通过后再定向修订其后续内容。
+用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。Day3 与 Day4 R1 正式通过时均已执行该规则；后续仍从最新磁盘版本编辑，保留用户新增内容。
 
 总规划已在 2026-08-26 完成 Week9 校准：
 
@@ -7575,3 +7575,45 @@ R2 已完整讲解 SET→GET 的对象寿命、server-owned store、缺失与空
 最后技术 check 修正了 Arity 的计数模型：Redis 官方命令元数据把 command name 计入，正文分别列出 name 后参数数量与 arguments.size()，避免入门解释污染后续源码理解。既有 encoder 的实际函数名与 target 名已写清；返回 wire bytes 的等价表示不引入新 reply class hierarchy，也不能在 Day5 重复编码。
 
 MEMORY 的当前状态/下一步、总规划与 DAILY_INDEX 同步到 Day4 已生成待学习，索引现为 81 份。仅含 Codex 临时测试副本的 `.review_tmp/` 加入 Git ignore，文件保留；用户既有 ML 笔记与 Python 笔记不改写。按新 daily 生成的既有规则进行 Git add/commit/push，不改变主线三 Part/R1/R2/R3 与理论线各自规则。
+
+## 2026-10-09：Week12 Day4 R1 首次检阅
+
+重新读取用户保存的 note、Ubuntu 最新四个 production files、永久 test 和 CMake，保持只读。Daily 首次 baseline 为 `106da78`，与当前磁盘版本 diff 为空；用户本日没有新增教程内容，不虚构新增编写经验。用户采用 `std::map<string,string>` 保存 owning key/value，GET 用 `find()` 后返回独立 optional<string> 快照；dispatcher 完整匹配 ASCII 命令名并分成六个 handlers，正常路径、空值/缺失、二进制参数、重复计数与错误后继续执行均成立。保留 map 设计，不强制改成 unordered_map；复制成本和 erase 两次查找属于后续性能讨论，不当成 correctness bug。
+
+实测：fresh normal build 零 warning，固定 `cmake -E chdir build ctest --output-on-failure` 全项目 `74/74 PASS`，其中用户 Day4 永久 tests `3/3 PASS`。Codex 在自有 workspace 与 Ubuntu `/tmp` 新增 10 项独立语义测试，normal 与 ASan/UBSan 合并 CTest 均 `83/84 PASS`，新增项 `9/10 PASS`；sanitizer 日志无内存/未定义行为诊断。唯一功能失败是 `src/command_dispatcher.cpp:35` 的 PING wrong-arity message 含 literal backticks，实际回复为 -`ERR ...`\r\n，而冻结契约为 -ERR ...\r\n。另用仅包含两个 public headers 的 syntax-only probe 确认 `kv_store.hpp` 被直接/间接重复包含时 class redefinition；两个 headers 均缺少 guard。直接 include `<string_view>` 是非阻塞自足性建议，当前 GCC 实际编译可用，不谎称已有编译失败。
+
+笔记逐项检阅：R1 的 map 选型正确；“一个报错”的 passing、隐含 this 与 discards qualifiers 三段均正确，实际 get 已通过 find 避免 const map 调用 operator[]；execute_command 的 dispatcher/handler 理解与实现一致。五道验收题均未另写答案：第 1~3 题核心由 source 与新增测试证明；第 4 题 parser 接受合法 SET 参数 frame、dispatcher 拒绝错误 arity 的分层由现有 parser 和 handler 路径成立，错误后继续执行也有实测；第 5 题共享 store/独立 Connection input 是后续网络集成，当前未给集成证据，不提前声称已证明，也不作为 R1 扣分项。
+
+暂评 `95/100`：PING 固定错误文本扣 3 分，header composability 扣 2 分；R1 暂未正式通过，核心待修为前者，后者属小幅工程整理。用户代码、永久 tests、note、daily 均未修改；R1 正式通过后再从最新磁盘版本按真实 map/六 handlers 和本次证据定向润色完整 R2/R3。更新 MEMORY 当前状态/下一步、总规划与索引，不自动 commit/push，也不触碰用户无关的 VS Code 调试笔记。
+
+## 2026-10-09：Week12 Day4 R1 正式通过与后半教程定向润色
+
+用户随后回复“ok了”。重新 SSH 读取最新 four production files 与永久 test，确认 `ping_handler` 删除两端反引号，两个 public headers 顶部增加 `#pragma once`。重新编译后 normal 与 ASan/UBSan 的固定 CTest 合并矩阵均 `84/84 PASS`，编译零 warning；直接/间接同时包含两个 headers 的 syntax-only probe 也通过。上一轮 3 分 error-text 和 2 分 header composition 扣分全部撤销，R1 复评 `100/100` 正式通过。分数仅描述本轮冻结范围，不能推广成性能满分、生产完备或整日已经验收。
+
+最新 note 与前轮一致，逐项结论保持：R1 的 map representation 正确；const map 报错的 passing/this/discards 三段解释正确；dispatcher 理解正确。五道验收题均未另写：1~4 的核心由实现和实际 tests 支撑，5 的 server store/per-connection input 关系属于下一天网络组合，未提前记成集成已证明，不扣重复笔记或委托测试的分。
+
+按 standing authorization，从用户当前磁盘版本定向编辑 Day4 完整 R2/R3：SET 按值参数复制到 map；GET find→optional snapshot→Bulk encoder；笔记的 const operator[] 错误；实际 ASCII comparison helper；精确 error bytes 与本轮两项修复；DEL/EXISTS 逐项状态变化；size_t counters 在 max 1024 elements 下的可表示性；单线程借用模型；map 的 O(log K)、复制和 erase 双查找成本。保留合理设计，不强迫改 hash table、不把成本讨论变成即时优化任务。R3 明确四组临时语义证据已成立、无需重新手写；原工程 74 项/本日 3 项与临时 10 项严格分开，后续持久化可在明确授权后委托。
+
+Daily 首次 baseline `106da78` 与编辑前当前版本 diff 为空，没有用户新增内容被忽略。已保留编辑前检阅副本，编辑后验证 Round2 marker 之前全文逐字相同、68 行 code fences 成对、完整 14~25 节均保留。用户 production、永久 tests、note 与无关 VS Code 笔记未改；MEMORY 当前状态/下一步、总规划、DAILY_INDEX 同步到 Day4 R1 已通过待整日收尾。普通验收和后半教程润色不自动 commit/push。
+
+## 2026-10-09：Week12 Day4 整日正式通过
+
+用户明确本轮验收的是 Day4，并补充两题口述。第 4 题正确：合法 RESP Array/Bulk frame 可让 parser 返回 Complete；SET k 少 value，命令层返回固定 wrong-arity Error reply，framing 不被破坏，应用按 contract 保持连接并继续 parse/dispatch 后续 PING。不能把“parser Complete”单独泛化成任何 application 都必然继续；这不是本轮理解错误，而是说明继续处理属于应用策略。第 5 题正确：server 使用同一份 KvStore 保存共享数据，每个 Connection object 各自持有 input，partial command bytes 因而相互隔离。当前是正确的设计解释，网络实测仍留 Day5/Day6。
+
+再次读取最新 note：R1 的 map 选型、报错中 passing/this/discards qualifiers 三个子节、execute_command 的 dispatcher 理解均正确且与真实代码一致。验收题 1~3 未另写答案，但 owning strings/optional 快照、empty/miss、重复计数均有代码和 tests 支撑；4/5 的口述正确，不再记作未回答。用户认为后半主要复盘已有机制，结合真实源码和这次口述足以收尾，不为了 Round 形式再新增作业或重复抄写。
+
+最新四个组件文件、永久 tests 保持只读检阅。Normal 与 ASan/UBSan 构建零 warning，固定 CTest 合并矩阵再次均 `84/84 PASS`；双头文件组合 probe 编译成功。六条命令、exact error bytes、ownership、binary/empty、大小写、DEL/EXISTS、parser 串联均无新增核心问题。原工程 74 项（本日 3 项）与临时独立 10 项分别记录，后者仍待授权后的机械持久化，不扣成当前阻塞项。最终 `100/100`，完整 Day4 正式通过；分数只描述本日范围，不宣称 TCP integration、吞吐/延迟或生产完备。
+
+Daily 首次 baseline `106da78` 与当前版本逐块比对，变化均为上一轮获授权的定向 R2/R3 润色，没有新增用户编辑；本轮不再编辑 daily、note、production、永久 tests 或无关文件。同步当前实际进度、下一步、总规划和索引到 Day4 已完成；Day5 尚无提前稿，等待用户发起生成。普通验收不自动 commit/push。
+
+## 2026-10-09：Week12 Day5 教程生成
+
+已生成 `week12/day5/day5.md`，保留主线三 Part、R1 独立设计闸门和完整 R2/R3。今天唯一新增量是 `apps/mini_redis_server.cpp`：复用 Ubuntu `cpp/week10` 中已通过的 Acceptor/EventLoop/Connection、stateless RESP parser、map 版 KvStore 与六 handlers，将纯内存命令层接入 TCP。没有改用户 production、tests、CMake、note、旧 daily 或无关 VS Code 笔记；参考实现和脚本验证仅在 Codex workspace 与 Ubuntu `/tmp/week12_day5_generation_20261009`。
+
+R1 先说明程序用途、127.0.0.1:6380 的真实监听地址、生命周期、六命令最终行为与最低三条网络链；给出当前公开接口、精确协议错误 prefix、启动/运行异常诊断、可直接追加的 CMake 和 Python PING/SET/GET smoke。复杂 owner containers、application parse-loop/关闭方案留在 R2，不以小代码片段提前拼出 server 答案。R3 再提供同 socket split SET+GET、command errors+PING、protocol error+EOF 三项 client scaffold，expected reply 使用固定 bytes 而不复用被测 C++ encoder。用户掌握 oracle，重复 client 代码可委托；多客户端矩阵属于 Day6，TTL/AOF/性能按总规划后置。
+
+教程生成前核对了 Redis 官方 RESP/pipelining/client handling、Linux recv/send 和 Python socket 文档；读了实际 HTTP Server 的 owner/pending cleanup、Connection input/output/close-after-flush 与 parser 字段和英文错误。正文明确 dispatcher 已返回 wire bytes、只为 parser Error 额外编码一次，并正向串清同一 store 的寿命、各 Connection partial input 的隔离。完整 R1 后仍须按用户实际 source/note/tests/diff 逐节定向润色后半内容，不能把当前参考方案当成已经看过未来 R1。
+
+发布前私有 CMake 只读 add_subdirectory 用户 canonical 工程，fresh GCC 10.5/C++17 Debug 与 ASan/UBSan 构建均零 warning；固定 CTest 入口两种构建均 `74/74 PASS`。从 Day5 正文逐字提取的两个 Python scripts 在 normal/sanitizer 参考 server 上均通过：smoke、split SET+GET、两个 command errors 后 PONG、exact protocol error 后 EOF；参考 server 无 stderr/sanitizer 报告，launcher 带 timeout/finally，并已停止 child server。此处是教材接口和脚本验证，不是用户完成 Day5；也不宣称 Ctrl+C/SIGTERM 已执行完整析构或 leak check。
+
+两轮自检核对了 R1 截断后是否能开工、跨日接口/target 传递依赖、CMake 与固定 `cmake -E chdir build ctest --output-on-failure`、fence/标题/术语/错误政策。特别保留 split-send 的证据边界：两次 sendall 不保证两次 recv/MessageCallback，NeedMore 分支是否本次真正执行需状态记录或确定性 parser oracle，不能写成网络 chunk 边界已被保证。Mermaid 使用 quoted labels 的简单 graph TD 形式；没有声称做过 Typora UI 渲染。索引现为 82 份，当前状态统一为 Day5 已生成待 R1，Day4 final 100/100 和 AI Theory T1~T4 通过状态不变。按新 daily 规则 Git add/commit/push，同时保留此前积累的用户笔记和 Day4 获授权润色。

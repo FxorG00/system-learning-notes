@@ -428,6 +428,10 @@ R1 正式通过后，我会逐节对照你的实现，定向修改后面的 R2/R
 
 # Round2：顺着一次命令，讲清状态与所有权
 
+**你的 R1 已经形成可用的 KV 命令层：`std::map` 保存数据，六个 handler 执行操作，dispatcher 返回已经编码的 RESP bytes。** 后半教程顺着这份实现解释，不更换容器，也不重新拆模块。
+
+2026-10-09 复检中，PING 错误文本与头文件重复包含问题均已修复；normal 与 ASan/UBSan 的合并测试均 `84/84 PASS`。其中 74 项属于原工程，10 项是 Codex 的独立临时检阅测试，后者尚未写入你的永久 test 文件。
+
 ## 14. SET 到 GET：谁接过了哪一份数据
 
 回到你已经写好的 parser。它处理一条完整 frame 后，返回：
@@ -437,7 +441,22 @@ result.arguments = ["SET", "name", "FxorG"]
 result.consumed_bytes = 当前 frame 的完整长度
 ~~~
 
-Application caller 把这一组 arguments 交给 `execute_command(store, result.arguments)`。Dispatcher 识别到 SET，确认两项参数齐全，然后请求 store 保存 `name -> FxorG`，最后用已有 Simple String encoder 生成 `+OK\r\n`。
+接到你的实际代码，这条链是：
+
+~~~text
+execute_command(store, result.arguments)
+-> 复制 arguments[0] 到局部 name
+-> ascii_case_insentitive_equal(name, "set") 匹配成功
+-> set_handler(store, arguments)
+-> arguments.size() == 3，含命令名和两个参数
+-> store.set(arguments[1], arguments[2])
+-> KvStore::set 的按值参数接到 key/value 副本
+-> data_[key] = value，map 保存自己的 key/value
+-> encode_resp_simple_string("OK")
+-> 返回 +OK\r\n
+~~~
+
+这里 `data_[key]` 用于写入：已有 key 时取到原 value，再覆盖；新 key 时插入一项，再赋值。你的永久 `BasicCommandsUseOneStore` 已验证覆盖前后 `size() == 1`。
 
 此时出现了两种不同寿命：
 
@@ -451,15 +470,18 @@ KvStore 持有的 name -> FxorG
     -> 下一条 GET 仍然能访问
 ~~~
 
-**SET 真正完成的动作是把 caller 提供的内容保存成 store 自己持有的数据。** 它可以经过复制，也可以在合适的位置移动；关键是调用结束后，store 的内容不依赖 caller 参数继续存活。
+**你的 SET 通过复制完成所有权交接。** `arguments`、`set()` 的局部参数和 `data_` 中的字符串是各自拥有内容的对象。Caller 后续修改 arguments，不会改动 map 中的记录；这已由独立测试实际验证。
 
 下一条 GET 只查询已有内容：
 
 ~~~text
 caller 交付 ["GET", "name"]
--> dispatcher 检查 GET 的参数数量
--> store.get("name") 返回拥有内容的查询结果
--> dispatcher 把 value 交给 Bulk String encoder
+-> execute_command 匹配 "get"，进入 get_handler
+-> get_handler 确认 arguments.size() == 2
+-> store.get(arguments[1])，用 data_.find(key) 查询
+-> 找到后 return it->second，复制成 optional<string>
+-> get_handler 的局部 result 拥有这份副本
+-> encode_resp_bulk_string(*result)
 -> reply = "$5\r\nFxorG\r\n"
 -> caller 得到独立 reply string
 ~~~
@@ -468,9 +490,11 @@ caller 交付 ["GET", "name"]
 
 ## 15. 谁拥有 store，谁只借用它
 
-为什么 R1 的测试一开始构造 `KvStore store;`，然后连续执行多条命令？因为**保存位置需要比单次命令活得更久**。
+你的三个永久 tests 都先构造 `KvStore store;`，再把同一个对象传给多次 `execute_command()`。这就是目前已经证明的共享状态：**保存位置比单次命令活得更久**。
 
-Day5 的 server owner 也会做同样的事：创建一份 store，让各个 connection 的 application callbacks 访问这份 store。Client A 的 SET 与 client B 的 GET，最终到达同一个保存位置。
+`execute_command(KvStore& store, ...)` 与四个读写数据的 handlers 借用这一份 store。`set_handler` 修改它；`get_handler/del_handler/exists_handler` 访问它；PING/ECHO 的 handlers 只需要 arguments。你没有把数据藏在 handler 的局部 map 中，因此一次 SET 返回后，下一次调用仍然能 GET。
+
+Day5 的 server owner 会把这个已经成立的关系接入网络：创建一份 store，让各个 connection 的 application callbacks 访问它。Client A 的 SET 与 client B 的 GET，最终到达同一个保存位置。**这仍是下一天的集成任务；今天的纯内存测试没有证明两个 TCP clients 已经连通。**
 
 ~~~mermaid
 graph TD
@@ -492,10 +516,10 @@ graph TD
 | `KvStore` | R1 test；将来是 server application | dispatcher 借用引用 |
 | `arguments` | parse result 或 test caller | dispatcher 只读借用 |
 | 已保存的 key/value | store | 持续保存，直到覆盖/删除/析构 |
-| `get()` 返回值 | 查询 caller | 独立 snapshot，不随 store 变化 |
+| `get()` 返回值 | 查询 caller | 独立 snapshot（查询快照），不随 store 变化 |
 | `execute_command()` 返回值 | application caller | 独立 reply bytes，可交给发送层 |
 
-`get()` 的复制语义让第一版使用简单，但会复制 value。这是明确的接口取舍，后面性能分析可以测它的代价；现在先把内容和 lifetime 做对。
+你的 `return it->second;` 就建立了这个快照。独立测试先保存查询结果，再覆盖和删除原 key，保存的结果仍然是旧 value。这个副本会在 GET 编码结束后随局部 `result` 析构，而返回的 reply string 继续由 caller 持有。
 
 ## 16. 缺失与空值，为什么必须分开
 
@@ -521,7 +545,9 @@ get("missing") -> nullopt
 | 找到空 value | `$0\r\n\r\n` | 这个 key 的 value 是空字符串 |
 | 没找到 key | `$-1\r\n` | 这个 key 不存在 |
 
-因此 GET miss 应保持 store 原样。如果内部选择关联容器，检查一次缺失 key 后，`size()` 仍应不变；查询代码要选择保留这种语义的接口。
+你现在的 `get_handler` 写的是 `if (result)`，判断的是 **optional 是否有值**。一个包含空 string 的 optional 仍然为 true，所以空 value 正常进入 Bulk encoder；`nullopt` 才进入 Null Bulk encoder。这条分支已通过空 key/空 value 的实测。
+
+笔记中那个 const map 编译错误，正好解释了你为什么改成 `find()`。`operator[]` 需要允许插入缺失 key，因而要求可修改的 map；`find()` 只查询，能在 const map 上使用。你实际的 `get()` 和 `exists()` 都已用 `find()`，GET miss 后 `size()` 保持不变。
 
 ## 17. 大小写与 binary：只改变允许改变的内容
 
@@ -532,7 +558,11 @@ command name：按 ASCII 字母识别对应操作
 key / value：按照原始 length 与 bytes 保存和比较
 ~~~
 
-若选择创建一个 command name 的规范化副本，就只处理那一个字符串。ASCII 范围判断可以明确识别 `A` 到 `Z`；其他 bytes 保留为原样，最终不匹配这六个名字。
+你的 `ascii_case_insentitive_equal()` 先比较两个 `string_view` 的长度，再逐个比较 bytes。它只把局部 `char a/b` 中的 `A` 到 `Z` 转为小写，原 `name` 和 arguments 都没有被修改。
+
+所以 `sEt` 可以匹配 `set`；`std::string("GET\0", 4)` 则在长度检查时就无法匹配三字节的 `get`。`Name` 与 `name` 根本没有进入这个 helper，而是由 map 按原始 bytes 区分，独立测试已确认它们可以保存不同 value。
+
+`string_view` 在你的 helper 中只负责借用字符串的 pointer + length。读取 view 不修改原 bytes；但 view 也不会把源对象冻结，源字符串仍由其 owner 管理。当前调用中的局部 `name` 与固定命令名字都活到 helper 返回，借用寿命足够。
 
 这也延续了 Day3 的经验：从网络读到的 `char` 可能带高位字节。字符分类接口有输入范围要求，**这里要识别的是一小组固定 ASCII 命令名**，无需让 key/value 经过 locale（地区语言规则）的转换。
 
@@ -541,7 +571,7 @@ key / value：按照原始 length 与 bytes 保存和比较
 ~~~cpp
 // 明确长度为 4 bytes：V、NUL、CR、LF。
 const std::string value("V\0\r\n", 4);
-const std::string key("K\0", 2);
+const std::string key("K\0\xff", 3);
 ~~~
 
 执行 `SET key value` 后再 GET，期望 reply 的结构是：
@@ -554,7 +584,9 @@ $4\r\n
 
 这里 payload 自己包含的 CRLF 仍属于那 4 bytes。它和 encoder 加在 payload 后面的 terminator 各有自己的位置。
 
-**Binary-safe 的证据是 SET、store、GET 和 encoder 全程保留了同一组 bytes。** Day3 parser 已经保证按 Bulk length 提取内容，今天不能在中间改回 `strlen()` 或以 `\0` 截断的处理方式。
+这就是独立检阅中实际运行的 binary case：三字节 key 与四字节 value 经 SET/GET 完整往返，截短为 `"K"` 的 key 查不到原记录，PING/ECHO 也能原样返回该 value。
+
+**你的 binary-safe 路径依次经过 `std::string`、map 的 key/value、optional 副本和 Bulk encoder，全程使用完整长度。** Payload 自己的 CRLF 和 encoder 追加的 CRLF 都被保留。
 
 ## 18. 格式合法的错误命令，为什么下一条还能执行
 
@@ -589,11 +621,15 @@ parser Error
 -> caller 按应用策略安排 close-after-flush
 ~~~
 
-今日组件不实现上述 connection policy；它只保证 command 错误有稳定 reply、数据不被修改、下一次函数调用仍然有效。
+你的 `set_handler` 在检查参数数量后才调用 `store.set()`。例如 `SET k` 或 `SET k changed NX` 都走错误回复，不会改变原 value。`execute_command()` 对空 vector 先返回固定错误；未匹配的命令返回固定 unknown message。独立检阅已覆盖这些分支与其后的正常命令。
+
+这次 PING 的问题也发生在这一层：字符串中的 Markdown 反引号被 error encoder 当成普通 payload 发出去。你已经删除两端反引号，`PING a b` 现在精确返回 `-ERR wrong number of arguments for 'ping' command\r\n`。**Error reply 也是对外输出，测试需要比较完整 bytes。**
+
+你还给两个公开头文件补了 `#pragma once`。同一个编译单元先 include `kv_store.hpp`、再 include `command_dispatcher.hpp` 时，后者会再次 include 前者；保护生效后，KvStore 的 class definition 只展开一次，组合编译 probe 已通过。
 
 ## 19. DEL 与 EXISTS：让状态变化解释计数
 
-已有 `a -> v`，输入 `EXISTS a a missing`。EXISTS 只是观察，三次观察都面对同一份未变化的数据：
+你的 `exists_handler` 从 arguments[1] 起逐项调用 `store.exists()`；后者只做 `data_.find()`。已有 `a -> v`，输入 `EXISTS a a missing`，三次观察都面对同一份未变化的数据：
 
 | 本次输入位置 | 查询结果 | 累计计数 |
 |---|---|---:|
@@ -603,7 +639,7 @@ parser Error
 
 所以它回复 `:2\r\n`。[EXISTS 官方说明](https://redis.io/docs/latest/commands/exists/) 明确把重复出现的已有 key 计入多次。
 
-随后执行 `DEL a a missing`，每次删除会影响后一次看到的 state：
+你的 `del_handler` 对每项调用 `store.erase()`，只有返回 true 才增加 `del_count`。`KvStore::erase()` 先用 `exists()` 查找，再调用 `data_.erase()` 删除。随后执行 `DEL a a missing`，每次删除会影响后一次看到的 state：
 
 | 本次输入位置 | 本次实际动作 | 删除后的 state | 累计删除数 |
 |---|---|---|---:|
@@ -613,11 +649,13 @@ parser Error
 
 所以 DEL 回复 `:1\r\n`。**返回值描述本次命令实际删除了多少项。** R1 的 `erase()` 返回 bool，正好能够表达一次尝试有没有产生删除。[DEL 官方说明](https://redis.io/docs/latest/commands/del/) 可用于核验。
 
-这两条命令展示了今天真正需要关注的东西：同一个 key 的多次访问之间，state 是否发生变化，会直接影响业务结果。
+永久 `ExistsAndDelHaveDifferentCounts` 已验证这两条命令的先后结果。你并没有对输入先去重，而是让每次访问看到当时的真实状态，所以两种计数都正确。
+
+你的两个 counters 使用 `size_t`，交给已有 Integer encoder 时转成其整数参数。当前 parser 最多交付 1024 个 elements，命令名占一个，因此计数最多 1023，这条入口规模下转换可表示。今天无需为它额外引入无限参数的计数机制。
 
 ## 20. 单线程 EventLoop 怎样使用这份共享数据
 
-当前 Reactor 在一个 EventLoop thread 中 dispatch callbacks。一个 callback 执行到返回，再执行下一项工作，今天没有引入并行的 command workers。
+你的 KvStore 目前没有 mutex，R1 tests 也是串行调用。Day5 继续使用已有单线程 Reactor：一个 callback 执行到返回，再执行下一项工作，不引入并行 command workers。
 
 例如：
 
@@ -641,9 +679,15 @@ EventLoop dispatch B
 
 你之前已经注意到 HTTP parser 的反复扫描与 RESP parser 的扫描方式不同。这种“同样正确，但工作量不一样”的观察，今天也可以延续。
 
-若你选择 hash table（哈希表），平均查找是常说的 $O(1)$，但这是随 key 数量讨论的平均容器操作次数。读取/hash/比较一个长 key 仍要处理它的 bytes；GET 的拥有型返回值与 reply 编码也会复制 value。
+你的 baseline（基线版本）明确使用 `std::map`。设当前保存了 $K$ 个 keys，查找、按 key 覆盖/插入、按 key 删除的容器操作是 $O(\log K)$；字符串比较还要读 key bytes，实际成本也与 key 内容有关。
 
-如果选择其他容器，就按实际 representation 说明查找、覆盖和删除的成本。**今天先保留一个内容正确、成本能解释的 baseline（基线版本）。** 不凭一次小测试宣布“高性能”，也不提前塞入 memory pool 或 lock-free 结构。
+沿现有代码可以指出三处具体工作量：
+
+- `set_handler` 向按值参数传 key/value，随后 `data_[key] = value` 把内容写入 map，正确地建立拥有关系，也产生复制。
+- `get()` 复制 value 到 optional，Bulk encoder 再构造 reply string；长 value 的复制和编码值得之后测量。
+- `erase()` 先 `exists()`、再 `data_.erase(key)`，成功删除时进行了两次查找；这影响常数，不改变命令语义。
+
+**这三点现在都保留，不为迎合教程改成 hash table 或重写接口。** 性能阶段先建立 workload（测试负载）和 baseline，再测容器、复制、查找各占多少时间。当前只有 correctness evidence，尚未给出吞吐或延迟结论。
 
 还有一个产品边界：parser 的单 Bulk/单 frame 上限控制一次请求规模，store 的总占用会随着很多次 SET 增长。V1 今天没有总 keyspace memory cap（内存总上限），后续资源管理阶段再设计这层限制。
 
@@ -651,26 +695,28 @@ EventLoop dispatch B
 
 # Part3：把理解变成代表性证据
 
-# Round3：补四组关键检查，继续维护你的 V1
+# Round3：核对已成立的证据，保留你的 V1
 
-## 22. 已有三个 tests，再补哪些路径
+## 22. 你接下来具体做什么
 
-R1 的三个 tests 继续保留。后续补充只围绕下面四组不同的结论，放在同一个 `command_dispatcher_test.cpp` 中即可；不用复制一套新的 store/dispatcher。
+**本轮不再要求升级 production code，也不要求你重新手写四组 tests。** 你的核心实现已经满足本日 contract；R3 只需核对下面每组 evidence（验证证据）各在证明什么，遇到说不清的地方再回看对应 R2。
+
+原工程的 `command_dispatcher_test.cpp` 仍只有三个永久 tests。下面更细的路径已在 Codex 的独立临时工程中运行通过；其 mechanical test body（重复调用和断言）可在授权后合并进永久 test，作为 Week12 出口前整理。当前不把临时通过冒充已持久化，也不把持久化变成让你重复手写的学习任务。
 
 ### 22.1 空值与所有权
 
-用空 key 保存空 value，GET 必须得到 `$0\r\n\r\n`，EXISTS 必须得到 `:1\r\n`；另一个不存在的 key 得到 `$-1\r\n`。
+独立 `EmptyValueAndEmptyKeyArePresent` 已验证：空 key 保存空 value，GET 得到 `$0\r\n\r\n`，EXISTS 得到 `:1\r\n`；另一个不存在的 key 得到 `$-1\r\n`。
 
-再建立两种寿命变化：
+`StoreOwnsInputsAndReturnedSnapshots` 另外建立了两种寿命变化：
 
 1. Caller 用一个 arguments vector SET，随后修改原 vector 的 key/value，store 中原来的内容仍然不变。
 2. 先调用 `store.get()` 保存查询结果，再覆盖、删除原 key，保存下来的结果仍能访问原内容。
 
-这组 oracle（判断正确与否的依据）来自 public ownership contract：SET 保存内容，GET 返回独立 snapshot。不是只检查“没崩溃”。
+这组 oracle（判断正确与否的依据）来自 public ownership contract：SET 保存独立内容，GET 返回独立 snapshot。你只需要能把这两个结果分别对应到 `data_[key] = value` 与 `return it->second`。
 
 ### 22.2 大小写与 binary round trip
 
-使用混合大小写的 `sEt/gEt`，保存带 NUL/高位字节的 key 和带 NUL/CRLF 的 value，再比较 exact reply bytes。
+独立 `BinaryDataRoundTrips` 使用混合大小写命令，保存带 NUL/高位字节的 key 和带 NUL/CRLF 的 value，比较完整 reply bytes。`OnlyCommandNamesIgnoreAsciiCase` 另验证 `Name/name` 是两个 key，以及额外 NUL、空格、高位命令 bytes 都不会误识别成已知命令。
 
 例如 value 是 `std::string("V\0\r\n", 4)`，期望值应明确构造为：
 
@@ -681,26 +727,26 @@ const std::string expected = std::string("$4\r\n")
                            + "\r\n";
 ~~~
 
-再确认截断后的 key 查不到原记录；`std::string("GET\0", 4)` 不被当成 GET；`Name` 与 `name` 可以保存不同值。
+以上 checks 都已通过。这段 expected 的构造独立于你的 encoder，因而能发现 encoder 或中间内容被截断，而不是让实际结果与同一实现生成的预期一起出错。
 
 ### 22.3 错误矩阵与不污染 state
 
-六条已识别命令各有一条 wrong arity case，检查完整固定 error text；另外检查空 vector、空 command name、unknown command。
+独立 `PingWrongArityUsesFrozenErrorBytes`、`OtherWrongArityErrorsPreserveState`、`EmptyAndUnknownCommandsAreStableErrors` 已覆盖六条命令的 wrong arity、空 vector、空 command name 和 unknown command，并比较完整固定 error text。
 
-其中一条错误放在已有 `k -> kept` 之后，再 GET 验证仍是 `$4\r\nkept\r\n`。例如 `SET k changed NX` 在 V1 返回 wrong arity，原 value 仍是 `kept`。
+其中错误 SET 放在已有 `k -> kept` 之后，再 GET 验证仍是 `$4\r\nkept\r\n`。`SET k changed NX` 在 V1 返回 wrong arity，原 value 仍是 `kept`。
 
-随后 PING 仍返回 `+PONG\r\n`。这证明错误是一次命令的结果，组件没有被推进到无法继续使用的状态。
+随后 PING 仍返回 `+PONG\r\n`。这组测试曾实际抓到 PING 多余反引号，修复后通过；它也证明错误返回后，同一组件仍可继续使用。没有要求你再故意写错一次或重跑相同修复流程。
 
 ### 22.4 用你的真实 parser 接进命令层
 
-把下面两个完整 frames 连在同一个 string 中：
+独立 `ExistingParserFeedsTheSameStore` 已把下面两个完整 frames 连在同一个 string 中，并使用你的真实 parser、dispatcher、store 与 encoder：
 
 ~~~text
 SET frame: *3\r\n$3\r\nSET\r\n$1\r\nk\r\n$1\r\nv\r\n
 GET frame: *2\r\n$3\r\nGET\r\n$1\r\nk\r\n
 ~~~
 
-Caller 完成这段接口组合：
+实际通过的接口组合是：
 
 ~~~text
 parse 当前完整 range
@@ -714,13 +760,15 @@ caller 从相应 suffix 再 parse
 -> 使用同一个 store 执行，得到 $1\r\nv\r\n
 ~~~
 
-今天只要这一条组合证据：parser 的实际输出能喂给 dispatcher，store 的变化能穿过 encoder 回到 exact reply。Fragmentation 已在 Day3 覆盖，这里无需重新遍历每一个 split point。
+这条证据已经成立：parser 的实际输出能喂给 dispatcher，store 的变化能穿过 encoder 回到 exact reply。Fragmentation 已在 Day3 覆盖，这里无需重新遍历每一个 split point。
 
-这些 correctness tests（正确性测试）的重复调用与断言可以委托我补充；你需要能说明输入怎样建立状态、expected 来自哪条语义。测试工作量的分工，不改变证据必须存在的要求。
+四组 covered paths（本次实际覆盖的路径）都有测试证据。你需要掌握的是输入怎样建立状态、expected 来自哪条语义；重复调用与断言的写法可以委托。
 
 ## 23. 编译与 ASan/UBSan：看它们分别证明什么
 
-先按 §12 运行 normal build 和全量 CTest。今天的结果要同时包含新 tests 和已有 tests，以确认新 target 的依赖没有破坏原工程。
+你的 normal build 已零 warning；原工程 74 项在独立检阅构建中全部通过，其中三个本日永久 tests 通过。加入十项临时语义测试后，normal 与 ASan/UBSan 都是 `84/84 PASS`，组合包含两个 public headers 的编译 probe 也通过。
+
+下面命令保留为你以后复跑的入口，**R1 复检已执行，今天不用为打卡再次跑一遍相同矩阵**。直接以用户工程为 source 时会运行其永久 tests；十项临时检阅 tests 尚未合入，不会自动出现在这个命令的结果中。
 
 再使用独立 sanitizer build，避免覆盖普通构建：
 
@@ -742,7 +790,9 @@ PIE 是 Position Independent Executable（位置无关可执行文件）；`-no-
 
 本日没有新增 user threads，使用 TSan 不会额外证明命令语义。若出现失败，先区分普通 test assertion、sanitizer report 与 build/link error，再检阅对应 source。
 
-本教程发布前，独立临时参考工程已经复用你的 encoder/parser 编译验证：normal 与 ASan/UBSan 均 `78/78 PASS`，包括已有 71 项与新增 7 个代表性 tests。**这是教材接口与样例的验证，不是你的 Day4 验收结果。**
+你这次的实际差别也很清楚：首次检阅没有 sanitizer 诊断，但 PING 的 exact-text assertion（精确文本断言）失败。删除反引号后该 assertion 通过；`#pragma once` 则解决单独的组合编译失败。三类证据分别回答语义、头文件可组合性和 covered memory safety（覆盖路径的内存安全）问题。
+
+发布前的参考工程 `78/78 PASS` 只证明教材接口可运行；本节的 `84/84 PASS` 才是对你最新版组件的实际复检。两者不混用，也不据此宣称已经验证 TCP 多客户端或性能。
 
 ## 24. 验收时需要你能解释的内容
 
@@ -754,11 +804,23 @@ PIE 是 Position Independent Executable（位置无关可执行文件）；`-no-
 4. `SET k` 的 parser 结果和命令执行结果分别是什么？下一条 PING 能否继续执行？
 5. 将来两条 Connection 为什么能共享数据，而各自的 partial input 仍相互隔离？
 
-代码已经证明的基础用法不用重复写成验收题。若某处实现与口述冲突，以实际路径核对，不根据“我觉得没问题”跳过真实错误。
+当前 evidence 对应关系：
+
+| 问题 | 你的实现与本次证据 |
+|---|---|
+| 1. SET 所有权 | `set()` 按值参数、map 保存字符串；修改 caller vector 后记录不变 |
+| 2. 空值与缺失 | `get()` 返回 optional，`get_handler` 根据是否有值分支；两种 exact reply 已实测 |
+| 3. 两种计数 | `exists_handler` 只读、`del_handler` 逐次删除；永久 test 验证 2 与 1 |
+| 4. SET k | parser 可以 Complete；`set_handler` 拒绝 arity，store 保持原样；错误后正常命令仍有效 |
+| 5. 多 Connection | Day5 在 server owner 放同一份 store；各 Connection 保留独立 input，尚待网络集成证据 |
+
+你没有另写五题答案；第 1~4 题核心已有 source/test 证据，不要求重复抄写。第 5 题是下一天的实际组合，阅读时理解 owner 关系即可，不能把今天的函数调用测试当成 TCP 集成已经完成。
 
 ## 25. 今日完成线与下一步
 
-今天通过需要：六条命令与固定错误回复正确；覆盖不增加 key 数，miss 不创建 key；缺失/空值、binary、命令名大小写和所有权有代表证据；normal build 零 warning，全量 CTest 与 sanitizer covered paths 通过。
+**R1 已正式通过，生产实现本轮不再新增功能。** 六条命令、固定错误回复、覆盖/miss、缺失/空值、binary、大小写和所有权均有代表证据；normal build 零 warning，normal 与 sanitizer 的实际检阅矩阵通过。
+
+Day4 收尾时，只需把 R2 的每条链对应回你的函数，确认同一个 store 为什么能持续保存数据，以及下一天怎样让多个 callbacks 借用它。有疑问就针对那一段讨论；没有疑问不要求另写一份总结或重新实现四组 tests。
 
 笔记只保留本日真正新增的直觉、你自己的设计取舍和遇到的问题。没有必要重新介绍熟悉的 `vector/string`，也不用为这两个组件写一套项目 README。
 
