@@ -2,7 +2,7 @@
 
 > 更新日期：2026-10-10
 >
-> 收录范围：主线 Week1 Day1 至 Week12 Day6，共 83 份正式 daily 教程。
+> 收录范围：主线 Week1 Day1 至 Week12 Day7，共 84 份正式 daily 教程。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week11 已通过
-Week12 Day1~Day5 已正式完成；Day4/Day5 最终均 100/100。原工程 normal/sanitizer 各 74/74，Day5 两个用户网络脚本通过，入口 catch 的失败退出码已实测。Day6 已生成待 R1：双客户端共享 store/半帧隔离，完整后半包含状态型 pipeline、既有 good client 存活、二进制跨连接、有限慢读和 fd 回落。Codex 私有生成验证不冒充用户 Day6、性能或整周通过；Day4 临时合并 84/84 与原工程矩阵分别记录
+Week12 Day1~Day6 已正式完成；Day4/Day5/Day6 最终均 100/100。Day6 保存的 R1/extra 在原 server 与当前源码新 Debug/ASan/UBSan 实例上通过，覆盖双半帧、共享 store、状态型 pipeline、既有 good/fresh、binary、有限慢读和 100 次连接。两个 fresh builds 零 warning、固定 CTest 各 74/74，fd 各 5 -> 5，trace 捕获写 EAGAIN/EPOLLOUT 与 B 在 ready 后 PONG、A 续传排空。Day7 教程已生成待验收，沿用 HTTP 图做 application 差异复盘与真实 Redis 第一层对照，Week12 尚未整体通过；正确性不推广为性能。原工程 74/74 与 Day4 临时合并 84/84 分开记录
 ```
 
 ---
@@ -210,6 +210,7 @@ Week12 Day1~Day5 已正式完成；Day4/Day5 最终均 100/100。原工程 norma
 | [Day4：KV 数据与六条命令](week12/day4/day4.md) | 从 database/cache/KV 用途建立共享 state；按实际 map/六 handlers 解释 SET 复制、GET 快照、const find、二进制参数、重复计数和稳定错误；区分纯内存证据与未来网络共享 | `KvStore` + `execute_command` + R1 小 checker/CMake + 永久 tests 与独立临时 semantics matrix | KV store, keyspace, arity, PING, ECHO, SET, GET, DEL, EXISTS, command dispatcher, optional, ownership, const map, snapshot |
 | [Day5：Mini Redis 接入 TCP](week12/day5/day5.md) | 复用 Reactor、RESP parser 和 map/六 handlers；把累计 input 接到命令层，精确消费并有序回复；区分 command error 继续与 protocol error 排空后关闭 | `mini_redis_server.cpp` + CMake append + Python smoke/protocol checker + normal/ASan/UBSan 网络验证入口 | Mini Redis, Reactor integration, MessageCallback, partial frame, pipelining, shared store, protocol error, close-after-flush, deferred cleanup |
 | [Day6：多客户端与连接隔离](week12/day6/day6.md) | 共享 KvStore 与每连接 input/output；业务回复建立跨连接顺序；状态型流水线、坏协议隔离及有限慢读背压，区分功能 PASS 与实际写 EAGAIN | 独立 R1 isolation checker + 可委托 extra checker + fd before/after + normal/ASan/UBSan；可选 strace | multi-client, isolation, shared store, partial frame, pipeline order, slow reader, backpressure, EAGAIN, EPOLLOUT, fd baseline |
+| [Day7：Mini Redis V1 出口与真实 Redis](week12/day7/day7.md) | 复用 HTTP 图/表，只核对 RESP、命令层与共享 map 的变化；按当前源码对照数据所有权、三层关闭状态和真实 Redis 的执行路径、类型、线程、过期与持久化 | 差异口述或少量新增 note + 已有 claim/evidence；不重画底座、不重复网络矩阵 | Mini Redis V1, Redis comparison, ownership, map, command execution, data type, object encoding, TTL, eviction, persistence, AOF, RDB |
 
 ---
 
@@ -307,6 +308,10 @@ multi-client / shared store / partial isolation -> Week12 Day6
 stateful pipeline / cross-client ACK ordering  -> Week12 Day6
 bad client / existing good client / fd baseline -> Week12 Day6
 slow reader / backpressure / send EAGAIN trace  -> Week12 Day6
+Mini Redis V1 exit / application protocol reuse -> Week12 Day7
+Redis event loop / command execution / I/O threads -> Week12 Day7
+Redis data types / value encoding / map vs dict -> Week12 Day7
+key lifetime / TTL / eviction / persistence map -> Week12 Day7
 ```
 
 ## 并发与工程工具

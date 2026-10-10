@@ -205,7 +205,11 @@ R1 完成后发我代码和你对 oracle 的简短说明。笔记只需记住一
 
 # Round2：对照现有服务器，解释为什么场景成立
 
+> 2026-10-10 定向检阅：你的 `mini_redis_isolation_check.py` 共 46 行，R1 正式通过，`100/100`。五阶段 exact replies、失败 non-zero、普通与 `-O` 运行均已实测。以下逐节接上这份实现；R3 尚未完成，不把初始教程的私有生成验证当成你的整日通过。
+
 ## 10. 一份数据，多个通信对象
+
+你的脚本第 4、5 行各建立一条 socket，直到第 40、41 行才关闭。它们在中间五个阶段始终同时在线，B 的两次 GET 使用同一个 `b`，不是先关闭 A 再新建 B。当前没有独立 Day6 note，本轮直接把这些真实动作作为实现证据，不要求另抄一份。
 
 你的 `main_()` 中，KvStore 和 Connection map 都由服务器入口拥有：
 
@@ -232,6 +236,8 @@ graph TD
 你昨天的 `connection_over_flag[fd]` 也是按 fd 保存的 application state（应用状态）。一个 fd 被标为停止解释请求，并不会把所有连接都标为停止。
 
 ## 11. A 没写完时，服务器到底在等什么
+
+你第 13 行编码的 `SET d6-shared new` 共 37 bytes；第 14 行发出前 34 bytes，留下的 `data[-3:]` 正是 `b"w\r\n"`。因此缺的是最后一个 value byte 和终止符，不是只把一条完整命令切成了两个完整命令。
 
 对照你的 MessageCallback：
 
@@ -279,6 +285,8 @@ graph TD
 
 ## 12. 跨连接的先后关系要由成功回复建立
 
+你已经建立了这个关系：第 28 行补齐 A，第 30~32 行先核对 A 的 `+OK\r\n`，第 34 行才让 B 再 GET。初始状态也一样，第 8~12 行先完成 B 的 SET/OK，才开始 A 的半帧阶段。**这两处等待保留，不需要加入 sleep。**
+
 假设测试这样写：
 
 ```text
@@ -305,6 +313,8 @@ A 的 SET 已经执行
 
 ## 13. 半帧网络实验与 parser 单测各自证明什么
 
+你的 R1 在 A 两次发送之间完整运行了 B 的 GET/PING。这证明了测试端尚未补齐 A 时，B 仍能得到服务；脚本没有记录服务器何时读到 A 的前 34 bytes，所以不把它描述为“已经确定观察到一次 A 的 NeedMore callback”。
+
 你把 request 拆成两次 sendall，**TCP 仍可能把它们合并成一次 recv**。
 
 R1 在两段之间运行 B 的请求，证明 A 没补全时 B 能工作；但它没有直接记录 A 的 callback 在哪一时刻调用了 parse，也不保证特定 recv 分段。
@@ -319,6 +329,8 @@ R1 在两段之间运行 B 的请求，证明 A 没补全时 B 能工作；但�
 两者组合比重复写几十条网络分段 cases 更有价值。
 
 ## 14. 流水线要用会改变数据的命令来观察
+
+你当前第 16~26 行逐条发送 GET、读取回复，再发送 PING；这是正确的 R1，却还没有一次发出一批状态变化命令。下一轮直接运行 `check_pipeline`，不把现有文件改成第二套综合 checker。
 
 昨天已经验证多条命令连续到达。今天把顺序变成有可见差异的结果：
 
@@ -351,6 +363,8 @@ $-1\r\n
 
 ## 15. 坏协议隔离，要保留一条已经在线的好连接
 
+你的 R1 中 A/B 都是合法协议，正常关闭也发生在全部回复之后。新增验证放在 `check_bad_client`：保留一条已成功使用的 good socket，再让另一条 bad socket 发生协议错误。它补的是 R1 没有覆盖的维度，不是修复 R1。
+
 Day5 的坏协议验证包含 Error reply、EOF 和新的 PING。今天增加的维度是：**错误发生前就已在线的好连接，错误发生后仍然可用**。
 
 ```text
@@ -374,6 +388,8 @@ fresh 新连接 PING -> PONG
 
 ## 16. 对照你的关闭主线
 
+R1 的 `a.close()` / `b.close()` 是正常使用后的客户端关闭，服务器通过 EOF 和 deferred cleanup 回收连接。下面则是仍在线的 client 发坏协议后，服务器主动停止当前连接的业务处理；两种触发原因接入已有同一条清理主线。
+
 你的 MessageCallback 处理 Error 时：
 
 ```text
@@ -392,6 +408,8 @@ Connection 继续负责把已排队回复交给 kernel。排空后 `close_helper
 
 ## 17. 当前故障隔离的真实范围
 
+本轮额外用私有故障 peer 验证了你的 Python 脚本：wrong reply、提前 EOF、timeout、connection refused 都非零退出，且不会打印 PASS。这证明的是 **checker 能报告失败**，没有证明服务器能恢复所有 socket 异常；私有 peer 使用另一临时端口，未停止你原来的 server。
+
 对照当前 Connection，fatal recv/send 或 SO_ERROR 路径会先提交 close，再抛 `std::system_error`。异常可能沿 callback、`poll_once` 到 main 的 catch，最终诊断后 exit 1。
 
 所以本日准确的通过描述是：
@@ -403,6 +421,8 @@ RST（Reset，TCP 复位）等场景可能进入后一条路径。今天不把�
 这样保留了 Day5 的 V1 error contract。等以后需要对异常 clients 建立更强的服务可用性保证，再明确哪些错误应在连接层吸收、哪些错误必须退出进程。
 
 ## 18. 慢读取时，回复先堆在哪里
+
+你的 R1 每发一条完整命令就调用 `recv_exact`，回复也只有 OK、PONG 和 3-byte value；没有刻意积压 output。下一轮 `check_slow_reader` 才改变读取节奏，不需要为了追求“压力”把 R1 的 old/new 拉长。
 
 Client 暂时不 recv，并不会立刻让 server 的 send 失败。中间还有几层缓冲：
 
@@ -421,6 +441,8 @@ Connection.output
 这也解释了为什么小小一个 PONG 无法稳定制造慢读压力：client 不读，kernel 很可能仍然装得下。[send(2)](https://man7.org/linux/man-pages/man2/send.2.html)
 
 ## 19. 你的发送路径怎样让出执行权
+
+本轮重新读取了你当前 `connection.cpp`，下面仍对应你已有的 `output_.append -> handle_send -> EAGAIN 保留 suffix/关注 EPOLLOUT`。R1 只验证小回复正常链，**这里没有要求再实现一次 Connection；先用下一轮的慢读场景验证已有路径。**
 
 你当前 `Connection::send` 先 append 回复，再调用 `handle_send`。后者在 send 成功时推进 offset，EINTR 时重试，EAGAIN/EWOULDBLOCK 时保留尚未发送的 suffix。
 
@@ -452,6 +474,8 @@ graph TD
 
 ## 20. 怎样建立慢读场景，而不是靠 sleep 猜执行顺序
 
+你在 R1 已经用 A 的 OK 建立“SET 已执行”的状态。慢读时 A 故意不读取回复，因此不能等它的 OK 来推进；扩展脚本让 B 读取共享 marker，换一种方式确认 A 的批次已经执行。它延续的是你已经做对的状态同步，而不是靠调长 sleep 猜测。
+
 R3 的脚本给慢读连接 A 连续发送 64 条 ECHO，每条 payload（命令携带的数据）为 64 KiB，合计产生约 4 MiB 回复。每条 request 都远低于当前单帧限制。
 
 A 暂时不读任何 reply。紧接 ECHO 批次，在 A 的同一输入流中追加：
@@ -470,14 +494,107 @@ SET d6:slow-phase ready
 
 `SO_RCVBUF（socket receive buffer，接收缓冲设置）`用于缩小 A 的接收缓冲配置，增加产生背压的机会。Linux 会对配置值作调整，常见实现还会为内部记账将值加倍；所以传入 65536 不代表应用能推断精确 TCP window。[socket(7)](https://man7.org/linux/man-pages/man7/socket.7.html)
 
+### 20.1 slow read 建立的场景是干啥的
+
+**这个“慢读”测试，就是模拟：一个客户端不断请求大量回复，却迟迟不接收。我们要看它会不会拖住整个服务器，让其他客户端也没法正常使用。**
+
+比如 A 请求下载大量数据，但 A 的网络很慢。服务器很快生成了回复，可这些回复无法立刻全部发出去。你今天的脚本用 **A 暂时不调用 `recv`**，主动制造类似的情况。
+
+#### 1. A 不读，服务器会发生什么？
+
+不是 A 一停止读取，服务器的 `send` 就马上失败。中间还有缓冲区：
+
+```text
+服务器生成回复
+    ↓
+服务器 send，把字节交给内核
+    ↓
+网络传输
+    ↓
+A 的内核接收缓冲区
+    ↓
+A 调用 recv，取走字节
+```
+
+**A 不调用 `recv`，它的内核仍然可以先接收数据。** 但缓冲区容量有限。随着回复不断到达，缓冲区逐渐装满，TCP 就会限制服务器继续发送。
+
+这种“接收方处理不过来，反过来限制发送方”的现象叫 **backpressure（背压）**。
+
+对于你的非阻塞服务器，最终可能出现：
+
+```text
+send 暂时发不动，返回 EAGAIN
+    ↓
+未发送的 bytes 留在 Connection 的 output Buffer
+    ↓
+当前 callback 返回，让 EventLoop 继续处理其他连接
+    ↓
+将来 socket 又可写时，再继续发送
+```
+
+**最重要的是：不能为了等 A 接收，而卡住负责所有连接的 EventLoop。**
+
+#### 2. 这个测试具体在干什么？
+
+```text
+A：连续发送 64 条大 ECHO
+A：暂时不读取回复
+        ↓
+服务器生成大量回复，尝试向 A 发送
+        ↓
+B：发送 PING
+        ↓
+检查 B 能否正常收到 PONG
+        ↓
+A：开始读取，检查全部回复是否完整、正确
+```
+
+这里检验两件事：
+
+- **B 仍能使用服务器**：一个慢客户端没有阻塞其他客户端。
+- **A 最后能收到完整回复**：暂时发不出去的数据没有丢失，之后能继续发送。
+
+#### 3. 为什么还要加那个 `SET marker`？
+
+需要确认 B 的 PING 不是“趁 A 的请求还没处理，抢先完成了”。
+
+所以 A 在自己的请求流末尾再放一条命令：
+
+```text
+ECHO 大数据
+ECHO 大数据
+……
+SET d6:slow-phase ready
+```
+
+服务器按顺序执行。B 用 `GET d6:slow-phase` 看到 `ready`，就知道：
+
+**服务器已经处理完 A 前面的 ECHO 批次，而此时 A 仍未主动读取回复。**
+
+然后 B 再 PING，测试的时机就明确了。
+
+不过，这个 marker **只能证明命令已执行，不能单独证明服务器一定遇到了 `EAGAIN`**。回复也可能暂时都被各级缓冲区容纳。若要证明实际触发过背压，还需要观察 `EAGAIN` 或未发送的 output。
+
+#### 4. `SO_RCVBUF` 在这里有什么用？
+
+**把 A 的接收缓冲区设小一些，让它更容易装满。** 配合大量回复，增加服务器暂时发不动的机会。
+
+你先记住整场实验的主线就够了：
+
+> **A 要大量回复却不读 → 检查 B 不受拖累 → A 恢复读取后，检查数据完整。**
+
+它是在验证你写的 **output Buffer + 非阻塞发送 + EPOLLOUT 续传** 是否真的能应对慢客户端。
+
 ## 21. 两种不同强度的结论
+
+当前已经成立的是 R1 的 old → A OK → new 与中途 B PONG；下面两种慢读结论都留给下一轮的实际证据，不拿本轮 12 次普通成功和 1 次 `-O` 成功替代它们。这些复跑也不是吞吐或公平性 benchmark。
 
 | 证据 | 可以说什么 |
 |---|---|
 | A 不读回复，B 看到 marker 后 PING 成功，A 随后读全 | 这个有限慢读工作量下，其他 client 仍能得到服务，回复未丢失 |
 | 同时捕获 A 的 send 返回 EAGAIN，以及对应 fd 加入 EPOLLOUT | 本次确实经过了待发送 output 与动态写关注路径 |
 
-第一行不自动证明第二行。不同机器的 socket 缓冲大小不同，某次 4 MiB 回复也可能更多地被 kernel 接收；`28 给出可选 trace（系统调用记录）方法。
+第一行不自动证明第二行。不同机器的 socket 缓冲大小不同，某次 4 MiB 回复也可能更多地被 kernel 接收；第 28 节给出可选 trace（系统调用记录）方法。
 
 你目前的 callback 会连续处理 input 中所有完整命令。所以本日成功也没有建立任意 workload（工作负载）下的公平调度或延迟上界。
 
@@ -491,10 +608,10 @@ SET d6:slow-phase ready
 
 ## 22. 今天的具体行动
 
-1. 保留并运行你独立完成的 R1 双客户端脚本。
-2. 使用下面的 extra checker（扩展检查脚本），覆盖两个半帧、状态型流水线、坏连接与好连接、二进制跨连接及慢读取。
+1. 保留你已通过的 46 行 R1 文件；不补写第二份 R1，不为缩短代码强制重构。新增场景先放到独立 extra 文件。
+2. 使用下面的 extra checker（扩展检查脚本），覆盖两个半帧、状态型流水线、坏连接与好连接、二进制跨连接及慢读取；你解释各个 oracle，重复脚手架可以直接使用或明确授权我落盘。
 3. 单独跑 100 次连接/使用/关闭，并对照同一 server 的 fd 数。
-4. 在 normal 和 ASan/UBSan server 上运行今天的网络脚本，保留现有固定 CTest 入口。
+4. 在 normal 和 ASan/UBSan server 上运行今天的网络脚本，保留现有固定 CTest 入口；这是 R3 新覆盖路径的验证，不能用初始生成时的结果代替。
 
 **不要求重写你的 C++ 服务。** 如果测试出现 failure，就定位具体场景的对象/状态；我在检阅时核对源码和证据，再判断是否需要修复。
 
@@ -507,6 +624,8 @@ tests/mini_redis_day6_extra.py
 ```
 
 它与 R1 文件分开，导入原 `mini_redis_smoke` 的 helper；不会替换你的 R1。
+
+本轮检查时，Ubuntu 中还没有这个 extra 文件。下一步只增加它；你已经写好的 R1、smoke、protocol checker 和服务器代码保持原样。下面代码本身不复用服务器的 encoder 生成 expected。
 
 | 函数 | 它制造什么情景 | 结果依据 |
 |---|---|---|
@@ -722,6 +841,8 @@ python3 tests/mini_redis_day6_extra.py --case failure
 
 ## 24. 出错时，沿场景找第一个不成立的边
 
+你的 R1 每个比较都保留 expected/actual，私有 wrong-reply 检查实际得到 `expected: b'+OK\r\n', got b'+NO\r\n'`。这已经能定位第一处不符；沿用这套诊断，不要求再造错误报告框架。下一轮出现失败时，再对照下表处理。
+
 先区分失败位置，不急着改 parser：
 
 | 现象 | 优先核对 |
@@ -738,7 +859,9 @@ python3 tests/mini_redis_day6_extra.py --case failure
 
 ## 25. fd 数怎样观察才有意义
 
-这项单独使用一台你自己启动的 server；先停止 `8 的前台实例，避免端口冲突。
+你的 R1 正常路径已显式关闭 A/B。脚本异常时会以 non-zero 结束，操作系统回收该测试进程的 sockets；将来把它改成长期运行的测试程序时，可以用 `with` 增强异常路径的及时清理。本日不因此要求重写当前 R1，也不把“客户端关闭”直接当作 server fd 已回落的计数证据。
+
+这项单独使用一台你自己启动的 server；先停止第 8 节的前台实例，避免端口冲突。
 
 在 Ubuntu 工程目录的同一 shell：
 
@@ -786,7 +909,9 @@ wait "$server_pid"
 
 ### 26.1 Normal
 
-继续使用 `8 的 Debug build：
+R1 本轮已在你原来运行的 server 上通过；另用当前源码在 `/tmp/week12-day6-r1-review-20261010/build` 做了独立 Debug build，零 warning，固定入口 CTest `74/74 PASS`。这 74 项是组件矩阵，不能计入新的 multi-client 网络 cases。
+
+继续使用第 8 节的 Debug build：
 
 ```bash
 cmake --build build -j2
@@ -796,6 +921,8 @@ cmake -E chdir build ctest --output-on-failure
 在这个 server 上运行 R1 和 extra checker，记录 PASS 或具体失败。
 
 ### 26.2 ASan/UBSan
+
+本轮没有停止你已运行的 server，也没有启动第二个争用 6380 的 sanitizer server。新网络场景的 ASan/UBSan 结果待 R3 实际运行，初始教程第 31 节的生成验证仍只是历史参考。
 
 使用独立 build directory（构建目录），不覆盖 normal。下面路径只放生成产物：
 
@@ -826,16 +953,16 @@ UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
 
 ## 27. 今天必要证据只有这些
 
-| 新维度 | 通过依据 |
-|---|---|
-| R1：共享 store 与 partial input 隔离 | A/B 同时在线，old → A OK → new，并且 B 中途 PONG |
-| 两个同时未完成的请求 | 先补 B、再补 A，各自 key/value exact |
-| 有状态的 pipeline | 六条不同回复按协议精确匹配 |
-| 协议错误隔离 | bad Error/EOF、原 good 可用、新 fresh 可用 |
-| 二进制 key/value 跨 client | NUL/CRLF 与长度都精确 |
-| 有限慢读取 | B 见 ready 后 PONG，A 读全回复且能继续 PING |
-| 反复连接/关闭 | 100 次正确，server fd 回到 baseline |
-| 当前组件与地址安全 | 固定 CTest；normal/sanitizer 网络脚本，无新增诊断 |
+| 新维度 | 通过依据 | 当前状态 |
+|---|---|---|
+| R1：共享 store 与 partial input 隔离 | A/B 同时在线，old → A OK → new，并且 B 中途 PONG | 本轮已通过 |
+| 两个同时未完成的请求 | 先补 B、再补 A，各自 key/value exact | R3 待新增 |
+| 有状态的 pipeline | 六条不同回复按协议精确匹配 | R3 待新增 |
+| 协议错误隔离 | bad Error/EOF、原 good 可用、新 fresh 可用 | R3 待新增 |
+| 二进制 key/value 跨 client | NUL/CRLF 与长度都精确 | R3 待新增 |
+| 有限慢读取 | B 见 ready 后 PONG，A 读全回复且能继续 PING | R3 待新增 |
+| 反复连接/关闭 | 100 次正确，server fd 回到 baseline | R3 待观察 |
+| 当前组件与地址安全 | 固定 CTest；normal/sanitizer 网络脚本，无新增诊断 | 本轮 Debug 74/74；新网络 sanitizer 待 R3 |
 
 这不是要求你手写八个测试文件。一个自己设计的 R1 文件，加一个可委托的扩展脚本，已覆盖表中网络维度。
 
@@ -843,7 +970,9 @@ UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
 
 ## 28. 可选：确认真的走过 EAGAIN 与 EPOLLOUT
 
-慢读功能场景已经通过后，想把 `19 的路径亲眼对应起来，再做这项。它是机制增强证据，不要求为截图反复调大数据。
+你的当前 R1 不制造写背压，也没有 trace。先完成有限慢读的功能检查，再按兴趣运行下面的观察；没有截图或 EAGAIN 记录不撤销 R1 的 `100/100`。
+
+慢读功能场景已经通过后，想把第 19 节的路径亲眼对应起来，再做这项。它是机制增强证据，不要求为截图反复调大数据。
 
 停止其他 6380 server，Terminal A：
 
@@ -885,6 +1014,8 @@ epoll_ctl(3, EPOLL_CTL_MOD, 6, {EPOLLIN|EPOLLOUT|EPOLLRDHUP, ...}) = 0
 
 ## 29. 收口问题：可以口述，不用另写长卷
 
+R1 范围只涉及前两题：脚本证明 A/B 同时在线、共享值可见；源码证明 input 属于各自 Connection；A 的 OK 后才发 B GET 也已落实。没有独立 note 或额外口述，本轮不把其余三题标成已经回答。读完 R2、运行新增场景后，用真实观察说明即可。
+
 1. 你代码里哪一个对象共享，哪些对象按连接独立？A 半帧为何不会挡住 B？
 2. 为什么 A.sendall 后立刻让 B GET，不足以建立“B 应看到新值”的前提？
 3. SET/GET/SET/GET 的回复比一串相同 PONG 多证明了什么？
@@ -894,6 +1025,8 @@ epoll_ctl(3, EPOLL_CTL_MOD, 6, {EPOLLIN|EPOLLOUT|EPOLLRDHUP, ...}) = 0
 脚本、真实运行和你的解释能覆盖它们时，不要求再抄书面答案。检阅仍会逐项判断正确与否，不把“看过了”直接当作机制掌握。
 
 ## 30. 今天结束后，Mini Redis 增加了什么
+
+当前只正式通过 R1。你的下一个动作是保留它，完成 extra checker 的新增维度与对应工具证据；不继续打磨已经正确的 old/new 五阶段，也不提前记为 Day6 整日或 Week12 通过。
 
 Day5 的成果是**服务器能通过 TCP 执行命令**。
 
@@ -906,6 +1039,8 @@ Day7 再把 parser → dispatcher → store → reply → lifecycle 的主线收
 **共享的是业务数据，隔离的是每条连接的通信状态；场景通过要由状态和 exact replies 证明。**
 
 ## 31. 本份教程生成时的复核
+
+本节保留首次生成时的记录，与本轮检阅分开。本轮实际新增的证据是：你的 R1 普通运行 12 次、`-O` 1 次成功；私有 wrong reply / EOF / timeout / refusal 四类失败正确 non-zero；当前源码独立 Debug build 零 warning、CTest 74/74。脚本和服务器源码 hashes 未变，用户原 server 保留。它们支持 R1 通过，不替代完整 R3 矩阵。
 
 以下是 Codex 生成教程时对你的现有服务器做的私有验证，不冒充你已经完成 Day6：
 

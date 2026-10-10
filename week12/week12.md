@@ -925,7 +925,7 @@ ASan/UBSan 覆盖 parser、store、integration paths
 
 ## 17.1 Round1：恢复项目主链
 
-不新写 feature。根据真实代码独立画出：
+不新写 feature。沿用 Week11 Day7 已有 Reactor/HTTP 图与所有权表，只对 application 层替换、新增共享 KV 状态做差异口述或局部补充；不要求重新画整套底座。核对的完整链仍是：
 
 ```text
 accept
@@ -939,7 +939,7 @@ accept
 -> deferred cleanup
 ```
 
-再填写 ownership/state table：
+已有 ownership/state table 直接引用，只核对本周新增或变化的对象，不重新填写相同条目。相关对象是：
 
 ```text
 connected fd
@@ -971,7 +971,7 @@ event loop
 
 ```text
 我们的 Reactor 与 Redis ae event loop 有同类事件驱动思想，但不是 Redis 源码复刻
-我们的 store 只有 unordered_map<string,string>
+我们的 store 当前是 map<string,string>；connections owner 才是 unordered_map<int,unique_ptr<Connection>>
 真实 Redis 支持多种 data types、encoding 与复杂 lifecycle
 经典 command execution mental model 以 event loop 串行为核心
 现代 Redis 还包含 I/O threads 与后台任务，不能粗暴说“Redis 完全单线程”
