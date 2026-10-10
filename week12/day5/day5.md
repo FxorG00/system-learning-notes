@@ -414,9 +414,15 @@ R1 提交：server source、smoke 输出，以及你怎样保存 store、管理 
 
 # Round2：顺着你的服务器，串清完整命令路径
 
+> 2026-10-10，按你已经保存并运行的 R1 定向复盘。R1 正式通过，`97/100`；完整 Day5 尚待协议错误分支收尾。
+>
+> 本轮只读检阅 `apps/mini_redis_server.cpp`、现有 Connection、CMake 和你的 smoke。Normal 与 ASan/UBSan 的原工程 CTest 均 `74/74 PASS`，构建零 warning；真实 TCP 的正常链、连续命令、partial suffix 补全、跨连接数据保留和 binary value 均通过。首轮发现协议 Error 分支没有退出；你在本轮已补 `break`，重新构建两种 server 后，坏 socket EOF 与新连接 PONG 都通过。当前只剩 exact error prefix 少空格，不把它记成最终已收口。
+
 ## 11. 一次 SET 怎样穿过已有组件
 
-先定位你 R1 中设置 MessageCallback 的位置。今天的 application 主线就从这里开始。
+你把 `KvStore store` 放在 `main()` 中，让每条 Connection 的 MessageCallback 通过 `&store` 借用它。这个位置决定了：**每次 SET/GET 操作的是同一个持续存在的对象**，而不是 callback 内临时生成的一份空 store。
+
+你的 callback 从 `parser.parse(input.peek(), input.readable_bytes())` 开始。Complete 分支实际采用 **先 retrieve，再 execute_command，最后 send** 的顺序，下面按你的代码串起来。
 
 以 client 发送 `SET name FxorG` 为例：
 
@@ -442,10 +448,13 @@ application 调用 RespRequestParser::parse
 Complete：arguments = [SET, name, FxorG]，给出完整 frame 长度
     |
     v
+input.retrieve(result.consumed_bytes)，移走当前完整 request
+    |
+    v
 execute_command 进入你的 set_handler，修改同一份 map
     |
     v
-dispatcher 返回 +OK\r\n；application 精确消费当前 request
+dispatcher 返回 +OK\r\n，保存在本次局部 response 中
     |
     v
 Connection::send 接住 reply，发完或保留待发送 suffix
@@ -458,9 +467,13 @@ client 累计收到完整 +OK\r\n
 
 Linux 的 `recv()` 返回当时可取得的数据，stream socket 不维护应用消息边界；这解释了为什么 callback 参数必须是累计 Buffer，而不是“本次已经完成的一条命令”。[Linux recv 文档](https://man7.org/linux/man-pages/man2/recv.2.html)
 
-你 HTTP Server 里的 message callback 已经承担过同一职责。今天新增的是从 `HttpRequest/route/HTTP response` 换成 `RespRequestParseResult/execute_command/RESP reply`，而不是改变 epoll 层的工作方式。
+你 note 中说“本质上跟 http_server_v1 一样，只需要改 message_callback”，抓住了主要变化：从 `HttpRequest/route/HTTP response` 换成 `RespRequestParseResult/execute_command/RESP reply`。你同时在 server owner 中增加了长期存在的 `store`；这是命令层能跨请求保存数据的另一半。Acceptor、EventLoop、Connection 不需要为 Redis 重写。
+
+**这一节已经完成，保留你的组合方式。** 你自己的 smoke 已真实收到 PONG、SET 的 OK 和 GET 的值。
 
 ## 12. Parser 是局部对象，为什么仍能处理半条 request
+
+你在每次 MessageCallback 中构造 `RespRequestParser parser`，在它内部用 `while(1)` 解释当前 input。NeedMore 时 break，callback 返回，局部 parser 析构；**未消费的 bytes 仍留在这条 Connection 的 input 中**。
 
 看这个实际输入：
 
@@ -481,9 +494,13 @@ Linux 的 `recv()` 返回当时可取得的数据，stream socket 不维护应�
 
 **跨事件保存的是 Connection 的 input bytes；parser 根据本次完整可见的范围重新判断。** 你的 parser 是 stateless（无跨调用状态）对象，现阶段局部创建就足够。
 
-这个设计的成本也明确：若很长的 request 被拆成许多很小的 chunks，累计 prefix 可能被重复扫描。单次 parse 的顺序扫描，与跨多次 parse 的总成本是两个问题。今天保持已通过接口；后续性能阶段再用 workload 测量，不能只凭“扫描一次”宣称所有网络输入都线性总成本。
+本轮检查先提交 `[完整 SET][完整 GET][半条 PING]`，收齐前两条回复后才补上 PING suffix，最终收到 PONG。它证明你的服务器能正确处理这种外部提交顺序；没有记录 parse status，因此不冒充每次 recv 或 callback 的实际边界证据。
+
+你的局部 parser 和 NeedMore break 都保留。长 request 若拆成许多小 chunks，可能反复扫描累计 prefix；单次 parse 的顺序扫描与跨多次调用的总成本分别测量，留给后续性能阶段。
 
 ## 13. 什么时候消费：沿着你的 Interval 结果判断
+
+你的 Complete 分支先执行 `input.retrieve(result.consumed_bytes)`，然后把 `result.arguments` 交给 `execute_command()`。**这个顺序在你当前 parser 下是安全的**，不用为了迎合旧流程图改成先执行再 retrieve。
 
 你成功路径最后才把 Interval 中的内容构造成 `vector<string>`。因此 Complete 返回时：
 
@@ -493,7 +510,7 @@ result          拥有当前 command 的 arguments 副本
 consumed_bytes  只覆盖当前完整 frame
 ```
 
-Application 此时可以精确 retrieve 当前 frame；result.arguments 仍能安全交给 dispatcher。也可以先执行命令再 retrieve。两种局部顺序都应保持 **只执行一次、只消费该 frame、reply 顺序一致**。
+Retrieve 改变 input 的 readable range，`result.arguments` 中的字符串副本仍存在。Dispatcher 因而访问自己的参数内容，不依赖已经消费的原始 Buffer prefix。
 
 需要区分的不是“必须哪一行在前”，而是成功与不完整两种状态：
 
@@ -502,7 +519,11 @@ Application 此时可以精确 retrieve 当前 frame；result.arguments 仍能�
 
 每次 retrieve 后重新取 Buffer 的当前范围，不跨 append/retrieve 保存旧 pointer。你拥有的 arguments 让命令执行不依赖原始 Buffer 的地址寿命。
 
+你每次 while 都重新调用 `input.peek()` 和 `input.readable_bytes()`，符合这个要求。本轮含 NUL/CRLF 的 value 测试也通过，说明这条组合路径继续按 explicit length（显式字节长度）交付参数，而没有退回 C-string 判断。
+
 ## 14. 一次 callback 中有两条命令
+
+你的 `while(1)` 已经完成这项工作：Complete 分支消费一帧后直接进入下一轮，NeedMore 分支 break。成功路径每一轮都向前推进，不需要再加另一套“批量命令”接口。
 
 假设 input 是：
 
@@ -510,7 +531,7 @@ Application 此时可以精确 retrieve 当前 frame；result.arguments 仍能�
 [SET name FxorG 的完整 frame][GET name 的完整 frame][半条 PING]
 ```
 
-Application 第一次 parse 得到 SET 的 Complete；SET 执行后，store 中已经保存 `name -> FxorG`。
+Application 第一次 parse 得到 SET 的 Complete，消费 SET frame，再执行 SET；store 中已经保存 `name -> FxorG`。
 
 消费 SET 后，当前 prefix 是 GET。第二次 parse 得到 GET 的 Complete，它访问的是刚才修改过的 store，返回 `$5\r\nFxorG\r\n`。
 
@@ -520,7 +541,7 @@ Application 第一次 parse 得到 SET 的 Complete；SET 执行后，store 中�
 graph TD
     A["Application 查看当前 input prefix"]
     B["Parser 判断当前第一帧"]
-    C["Complete: 执行命令并消费该帧"]
+    C["Complete: 消费该帧并执行命令"]
     D["Connection 接住对应 reply bytes"]
     E["NeedMore: 保留 prefix 并返回"]
     F["Error: 发错误回复并结束该 session"]
@@ -534,13 +555,15 @@ graph TD
 
 这张图解释循环的结束条件：**Complete 让 input 向前推进；NeedMore 让 application 等新数据；Error 结束该 client 的 request 处理。** 空 input 在你的 parser 中也是 NeedMore，可直接结束。
 
+你的三个出口现在都已落地：**最新 Error 分支已补 `break`**，符合图中的第三个出口。第 17 节保留首轮反例和你本次修复的因果复盘，不再让你重复修已经改好的循环。
+
 一次只处理第一条完整 frame，可能使第二条一直留在 user Buffer：kernel 数据已经读走，未必再产生新 input readiness。你已经在 HTTP keep-alive 的循环里解决过这一点，今天沿用相同判断。
 
 Client 连续发送多条命令、以后再收回复的方式叫 **pipelining（流水线请求）**。Redis 官方用它减少逐条等待带来的往返开销；本日先保证正确顺序，吞吐实验后置。[Redis pipelining 文档](https://redis.io/docs/latest/develop/using-commands/pipelining/)
 
 ## 15. 从局部 reply 到 Connection output
 
-在你的 SET handler 中，encoder 产生一个 string：
+你的 Complete 分支用 `auto response = execute_command(store, result.arguments)` 保存局部 string，再调用 `connection.send(response.data(), response.size())`。SET 时这个 string 的内容是：
 
 ```text
 reply = +OK\r\n
@@ -556,7 +579,11 @@ Application 调用 `connection.send(reply.data(), reply.size())`，你的 Connec
 
 `send()` 成功并不报告“对方 application 已读取回复”。Linux send 文档也明确区分本地发送操作成功与最终交付状态。[Linux send 文档](https://man7.org/linux/man-pages/man2/send.2.html)
 
+本轮小回复按序到达，当前 `Connection::send()` 也确实复制进自有 output。它们支持你现在的 ownership 解释；这些小请求没有建立持续 backpressure（发送受阻、待发送数据持续积压），因此不声称本轮已经再次观察过 EPOLLOUT 的全部分支。**这里保留你的 send 调用，不延长 response 的局部寿命。**
+
 ## 16. 同样是 Error reply，为什么有两种关闭策略
+
+你的代码已经把两者放在不同路径：**command error 仍从 Complete 分支出来；protocol error 才进入 Error 分支**。`execute_command()` 返回的是 wire bytes，Complete 分支直接 send，不需要再检查 string 是否以 `-` 开头。
 
 从你刚回答正确的 `SET k` 出发：
 
@@ -585,9 +612,50 @@ RESP frame 完整
 
 **既有 dispatcher 回复直接发送；parser 原因才需要编码一次。** 这是 R1 中最值得核对的一处组合边界。
 
+本轮连续发送 `SET missing`、未知命令、PING，分别收到两条 Error reply 和 PONG；你的 command-error 继续策略通过。
+
+你的 protocol-error message 当前写成 `"ERR Protocol error:" + result.error_message`，冒号后少一个空格。本轮实际收到：
+
+```text
+-ERR Protocol error:expected top-level RESP array\r\n
+```
+
+第 6.3 节规定的是 `ERR Protocol error: `。**只补上这个固定 prefix 的空格，保留已有 parser 原因与 encoder；不用重写错误类型。**
+
 ## 17. 错误回复怎样发完，怎样真正清理
 
-你目前的 `close_after_flush()` 设置 flag；若 output 已空，就调用 close helper，否则让既有 EPOLLOUT 继续发送。
+你已经接好了关闭链的后半段：`close_after_flush()` 请求排空 output；Connection 的 close callback 把 fd 放入 `pending_close`；`poll_once(-1)` 返回后，owner 才 erase Connection 和 `connection_over_flag` 的对应项。
+
+**首轮实际缺陷是：发出关闭请求后，Error 分支没有停止这次解析循环。你在检阅期间已保存 `break`，该缺陷已经修复。** 下面保留 `+broken\r\n` 在修复前的实测过程，让你看到这条小修改到底切断了哪一段错误执行：
+
+```text
+parser Error，consumed_bytes 为 0
+-> input.retrieve(0)，坏 prefix 仍在原处
+-> send 第一条 protocol-error reply
+-> connection_over_flag[fd] = true
+-> close_after_flush；小回复已排空，Connection 提交 close request
+-> 当前 while 没有 break/return，直接开始下一轮
+-> 同一 prefix 再次 Error
+-> 第二次 send 抛出 logic_error
+-> 异常离开 callback / poll_once，main 没有捕获
+-> 整个 server 被 terminate，进程因 SIGABRT 退出
+```
+
+实际异常文本是 `Connection::send called after close request`。因此，这个错误不是 parser 没有识别坏输入，也不是 pending-close 的 erase 太早；它是 **当前业务控制流没有在 Error 出口停止**。
+
+### 17.1 Flag 保存状态，离开循环要靠控制流
+
+你的 note 写“flag 为 true 不能进 message_callback”。准确地说：**Connection 仍可能调用该 callback，入口 guard 使它不再继续解析业务**。
+
+但入口 guard 位于 `while(1)` 之前。这次 callback 已经进入循环后，给 flag 赋 true 不会自动重新执行入口 guard，也不会让 C++ 自动跳出 while。
+
+你最新加上的 `break` 已经实现：**Error reply 纳入发送路径、调用 close_after_flush 后，立刻结束当前 MessageCallback 的解析循环。** 保留这个修复与入口 guard；Error 没有合法 consumed boundary，`retrieve(0)` 本身没有推进作用，不把它当作循环的出口。
+
+修后重新构建 normal 与 sanitizer server，均已收到一条错误 reply、观察坏 socket EOF，并用新连接收到 PONG；没有再次出现 send-after-close。现在剩下的是第 16 节的 exact prefix 空格。
+
+### 17.2 关闭链的正确终点
+
+你目前的 `close_after_flush()` 设置 flag；若 output 已空，就调用 close helper，否则让既有 EPOLLOUT 继续发送。业务 Error 分支返回后，原有延迟清理关系才能正常接上。
 
 因此关闭链要从“请求停止业务”一直看到“对象析构”：
 
@@ -606,34 +674,37 @@ Application 发现 protocol Error
 
 `session（会话）`在这里指**这条 TCP connection 上的命令处理状态**。结束 session 的业务状态与 Connection 发出 close request 的 transport 状态职责不同。
 
-你的 HTTP Server 已经把 `request_over_flag` 放在 application owner 中。Mini Redis 也要确保：一旦 protocol error 已触发结束处理，后续 message callback 不再对这个 input 执行新的 commands。可以复用既有可观察状态，也可以保留 application 状态；不把 Redis 错误策略塞进 `Connection::handle_recv()`。
+你已经把 `connection_over_flag` 放在 Mini Redis 的 application owner 中，并在对应 Connection 清理时 erase。保留这个安排，不把 RESP 错误策略搬进 `Connection::handle_recv()`。
 
 **Close-after-flush 是等待本地 output 排空的请求；pending close 是 owner 延迟销毁对象的记录。** 前者保证回复进入发送路径，后者保证 callback 返回前 `this` 仍有效。
 
-R3 的小错误回复测试能验证“收到回复后 EOF”，但通常不会让 output 持续积压；它不能单独证明 EPOLLOUT backpressure 分支已执行。旧 Connection checker 与后续定向 workload 负责更强路径证据。
+你 note 里的“这是 TCP 层的事情”需要再分一层：**Connection 是 user-space 的字节搬运/关闭适配组件；TCP 协议状态由 Linux kernel 管理**。你的 flag、output 排空判断和 pending-close 容器都在用户程序中，不是 kernel 自己保存的 Redis session policy（Redis 会话处理策略）。
+
+R3 对这个实测缺陷必须同时看 **坏 connection 收到回复后 EOF，以及另一条 connection 仍能 PING**。整个 server 崩溃也会产生 EOF，所以仅看到 EOF 不能证明只关闭了当前 client。小回复仍不证明 output 持续积压；EPOLLOUT backpressure 的更强证据沿用旧 checker 和后续 workload。
 
 ## 18. 一份 store，多个 Connection，各自的 input
 
-你昨天已经口述正确：**所有 command handlers 操作同一个 KvStore；每条 Connection 自己保存 partial input。**
+你昨天已经口述正确，今天也落成了代码：**`main()` 的一个 store 被所有 command callbacks 借用；每条 Connection 自己保存 partial input。** 本轮先 SET，关闭该 socket，再用新 socket GET 同一个 key，值仍为 FxorG。
 
-今天核对这句话在 R1 中是否真有对象寿命支撑：
+这不是只靠解释成立，下面逐项对照你的 owner：
 
 | 对象 | 谁拥有 | 应持续到什么时候 |
 |---|---|---|
-| `EventLoop` | server owner | 所有已注册 Channel 清理之后 |
-| `KvStore` | server application | 仍有 command callback 会借用它期间 |
-| `Connection` | server owner | 当前 callback 返回且 owner 执行延迟清理之后 |
+| `EventLoop loop` | `main()` | 在当前正常运行中承载所有已注册 Channels |
+| `KvStore store` | `main()` 的局部对象；callback 通过 `&store` 借用 | 覆盖所有正在运行的 command callbacks |
+| `Connection` | `connections` 中的 `unique_ptr` | 当前 callback 返回且 owner 执行延迟清理之后 |
 | connected fd、input/output | 对应 Connection | Connection 析构时清理 |
-| parser 和本次 result | 当前 application 调用 | 本次解释和命令处理完成即可 |
-| 每条 session 的结束状态 | application owner 或既有可用状态 | 与该 Connection 的存活期间对应 |
+| parser 和本次 result | MessageCallback / 当前 while iteration | 本次解释和命令处理完成即可 |
+| 每条 session 的结束状态 | `connection_over_flag` | owner 与对应 Connection 一起 erase |
+| 待清理 fd | `pending_close` | 本轮 poll_once 返回后处理并 clear |
 
-如果在每次 message callback 中重新创建 store，下一次 GET 看不到上一次 SET。这会直接表现为第 9 节失败，而不是一个需要背诵的抽象规则。
-
-如果 callback 借用某个已离开作用域的局部 store，问题则变成 dangling reference（悬空引用）：回调仍保存引用，但目标对象已经析构。正确关系是 **borrower（借用者）的使用期落在 owner（拥有者）的存活期内**。
+你没有在 callback 中创建 store，也没有借用一个已经离开作用域的临时对象。这个使用关系就是 **borrower（借用者）的使用期落在 owner（拥有者）的存活期内**；正常运行中 `main()` 的 store 持续存在。
 
 你当前 map 是 owning storage，GET 又返回副本，因此解析结果和 reply 的局部析构不会带走已保存的数据。今日保留这份正确设计，不为换容器重写 store。
 
 当前只有一个 EventLoop thread 执行 commands，store 访问在这条执行流中顺序发生。Day5 不增加 mutex，也不把“有多个 sockets”理解为“已经有多个同时访问 map 的 threads”。
+
+本轮确认了 client 断开不会删除 store 中的数据，以及对应 Connection 的延迟清理。你现在的无限循环没有 graceful shutdown；本轮测试终止进程也不证明正常退场的整套析构链或内存泄漏检查。那是后续工程范围，今天不改 owner 容器。
 
 ---
 
@@ -641,24 +712,24 @@ R3 的小错误回复测试能验证“收到回复后 EOF”，但通常不会�
 
 ## 19. 今天明确补什么，不重新造一套组件
 
-继续维护 R1 的 server 文件。最终需要收口的只有这条 application 链：
+**继续维护你当前的 `apps/mini_redis_server.cpp`，现在只补一项功能细节和一项轻量诊断整理。**
 
-1. 当前 input 中所有完整 frames 都能按序执行、精确消费；NeedMore 留下 suffix。
-2. Dispatcher 已编码回复直接发送；protocol Error 只额外编码一次。
-3. Command error 后继续运行；protocol Error 后停止该 session、排空回复再延迟清理。
-4. Store 持续存在，Connection 清理沿用现有 owner 生命周期。
+1. **补全固定错误 prefix 的空格。** Encoder 的 message 应是 `ERR Protocol error: ` + `result.error_message`；encoder 继续负责外层 `-` 和 CRLF。
+2. **给入口异常一个正常诊断出口。** 在 `main()` 的入口层捕获未恢复的标准异常，向 stderr 输出 `mini_redis_server: ` + `what()`，返回 non-zero。你目前端口占用时有 bind 原因，但属于未捕获异常触发 terminate；这是小幅工程整理，不要求今天建立多级异常恢复框架。
 
-R1 正式通过时，我会把本节改成与你实际 source 一一对应的明确修改项。已经正确的部分保留，不要求把设计换成教程偏好的写法。
+已经通过、继续保留的部分是：`main()` 的一份 store、`connections` 中的 unique ownership、局部 parser、Complete 先 retrieve 再 dispatch、NeedMore break、你最新补好的 Error break、已有 output 交接、poll_once 返回后处理 `pending_close`。
+
+第 1 项是完整日的必修；第 2 项是轻量工程质量项。**不重新写 parser、dispatcher、Connection 或整套测试。** R1 的 `97/100` 只评价 R1 范围：callback/TCP 两处笔记措辞各扣 1 分，入口诊断形式扣 1 分；已经修好的 Error 出口明确撤销待办，剩下的 exact reply 差异仍单独登记，不伪装成本日最终已通过。
 
 ## 20. 三个集成 checks：提供脚手架，你判断 oracle
 
 新增 **`tests/mini_redis_protocol_check.py`**。它 import 同目录 smoke 的两个 helpers，不重复实现编码和接收。
 
-| Case | 实际发送 | 固定判定 |
-|---|---|---|
-| split SET + GET | 一条 SET 分两次发送，随后追加 GET | 收到 `+OK` 和 exact value reply |
-| command errors + PING | SET 少参数、未知命令、PING 连续发送 | 三条回复按序；最后 PONG 证明仍可用 |
-| protocol error + EOF | 首字节不是 `*` 的坏 request | 收到 exact protocol error，然后 EOF |
+| Case | 实际发送 | 固定判定 | 你的 R1 与本轮证据 |
+|---|---|---|---|
+| split SET + GET | 一条 SET 分两次发送，随后追加 GET | 收到 `+OK` 和 exact value reply | partial suffix 补全已经通过；复用该检查 |
+| command errors + PING | SET 少参数、未知命令、PING 连续发送 | 三条回复按序；最后 PONG 证明仍可用 | 已通过，不调整 dispatcher |
+| protocol error + EOF + 新连接 PING | 首字节不是 `*` 的坏 request，然后另开正常 connection | 一条 exact error、EOF、正常 connection 收到 PONG | 最新 Error break 已修好；EOF/新 PING 已通过，只剩 prefix 空格 |
 
 **这三项检验今天的组件交接，而不是重写 Day3/Day4 所有单测。** 机械 client 代码由我提供；你需要知道每项在验证什么。
 
@@ -708,7 +779,7 @@ def check_command_errors_continue() -> None:
 
 
 def check_protocol_error_closes() -> None:
-    """协议结构错误：先收到完整 Error reply，再观察 EOF。"""
+    """协议结构错误：exact reply + EOF；新连接 PING 排除整个 server 崩溃。"""
     expected = b"-ERR Protocol error: expected top-level RESP array\r\n"
     with socket.create_connection(("127.0.0.1", 6380), timeout=3.0) as sock:
         sock.settimeout(3.0)
@@ -717,7 +788,11 @@ def check_protocol_error_closes() -> None:
         extra = sock.recv(1)
         if extra != b"":
             raise RuntimeError(f"expected EOF, got {extra!r}")
-    print("PROTOCOL ERROR + EOF PASS")
+    with socket.create_connection(("127.0.0.1", 6380), timeout=3.0) as healthy:
+        healthy.settimeout(3.0)
+        healthy.sendall(encode_request(b"PING"))
+        expect_bytes(healthy, b"+PONG\r\n")
+    print("PROTOCOL ERROR + EOF + SERVER ALIVE PASS")
 
 
 def main() -> None:
@@ -741,6 +816,8 @@ python3 tests/mini_redis_protocol_check.py
 
 Expected bytes 是根据本项目 contract 手写的常量，独立于被测 C++ encoder；Python 的 `encode_request()` 只生成输入。
 
+**目前保存的 `tests/mini_redis_smoke.py` 已通过；你尚未新增这份 protocol checker。** 本轮补充检查只在 Codex 的 `/tmp` 目录运行，没有写入你的 tests。当前版本遇到坏协议时应 FAIL，这是要修的真实行为，不通过删除 case 让结果变绿。
+
 ### 20.1 split-send 的证据边界
 
 两次 `sendall()` **不保证** server 一定收到两次 recv，也不保证执行两次 MessageCallback。TCP 可能合并字节，这是正常行为。
@@ -758,12 +835,17 @@ Day3 的 all-split parser tests 已确定性覆盖 prefix 判断；这里验证�
 | SET 成功，GET 得到 `$-1` | store 是否在两次调用间仍是同一个对象 |
 | 第一条 reply 正常，第二条 timeout | 当前完整 suffix 是否仍停在 input，callback 是否只处理了一帧 |
 | Error 后 PING timeout/EOF | 是否把 command error 当成 protocol error 关闭 |
+| Protocol error 后 server 报 `send called after close request` | 先看你的 Error 分支是否仍留在同一次 while 中 |
+| Protocol error 的 exact bytes 少一个空格 | 对照你构造的 `ERR Protocol error: ` 固定 prefix |
 | Protocol error 已收到，但 EOF timeout | close-after-flush 与 owner cleanup 是否接通 |
+| 坏 socket 已 EOF，新 connection 却 refused | 看 server 是否整体退出；EOF 不能代替存活检查 |
 | 回复多了一层 `+` 或 `$` | dispatcher 的 wire reply 是否被重复编码 |
 
 这是根据现象选择检查点，不是要求把已有组件全部重写。
 
 ## 21. Regression 与 ASan/UBSan
+
+你现在的 CMake target 正确链接了 Acceptor、Connection、RESP parser 与 command dispatcher，传递依赖也成立；本轮两种 fresh build 均零 warning。**CMake 接线已通过，接下来修改的是 server 的两个功能分支，而不是构建系统。**
 
 先复跑原有 regression tests（回归测试：确认旧功能没有因集成修改而退化）：
 
@@ -797,11 +879,26 @@ ASAN_OPTIONS=halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
 
 本日重点看 callback 引用是否悬空、清理是否在活动 callback 中销毁对象、Buffer pointer 是否失效。若 report 出现，从 stack 找到第一条自己的 source frame，再核对它访问的对象 owner 与寿命。
 
+本轮实测记录：normal/ASan/UBSan 的原工程 CTest 各 `74/74 PASS`；两种 server 的 smoke、coalesced/partial suffix、跨连接 store、command-error 继续、binary/empty 回复均通过，未出现 sanitizer 报告。首轮两种 build 都复现少空格和 `logic_error` 后 SIGABRT；你补 break 后又重新构建两种 server，EOF 与新 PING 均通过，只剩少空格。**Sanitizer 没有内存报告，不会替你判断 exact reply 或业务控制流是否正确。**
+
+此前 Day4 的 `84/84` 是原工程 74 项加当时临时补充 10 项；本轮没有把那 10 项加入 CTest，也没有把网络检查伪装成原工程已注册的 tests。两次证据分别记录。
+
 **正常字节结果与 sanitizer 是两类证据。** Exact replies 验证协议/命令结果；ASan/UBSan 无报告只限定本次实际覆盖的内存/未定义行为路径。Ctrl+C 强制停止不证明完整析构或 leak-check 已完成。今天不为单线程服务器增加 TSan 或 benchmark。
 
 ## 22. 笔记和验收：只记新增的关系
 
-`day5_note.md` 可保留你最初的组合思路、真实踩坑、一个完整 SET→GET 路径、几行测试结果。已经在代码写清的现成接口不再抄一遍。
+你当前 `day5_note.md` 只有 R1 一节，本轮逐条判断如下，原笔记未改：
+
+| 你写下的观点 | 判断 | 定向补充 |
+|---|---|---|
+| 复用 HTTP 骨架，主要改 MessageCallback | 正确 | 你还在 main 中保存了一份长期 store，支持跨命令数据 |
+| raw bytes → parser Complete → dispatcher → reply | 正确 | 你采用先 retrieve 再 dispatch；owning arguments 使该顺序安全 |
+| connection_over_flag 表示不再承载 request | 正确 | 它是 application 状态，不等于 Connection 对象已经析构 |
+| flag 为 true 不能进 MessageCallback | 措辞需修正 | callback 可以被调用，但入口 guard 不再处理业务；你最新用 break 结束当前循环 |
+| close-after-flush → output 空 → close callback | 正确 | 后续 pending-close 由 owner 在 poll_once 返回后处理 |
+| 上述 flag/关闭链就是 TCP 层的事情 | 分层不够准确 | 用户态 Connection 使用 kernel TCP；业务 flag 和 deferred cleanup 属于你的 C++ 程序 |
+
+只补本轮真正新增的两个关系：**flag 与控制流出口分别负责什么，以及单 socket EOF 与 server 存活的区别。** 已由代码/实测证明的现成接口不用重新抄写。
 
 五个问题可口述，也可用自己的实现和证据回答：
 
@@ -813,11 +910,13 @@ ASAN_OPTIONS=halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
 
 能从 source 和 tests 证明的机械事实可以省略书面答案；不能用“组件之前通过”代替今天真实 TCP 链路。
 
+R1 时五题均未另写答案。第 1/2/4 题可由你的 source 和本轮结果支持；第 5 题已有 store 保留与延迟清理的证据，但不等于优雅退出已验证。第 3 题的 command-error 继续和最新 protocol-error 停止均有实测，Error 的 exact 文本仍需第 19 节补空格。不提前把未另回答的问题标为“答对”，也不要求重复抄写已证明的机制。
+
 ## 23. 今日通过线与下一天
 
-**核心通过：新 server 可编译运行、smoke 成功、已保存的数据跨命令保留，生命周期沿用正确的 owner/延迟清理关系。**
+**你的 R1 已正式通过：新 server 可编译运行、smoke 成功、数据跨命令和 client close 保留，正常路径生命周期沿用正确的 owner/延迟清理关系。** 当前只进入定向 R2/R3，不提前记成完整 Day5 或 Week12 通过。
 
-完整日再收口三种集成情景：partial/coalesced requests、command error 后继续、protocol error 回复后 EOF。原 tests 不退化，sanitizer 覆盖本日网络路径无报告。重复 client 代码可以委托，不因机械测试由谁写而扣分。
+完整日的下一步明确为：补 prefix 空格，再验证 exact error → 坏 socket EOF → 新 connection PONG；Error break 已修，不再要求重复动手。原 smoke、partial/coalesced 和 command-error 继续路径保留；复检确认原 tests 不退化、实际覆盖路径无 sanitizer 报告。重复 client 代码可以委托，不因机械测试由谁写而扣分。
 
 资源使用的长期上限、超大 output backpressure、系统错误精细恢复、优雅 shutdown、性能结论属于后续增强，不把它们伪装成本日已验证。
 
@@ -825,7 +924,7 @@ Day6 在同一个 `mini_redis_server` 上做 **多客户端共享数据、各自
 
 ## 24. 资料怎样对应到今天
 
-正文已经给出完成任务所需内容，以下只用于定向查证：
+你 R1 没有引入新 library API，资料只用于查证本轮的具体交接关系；不要求重新读完整 RESP 或 socket 文档：
 
 - [Redis RESP specification](https://redis.io/docs/latest/develop/reference/protocol-spec/)：看 Network layer、Request-Response model，以及已学 Simple Errors/Bulk Strings/Arrays；今天不展开 RESP3。
 - [Redis pipelining](https://redis.io/docs/latest/develop/using-commands/pipelining/)：看连续发命令、随后按序接收回复的使用方式；优化数据留到性能阶段。

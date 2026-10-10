@@ -1,8 +1,8 @@
 # Daily 教程总目录
 
-> 更新日期：2026-10-09
+> 更新日期：2026-10-10
 >
-> 收录范围：主线 Week1 Day1 至 Week12 Day5，共 82 份正式 daily 教程。
+> 收录范围：主线 Week1 Day1 至 Week12 Day6，共 83 份正式 daily 教程。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week11 已通过
-Week12 Day1~Day4 已正式完成；Day4 最终 100/100，map/六 handlers 与分层错误、共享/隔离关系通过验收；normal/sanitizer 合并矩阵均 84/84（原工程 74 项 + 临时 10 项），头文件组合编译通过。Day5 Reactor 集成教程已生成，等待 R1；参考验证不代表用户已经完成
+Week12 Day1~Day5 已正式完成；Day4/Day5 最终均 100/100。原工程 normal/sanitizer 各 74/74，Day5 两个用户网络脚本通过，入口 catch 的失败退出码已实测。Day6 已生成待 R1：双客户端共享 store/半帧隔离，完整后半包含状态型 pipeline、既有 good client 存活、二进制跨连接、有限慢读和 fd 回落。Codex 私有生成验证不冒充用户 Day6、性能或整周通过；Day4 临时合并 84/84 与原工程矩阵分别记录
 ```
 
 ---
@@ -209,6 +209,7 @@ Week12 Day1~Day4 已正式完成；Day4 最终 100/100，map/六 handlers 与分
 | [Day3：RESP parser hardening](week12/day3/day3.md) | 在同一份 parser 上系统验证任意 byte split、二进制 payload、coalesced frames、numeric overflow 与 element/bulk/frame limits；区分 first-frame size 和整个 Buffer size | hardened request parser + all-split/binary/overflow/limit matrix + ASan/UBSan evidence | fragmentation, coalescing, binary-safe, numeric overflow, checked arithmetic, resource limit, first-frame boundary |
 | [Day4：KV 数据与六条命令](week12/day4/day4.md) | 从 database/cache/KV 用途建立共享 state；按实际 map/六 handlers 解释 SET 复制、GET 快照、const find、二进制参数、重复计数和稳定错误；区分纯内存证据与未来网络共享 | `KvStore` + `execute_command` + R1 小 checker/CMake + 永久 tests 与独立临时 semantics matrix | KV store, keyspace, arity, PING, ECHO, SET, GET, DEL, EXISTS, command dispatcher, optional, ownership, const map, snapshot |
 | [Day5：Mini Redis 接入 TCP](week12/day5/day5.md) | 复用 Reactor、RESP parser 和 map/六 handlers；把累计 input 接到命令层，精确消费并有序回复；区分 command error 继续与 protocol error 排空后关闭 | `mini_redis_server.cpp` + CMake append + Python smoke/protocol checker + normal/ASan/UBSan 网络验证入口 | Mini Redis, Reactor integration, MessageCallback, partial frame, pipelining, shared store, protocol error, close-after-flush, deferred cleanup |
+| [Day6：多客户端与连接隔离](week12/day6/day6.md) | 共享 KvStore 与每连接 input/output；业务回复建立跨连接顺序；状态型流水线、坏协议隔离及有限慢读背压，区分功能 PASS 与实际写 EAGAIN | 独立 R1 isolation checker + 可委托 extra checker + fd before/after + normal/ASan/UBSan；可选 strace | multi-client, isolation, shared store, partial frame, pipeline order, slow reader, backpressure, EAGAIN, EPOLLOUT, fd baseline |
 
 ---
 
@@ -302,6 +303,10 @@ KvStore / dispatcher / empty vs missing     -> Week12 Day4
 Mini Redis TCP / MessageCallback integration -> Week12 Day5
 RESP split / command error continue / EOF    -> Week12 Day5
 shared store / close-after-flush / cleanup   -> Week12 Day5
+multi-client / shared store / partial isolation -> Week12 Day6
+stateful pipeline / cross-client ACK ordering  -> Week12 Day6
+bad client / existing good client / fd baseline -> Week12 Day6
+slow reader / backpressure / send EAGAIN trace  -> Week12 Day6
 ```
 
 ## 并发与工程工具

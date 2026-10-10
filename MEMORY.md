@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-09）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1 已以 `94/100`、Day2 与 Day3 均已以 `96/100`、Day4 已以 `100/100` 正式完成；Day5 教程已生成，等待用户独立完成 R1；网络集成尚未作为用户产出验收。用户的 `std::map` 版 KvStore 与六个 handlers 保留；ownership、binary/empty、大小写、DEL/EXISTS 计数和 parser→dispatcher 均有实测。PING 错误文本与头文件保护的修复保持有效，完整日再次 normal/ASan/UBSan 合并 CTest 均 `84/84 PASS`、零 warning，头文件组合编译通过；其中原工程 74 项与 Codex 临时补充 10 项明确区分。用户口述第 4/5 题正确：SET k 是合法 RESP frame，但 dispatcher 返回 wrong-arity command error；共享同一 KvStore，各 Connection 分别持有自己的 partial input。第 1~3 题未另写，但代码和 tests 已证明，不要求重复抄写。Day4 R2/R3 已完成定向润色和阅读收尾；本日纯内存组件通过，不提前记成 TCP 多客户端集成或性能已验证。Day1/Day3/Day4 临时检查的代表性 cases 可在授权后持久化，作为 Week12 出口前非阻塞工程整理。AI Theory T1~T4 已正式通过，下一模块为 T5；用户的 `ML.md` 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，但 Ex1 尚未提交 executable evidence，因此当前不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-10）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1~Day5 已正式完成，分数分别为 `94/100`、`96/100`、`96/100`、`100/100`、`100/100`；Day5 R1 的历史评分为 `97/100`。用户最新 `mini_redis_server.cpp` 的 main_ 持有一份 map 版 KvStore，callbacks 借用 store，Connection 分别拥有 input/output；TCP PING/SET/GET、连续完整帧与 partial suffix 补全、跨 client close 保留数据、command-error 后 PING、binary/empty 回复均通过。用户已保存两个 Python 网络脚本，normal 与 sanitizer server 均通过 smoke 和 protocol checker；协议错误的 exact prefix、Error break、坏 socket EOF、server 存活和新 connection PONG 均已验证。Normal 与 ASan/UBSan 新 server 重编译零 warning，原工程固定 CTest 再次各 `74/74 PASS`，本轮覆盖的网络路径无 sanitizer 报告；不与 Day4 的原工程 74 + 临时 10 项合并 `84/84` 混淆。笔记 callback guard 与 Connection 层次表述已修正，原两分扣分已撤销；用户随后自行在入口 catch 增加 return 1，两种 build 实测端口占用时均 exit 1，剩余 1 分撤销，Day5 最终复评 `100/100`。Day5 R2/R3 已在 R1 通过时定向润色，整日复检未改 daily、源码、永久 tests 或 note。Week12 Day6 已按本轮指令生成，待用户完成 R1；核心新产出为双客户端共享 store/partial input 隔离脚本，完整 R2/R3 包含状态型 pipeline、既有 good client 存活、二进制跨连接、有限慢读和 fd 回落。Codex 的私有生成验证已完成，不冒充用户通过 Day6 或 Week12，不推广为性能与生产故障全覆盖。Day1/Day3/Day4 临时代表 cases 的持久化可在授权后委托，不阻塞当前推进。AI Theory T1~T4 已正式通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，Ex1 尚未提交 executable evidence，不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -3117,6 +3117,8 @@ Round 3：补 deterministic tests、TSan/stress/benchmark、README 与最终证�
 
 重复内容允许省略，但不能因“代码跑通”跳过关键机制验证。
 
+服务器关闭路径的 oracle 要区分“当前 client 关闭”与“整个 server 退出”：bad socket 得到 EOF 也可能来自进程崩溃。若声称只关闭坏 session，除了 exact error + EOF，还应验证一个正常 connection 仍可使用；不能把 EOF 单独当成 failure isolation 的证据。该补强按当前 Round 范围登记，允许后置的错误分支不因此被追溯成 R1 blocker。
+
 每日任务的要求必须分层，不能把大量工程边界全部写成当天的阻塞性“契约”：
 
 ```text
@@ -3166,7 +3168,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-10-09 当前学习状态：系统主线 Week1~Week11 已完成。Week12 Day1~Day4 已正式完成，分数分别为 `94/100`、`96/100`、`96/100`、`100/100`。Day4 完整验收已核对最新代码、note、daily baseline diff 与第 4/5 题口述；没有新增核心问题，无需再写业务或重复 tests。下一步学习已经生成的 Day5，按真实 map/六 handlers、现有 RESP parser/encoder 与 Connection 独立完成 R1：把纯内存命令层接入单线程 Reactor，让 callbacks 借用同一个 server-owned KvStore，并保留各 Connection 独立 input/output。Day5 教程已生成待 R1，用户 TCP 集成尚未验收；Codex 临时参考运行不算用户学习通过。最新 normal/sanitizer 合并矩阵均 `84/84 PASS`，头文件组合编译通过；原工程 74 项、本日永久 3 项、临时补充 10 项的证据范围不混淆。Day1/Day3/Day4 临时代表 cases 的永久整理可在授权后委托，不阻塞当前推进。普通验收不再修改已润色的 Day4、用户代码、tests 或 note。AI Theory T1~T4 已正式通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 regularization，Ex1 可在完成后作为 T7 等价产出。
+2026-10-10 当前学习状态：系统主线 Week1~Week11 已完成。Week12 Day1~Day5 已正式完成，分数分别为 `94/100`、`96/100`、`96/100`、`100/100`、`100/100`。Day5 最新修复复检：normal/ASan/UBSan server 重编译零 warning，原工程固定 CTest 再次各 `74/74 PASS`；用户两个已保存的网络脚本和临时补充路径均通过，exact protocol error、坏 client EOF 后 server 存活、新 PING、跨连接数据保留成立。入口 catch 已由用户补 return 1，两种 build 实测端口占用时均 exit 1；撤销剩余 1 分，Day5 最终 `100/100`，当前日无未修扣分项。Week12 Day6 已生成，下一步为用户独立完成 R1 双客户端场景；R2/R3 已完整提供，R1 正式通过时须按真实脚本/note 定向润色并保留用户新增内容。私有生成验证覆盖有限多客户端矩阵，但不替代用户 Day6 验收，不记为整周或性能通过。用户代码、永久 tests、note、冻结 daily 在本次复检均只读；R1 首次通过时的定向润色已完成，不为普通复检再次覆盖用户内容。临时代表测试可在用户明确授权后持久化，普通 review 不自动 commit/push。AI Theory T1~T4 已通过，下一模块为 T5；Ex1 完成后可作为 T7 等价产出，不重复实现。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。Day3 与 Day4 R1 正式通过时均已执行该规则；后续仍从最新磁盘版本编辑，保留用户新增内容。
 
@@ -7617,3 +7619,59 @@ R1 先说明程序用途、127.0.0.1:6380 的真实监听地址、生命周期�
 发布前私有 CMake 只读 add_subdirectory 用户 canonical 工程，fresh GCC 10.5/C++17 Debug 与 ASan/UBSan 构建均零 warning；固定 CTest 入口两种构建均 `74/74 PASS`。从 Day5 正文逐字提取的两个 Python scripts 在 normal/sanitizer 参考 server 上均通过：smoke、split SET+GET、两个 command errors 后 PONG、exact protocol error 后 EOF；参考 server 无 stderr/sanitizer 报告，launcher 带 timeout/finally，并已停止 child server。此处是教材接口和脚本验证，不是用户完成 Day5；也不宣称 Ctrl+C/SIGTERM 已执行完整析构或 leak check。
 
 两轮自检核对了 R1 截断后是否能开工、跨日接口/target 传递依赖、CMake 与固定 `cmake -E chdir build ctest --output-on-failure`、fence/标题/术语/错误政策。特别保留 split-send 的证据边界：两次 sendall 不保证两次 recv/MessageCallback，NeedMore 分支是否本次真正执行需状态记录或确定性 parser oracle，不能写成网络 chunk 边界已被保证。Mermaid 使用 quoted labels 的简单 graph TD 形式；没有声称做过 Typora UI 渲染。索引现为 82 份，当前状态统一为 Day5 已生成待 R1，Day4 final 100/100 和 AI Theory T1~T4 通过状态不变。按新 daily 规则 Git add/commit/push，同时保留此前积累的用户笔记和 Day4 获授权润色。
+
+## 2026-10-10：Week12 Day5 R1 正式通过与定向润色
+
+重新读取 Day5 R1 contract/允许后置项、用户最新 `day5_note.md`、Ubuntu server/CMake/Connection/smoke，以及 daily 初始 Git baseline `888f66a7e4fea78737e2b0d2acbda1e62a51ab4f`。编辑前 daily 与该 baseline diff 为空，没有用户 daily 增补被遗漏；note 是用户新增文件，保持不变。生产代码、CMake 与永久 tests 未修改，构建和补充网络检查只在 `/tmp/week12_day5_r1_review_20261010` 中进行。
+
+实际实现：main 持有 `loop`、`acceptor`、`connections`、`connection_over_flag`、`pending_close` 和一份 `KvStore store`；message lambda 借用 flag map/store。局部 parser 的 while 在 Complete 时先 retrieve 再 execute/send，在 NeedMore 时 break。Parser 返回 owning arguments，先 retrieve 的顺序安全。正常关闭由 Connection 提交 fd、owner 在 poll_once 返回后 erase Connection 与 flag；store 不随 client close 清空。
+
+Fresh normal/ASan/UBSan 构建均零 warning，固定 CTest 均 `74/74 PASS`。用户已保存 smoke 两种 build 都打印 `MINI REDIS SMOKE PASS`。临时 checker 两种 build 都通过 `[完整 SET][完整 GET][半条 PING]` → 收前两条 reply → 补 suffix → PONG、client close 后新连接 GET、wrong-arity/unknown/PING 连续回复，以及含 NUL/CRLF 的 value 和 empty Bulk。没有记录 parser status，不把外部提交顺序写成确定的 recv/callback chunk 边界。本轮 sanitizer 未出现内存/UB 报告，终止进程不是优雅析构/leak-check 证据。
+
+两项 protocol 分支缺陷均实测：`ERR Protocol error:` 少一个空格，实际回复 `-ERR Protocol error:expected top-level RESP array\r\n`；Error 的 consumed_bytes 为 0，retrieve(0) 没推进，send + flag + close_after_flush 后仍进入下一轮，第二次 send 抛 `Connection::send called after close request`，未捕获异常导致整个 server SIGABRT（exit -6）。入口 flag guard 不会自动终止正在执行的 while。占用端口时也确实 non-zero 并报告 `bind: Address already in use`，但未使用要求的 `mini_redis_server: ` 标准诊断出口。
+
+笔记逐项：复用 HTTP/application 主线正确，raw bytes→parser→dispatcher→reply 正确，flag 的业务含义正确，close-after-flush→output empty→close callback 正确；“不能进 message_callback”应为“进入后 guard 不继续业务”，TCP 层措辞应区分用户态 Connection/关闭策略与 kernel TCP。五道 final questions 均未另写：第 1/2/4 题有代码/运行支持，第 5 题有 store 保留与延迟清理证据，第 3 题的 command-error 继续已证实但 protocol-error 停止待修，不提前标为全部答对。
+
+R1 正式通过 `97/100`：callback/层次两处笔记措辞各扣 1 分，入口诊断质量扣 1 分。教程第 6/10 节明示拆分/多帧/两类请求错误允许留到 R2/R3，故上述 protocol 缺陷登记为整日必修，不撤销 R1 核心通过，不把分数描述成生产质量。完整 Day5 尚未通过。
+
+R1 通过后同轮逐节定向润色 11~24 节：完全沿用用户变量、真实 retrieve 顺序、循环出口、reply/output ownership、map/store 生命周期；重点解释真实重复 Error→send after close→terminate 因果链。Round3 收敛为 Error 分支立即离开、补 prefix 空格与轻量入口诊断，不再列实现分叉选项。提供的 checker 加入协议错误 EOF 后新 connection PING，避免把 server 崩溃造成 EOF 当作只关闭坏 client。此经验整合入 §11，与只读/Round 分层规则一致；日常问答及代码修改边界不变。更新当前状态、总规划和索引；普通 review 不自动 Git commit/push。
+
+同轮收尾复检发现用户自行保存了 Error 分支的 `break`：server source SHA256 从 `40f37555e38173a88888c0244ca4c17547439374946d9da75d2b240d1300949e` 变为 `c2d0aa083ea2fe7383277be81aec5641250daf0796e8506179ba907b1e1e8de0`，其余 CMake、Connection 与 smoke 哈希保持一致。重新读取最新 73 行 source，重新编译 normal/ASan 两种 mini_redis_server 后，全部正常网络 case 再次通过；坏 socket EOF、server 存活、新 connection PING 均 PASS，撤销重复 send/整体退出待办。只剩 prefix 少空格（exact reply FAIL）和非阻塞入口诊断建议。R1 范围评分仍 `97/100`，不为原本后置且未扣分的修复机械加分。R2/R3 和所有当前进度段落均同步为“保留已修 break，只补 prefix”，原反例明确标为修复前过程，不能把旧故障继续写成最新版缺陷。
+
+## 2026-10-10：Week12 Day5 整日正式通过
+
+依据 MEMORY 的只读、逐项笔记、验收题证据与百分制规则，重新读取用户最新保存的 81 行 server、CMake、Connection、两个网络脚本与 note。用户已将服务主体放入 main_，main 用 try/catch 输出诊断；protocol prefix 已补空格，Error 分支 break 保留。完整日最终 `99/100`，正式通过；R1 历史 `97/100` 仍保留，不因后置功能补齐重复计算 R1 加分。
+
+Fresh normal 与 ASan/UBSan 在 `/tmp/week12_day5_final_review_20261010` 私有构建目录只读复用 canonical 工程，均零 warning；使用固定 `cmake -E chdir build ctest --output-on-failure`，两种构建各 `74/74 PASS`。用户已保存的 `mini_redis_smoke.py` 与 `mini_redis_protocol_check.py` 在两种 server 上均 PASS：PING/SET/GET、分次 SET+GET、wrong-arity/unknown 后 PONG、exact protocol error 后 EOF，并由新 connection PING 验证 server 存活。Codex 私有 runner 补充连续完整帧与 partial suffix、跨 client close 的 store 保留、binary value 含 NUL/CRLF、empty Bulk，全部通过。实际回复为 `-ERR Protocol error: expected top-level RESP array\r\n`，不再是旧的少空格版本。覆盖路径无 sanitizer 诊断；owned server 最后由 SIGTERM 停止，不能声称优雅析构或完整 leak check 已证明。两次 sendall 不等于两次 recv/callback，外部网络结果不夸大为已记录 NeedMore 分支或固定 kernel chunk。
+
+唯一保留扣分：`apps/mini_redis_server.cpp:75-80` 的 catch 打印后没有 non-zero return，main 落到结尾隐式返回 0。两种 build 实测占用 6380 时诊断 `mini_redis_server:bind: Address already in use`，exit 0。这是轻量工程退出码问题，扣 1 分，不阻塞本日核心；未替用户改源码。协议错误导致整个 server 退出的旧缺陷已解决，不继续扣分。
+
+Note 唯一 R1 章节逐条正确：复用 HTTP 的 transport 框架与更换 application；raw bytes→RESP parser→dispatcher→reply；flag 表示不再承载请求；进入 callback 后由 guard 停止业务；close-after-flush 等 output empty 后提交 close callback；这属于用户态 Connection 行为。两处原措辞已由用户修正，撤销各 1 分，源码旧注释不再重复扣 note 分。无需为了 Round 形式新增长笔记。
+
+五道 final questions 均未另写完整答案，不能记录成“全部答对”。1 的 partial prefix 由 Connection input 保存、4 的 reply suffix 由 Connection output 拥有，均由源码证明；2 的连续完整命令后补 partial suffix 与共享 store 的外部结果已有实测，但未记录每次 callback 边界；3 的 command-error 继续与 protocol-error 停止/坏 client EOF/server 存活已验证；5 的 owner 在 poll_once 返回后清理 Connection/flag、store 跨 client close 保留分别有源码和实测支持。未机械重复作答不扣分。
+
+完整对照 daily 初始 Git baseline `888f66a7e4fea78737e2b0d2acbda1e62a51ab4f`：变化是上一轮获授权的 R1 定向 R2/R3 润色，本轮没有新增用户 daily 修改，不虚构新编写经验。当前整日复检不改 daily、note、用户 production、永久 tests 或 CMake；补充 runner 仅在 Codex 自有目录与 Ubuntu /tmp。同步 MEMORY 两个当前状态段、总规划三个当前/下一步段与 DAILY_INDEX。下一步按用户指令生成 Week12 Day6 的多客户端与 failure isolation，不提前标为 Day6、Week12 全周或性能通过。普通复检不自动 Git commit/push。
+
+## 2026-10-10：Week12 Day5 退出码修复复检，最终 100/100
+
+用户回复“ok代码我改了”。重新只读查看最新 83 行 `mini_redis_server.cpp`，确认成功分支显式 return 0，catch 分支在 stderr 诊断后 return 1。Server SHA256 为 `df898a937ad1d7b51cc53a2c2c037c821b3d127cbb578eb681aaedba5eda12f8`；CMake、Connection 与两个永久 Python tests 的哈希均与前轮一致。
+
+在原私有目录重编译 normal 与 ASan/UBSan server，均零 warning。私有 checker 对占用端口新增 exit 1 的精确断言，两种 build 均实测 `OCCUPIED PORT STARTUP EXIT: 1`，stderr 含 `bind: Address already in use`；非零退出扣分撤销。原有 smoke、protocol checker、连续完整帧与 partial suffix 补全、跨 client close 数据保留、command errors 后继续、binary/empty、exact protocol error、坏 client EOF 后 server 存活与新 PING 均再次 PASS。固定 `cmake -E chdir build ctest --output-on-failure` normal/sanitizer 各 `74/74 PASS`，覆盖路径无 sanitizer 报告。owned server 已在 finally 停止，6380 无遗留监听；SIGTERM 停止不作为优雅析构证据。
+
+重新读取 note，唯一 R1 部分与前轮一致，逐项正确；五道 final questions 的未另写答案与代码/实测支持状态沿用上轮，不要求重复作答。没有新增今日学习要求或重复 tests。Day5 完整日从 `99/100` 复评到 `100/100`，通过状态保持；分数只对应本日范围，不推广为性能或生产完备。
+
+本轮仅修改 Codex 私有 runner 和三个进度文档，用户代码、永久 tests、CMake、note、冻结 daily 均未修改。MEMORY 当前进度/下一步、总规划与 DAILY_INDEX 已同步撤销退出码待办。下一步仍为按指令生成 Week12 Day6；本轮未生成，不自动 commit/push。
+
+## 2026-10-10：Week12 Day6 教程生成，待用户 R1
+
+已生成 `week12/day6/day6.md`，完整保留主线三 Part、R1 独立场景闸门及 R2/R3。依据 Week12 周计划、最新 Day5 100/100、当前 map 版 KvStore、每 Connection input/output、owner pending-close 与 fatal system_error 策略编排。今天不重写 C++ 服务：用户独立设计 `tests/mini_redis_isolation_check.py`，让 A 保留半条 SET、B 仍 GET/PING、A 完成并收到 OK 后 B 看见新值；重复扩展脚手架放在闸门后的独立 `mini_redis_day6_extra.py`。R1 完成后的整篇定向润色继续生效，不提前宣称已检阅用户未来实现。
+
+私有生成验证使用 Ubuntu 当前 `cpp/week10` 源码的 fresh Debug 和 ASan/UBSan 构建，均零 warning，固定 CTest 各 `74/74 PASS`。R1 私有参考和教程完整 extra checker 在两种 server 上均通过：两个半帧交错、状态型 SET/GET/DEL pipeline、坏协议 EOF 后既有 good 及新 fresh PONG、二进制 key/value 跨客户端、有限慢读及 100 次顺序连接/关闭。同一受控 server 的 fd 计数前后 `5/5`；教程要求比较用户自己的 baseline，不硬编码 5。网络脚本失败抛异常/non-zero，expected reply 不复用 C++ encoder。
+
+慢读场景用同一连接 ECHO batch 后的共享 marker 建立业务已推进状态；B 看见 ready 后才 PING，而 A 的 client 尚未读任何 reply。此关系避免 B 恰好抢在 A 批次之前完成造成假证据。功能 PASS 不自动说明 EAGAIN；本次另用 strace 实际观察到 `sendto(fd=6) -> EAGAIN` 与同 fd 的 `EPOLL_CTL_MOD + EPOLLOUT`。教程明确区分写 EAGAIN 与 recv EAGAIN，trace 为可选机制增强，不升级为吞吐/公平性结论。
+
+新案例继续区分协议错误连接隔离与当前 fatal socket/标准异常可能逃到 main 的整进程失败策略；未强塞 RST recovery、新线程/TSan、output 总内存上限、TTL/AOF 或性能项目。split-send 不保证 recv 分段，业务 ACK 才建立跨连接先后；100 次串行重连不冒充 100 并发。重复测试代码可委托，oracle 与性能结论仍要求用户能解释并独立捍卫。
+
+两轮文档核对：R1 截断后具备用途/文件/helper/输入输出/错误政策/运行入口；完整 Python block 与已实测私有 source 一致（仅 code fence 前多一个空行）；三 Part/三 Round、70 个成对 fences、目录和旧版 Mermaid quoted labels 已静态检查，未声称 Typora UI 实际渲染。所有私有 server 已结束，6380 未留监听；用户 server SHA256 与生成前一致。没有修改用户 production、永久 tests、CMake、note、旧 daily 或 T5 教程；保留磁盘上已有的用户与授权修改。
+
+当前快照、§13 下一步、总规划与 DAILY_INDEX 同步：主线 Week1~11 通过、Week12 Day1~5 通过、Day6 已生成待 R1、AI Theory T1~T4 通过/下一 T5；索引增加到 83 份。新 daily 按既有授权执行 git add ./commit/push repo master，发布前审计当前改动，不回退或覆盖已有内容。

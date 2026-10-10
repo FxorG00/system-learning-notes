@@ -1,8 +1,8 @@
 # C++ 系统工程 / AI Infra 求职总规划
 
-> 版本：2026-10-09，Week12 Day5 教程生成同步版
+> 版本：2026-10-10，Week12 Day6 教程生成同步版
 > 学习者：FxorG，中山大学计算机科学与技术专业，按当前学制为 2029 届
-> 当前进度：Week1 ~ Week11 已完成，Reactor V1 与 HTTP Server V1 均已闭环；Week12 Day1~Day4 已正式通过，Day4 最终 100/100，map 版 KvStore 与六条命令、分层错误处理及共享/隔离关系已确认。Normal/sanitizer 合并 CTest 均 84/84 PASS（原工程 74 项 + 临时 10 项），头文件组合编译通过，覆盖路径无 sanitizer 诊断。Day5 教程已生成，下一步独立完成 Reactor 集成 R1；用户网络产出尚未验收。AI Theory T1~T4 已通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 L2 regularization，Ex1 尚未提交 executable evidence
+> 当前进度：Week1 ~ Week11 已完成，Reactor V1 与 HTTP Server V1 均已闭环；Week12 Day1~Day5 已正式通过，Day4 最终 100/100，Day5 最终复评 100/100。Mini Redis 已跑通 TCP PING/SET/GET、partial suffix 补全、跨连接数据保留、command-error 继续与 binary/empty 回复。用户保存的 smoke/protocol checker 在 normal 与 sanitizer server 上均通过；exact protocol error、坏 socket EOF 后 server 存活、新 connection PONG 均成立。最新 normal/ASan/UBSan 原工程 CTest 各 74/74 PASS，server 重编译零 warning；不同于 Day4 合并临时测试的 84/84。用户补 return 1 后，两种 build 的端口占用场景均 exit 1，剩余工程扣分撤销。Day6 已生成待用户 R1，新增多客户端共享 store/独立 input、状态型 pipeline、既有 good client 存活和有限慢读验证；私有生成验证不替代用户验收，不提前记成 Day6、性能或整周通过。AI Theory T1~T4 已通过，下一模块为 T5；ML 自学已覆盖多变量线性回归、logistic regression 与 L2 regularization，Ex1 尚未提交 executable evidence
 > 近期目标：2026 年 12 月形成第一版简历，2027 年 1 月开始投递后台开发、C++ Infra 与 AI 业务基础设施相关实习
 > 长期目标：本科就业进入 AI Infra，重点发展 LLM inference systems / serving 与 CUDA kernel optimization
 
@@ -86,7 +86,7 @@ NOIP / CSP-S / CSP-J 奖项
 ### 2.3 当前短板
 
 ```text
-Mini Redis 的 RESP、KV、TTL、AOF 与完整项目证据尚未形成
+Mini Redis 的 RESP/parser、KV 和首条 TCP 链已形成；TTL、AOF、完整客户端矩阵与项目出口证据仍待完成
 数据库与 Redis 使用、持久化语义还未形成工程证据
 项目还缺稳定的性能数据、故障案例和简历表达
 已学 C++ / OS / 并发内容尚未形成稳定的面试口述闭环
@@ -624,7 +624,7 @@ atomic/CAS、acquire/release、happens-before 第一层
 
 ## 6. 2026-08 到 2027-03 双线时间表
 
-截至 2026-10-09 的真实状态：系统主线已完成 Week11 Reactor + HTTP Server V1；Week12 Day1~Day4 已正式通过，Day4 最终 `100/100`。纯内存命令/store 闭环、分层错误和未来共享 store/独立 Connection input 的关系均成立，Day5 Reactor 集成教程已生成，等待独立 R1 与用户网络实测验收。Normal/sanitizer 合并矩阵均 `84/84 PASS`、头文件组合编译通过、覆盖路径无诊断；临时 10 项尚未加入原工程的 74 项永久矩阵。AI Theory 已通过 T1~T4，T5 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
+截至 2026-10-10 的真实状态：系统主线已完成 Week11 Reactor + HTTP Server V1；Week12 Day1~Day5 正式通过，Day4 最终 `100/100`，Day5 最终复评 `100/100`。真实 TCP 正常链、连续完整命令与 partial suffix、跨 client close 数据保留、command-error 继续、协议错误 exact reply 与坏连接隔离均有实测。最新 normal/sanitizer 原工程矩阵各 `74/74 PASS`，server 重编译零 warning、覆盖路径无 sanitizer 报告；Day4 的临时 10 项仍未并入永久矩阵。入口 catch 的 return 1 已由用户补齐，两种 build 实测启动端口占用时均 exit 1，当前日无未修扣分项。Day6 教程已生成，下一步独立完成双客户端共享数据/半帧隔离 R1；其余代表场景放在完整 R2/R3。Codex 的私有 normal/sanitizer 生成验证不等于用户已经完成 Day6，也不记为整周、完整故障覆盖或性能通过。AI Theory 已通过 T1~T4，T5 是下一模块。下表后续日期仍是协调目标，不把落后模块静默记成完成。
 
 | 时间 | 系统主线 | AI 理论伴随线 | 必须形成的结果 |
 |---|---|---|---|
@@ -1152,9 +1152,9 @@ CUDA kernel correctness + profiler + benchmark
 ## 13. 当前下一步
 
 ```text
-1. 学习已生成的 Week12 Day5，根据 Day4 的实际 map/六 handlers、RESP parser/encoder 与现有 Connection 独立实现 mini_redis_server R1，把命令层接入 Reactor；保留共享 store 与各 Connection input 的职责边界。Day1/Day3/Day4 临时代表测试的持久化可在授权后委托 Codex，作为本周出口前非阻塞整理
+1. Week12 Day5 整日最终复评 100/100；Day6 已生成，用户先独立完成双客户端共享 store/partial input 隔离 R1。保留既有 owner/loop/store 设计，后半再验证状态型 pipeline、坏协议下既有 good client 存活、有限慢读与 fd 回落；R1 正式通过时根据真实脚本/note 定向润色 R2/R3。入口 catch 的 non-zero exit 已修复，不重复布置 Day5 正常链。临时代表测试持久化可在授权后委托 Codex，作为本周出口前非阻塞整理
 2. AI Theory 进入 T5；T1~T4 不重复学习
-3. Day4 PING/ECHO/SET/GET/DEL/EXISTS KV 核心已正式通过；Day5 用真实 TCP client 验证首条网络链，Day6 再做多客户端与 failure isolation，不用纯内存 tests 冒充网络集成证据
+3. Day4 六条命令/store 核心与 Day5 完整真实 TCP 链已通过；Day6 再做多客户端与 failure isolation，不把 Day5 少量重连、协议错误隔离结果推广成全矩阵或性能结论
 4. T20~T24 到达前只维护 serving 资料索引，不启动完整 vLLM/SGLang 源码主线
 5. 每个系统 milestone 继续保留 correctness、sanitizer、failure case 与可复现实验
 6. 到 Theory Gate 3 后先读 mini-sglang，再决定 production framework 的一个窄路径
