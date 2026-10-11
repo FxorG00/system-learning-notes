@@ -1,7 +1,7 @@
 # AI Infra 理论伴随线规划
 
-> 版本：2026-10-10，T5 正式通过与 T6 校准同步版
-> 适用对象：FxorG，中山大学计算机科学与技术专业；系统主线已完成 Week11，Week12 Day1~Day6 正式通过，Day6 最终 100/100，Day7 教程已生成待差异复盘/验收；理论线 T1~T5 已通过，T5 修复后最终 100/100，下一模块 T6 已按实际实现校准、尚未验收
+> 版本：2026-10-11，系统主线 Week13 Day1 教程生成同步版；理论线 T5/T6 状态不变
+> 适用对象：FxorG，中山大学计算机科学与技术专业；系统主线 Week1~Week12 已完成，Day7 整日最终 100/100，Week13 Day1 数据库第一层与索引实验教程已生成，独立 MySQL 脚手架已实测并同步 Ubuntu，下一步完成 R1 实际观察；Week13 尚未学习验收；理论线 T1~T5 已通过，T5 修复后最终 100/100，下一模块 T6 已按实际实现校准、尚未验收
 > 职业目标：本科就业，主攻 LLM inference systems / serving 与 CUDA/Triton kernel optimization
 > 本文件定位：`plan_strengthened.md` 的 AI Infra 理论伴随线，不替代 C++ / Linux / OS / 网络 / Reactor / Mini Redis 主线
 
@@ -163,8 +163,8 @@ AI Theory T module：只补 NumPy/PyTorch、数值稳定性、framework mechanis
 当前系统主线位置：
 
 ```text
-Week1 ~ Week11 已完成
-当前：Week12 RESP parser 与 Mini Redis V1
+Week1 ~ Week12 已完成
+当前：Week13 Day1 教程已生成；独立 MySQL 脚手架已实测，R1 小表与三组 EXPLAIN 待学习验收，后续接 TTL
 后续：TTL / AOF / tests / benchmark / README -> 项目证据与投递
 ```
 

@@ -130,13 +130,15 @@ Day6 的正常矩阵和 sanitizer 结果已经通过，没有改代码时，R1 �
 
 **到这里停止阅读。先确认 R1 的 application 层变化，再来看下面的对照。**
 
-R1 正式通过后，我会从你当时保存的 note、图、代码与本日增补出发，逐节定向润色 R2/R3；保留你的新增内容。下面先按生成时的真实实现提供完整后半课，不假装已经看过未来的 R1。
+**2026-10-11：R1 正式通过，`100/100`。** 你已口述 application 层替换、数据拥有关系，以及“执行完成”和“回复送达”两个时点；本轮三个追问的核心判断均正确。没有新增 note 不影响通过，旧图、当前代码和前日验证共同作为证据。
+
+下面按这次口述与当前实现定向校准。**§7~§11 留作按需查阅，你可以直接进入 §12，学习真实 Redis 的第一层。** 第三题的重扫复杂度只是额外性能思考，不新增 parser 优化任务。
 
 ---
 
 ## 7. Round2：沿你现在的 SET 走完整条链
 
-§7~§11 是按当前源码写的核对区。你已经口述清楚的 transport 可以跳过，只有 arguments、store 或关闭状态还拿不准时回来看；**今天真正新增的真实 Redis 地图从 §12 开始。**
+§7~§11 是按当前源码写的核对区。你这次已讲清 SET 的执行先后、回复积压和数据归属；这里补足对应的具体复制动作，熟悉的 transport 不再重讲。**今天真正新增的真实 Redis 地图从 §12 开始。**
 
 先把整体摆出来，再逐段解释。图中是你当前的实现，不是要求你另造一套参考版本。
 
@@ -217,7 +219,13 @@ parser 构造 owning arguments
 
 遇到 `NeedMore` 时，你退出本次 parse loop，未完成 frame 的 bytes 留在 input。下次新 bytes 到来，再解析累计内容；局部 parser 被重新创建也没关系，因为你的 partial state 就保存在 input 中。
 
-这也说明了你目前的 parser 模型：**每次从当前未消费前缀重新判断第一帧。** 单次向前扫描减少了一些重复工作，但不能直接推导成“任意一字节分片下，总扫描量始终是 $O(n)$”；跨调用重扫 prefix 仍可能增加成本。性能是否改善，留给固定 workload 的测量来证明。
+这也说明了你目前的 parser 模型：**每次从当前未消费前缀重新判断第一帧。** 你第三题的推导正确：假设先后有 $n$ 次解析，输入长度依次为 $1,2,\ldots,n$，而每次都完整重扫累计前缀，总工作量就是：
+
+$$
+1+2+\cdots+n=\frac{n(n+1)}{2}=\Theta(n^2)
+$$
+
+这是**上述调用与扫描模式下的平方级成本**。一字节发送不保证一字节接收，具体 parser 分支也未必每次遍历所有 payload；因此不能仅凭这个求和，就宣布当前 workload 已经出现同样的瓶颈。你已识别重扫风险，今天到这里即可；真实热点与优化收益留给固定 workload、profile 和 benchmark 证明。
 
 ### 7.4 从命令执行到 reply bytes
 
@@ -225,7 +233,7 @@ parser 构造 owning arguments
 
 SET 的 handler 修改同一份 store，并调用 encoder 得到 `+OK\r\n`。**你的 `execute_command` 返回的是已经编码的 `std::string` reply，不是等待 main 再编码的 Reply object。**
 
-main callback 调用 `connection.send(response.data(), response.size())`。你的 `send()` 把这段内容 append 到 Connection 的 output，再调用 `handle_send()`。
+main callback 调用 `connection.send(response.data(), response.size())`。你的 `send()` **先执行 `output_.append(data, length)`，把 bytes 复制到 Connection 自己拥有的 Buffer，再调用 `handle_send()`**。
 
 所以 reply 局部 string 可以离开作用域：尚未发出去的 bytes 已经归 output 所有，不依赖局部 `response.data()` 在未来还有效。
 
@@ -242,13 +250,13 @@ A 的完整 SET 被执行
 -> A 的 output 接收 OK bytes
 ```
 
-随后 B 的 GET callback 访问的是同一个 `store`，因此看到 new。
+随后 B 的 GET callback 访问的是同一个 `store`，因此看到 new。你第一题正是抓住了这个顺序：**只要 A 的 SET 已经执行，B 后续执行 GET 就能看到 new；不必等 A 读到 OK。** A 的慢读影响回复传输，不会让已经完成的 store 修改退回等待状态。
 
 **shared state（共享状态）来自共同引用的 store，不是因为两个 clients 的 Buffers 相互共享。** 你的 lambdas 捕获 `&store`，把每条连接接到了同一个应用状态上。
 
 当前命令执行都在一个 event-loop thread 中，同一时刻只有一段命令代码修改 store，所以目前不需要 mutex。以后真把命令执行交给多个 workers，必须重新设计同步和命令顺序；不能把今天的无锁使用当成 map 版 KvStore 一般意义上的 thread-safe 保证。
 
-跨连接本来没有天然的“谁先发谁先执行”保证。你的 client 先读到 A 的 OK，再发 B 的 GET，才建立了所需业务先后；sleep 或打印顺序替代不了这个关系。
+跨连接本来没有天然的“谁先发谁先执行”保证。第一题已经给定“A 的 SET 执行完成”，结论因此成立；Day6 的外部 checker 无法直接看到这个内部时点，所以先读到 A 的 OK，再发 B 的 GET，用回复建立可观察的先后。两种场景的前提不同，sleep 或打印顺序不能替代这个证据。
 
 ## 9. input 的消费、store 的修改和 output 的排空是三个时间点
 
@@ -263,6 +271,17 @@ OK reply 仍有一部分在 output 等待发送
 ```
 
 **output 保存的是待发送结果，不是尚未执行的命令。** 慢 client 暂时不读，不会自动撤销已经执行的 SET。
+
+你第二题说“reply 已经生成，所以后续 SET/DEL 不会改变剩余回复”，判断正确。对应你代码里的具体动作是：
+
+```text
+KvStore::get 返回 optional<string>，复制当时的 value
+-> GET handler 调用 encoder，得到拥有 bytes 的 reply string
+-> Connection::send 调用 output_.append，复制 reply bytes
+-> send 成功的 prefix 交给 kernel，尚未发送的 suffix 留在 output
+```
+
+**待发送的是当次 GET 已经形成的结果副本。** 后续修改的是 store 中的 value，不是这份 reply；它不会到发送时再重新读取 key。保证这一点的是上述拥有和复制动作，而不只是函数用了 `return`。
 
 你的 `handle_send()` 遇到 `EAGAIN` 或 `EWOULDBLOCK`，本轮就暂停发送，消费已发送 prefix，保留 suffix 并关注 `EPOLLOUT`；后续可写通知才继续。`EINTR` 则重试当前发送调用。这些分支直接沿用 Week10 的 transport。
 
@@ -326,7 +345,7 @@ server 进程结束 -> 当前纯内存数据不再保留
 
 ## 11. 所有权对照：按你当前实现填出来会是什么样
 
-R1 先用自己的表；这里用来核对缺口。
+本轮复用旧表与口述，不另交一张。你已讲清解析结果、store 和 reply 的独立拥有关系；下面保留实际类型，供回查。
 
 | 对象或状态 | 当前真正的 owner | 改变与结束的位置 |
 |---|---|---|
@@ -347,7 +366,7 @@ R1 先用自己的表；这里用来核对缺口。
 
 ## 12. 把你的实现放到真实 Redis 的一条路径里
 
-你已经看到了熟悉的模式：HTTP 和 Mini Redis 都能接在同一套 Reactor 上，只是 application 的解析与状态不同。
+你 R1 已经准确概括：HTTP 和 Mini Redis 都接在同一套 Reactor 上，application 的 parser、命令/路由和状态发生变化。下面从这条已掌握的主线进入真实 Redis，不再要求恢复一次底座。
 
 真实 Redis 同样需要接收请求、准备命令参数、执行命令、积累回复和继续发送。今天用 **Redis 7.2.5** 固定函数名做源码导航；这是阅读基线，不是要求安装这个旧版本或把它当成当前部署建议。
 
@@ -524,11 +543,10 @@ Day4 你已经知道 cache（缓存）是一种使用角色：为了更快访问
 
 有新增笔记时放在同一份 `day7_note.md`，不再产生 summary、README、interview 等重复文件；也不以笔记文件是否存在代替理解验收。
 
-今天具体做这三步：
+R1 已经完成 application 差异、共享 store、reply 生命周期的核对，三道口述追问也已通过。**Round3 不重画旧图、不重答这三题、不重新跑 Day6 矩阵；只收住以下新增内容：**
 
-1. **对照 §7~§11，只核对真实的 application 变化。** map、owning arguments、已经编码的 reply 是本周具体关系；旧图中的 output 与 deferred erase 沿用，不重画。
-2. **补一小段真实 Redis 对照。** 写清共同事件驱动思想、你的 String-only 数据模型、真实 Redis 的多种类型，以及主命令线程与 I/O/background 工作的区别。
-3. **用自己的话收住 V1 范围。** 六条命令、共享内存 store、每连接隔离、协议错误关闭 policy；过期、持久化和性能结论留到对应后续周。
+1. **读 §12~§18 的真实 Redis 对照。** 把自己的 String-only store 放进多种数据类型、主命令线程与 I/O/background 工作的地图中。
+2. **简短确认新增边界。** key 到期、内存压力淘汰、重启恢复分别解决什么问题；当前 V1 尚未实现它们。用少量笔记或口述即可，已有六条命令和 transport 的说明直接引用。
 
 每一步都可以短写或口述。R1 已经完整的地方直接引用，不要求为了 Round3 重新扩写同一条链。
 
@@ -572,9 +590,11 @@ cmake -E chdir build ctest --output-on-failure
 
 **没有改源码、没有新增失败，就复用这些通过结果。** 以后修改了某个实现，再针对受影响的路径复检。
 
+2026-10-11 R1 检阅只读核对了 server、Connection、KvStore 和 dispatcher；server/Connection 的 SHA256 与 Day6 已验收版本一致。本轮没有重新编译、运行 CTest 或网络矩阵，不把历史 `74/74` 和 sanitizer 结果说成本次新测；三个口述答案是这次新增的理解证据。
+
 ## 21. 今天的验证安排
 
-核心验证是已有实现与图、R1 的差异口述以及真实 Redis 对照；Day6 的完整网络矩阵不重做。
+R1 的差异口述已通过，当前只剩真实 Redis 第一层的新增理解；Day6 的完整网络矩阵不重做。
 
 你想在收口时亲眼再看一轮，可以启动现有 `build/mini_redis_server`，只运行你已经写过的 R1 checker；这属于可选复看，不是增加测试代码，也不是本日通过的额外门槛。
 
@@ -584,7 +604,7 @@ Ubuntu 当前没有 `redis-cli`。它是 Redis 自带的 command-line interface�
 
 ## 22. 五个收口问题
 
-旧图、代码或口述已经回答的，检阅时直接引用对应证据。只挑没有被覆盖的点补一句即可。
+旧图、代码或口述已经回答的，检阅时直接引用对应证据。第 1~3 题的项目关系已有前日检阅、当前代码与 R1 口述支撑，**无需重新书写；这不表示本轮逐字回答过这五题。** 第 4~5 题对应今天新增的真实 Redis 地图，读完后简短确认即可。
 
 1. A 执行 SET 并断开后，B 为什么还可以 GET？这与 server 进程重启后的 GET 有什么差别？
 2. 你的 parser 成功后先 retrieve input，为什么 arguments 仍然有效？只保存 `peek()` 指针的结果能否直接沿用这个顺序？

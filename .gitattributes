@@ -1,0 +1,2 @@
+# Keep the Linux teaching launcher executable from a Windows checkout.
+/database_labs/week13/mysql_lab.sh text eol=lf

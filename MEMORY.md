@@ -124,7 +124,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-10）：Week1~Week11 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1~Day6 已正式完成，分数分别为 `94/100`、`96/100`、`96/100`、`100/100`、`100/100`、`100/100`；Day5 R1 的历史评分为 `97/100`，Day6 R1 为 `100/100`。当前 Mini Redis 使用 main_ 持有的一份 map 版 KvStore，每 Connection 独立 input/output，owner 在 poll 返回后清理；TCP 正常链、partial suffix、跨 client 数据共享、command-error 继续、protocol-error exact reply/坏 socket EOF/健康连接继续均已验证。Day5 的 prefix、Error break、入口 catch return 1 等旧扣分已经撤销。Day6 用户已保存 46 行 R1 和 151 行 extra checker；原 6380 server 与当前源码私有 Debug/ASan/UBSan server 上完整矩阵均通过，两个新构建各零 warning、固定 CTest `74/74 PASS`，网络覆盖路径无 sanitizer 报告，`-O` 运行也通过。每个私有 server 的 fd 都回到 `5 -> 5`；trace 实际观察 A 写 EAGAIN/同 fd 加 EPOLLOUT，B 见 ready 后 PONG，A 恢复读取后排空并取消写关注。用户口述慢读场景主线正确，笔记两个章节与 daily 新增 §20.1 均已检阅；本轮不改源码、永久 tests、note 或冻结 daily。Day6 整日正式通过；Day7 教程已生成，进入 application 差异复盘与真实 Redis 第一层对照，尚未验收，Week12 尚未整体通过，不推广为吞吐、公平性、无限积压或全部系统故障隔离。Day1/Day3/Day4 临时代表 cases 的持久化可在授权后委托，不阻塞当前推进；原工程 `74/74` 与 Day4 原工程加临时 10 项的 `84/84` 分开记录。AI Theory T1~T5 已正式通过，T5 修复复检最终 `100/100`；sample_categorical 已改用 range(len(probabilities))，合法两类/四类与既有核心检查均通过（7/7）。下一模块为 T6，提前稿已承接 T5 的真实采样/概率接口定向校准，尚未学习验收。ML 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，Ex1 尚未提交 executable evidence，不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-11）：Week1~Week12 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1~Day6 已正式完成，分数分别为 `94/100`、`96/100`、`96/100`、`100/100`、`100/100`、`100/100`；Day5 R1 的历史评分为 `97/100`，Day6 R1 为 `100/100`。当前 Mini Redis 使用 main_ 持有的一份 map 版 KvStore，每 Connection 独立 input/output，owner 在 poll 返回后清理；TCP 正常链、partial suffix、跨 client 数据共享、command-error 继续、protocol-error exact reply/坏 socket EOF/健康连接继续均已验证。Day5 的 prefix、Error break、入口 catch return 1 等旧扣分已经撤销。Day6 用户已保存 46 行 R1 和 151 行 extra checker；原 6380 server 与当前源码私有 Debug/ASan/UBSan server 上完整矩阵均通过，两个新构建各零 warning、固定 CTest `74/74 PASS`，网络覆盖路径无 sanitizer 报告，`-O` 运行也通过。每个私有 server 的 fd 都回到 `5 -> 5`；trace 实际观察 A 写 EAGAIN/同 fd 加 EPOLLOUT，B 见 ready 后 PONG，A 恢复读取后排空并取消写关注。用户口述慢读场景主线正确，笔记两个章节与 daily 新增 §20.1 均已检阅；Day6 检阅未改源码、永久 tests、note 或冻结 daily。Day6 整日正式通过；2026-10-11 Day7 R1 以 application 差异口述正式通过 `100/100`：SET 修改先于回复送达、已编码 reply 独立于后续 store 修改、条件性前缀重扫可达平方级工作量均判断正确。当前源码只读核对，复用既有测试，不把复杂度风险写成已测瓶颈；R2/R3 已依据口述和真实复制动作定向校准，R1 与代码保留。Day7 收口第 4 题核心正确：命令串行、socket non-blocking 与进程总线程数应分别描述；第 5 题 TTL/内存压力淘汰/持久化的三个目的均正确。结合本周既有代码与验证，Day7 整日最终 `100/100`，Week12 正式通过，主线累计 84 个通过单元。Week13 Day1 教程与独立 MySQL 脚手架已生成、实测并同步 Ubuntu，R1 尚未学习验收；下一步完成小表与三组 EXPLAIN 的实际观察，后续在现有 KvStore 增加 EXPIRE/PTTL、可控时钟与有限维护，不推广为吞吐、公平性、无限积压或全部系统故障隔离。Day1/Day3/Day4 临时代表 cases 的持久化可在授权后委托，不阻塞当前推进；原工程 `74/74` 与 Day4 原工程加临时 10 项的 `84/84` 分开记录。AI Theory T1~T5 已正式通过，T5 修复复检最终 `100/100`；sample_categorical 已改用 range(len(probabilities))，合法两类/四类与既有核心检查均通过（7/7）。下一模块为 T6，提前稿已承接 T5 的真实采样/概率接口定向校准，尚未学习验收。ML 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，Ex1 尚未提交 executable evidence，不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
 
 ### Week1：已完成
 
@@ -3170,7 +3170,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-10-10 当前学习状态：系统主线 Week1~Week11 已完成。Week12 Day1~Day6 已正式完成，分数分别为 `94/100`、`96/100`、`96/100`、`100/100`、`100/100`、`100/100`。Day6 的 R1/extra 两个已保存脚本在原 server 与当前源码新 Debug/ASan/UBSan 实例上均通过；两种新构建零 warning、固定 CTest 各 `74/74 PASS`、网络路径无 sanitizer 报告，fd 各 `5 -> 5`。可选 trace 实际捕获写 EAGAIN、动态 EPOLLOUT、B 在 marker ready 后 PONG 与 A 续传排空。note 的两个部分、daily 新增 §20.1 和慢读口述已逐项检阅；本轮不改用户代码、tests、note 或 daily。Week12 Day7 教程已生成：复用 Week11 的图和所有权表，只复盘 application protocol、命令层与共享 store 的变化，并学习真实 Redis 第一层；用户已正确口述 Reactor 底座复用，不要求重画整套图。Day7 尚未正式验收，Week12 尚未整体通过。有限 correctness 不推广为性能、公平性或所有 fatal socket 错误隔离。临时代表测试可在用户明确授权后持久化，普通 review 不自动 commit/push。AI Theory T1~T5 已通过，T5 修复复检最终 `100/100`；两类/三类/四类采样与已有核心检查 7/7 通过。下一步进入已按 T5 实际实现定向校准的 T6，不重写采样器、不重复已通过统计实验。Ex1 完成后可作为 T7 等价产出，不重复实现。
+2026-10-11 当前学习状态：系统主线 Week1~Week12 已完成。Week12 Day1~Day6 已正式完成，分数分别为 `94/100`、`96/100`、`96/100`、`100/100`、`100/100`、`100/100`。Day6 的 R1/extra 两个已保存脚本在原 server 与当前源码新 Debug/ASan/UBSan 实例上均通过；两种新构建零 warning、固定 CTest 各 `74/74 PASS`、网络路径无 sanitizer 报告，fd 各 `5 -> 5`。可选 trace 实际捕获写 EAGAIN、动态 EPOLLOUT、B 在 marker ready 后 PONG 与 A 续传排空。note 的两个部分、daily 新增 §20.1 和慢读口述已逐项检阅；Day6 检阅未改用户代码、tests、note 或 daily。Week12 Day7 R1 已于 2026-10-11 正式通过 `100/100`：application 差异与三题口述均正确，已补准 get/encoder/output 的实际拥有和复制链、条件性平方级重扫与实测瓶颈的区别。未新增 note、不重画旧图、不重复 Day6 矩阵；只读核对当前源码后，保留 R1 与用户内容并定向校准完整 R2/R3。用户已补充第 4/5 题口述：最终能区分普通命令串行与后台多线程工作，TTL、内存压力淘汰和进程重启恢复的三个目标均正确；补准串行只保证执行不重叠、不等于跨客户端固定发送顺序，进程总线程数描述整个进程。Day7 整日最终 `100/100`，Week12 正式通过，累计 84 个主线通过单元。Week13 Day1 教程与独立 MySQL 脚手架已生成、实测并同步 Ubuntu，R1 尚未学习验收；下一步完成 MySQL 小表/三组 EXPLAIN 的实际观察，再依次推进原 KvStore 的 TTL/可控时钟、EXPIRE/PTTL、有限维护与空闲集成；不重写 Reactor 或 RESP。有限 correctness 不推广为性能、公平性或所有 fatal socket 错误隔离。临时代表测试可在用户明确授权后持久化，普通 review 不自动 commit/push。AI Theory T1~T5 已通过，T5 修复复检最终 `100/100`；两类/三类/四类采样与已有核心检查 7/7 通过。下一步进入已按 T5 实际实现定向校准的 T6，不重写采样器、不重复已通过统计实验。Ex1 完成后可作为 T7 等价产出，不重复实现。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。Day3 与 Day4 R1 正式通过时均已执行该规则；后续仍从最新磁盘版本编辑，保留用户新增内容。
 
@@ -3212,6 +3212,8 @@ AI_Infra理论伴随线规划.md 只负责 T1~T24 的路线、范围与 gate；�
 主线 daily.md 与理论线 Txx.md 使用独立编写规则；这里只约束理论线，不能据此新增、删减或重新解释任何 daily.md 规则。理论线不机械照搬 Round、Reading Gate、contract 和多层 test checklist，但也不统一删除闸门；每个 T 根据是否存在真实认知墙单独判断
 AI Theory 前期默认约 70% 概念讲解与推导、30% 手推/实验/coding。T9 以后框架与 inference engineering 增多时，理论线 coding 比例可以提高，但仍先讲完整概念主线
 Txx.md 默认是一份从头可以连续阅读的自包含讲义：当前问题 -> 新对象/术语 -> 最小数值或 shape 例子 -> 完整推导 -> 紧邻小实验 -> 下一概念，不把知识拆成术语表、资料清单和孤立问答
+新理论对象先接上旧心智模型：谁产生它、每项/每行代表什么、为什么下游还不能直接使用、转换后的对象由谁消费。用一条普通完整场景贯穿来源 -> 计算 -> 输出 -> 用途，不能只写“承接上一课”或给对象起名就算接通；极端值/异常例子放在普通对象与用途讲清之后
+引入算法先建立转换需求，再解释各动作怎样满足需求；若需求不能唯一确定算法，明确它是常用选择而非必然唯一答案。近义词按当前角色区分，例如 input example、random draw 与 true label；这两条只细化理论线的连续讲义规则，不改变主线 daily.md 的编写或 R1 披露规则
 外部视频与官方文档是校准、查证或第二解释源。先由 Txx.md 把必学内容讲清，再把精确链接放到概念出现的位置并标明选看/延伸；不能让用户先跳出教程读一份冗长资料，再猜它应该插在何处
 通常只保留一个综合 coding 产出和 3~5 个高价值理解问题，不用“完成 checklist”冒充理解；简单 numerical exercise 不包装成大型工程 contract。这里的“一个产出”按 learning contract 计数：若 ML 经典作业已经提供同等或更强证据，T module 复用该 artifact 并只补 AI mapping，不另写同构程序
 同一个 invariant 正文完整解释一次，结尾最多压缩一次；删除重复 pass criteria、训诫式错误全集、过长固定 note 模板和只为仪式感存在的环境/阅读闸门；保留能够保护真实独立思考空间的单一闸门
@@ -7763,3 +7765,62 @@ R2 以 Redis 7.2.5 官方源码固定函数名进行窄对照，不推荐部署�
 MEMORY 两个当前状态、总规划、周计划、理论规划的系统状态与 DAILY_INDEX 同步：84 份主线教程已经生成，正式通过仍为 83 个单元；Week12 Day7 待验收，整周未通过。新 daily 按既有授权审计当前变更后执行 git add ./commit/push repo master，包含此前累计笔记与文档修改，不回退用户改动。
 
 发布前做本篇纵向与跨日横向核对：三 Part、三 Round、单个阅读闸门、24 个单调章节、成对 fences、两张 graph TD 的 quoted labels、源码对象/接口/关闭状态、实际 CTest 与旧工具证据归属、Day7 未通过及 Week13/14 边界均已核对。Mermaid 采用 Typora 8.8.3 兼容写法并做静态检查，未声称在 Typora UI 实际渲染。Git 变更均为文档，凭据与大文件扫描无异常。
+
+## 2026-10-11：Week12 Day7 R1 差异口述正式通过，100/100
+
+按总规划、MEMORY、Week12 与当前 Day7 的 Round 范围检阅。用户已正确口述 HTTP -> RESP/application 替换、command dispatcher/KvStore/reply 与数据独立拥有，不强制重新画已熟悉的 Reactor 图或复制旧所有权表。Day7 目录目前只有教程，没有独立 note；本轮口述就是新增理解产出，不虚构用户已写过一份新笔记。
+
+三个追问逐项：第一题正确，给定 A 的 SET 已执行，store 修改发生在编码/发送 OK 之前，A 回复积压不阻止 B 后续 GET 观察新值；第二题正确，GET 的已生成 reply 不随后续 SET/DEL 变化，补准当前代码的具体依据为 KvStore::get 返回 owning optional<string> 副本、encoder 生成 reply string、Connection::send 先 output_.append 复制 bytes，再发送；第三题条件推导正确，若长度依次为 1..n 且每次完整重扫，累计工作量 n(n+1)/2，为 Θ(n²)。一字节发送不保证对应一字节 recv/parse，具体路径也未必每次扫描整个 payload，因此只登记潜在复杂度风险，不称为已经通过 profile 找到的实际瓶颈；这一额外性能题不新增 R1 门槛或 parser 优化任务。
+
+只读重新核对 apps/mini_redis_server.cpp、src/connection.cpp、src/kv_store.cpp 与 src/command_dispatcher.cpp。server SHA256 仍为 df898a937ad1d7b51cc53a2c2c037c821b3d127cbb578eb681aaedba5eda12f8，Connection 仍为 9e609242f9cec1bd77f3c3a942e77c2116d4427911b6f851a6e6942380f476e6；与 Day6 已验收版本一致。本轮未编译、未重新运行 CTest/网络/ASan/UBSan/trace，复用前日已通过证据，不冒充新实测，也不修改用户代码、永久 tests、CMake 或 note。
+
+未发现 R1 范围 blocker，R1 正式通过 100/100；这不是 Day7 整日或 Week12 通过。按 standing authorization，先保存当前 daily 副本并核对 Git baseline，再只修改阅读闸门之后的 R2/R3：顺着三个答案定位复制动作和两个时点，保留条件性复杂度推导，明确 §7~§11 按需回查、下一步直接读 §12~§18 真实 Redis 第一层。R3 只收住新增类型、线程、TTL/eviction/persistence 地图，不重画、不重复旧题和矩阵；五道整日问题没有虚构为本轮全数回答。R1 原文与用户内容保持，当前无用户 daily diff；规则沿用既有复盘去重、证据归属与定向润色条款，不新增重复规则。
+
+MEMORY 当前进度和下一步、总规划、理论规划系统状态与 DAILY_INDEX 同步到 Day7 R1 通过、R2/R3 待整日验收；正式通过单元仍 83 个，教程 84 份，AI Theory T1~T5/下一 T6 不变。普通 review/定向润色不自动 commit/push。
+
+## 2026-10-11：Week12 Day7 收口与 Week12 正式通过
+
+用户继续口述 Day7 §22 第 4/5 题。第四题核心理解正确：当前 V1 的命令由单个 event-loop thread 串行执行；non-blocking socket 不等待新数据或发送空间就绪；真实 Redis 的普通命令主路径有串行模型，同时可有后台线程等工作。其“整个进程只有一个线程”一段起初与单线程命令混在一起，最后已经主动区分主命令路径与整个进程，检阅补准概念范围即可。A -> B -> C 作为串行示意可以成立，不把这句话强行解读成用户声称跨客户端按发送顺序执行；明确串行只保证执行不重叠，具体跨连接顺序取决于实际处理时序。两处表达精度补充不作为新 blocker 或机械扣分。
+
+第五题正确，三个目标分别是：TTL/Time To Live 约束业务数据的有效期；eviction 按策略应对内存压力；persistence 保存进程结束后的恢复依据。用户指出当前纯内存 store 重启后丢失，文件记录可供恢复，因果链完整；本题只验收第一层目的，不冒充已实现 TTL、内存淘汰、AOF/RDB 或断电 durability。
+
+五题归属如实保留：第 1~3 题沿用前日检阅、R1 差异口述与当前 owning arguments/共享 store/command-error-vs-protocol-error 实现证据，没有新抄题；第 4/5 题是本轮新增口述。真实 Redis 数据类型/encoding 没有在本轮逐项重新作答，不虚构独立完整讲解证据，也不为基础地图再补一份长卷。Day7 目录只有 daily，无独立 note，不因形式扣分。
+
+只读重新核对 server、Connection、KvStore、dispatcher 与 isolation/extra 两个网络脚本 SHA256，均保持已验收版本：server df898a937ad1d7b51cc53a2c2c037c821b3d127cbb578eb681aaedba5eda12f8；Connection 9e609242f9cec1bd77f3c3a942e77c2116d4427911b6f851a6e6942380f476e6；KvStore a438fe18a4ebae2847f6e472d241d684e96aebc236e198386caea04fadbc6ae2；dispatcher c954378d09543e3ab9431d295b3f5ac632d60910329dede953fb3be169a21cce；isolation ecb2b79aed6eab29e8161549494ae0c58774eeedde6f543be022c7d37c0412de；extra f46fbc339924a1aaf6c0071bba7afe48903139f3d68ce98b2cacce152a482a03。未新增编译/CTest/network/sanitizer/trace，继续复用 Day6 已通过结果；不称为本轮新测。Redis 官方 latency 文档也确认主请求线程与后台慢 I/O 线程的范围区别。
+
+本周核心出口已有证据支持：RESP framing/owning arguments/六条命令/共享 KV/每连接隔离/pipeline/binary/协议错误排空清理/有限慢读/fd 与 covered memory paths，以及可解释的应用差异和数据生命周期。Day7 整日最终 `100/100`，Week12 正式通过；分数限于本日学习范围，不代表真实 Redis 全兼容、生产级性能、公平性、无限资源积压或所有 fatal socket 故障都可恢复。R1 的 `100/100` 保留。
+
+本轮不修改冻结 day7.md、用户代码、永久 tests、CMake 或 note；前轮 R1 后定向 R2/R3 润色保留。同步 MEMORY 当前进度/下一步、总规划的 Week12 milestone 与真实能力基线、理论规划的系统状态和 DAILY_INDEX：主线 Week1~Week12、84 个单元正式通过；下一步按指令生成 Week13 周规划，先窄 MySQL foundation，再做现有 KvStore 的 TTL/deadline/可控时钟与测试。理论仍 T1~T5 通过/下一 T6，不提前标记 Theory Gate 1、生成 Week13 教程或自动 commit/push。
+
+
+## 2026-10-11：Week13 周规划生成，Day1 尚未开始
+
+新增 `week13/week13.md`，依据 Week12 正式通过、总规划 Milestone E、最新口述与当前 Ubuntu 真实接口编排。只读核对原 map 版 KvStore、command dispatcher、signed RESP integer encoder、poll_once 与现有 CMake；仍在 `cpp/week10` 原工程升级，不复制服务器。七个学习日依次为 MySQL 小表/三组 EXPLAIN、KvStore 有效期/可控时钟、EXPIRE/PTTL、有限主动清理、网络与空闲维护、缓存问题/事务第一层、V2 差异出口。主线三 Part/R1/R2/R3、R1 通过后的整篇定向润色、保留用户增补与代码默认只读规则保持。
+
+已用 Redis/MySQL 官方文档核对所选基本语义：EXPIRE 基本形式、PTTL -2/-1、普通 SET 清除旧有效期、非法时间参数属于 command error。项目约定到 deadline 即失效；正 TTL 单位转换和时间点加法须有范围检查。精确边界由 fake clock 证明，真实 TCP 使用容差与总 timeout。主动清理须独立观测，不能靠 GET 触发惰性删除证明；单轮检查预算与删除数、物理条目数与 live keys、物理释放与 RSS 均分开。Week14 再决定可恢复的时间表示，不原样持久化 steady_clock。
+
+本次 Ubuntu `mysql --version` 返回 command not found；没有安装软件、运行 SQL 或虚构 EXPLAIN 结果。Day1 生成时明确处理独立实验环境。MySQL 第一层保留表/SELECT/index/回表/覆盖、实际优化器计划；Day6 补 ACID、isolation、MVCC 与锁/死锁第一层，旧 PDF 图解作为直觉辅助，具体语义以官方文档与实验版本校对。不新增完整 15-445/BusTub 或 MIT lecture 负担，不取消 MIT 长期完整通关。
+
+当前长连接继续保留；idle 客户端与 key 到期分开，shutdown 只核对已有关联清理/进程终止边界，本周不新增优雅停机框架。原 source unchanged 的 Week12 evidence 复用，最终回归针对修改后的工程重跑；不把预算或 correctness 写成性能提升。旧 Reactor 流程图/表不重画，core correctness 的 oracle 由用户解释，重复 tests/脚手架可按授权委托。
+
+当前进度与下一步同步到 MEMORY §4/§13、总规划与理论规划：Week1~Week12 共 84 个主线单元正式通过，Week13 仅周规划已生成，下一步按指令生成 Day1；理论仍 T1~T5 已通过/下一 T6，Ex1/T7 共用一次实现，T10 只是既有协调目标，未冒充完成。周规划不计入 DAILY_INDEX，不新增 daily 或通过数，不修改用户 source/tests/note/冻结 daily；保留此前未提交文档改动，按现有 weekly/review 范围不自动 commit/push。
+
+## 2026-10-11：T6 补齐分数来源与 T5 概率接口的教学桥
+
+用户指出提前稿虽然声明承接 T5，却从极端 logits 直接开始，未讲清分数由谁算出、每项对应什么，以及为什么需要 softmax。按当前 T5 的真实 sample_categorical 接口、理论规划 T6 范围和理论线连续讲义规则，先备份最新 T6，再重写 §0~§1：猫/狗/鸟分类场景 -> 已学 affine calculation -> 每类一组参数 -> x @ W + b 得到 [2,4,1] -> 采样器所需合法概率 -> exp 正权重与求和归一化 -> argmax / random draw 分支。input example 与随机抽取结果分开，真实标签来自数据；softmax 是常用平滑映射，不能说非负/和为 1/保序的需求唯一推出指数。补充概率比与分数差的关系，用 probability ratio，不混称多分类 odds。
+
+后文 batch 轴、类别下标、one-hot target 与 loss 顺着同一图例衔接；[1000,1001,1002] 后移为数值稳定性案例，减 maximum 和稳定 loss 的解法仍在唯一 Reading Gate 后。R1 两个函数、固定数值 cases、独立证据与停止边界保留，不新增分类器训练、采样重测或下一模块任务。官方 D2L 的线性输出、softmax 和批量计算用于查证；Ubuntu 内存中独立核对 affine outputs、概率向量、log 2 精确例子、鸟/狗标签 loss、概率比、argmax 与 naive 上溢，全部通过。Markdown/LaTeX 定界和闸门顺序做静态核对，不声称实际打开 Typora 渲染。
+
+可复用经验合并进 §13 理论线 canonical rule，与已有对象/函数实施桥、术语首次注解、闸门保护真实认知墙和数学基础去重规则兼容；不改主线 daily.md 规则。只修改 T6 和 MEMORY，用户代码/notes、其他教程与规划状态保持；T6 仍未验收，主线 Week13 仅周规划生成，普通提前稿润色不自动 commit/push。
+
+## 2026-10-11：Week13 Day1 生成，MySQL 查询路径第一层
+
+新增 `week13/day1/day1.md`，承接 Week12 V1 正式通过、Day7 已正确区分 TTL/eviction/persistence 的口述与 Week13 周规划。主线三 Part 和 R1/R2/R3 保持：按课程号查成绩的具体问题 -> 表/主键/SQL 与程序关系 -> 独立实例和三组查询 -> 唯一 Reading Gate -> 页/B+ 树/聚簇与二级索引/回表/覆盖 -> 真实 EXPLAIN 的范围与简短收口。先预测、运行并保存自己的输出，后半参考结果不在闸门前揭晓；R1 正式通过后仍要依用户真实 SQL、输出和增补逐节定向校准完整 R2/R3。
+
+新建 `database_labs/week13/mysql_lab.sh`、`mysql_index_setup.sql` 和 `ENVIRONMENT.md`。Ubuntu 原全局 mysql 不存在，采用官方 Ubuntu 包固定快照 `8.0.42-0ubuntu0.20.04.1` 解压到独立用户目录；不执行系统安装、不用 sudo、不注册服务、不改全局配置。无密码 root 仅用于私有父目录中的本机 Unix socket，关闭 TCP/MySQL X；不将旧固定实验快照推荐为生产版本。脚手架与 fixture 已复制到新的 `~/code/system-learning/database_labs/week13`，未创建用户要独立保存的 `mysql_index_lab.sql`，未触碰 Mini Redis source/tests/CMake/note。`.gitattributes` 只对这个新 Bash launcher 固定 LF。
+
+可运行性实测：正常 start、重复 start、setup、SQL 参数入口、stop、重复 stop 全部通过；本表 20000 行、课程 7 匹配 20 行，InnoDB page size 16384 bytes。三组正式查询在相同条件且没有 ORDER BY/LIMIT 的情况下，分别显示 `ALL/key=NULL/rows=19776/Using where`、`ref/idx_course/20/Extra=NULL`、`ref/idx_course/20/Using index`。19776 是本次统计估计，不冒充真实行数或固定输出。独立读取全部记录核对生成规则，建索引前后 exact result sets 相同，第三组等于前两组的 id/course_id 投影；缺表 SQL 报 ERROR 1146 且 nonzero。私有验证实例与新学习实例均已停止，学习运行库和数据保留；不把这些生成前验证记成用户已完成实验，也不称为 performance evidence。
+
+两张 PNG 从本地《图解 MySQL》亮白版 v2.0 实际 PDF 第 40/42 页裁取并目视核对；分别解释聚簇叶子行记录和二级索引回表，图下映射商品字段到本日课程表，并修正示意单向叶链接与实际双向链接的边界。MySQL 官方 8.0 文档核对表、索引与 EXPLAIN；Using index condition 与覆盖分开，树层数与物理 I/O 分开，数据库页与虚拟内存页分开，普通 EXPLAIN/ANALYZE TABLE/EXPLAIN ANALYZE 分开。不扩展完整 15-445/BusTub、JOIN、索引失效大全、SQL 性能压测或新 C++ 组件。
+
+同步当前进度、下一步、总规划、理论规划系统状态、Week13 和 DAILY_INDEX：85 份主线 daily 已生成，正式通过仍为 Week1~Week12 的 84 个；Week13 Day1 R1 待学习验收，下一步完成自己的三组实际观察，随后回原 KvStore 做 TTL。理论仍 T1~T5 已通过/下一 T6；不改理论线规则或旧冻结 daily。新 daily 按既有授权在审计本轮与此前累计文档改动后执行 git add ./commit/push repo master；保留原改动，提交中包含此前 Week12 收口、Week13 周规划与 T6 教学桥修订。
