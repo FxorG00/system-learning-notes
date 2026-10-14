@@ -1,8 +1,8 @@
 # C++ 系统工程 / AI Infra 求职总规划
 
-> 版本：2026-10-11，Week13 Day1 教程生成同步版；R1 待学习验收
+> 版本：2026-10-14，Week13 Day2 TTL 教程已生成、R1 待实现；Day1 最终 98/100；理论线下一步 Ex1/T7 等价训练证据
 > 学习者：FxorG，中山大学计算机科学与技术专业，按当前学制为 2029 届
-> 当前进度：Week1 ~ Week12 已完成，Reactor V1 与 HTTP Server V1 均已闭环；Week12 Day1~Day6 已正式通过，Day4/Day5/Day6 最终均 100/100。Mini Redis TCP 正常链、partial suffix、command-error 继续、protocol-error 只关闭坏连接与 binary/empty 回复成立。Day6 用户已保存 isolation/extra 两个网络脚本，双半帧、共享 store、有状态 pipeline、既有 good 和新 fresh 存活、跨连接 binary、有限慢读与 100 次连接均通过。Day6 Debug/ASan/UBSan 构建零 warning、固定 CTest 各 74/74 PASS、网络路径无报告，fd 各 5 -> 5；Day6 trace 实际观察写 EAGAIN/动态 EPOLLOUT、B 见 ready 后 PONG 与 A 续传排空。组件矩阵与网络场景分开计数，不与 Day4 临时合并 84/84 混淆。Day7 R1 与整日最终均 100/100，线程模型和 TTL/eviction/persistence 口述已完成；Week12 正式通过，累计 84 个主线单元。Week13 Day1 数据库第一层与索引实验教程已生成，独立 MySQL 脚手架已实测并同步 Ubuntu，下一步完成 R1 三组实际观察；Week13 尚未学习验收；correctness evidence 不推广为性能或全部系统故障隔离。AI Theory T1~T5 已通过，T5 修复后最终 100/100，私有核心检查 7/7 PASS；下一模块 T6 已依 T5 实际实现校准但尚未验收；ML 自学已覆盖多变量线性回归、logistic regression 与 L2 regularization，Ex1 尚未提交 executable evidence
+> 当前进度：Week1 ~ Week12 已完成，Reactor V1 与 HTTP Server V1 均已闭环；Week12 Day1~Day6 已正式通过，Day4/Day5/Day6 最终均 100/100。Mini Redis TCP 正常链、partial suffix、command-error 继续、protocol-error 只关闭坏连接与 binary/empty 回复成立。Day6 用户已保存 isolation/extra 两个网络脚本，双半帧、共享 store、有状态 pipeline、既有 good 和新 fresh 存活、跨连接 binary、有限慢读与 100 次连接均通过。Day6 Debug/ASan/UBSan 构建零 warning、固定 CTest 各 74/74 PASS、网络路径无报告，fd 各 5 -> 5；Day6 trace 实际观察写 EAGAIN/动态 EPOLLOUT、B 见 ready 后 PONG 与 A 续传排空。组件矩阵与网络场景分开计数，不与 Day4 临时合并 84/84 混淆。Day7 R1 与整日最终均 100/100，线程模型和 TTL/eviction/persistence 口述已完成；Week12 正式通过，累计 84 个主线单元。Week13 Day1 整日于 2026-10-14 正式通过 98/100，累计 85 个主线通过单元；三组 SQL/计划/结果复用，最新 note 已正确修正回表/覆盖模型和第三组引用。rows 估计与性能测量的两项表述已在对话补准；本次未 SSH 或修改数据库、代码与冻结教程。Week13 尚未整周通过，Day2 已生成，当前进入原 KvStore 的毫秒 TTL/可控时钟独立 R1，尚未通过；已生成 daily 86 份；correctness evidence 不推广为性能或全部系统故障隔离。AI Theory T1~T6 已正式通过，T6 最终 100/100，最后 CE 入口扣分撤销；同一 R1 14/14、后半 24/24、类型拒绝 5/5 PASS。下一步 Ex1/T7 共用一份可运行训练 evidence，T7 提前稿已按实际进展核对润色，T7 尚未通过；ML 自学已覆盖多变量线性回归、logistic regression 与 L2 regularization，Ex1 尚未提交 executable evidence
 > 近期目标：2026 年 12 月形成第一版简历，2027 年 1 月开始投递后台开发、C++ Infra 与 AI 业务基础设施相关实习
 > 长期目标：本科就业进入 AI Infra，重点发展 LLM inference systems / serving 与 CUDA kernel optimization
 
@@ -88,7 +88,7 @@ NOIP / CSP-S / CSP-J 奖项
 
 ```text
 Mini Redis 的受限 RESP/String KV、多客户端代表矩阵与 Week12 出口已完成；TTL、AOF、性能和最终项目文档仍待后续 milestone
-数据库与 Redis 使用、持久化语义还未形成工程证据
+Redis 受限 V1 与 MySQL 小表/SQL/索引路径已有有限证据；事务并发、持久化恢复与面试纵深仍待补实
 项目还缺稳定的性能数据、故障案例和简历表达
 已学 C++ / OS / 并发内容尚未形成稳定的面试口述闭环
 C++ object model、atomic/CAS、memory order 仍需定向补强
@@ -266,6 +266,8 @@ Linux / OS：383
 ```
 
 数据边界：两份资料混有日常实习、暑期、校招和社招，也有汇总/分析帖；关键词可能重复命中同一道组合问题。因此它们用于决定优先级和追问形态，不用于估算录取概率，也不把某个社招系统设计题直接升级为实习前硬前置。
+
+2026-10-12 再次对照本地原问题与牛客后台实习样本，明确采用 [C++ 项目伴随补缺安排](C++项目伴随补缺规划.md)：虚函数属于“提过第一层、尚未完整练过”，安排 Week13 Day7 独立小专题；已有 RAII/移动/智能指针等先诊断，再决定是否补课。编译链接跟随 Week14 AOF，对象占用、额外分配与容器代价跟随 Week15 性能。面经决定查漏方向，项目继续决定主线与产出。
 
 ---
 
@@ -474,7 +476,7 @@ remove / close / callback 生命周期可解释
 
 不提前做多 EventLoop、多线程 Reactor、io_uring 或 lock-free。
 
-出口前做一次 C++ 定向补缺，挂回 Week7~8 并发组件和 Reactor lifetime，不进入复杂模板或 lock-free 实现：
+Week10 原定的 C++ 第一层对照范围如下，挂回 Week7~8 并发组件和 Reactor lifetime：
 
 ```text
 virtual dispatch、object layout、virtual destructor 第一层
@@ -483,6 +485,8 @@ template instantiation 的编译期含义
 alignment、cache line、false sharing 第一层
 atomic 与 mutex/volatile 的边界、CAS、acquire/release、happens-before 第一层
 ```
+
+Week10 Reactor 主线已通过；上述主题在出口教程中出现，不等于每项都已完成独立理解与实验。虚函数的完整补缺明确转到 Week13 Day7；其他点先抽查真实调用与已有证据，缺多少补多少，不回退重学 Week10，也不引入复杂模板或 lock-free 实现。
 
 ### Milestone C / Week11：HTTP Server V1（已通过）
 
@@ -560,6 +564,8 @@ cache penetration / breakdown / avalanche 的问题模型与基本处理
 MySQL ACID、transaction、isolation、MVCC、lock/deadlock 第一层
 ```
 
+Day7 的 V2 核心收口后，另安排约 90~150 分钟的虚函数/对象模型小专题，可分两次完成。先接上类与对象、构造/析构、继承和基类部分，再讲基类引用调用、override/重载/隐藏、纯虚与抽象、虚析构、构造/析构阶段和对象切片，最后用常见虚表模型解释；做一个独立小实验，不改 TTL 时钟或现有 Reactor 架构。完整安排见 [C++ 项目伴随补缺](C++项目伴随补缺规划.md)，独立讲义见 [C++ 面试语法小册](杂教程/C++面试语法小册.md)。
+
 ### Milestone F / Week14：Mini Redis V3 - AOF 与恢复
 
 ```text
@@ -581,6 +587,8 @@ replication、sharding、consistency、RPC 的最低系统词汇
 不实现 Redis Cluster、Raft 或分布式事务
 ```
 
+C++ 伴随小节跟着 AOF 多文件组件讲声明/定义、static/extern/inline、编译与链接、模板定义可见性和库的第一层。构造/析构、特殊成员函数、const/noexcept 与 move/forward 先对照已有代码诊断，只补不能解释的点；不新增完整编译原理课程。
+
 ### Milestone G / Week15：测试、故障与性能
 
 ```text
@@ -595,6 +603,8 @@ perf / flame graph 只在真实瓶颈出现后使用
 ```
 
 出口：每条性能结论能从命令、环境和结果复现；至少保留一条“现象 -> 假设 -> 工具 -> 证据 -> 修改 -> 复测”的完整排查链。
+
+C++ 伴随小节从真实 Buffer/string/KvStore 观察对象大小、对齐、额外分配和容器行为。智能指针/捕获生命周期与 atomic 第一层复用旧并发组件抽查，不给单线程 Mini Redis 强加并发，不为了练内存池先改正确代码。
 
 ### Milestone H / Week16：简历项目收口
 
@@ -626,7 +636,7 @@ atomic/CAS、acquire/release、happens-before 第一层
 
 ## 6. 2026-08 到 2027-03 双线时间表
 
-截至 2026-10-11 的真实状态：系统主线已完成 Week1~Week12，包含 Reactor/HTTP Server 与 Mini Redis 受限 V1；Week12 Day1~Day6 正式通过，Day4/Day5/Day6 最终均 `100/100`。Day5 TCP、protocol-error 与入口退出码旧问题已闭环；Day6 已保存完整多客户端脚本，本次在原 server 与 fresh Debug/ASan/UBSan 实例上验证双半帧、共享 store、状态型 pipeline、bad/既有 good/fresh、binary、有限慢读和 100 次连接。两个 fresh 构建零 warning、固定 CTest 各 `74/74 PASS`、网络 covered paths 无报告，fd 各 `5 -> 5`；trace 新证据包含写 EAGAIN/同 fd EPOLLOUT、B 在 ready 后 PONG 和 A 续传排空。不重写正确的 R1/服务器，也不扩大成 throughput/fairness/无限积压结论。Day7 R1 差异口述正式通过 `100/100`，确认状态修改与回复送达分离、reply bytes 独立拥有、条件性平方级重扫风险；后半已定向校准，线程模型和三种数据生命周期目标已口述确认，Day7 整日最终 `100/100`。Week12 正式通过；Week13 Day1 教程已生成、脚手架已实测并同步 Ubuntu，下一步为 R1 小表与三组 EXPLAIN 的实际观察，尚未学习验收；TTL/可控时钟/有限维护按后续学习日推进。AI Theory 已通过 T1~T5，T5 合法两类/四类采样已修复，核心检查 7/7 PASS，最终 100/100；下一模块 T6 已承接真实 sampler 做定向校准，尚未验收。下表后续日期仍是协调目标，不把落后模块静默记成完成。
+截至 2026-10-14 的真实状态：系统主线已完成 Week1~Week12，包含 Reactor/HTTP Server 与 Mini Redis 受限 V1；Week12 Day1~Day6 正式通过，Day4/Day5/Day6 最终均 `100/100`。Day5 TCP、protocol-error 与入口退出码旧问题已闭环；Day6 已保存完整多客户端脚本，本次在原 server 与 fresh Debug/ASan/UBSan 实例上验证双半帧、共享 store、状态型 pipeline、bad/既有 good/fresh、binary、有限慢读和 100 次连接。两个 fresh 构建零 warning、固定 CTest 各 `74/74 PASS`、网络 covered paths 无报告，fd 各 `5 -> 5`；trace 新证据包含写 EAGAIN/同 fd EPOLLOUT、B 在 ready 后 PONG 和 A 续传排空。不重写正确的 R1/服务器，也不扩大成 throughput/fairness/无限积压结论。Day7 R1 差异口述正式通过 `100/100`，确认状态修改与回复送达分离、reply bytes 独立拥有、条件性平方级重扫风险；后半已定向校准，线程模型和三种数据生命周期目标已口述确认，Day7 整日最终 `100/100`。Week12 正式通过；Week13 Day1 整日于 2026-10-14 正式通过 98/100，累计 85 个主线通过单元；最新 note 已修正 SQL 引用并正确解释候选定位/回表/覆盖，rows 与计时证据补准在对话。复用此前两万行/20 条匹配/相同结果与投影证据，本次未重跑数据库或改用户文件。Week13 整周尚未通过，Day2 已生成、独立 R1 待实现/验收，已生成 daily 86 份；TTL/可控时钟/有限维护按后续学习日推进。AI Theory 已通过 T1~T6，T6 最终 100/100；同一 R1 14/14、后半 24/24、类型拒绝 5/5 PASS，数值与入口缺口已闭环。下一步 Ex1/T7 共用一次训练实现，T7 已按实际结果核对润色，尚未提交等价验收。下表后续日期仍是协调目标，不把落后模块静默记成完成。
 
 | 时间 | 系统主线 | AI 理论伴随线 | 必须形成的结果 |
 |---|---|---|---|
@@ -716,7 +726,7 @@ benchmark 环境和数字
 
 ```text
 C++ object lifetime、RAII、copy/move、smart pointer
-virtual function / object layout 第一层
+virtual dispatch / virtual destructor / object layout 第一层，能用小实验解释
 STL complexity 与 iterator invalidation
 thread、mutex、condition variable、data race、deadlock
 atomic/CAS、acquire/release、happens-before 第一层
@@ -739,12 +749,12 @@ replication / sharding / consistency / RPC 的最低系统词汇
 | 出口 | 复盘主题 | 必须挂到的证据 |
 |---|---|---|
 | Week9 | TCP、non-blocking、epoll、LT/ET、系统调用 | Epoll Echo Server、`ss/strace` |
-| Week10 | ownership、virtual/object layout、thread/atomic/memory order | Reactor lifetime、Week7~8 并发代码 |
+| Week10 | ownership、object model 第一层对照、thread/atomic/memory order | Reactor lifetime、Week7~8 并发代码；虚函数完整实验转 Week13 Day7 |
 | Week11 | HTTP versions、HTTPS/TLS、协议 parser | HTTP Server、curl/抓包 |
 | Week12 | Redis/KV/cache 第一层、真实 Redis 数据模型地图 | KV implementation、真实 Redis 对照 |
-| Week13 | MySQL 表模型、B+ tree/index、expiration/eviction | 三组 EXPLAIN 对照、TTL tests、可控时钟 |
-| Week14 | AOF/RDB、WAL/recovery、replication/consistency | restart/fault experiment |
-| Week15 | CPU/memory/I/O/lock bottleneck、工具选择 | benchmark 与排查链 |
+| Week13 | MySQL 表模型、B+ tree/index、expiration/eviction；独立虚函数补缺 | 三组 EXPLAIN 对照、TTL tests、可控时钟；另一个小调用/析构实验 |
+| Week14 | AOF/RDB、WAL/recovery、replication/consistency；C++ 编译链接 | restart/fault experiment、实际多文件构建 |
+| Week15 | CPU/memory/I/O/lock bottleneck、工具选择；内存与容器代价 | benchmark 与排查链、对象和分配的实际观察 |
 | Week16 | project deep dive、system trade-off、行为问题 | README、代码、指标和时间说明 |
 
 每题按同一结构回答：
@@ -757,6 +767,8 @@ replication / sharding / consistency / RPC 的最低系统词汇
 ```
 
 已能顺畅回答且有证据的题直接通过；答不顺才回查 daily/note。不得为了形式抄写大量标准答案。
+
+基础语法补缺采用 [项目伴随安排](C++项目伴随补缺规划.md)，不另开八股主线。教材中出现过、能认出名词、能解释实际调用、有独立证据是不同状态；没有项目使用场景的明确基础缺口可做一个小实验，不强迫项目采用该特性。Week16 复盘时检查欠账是否闭环，不等到投递前一次补整套 C++。
 
 算法训练：
 
@@ -1113,6 +1125,8 @@ Round 3：只补高价值测试、性能证据和项目收口
 
 否则进入 backlog。
 
+这四条约束针对新增或改换**主线项目/技术方向**。虚函数等目标岗位基础若存在明确掌握缺口，允许用受限小专题补齐，即使当前项目不需要该特性；插入位置和证据单独登记，不为学习它改造项目架构，也不取消已通过的项目验收。
+
 ---
 
 ## 12. 阶段成功标准
@@ -1154,12 +1168,13 @@ CUDA kernel correctness + profiler + benchmark
 ## 13. 当前下一步
 
 ```text
-1. Week12 Day1~Day7 已正式完成，Day7 最终 100/100；本周 RESP/String KV、多客户端正常/错误/pipeline/binary/有限慢读与生命周期出口成立。复用已通过的 Debug/ASan/UBSan、74 项 CTest、fd 和背压 trace，不重写正确代码或重复旧矩阵。Week13 Day1 的窄 MySQL 第一层与三组 EXPLAIN 教程已生成，独立实例启停与 SQL 已实测；下一步完成 R1 的实际查询与计划判断，后续把 deadline、可控 clock、EXPIRE/PTTL 和有限清理加入现有 KvStore；性能和恢复仍按 Week14~Week16 后续规划
-2. AI Theory T5 修复复检最终 100/100；进入已依实际采样实现定向校准的 T6，重点是 logits -> stable probabilities -> stable loss。T1~T5 与已通过的采样/统计/seed 不重复学习或实现
+1. Week12 Day1~Day7 已正式完成，Day7 最终 100/100；原网络、组件与生命周期证据保留。Week13 Day1 最终 98/100，累计 85 个主线通过单元。Day2 已生成，当前先独立升级原 KvStore 的毫秒 TTL/可控时钟并运行最小 checker；正式 R1 通过后按真实实现定向润色后半。Day3 再接 EXPIRE/PTTL 命令，Day4/5 再做有限清理与服务器集成；性能和恢复仍按 Week14~Week16 后续规划
+2. AI Theory T1~T6 已通过，T6 最终 100/100，同一 R1 14/14、后半 24/24、类型拒绝 5/5 PASS；下一步进入已定向核对的 T7，Ex1 与 T7 共用一次实现。T7 尚未通过，不重做 T6、采样/统计/seed 或另写一套重复 tests
 3. Day4 六条命令/store、Day5 TCP 和 Day6 有限多客户端/failure-isolation 场景均通过；后续 TTL、AOF 和性能仍按 Week13~Week15 分阶段进入，不把 correctness 或 sanitizer 结果推广成生产级全故障隔离、吞吐、公平性或资源上限结论
 4. T20~T24 到达前只维护 serving 资料索引，不启动完整 vLLM/SGLang 源码主线
 5. 每个系统 milestone 继续保留 correctness、sanitizer、failure case 与可复现实验
 6. 到 Theory Gate 3 后先读 mini-sglang，再决定 production framework 的一个窄路径
+7. C++ 虚函数尚只有 Week10 第一层对照，完整小专题排在 Week13 Day7 V2 核心收口后；其余按 Week14/15 实际组件诊断补缺，最迟 Week16 投递准备前核对。当前下一步为 Week13 Day2 TTL，不抢跑或修改已通过 daily
 ```
 
 当前不要因为 2026 年 serving 生态更新临时插入 Go、Kafka、Kubernetes、完整 vLLM/SGLang、DeepEP 或 CUDA。先把最接近岗位硬要求、也最接近简历项目闭环的 HTTP -> Mini Redis 做穿，同时保持 AI Theory 的稳定推进。

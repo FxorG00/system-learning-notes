@@ -1,8 +1,8 @@
 # Daily 教程总目录
 
-> 更新日期：2026-10-11
+> 更新日期：2026-10-14
 >
-> 收录范围：主线 Week1 Day1 至 Week13 Day1，共 85 份正式 daily 教程；正式通过仍为 84 个主线单元。
+> 收录范围：主线 Week1 Day1 至 Week13 Day2，共 86 份正式 daily 教程；正式通过为 85 个主线单元。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week11 已通过
-Week13 Day1 已生成，R1 小表与三组实际 EXPLAIN 待学习验收；环境脚手架已实测并同步 Ubuntu，不计作用户学习通过。
+Week13 Day1 整日已于 2026-10-14 正式通过 98/100：复用三组 SQL/EXPLAIN 与相同 20 条结果证据，最新 note 已修正引用、串清同一索引下的回表/覆盖；rows 与实际检查规模及性能计时补准在对话。本次未重跑/修改 Ubuntu 或用户文件。主线通过数 85、已生成 daily 86；Week13 整周未通过，Day2 已生成，当前进入原 KvStore TTL/可控时钟独立 R1，尚未通过。
 Week12 Day1~Day7 已正式完成，累计 84 个主线通过单元，Day7 最终 100/100；Day4/Day5/Day6 最终均 100/100。Day6 保存的 R1/extra 在原 server 与当前源码新 Debug/ASan/UBSan 实例上通过，覆盖双半帧、共享 store、状态型 pipeline、既有 good/fresh、binary、有限慢读和 100 次连接。两个 fresh builds 零 warning、固定 CTest 各 74/74，fd 各 5 -> 5，trace 捕获写 EAGAIN/EPOLLOUT 与 B 在 ready 后 PONG、A 续传排空。Day7 application 差异、线程模型与 TTL/eviction/persistence 第一层口述已收口，Week12 正式通过；下一步 Week13 数据库第一层与 TTL；正确性不推广为性能。原工程 74/74 与 Day4 临时合并 84/84 分开记录
 ```
 
@@ -44,7 +44,7 @@ Week12 Day1~Day7 已正式完成，累计 84 个主线通过单元，Day7 最终
 | Reactor V1 | [Week10](#week10reactor-v1) | Buffer、Channel、EventLoop、Acceptor、Connection，继续加固 callback lifetime |
 | HTTP Server V1 | [Week11](#week11http-server-v1) | incremental request parser、response encoder、Reactor integration、keep-alive |
 | Mini Redis V1 | [Week12](#week12mini-redis-v1) | RESP2 encoder/parser、command dispatcher、KV store、multi-client integration |
-| 数据库与 Mini Redis V2 | [Week13](#week13mysql-与-mini-redis-v2) | 已生成 Day1：MySQL 表、SQL、索引访问路径；后续 TTL 按周规划推进 |
+| 数据库与 Mini Redis V2 | [Week13](#week13mysql-与-mini-redis-v2) | Day1 已正式通过：MySQL 表、SQL、索引访问路径；Day2 已生成：KvStore 毫秒 TTL/可控时钟；命令与清理按后续学习日推进 |
 
 ---
 
@@ -220,7 +220,8 @@ Week12 Day1~Day7 已正式完成，累计 84 个主线通过单元，Day7 最终
 
 | Day | 主要内容 | 主要产出 / 观察 | 检索关键词 |
 |---|---|---|---|
-| [Day1：MySQL 小表与索引路径](week13/day1/day1.md) | 从按字段筛选的需求引出表与 SQL；观察无二级索引、索引后回表、覆盖三组路径，解释 InnoDB 页、聚簇/二级索引与 EXPLAIN 估计 | 独立 MySQL 用户态脚手架 + 20000 行 fixture；用户保存三组 SQL/实际计划与判断，R1 待验收 | MySQL, SQL, SELECT, primary key, secondary index, B+ tree, page, clustered index, covering index, EXPLAIN, rows, Using index, 回表 |
+| [Day1：MySQL 小表与索引路径](week13/day1/day1.md) | SELECT/EXPLAIN 最小读法；先看逻辑索引条目已有/缺少的字段，串清回表与覆盖，再映射 B+ 树、页与聚簇索引；辨别 type=ref/ref=const、估计与实际结果 | 整日 98/100 正式通过；SQL/计划/结果证据复用，R3 正确修正候选定位→回表/覆盖；估计与计时表述补准，教程与 note 保留 | MySQL, SQL, SELECT, primary key, secondary index, B+ tree, page, clustered index, covering index, EXPLAIN, rows, Using index, 回表 |
+| [Day2：KvStore 有效期与可控时钟](week13/day2/day2.md) | 验证码时间线；原 store 的毫秒 TTL/clock injection、const 失效判断与物理 size；SET 清期限、删除/重建、范围错误与时间快照 | 原 KvStore 增量实现；最小 GTest checker 与 CMake；R1 待实现/验收，不复制网络底座 | TTL, deadline, fake clock, Now, expire_ms, pttl, steady_clock, chrono, duration_cast, const, 过期, 有效期 |
 
 ---
 
