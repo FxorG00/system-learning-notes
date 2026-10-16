@@ -1,7 +1,7 @@
 # AI Infra 理论伴随线规划
 
-> 版本：2026-10-14，系统主线 Week13 Day2 已生成、R1 待实现；理论线 T6 最终 100/100，下一步 Ex1/T7
-> 适用对象：FxorG，中山大学计算机科学与技术专业；系统主线 Week1~Week12 已完成，Day7 整日最终 100/100，Week13 Day1 整日已于 2026-10-14 正式通过 98/100，主线累计 85 个通过单元，索引候选/回表/覆盖模型已收口，复用既有 SQL 证据；本次未重跑或修改 Ubuntu。Week13 整周尚未通过，Day2 已生成，当前进入原 KvStore 的 TTL/可控时钟独立 R1、尚未通过；主线已生成 daily 86 份；理论线 T1~T6 已通过，T6 最终 100/100，同一 R1 14/14、后半 24/24、类型拒绝 5/5 PASS。下一步 Ex1/T7 共用一份线性回归训练 evidence，T7 已按 T6 实际结果和 ML 去重安排定向核对润色，T7/Theory Gate 1 尚未通过
+> 版本：2026-10-16，系统主线 Week13 Day2整日修后100/100正式通过、累计86个主线单元；Ex1/T7 最终 98/100，理论线下一步 T8
+> 适用对象：FxorG，中山大学计算机科学与技术专业；系统主线 Week1~Week12 已完成，Day7 整日最终 100/100，Week13 Day1 整日已于 2026-10-14 正式通过 98/100，主线累计 85 个通过单元，索引候选/回表/覆盖模型已收口，复用既有 SQL 证据；本次未重跑或修改 Ubuntu。Week13 整周尚未通过，Day2整日修后正式通过100/100、R1保持100，主线累计86个通过单元；本轮原工程75/75、normal与ASan/UBSan私有各24/24，无sanitizer诊断；Day3教程已生成、R1待学习验收，理论线T8不因系统进入新日而自动验收；主线已生成 daily 87 份；理论线 T1~T7 已通过，T6 最终 100/100、T7 最终 98/100。Ex1 两个实际脚本作为等价产出，半 MSE 系数修复后 20/20 私有检查通过，用户预测口述正确；独立最小二乘参照由本轮验收补上，不重写同一训练系统。下一步 T8 多分类/workflow，提前稿已结合实际结果和口述定向润色；T8/Theory Gate 1 尚未通过
 > 职业目标：本科就业，主攻 LLM inference systems / serving 与 CUDA/Triton kernel optimization
 > 本文件定位：`plan_strengthened.md` 的 AI Infra 理论伴随线，不替代 C++ / Linux / OS / 网络 / Reactor / Mini Redis 主线
 
@@ -164,7 +164,7 @@ AI Theory T module：只补 NumPy/PyTorch、数值稳定性、framework mechanis
 
 ```text
 Week1 ~ Week12 已完成
-当前：Week13 Day1 整日正式通过 98/100，主线累计 85 个通过单元；Day2 已生成，当前进入原 KvStore 的 TTL/可控时钟独立 R1，尚未通过；主线已生成 daily 86 份。理论线 T1~T6 已通过，Ex1/T7 待等价训练证据，不新增重复学习
+当前：Week13 Day1 整日正式通过 98/100，主线累计 85 个通过单元；Day2整日修后正式通过100/100、R1保持100，主线累计86个通过单元；本轮原工程75/75、normal与ASan/UBSan私有各24/24，无sanitizer诊断；Day3教程已生成、R1待学习验收，理论线T8不因系统进入新日而自动验收；主线已生成 daily 87 份。理论线 T1~T7 已通过，Ex1/T7 最终 98/100；下一步 T8 多分类与完整 workflow，不新增重复回归学习，Theory Gate 1 尚未通过
 后续：TTL / AOF / tests / benchmark / README -> 项目证据与投递
 ```
 
@@ -933,6 +933,8 @@ stable softmax
 ---
 
 ## T7：linear regression 等价验收与 training-loop bridge
+
+**实际状态：2026-10-14，Ex1/T7 最终 98/100，正式通过。** 复用用户的餐车、房价两个训练脚本；半 MSE 系数修复后，20/20 私有检查、数值梯度与独立最小二乘参照通过，新房预测口述正确。参照计算由 Codex 提供，不冒充用户已写最小二乘；不再要求另一份训练程序。下一步 T8，Theory Gate 1 尚未通过。
 
 ### 本周问题
 

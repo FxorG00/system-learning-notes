@@ -1,10 +1,10 @@
 # Week13：Mini Redis V2，让 key 按时过期
 
-> 版本：2026-10-14，Day2 TTL/可控时钟教程已生成、R1 待实现；Day1 最终 98/100，Day7 独立 C++ 补缺安排保持
+> 版本：2026-10-16，Day3 教程已生成、R1待实现；Day2整日100/100、Day1最终98/100保持，Day7独立C++补缺安排保持
 > 系统主线：Week1~Week12 已完成，共 84 个正式通过单元；进入 Milestone E
 > 本周产出：沿用现有 Mini Redis，增加 EXPIRE/PTTL、可控时钟和有限的过期清理
-> AI 理论线：T1~T6 已通过，T6 最终 100/100；下一步 Ex1/T7 共用训练 evidence；本周主线不等待理论线
-> 当前状态：Day1 整日正式通过 98/100，主线累计 85 个通过单元；最新 note 的回表/覆盖模型已收口，估计与计时表述在对话补准。Day2 已生成，当前进入原 KvStore 的毫秒 TTL/可控时钟独立 R1，尚未通过；主线已生成 daily 86 份；Week13 整周尚未通过
+> AI 理论线：T1~T7 已通过，T7 最终 98/100；下一步 T8 多分类/workflow；Theory Gate 1 尚未通过，本周主线不等待理论线
+> 当前状态：Day1整日98/100、Day2整日100/100均已正式通过，主线累计86个通过单元、87份已生成daily；Week13整周尚未通过。Day2原CTest75/75、normal与ASan/UBSan私有各24/24保持为已通过证据。Day3已生成，当前完成独立R1：接EXPIRE/PTTL与三个最小checker，后半再升级范围/异常来源和多key一致时间；示例生成QA不算用户完成Day3
 
 ---
 
@@ -42,7 +42,7 @@
 
 | 实际组件 | 本周怎样继续使用 |
 |---|---|
-| `KvStore`，内部为 `std::map<std::string, std::string>` | 在原组件上增加有效期，具体内部表示仍由你设计 |
+| `KvStore`，Day2 已升级为 `std::map<std::string, node>` | 保留 value/deadline 与 Now；Day3接命令，Day4再加有限维护 |
 | `execute_command(KvStore&, arguments)` | 沿用六条已有命令，新增 EXPIRE/PTTL |
 | owning reply string，即独立拥有 bytes 的回复字符串 | 保持已经生成的回复独立于后续 store 修改 |
 | 每 Connection 独立的 input/output Buffer | 继续处理任意分片与发送积压 |
@@ -189,15 +189,15 @@ R1 后用你实际的 `type/key/rows/Extra` 解释三组路径。`rows` 是估�
 
 **同一个 key 在到期前还能读，恰好到期后就读不到，怎样让这个判断独立于机器运行速度？**
 
-先用验证码的时间线讲清 value、当前时间和 deadline 三个对象。再引出 clock injection，时钟注入：组件通过可替换的时间来源获取当前时刻，测试因此能精确控制它。
+先用验证码时间线建立一条带可选期限的逻辑记录，区分“记录仍保留”和“当前还能读取”，再让各接口从同一状态模型里展开。随后提出真实时钟无法精确指定测试时刻的问题，引出 clock injection，时钟注入：组件通过可替换的时间来源获取当前时刻。
 
 ### R1 产出
 
-继续修改原 `include/mini_redis/kv_store.hpp` 与 `src/kv_store.cpp`。对外新增设置有效期、查询剩余时间所需能力；GET/EXISTS/DEL/SET 同时满足 §4 的行为。
+继续修改原 `include/mini_redis/kv_store.hpp` 与 `src/kv_store.cpp`。对外新增设置有效期、查询剩余时间所需能力；整日完成时 GET/EXISTS/DEL/SET 满足 §4。R1 先闭合可控时间、到期边界、查询一致与 SET 清旧 TTL；删除/重建、期限替换和异常边界在 R2/R3 打磨，不要求首版一次证明全部错误路径。
 
 Day2 教程会在闸门前给出完整的 public contract、小规模调用例子和 chrono 所需 API，解释每个接口做什么、失败如何表示。private representation 由你设计。
 
-已生成的 [Day2](day2/day2.md) 保留 const get/exists，并新增 const pttl；查询只判定当前有效性，不擦除记录，size 仍计物理条目。设置方法为 expire_ms，单位整数毫秒；新增默认/注入 Now constructors，范围与错误优先级在 R1 前明示。内部表示仍由你设计，原代码未由 Codex 改写；Day3 再处理整条多 key 命令的一致时间观测，不把单次方法快照当成该能力已完成。
+已生成的 [Day2](day2/day2.md) 已前移状态图与共用状态表，保留 const get/exists，并新增 const pttl；查询只判定当前有效性，不擦除记录，size 仍计物理条目。设置方法为 expire_ms，单位整数毫秒；新增默认/注入 Now constructors。最终范围与错误优先级在闸门前声明，但首版与最终验收分层；内部表示仍由你设计，原代码未由 Codex 改写。Day3 再处理整条多 key 命令的一致时间观测，不把单次方法快照当成该能力已完成。
 
 ### 必须成立的核心证据
 
@@ -210,11 +210,11 @@ Day2 教程会在闸门前给出完整的 public contract、小规模调用例�
 -> GET/EXISTS/PTTL 都按不存在处理
 ```
 
-另用两条小检查覆盖普通 SET 清除旧有效期、删除后重建同名 key。具体测试实现可以委托，但你需要独立说明每一步为何得到对应结果。
+最小 checker 同时覆盖普通 SET 清除旧有效期；删除后重建同名 key 在后半补齐。具体测试实现可以委托，但你需要独立说明每一步为何得到对应结果。
 
 ### R2/R3 的新增量
 
-按你的真实存储方式解释 lazy expiration，惰性过期：访问目标 key 时处理它是否已失效。明确“语义失效”和“内存回收”的两个时点，核对单位、时间范围及 owning value 的旧保证。
+2026-10-16修后整日正式通过100/100，R1保持100，旧4分扣分撤销。map<string,node>/deadline=-1/Now/const查询保留，输入检查前置、各分支单次取时、clock按值保存起点均已落实。非正TTL对缺失/过期返回false，有效记录删除并返回true。原工程fresh完整构建零warning、CTest75/75，normal与ASan/UBSan私有各24/24，复制/移动后clock使用已覆盖且无sanitizer诊断。下一步Day3接命令；有限维护仍留Day4，不提前。
 
 R3 明确给出你的实现还需要修改哪一处和补哪条证据；已经正确的方案保留，不再写一串通用“如果你这样实现”。
 
@@ -250,6 +250,8 @@ R1 前说明 `seconds` 的整数输入规则，包括负号、空输入、非法
 顺着你的 handler 讲清 command error 如何回到当前客户端，并保留下一条 PING。验证 EXPIRE 的 1/0、PTTL 三类返回值、非正有效期、再次设置、错误数字和错误参数数量。
 
 重复表驱动 GTest 可以由我编写。你负责定义错误输入、预期回复以及“失败设置不会覆盖原 deadline”的判断依据。
+
+Day3 教程现已生成：[设置与查询有效期](day3/day3.md)。R1先复用Day2已通过的`expire_ms/pttl`接通普通链、参数数量及简单整数错误，附三个小checker与可直接追加的CMake。完整数字范围、非正秒数与clock异常来源在R2/R3落实；整日仍要求一条多key命令共用同一时刻。当前EXISTS/DEL各轮分别调用原store方法的跨期限现象已用递增假时钟复现，属于本日新增关系，不回退Day2。后半给出有限的显式时间能力，保留旧API，不引入新线程/锁；R1正式通过后仍依据用户真实首版定向润色。
 
 命令名仍按原来的规则匹配；binary key/value 原样保留。新增时间参数是文本整数，并不把整条 request 改成 C-string。
 
@@ -458,23 +460,23 @@ cmake -E chdir build ctest --output-on-failure
 
 ## 13. AI 理论伴随线：按真实起点走
 
-**T1~T6 已通过，T6 最终 100/100；当前进入 Ex1/T7 共用的训练循环证据。** 不能因为系统进入 Week13，就在周规划中写成理论线已到 T10。
+**T1~T7 已通过，Ex1/T7 最终 98/100；当前进入 T8 多分类与完整 ML workflow。** 不能因为系统进入 Week13，就在周规划中写成理论线已到 T10。
 
-2026-10-13 T6 最终复检正式通过 `100/100`，最后 CE 入口检查已修复并撤销扣分。同一 R1 `14/14`、后半 `24/24`、五个类型拒绝场景 `5/5 PASS`；数值稳定性、轴/shape、输入不变与约定拒绝成立。下一步直接复用 Ex1 为 T7 的等价产出，T7 提前稿已按实际进展定向核对，不重写 softmax、T5 采样器或另布置测试工程。T7 尚未通过。
+2026-10-14 Ex1/T7 正式通过 `98/100`。餐车与房价两个实际脚本已闭合训练；用户修正半 MSE 的系数后，20/20 私有检查通过，包括数值梯度、原题 cost checkpoints、独立最小二乘与新房预测参照。用户口述训练集统计量和已学 theta 的复用正确。两处轻量记录精度问题不阻塞推进；不要求另写 synthetic 回归或最小二乘求解器。T8 提前稿已接上本轮结果和预测/验证集角色区别；T8 与 Theory Gate 1 尚未通过。
 
 本周顺序：
 
 ```text
-T6 已完成，不重复其数值实验
--> 当前进入 Ex1/T7 共用的线性回归 executable evidence
--> 有余力再推进 T8
+T7 已由 Ex1 等价完成，不重复回归训练或 T6 数值实验
+-> 当前进入 T8 多分类 softmax classifier 与 train/validation/test workflow
+-> T8 出口核对 Theory Gate 1 后，再推进 T9
 ```
 
-你已经学会的多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 和 L2 regularization 不重讲。Ex1/T7 只提交一份等价实现，不重复造两份。
+你已经学会的多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 和 L2 regularization 不重讲。Ex1/T7 已用同一份实际产出等价通过，不重复造两份。
 
 每天仍安排 30~60 分钟，周计划值 4~6 小时。按模块教程中的准确视频节号学习；本周不额外列一套 AI 视频，也不为 TTL 日插入 CUDA/serving 框架。
 
-总规划的 Week13/T10 仍是协调目标，**当前缺口明确存在**。10 月下半根据 T6、Ex1/T7 和 T8 的真实产出再评估 T9/T10 能否接上；未完成的部分如实记账，不硬塞五个模块，也不让理论进度阻塞 TTL 工程。
+总规划的 Week13/T10 仍是协调目标，**当前真实状态是 T7 已完成、T8 尚待实现**。10 月下半依据 T8 与 Theory Gate 1 的实际结果再评估 T9/T10 能否接上；未完成部分如实记账，不硬塞模块，也不让理论进度阻塞 TTL 工程。
 
 ---
 

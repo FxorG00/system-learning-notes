@@ -1,3 +1,5 @@
+## 怎么画预测图
+
 **用 Matplotlib（Python 绘图库）。这张图主要用两个 API：`scatter` 画真实数据的点，`plot` 画训练得到的直线。**
 
 先导入：
@@ -83,3 +85,37 @@ plt.show()
 **最终你应该看到：红色叉号是历史数据，蓝色直线是你训练出来的预测关系。** Matplotlib 接收你算好的坐标，负责把它们画出来。
 
 你在 Ubuntu Remote SSH 中运行时，先用 `savefig` 保存图片即可；没有图形界面时，可以省略 `show()`。
+
+## loss 图
+
+**每轮把 loss 存进列表，训练结束后用 `plt.plot(x, y)` 画出来：x 是迭代次数，y 是对应 loss。** [plot 官方文档](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.plot.html)
+
+下面是能直接运行的小例子：
+
+```python
+import matplotlib.pyplot as plt
+
+# 示例数据；实际使用时换成你每轮记录的 loss。
+loss_history = [10.0, 6.2, 3.8, 2.1, 1.3, 0.9]
+iterations = range(1, len(loss_history) + 1)
+
+plt.plot(iterations, loss_history)
+plt.xlabel("Iteration")       # 横轴：迭代次数
+plt.ylabel("Loss")            # 纵轴：损失
+plt.title("Training Loss")
+plt.grid(True)                # 显示网格
+plt.tight_layout()            # 自动调整留白
+plt.savefig("loss.png", dpi=150)  # 保存图片，再显示
+plt.show()
+```
+
+在你的训练代码中，**循环前创建列表，每轮算完 loss 后追加**：
+
+```python
+loss_history = []                  # 放在训练循环外
+
+# 在训练循环里，算出本轮 loss 后：
+loss_history.append(float(loss))
+```
+
+训练结束再执行上面的画图部分。如果在 Ubuntu SSH 终端里无法弹出窗口，可以省略 `plt.show()`，直接查看保存的 `loss.png`。[保存图片文档](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.savefig.html)

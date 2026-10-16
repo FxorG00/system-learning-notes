@@ -125,7 +125,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-最新进度快照（2026-10-14）：Week1~Week12 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1~Day6 已正式完成，分数分别为 `94/100`、`96/100`、`96/100`、`100/100`、`100/100`、`100/100`；Day5 R1 的历史评分为 `97/100`，Day6 R1 为 `100/100`。当前 Mini Redis 使用 main_ 持有的一份 map 版 KvStore，每 Connection 独立 input/output，owner 在 poll 返回后清理；TCP 正常链、partial suffix、跨 client 数据共享、command-error 继续、protocol-error exact reply/坏 socket EOF/健康连接继续均已验证。Day5 的 prefix、Error break、入口 catch return 1 等旧扣分已经撤销。Day6 用户已保存 46 行 R1 和 151 行 extra checker；原 6380 server 与当前源码私有 Debug/ASan/UBSan server 上完整矩阵均通过，两个新构建各零 warning、固定 CTest `74/74 PASS`，网络覆盖路径无 sanitizer 报告，`-O` 运行也通过。每个私有 server 的 fd 都回到 `5 -> 5`；trace 实际观察 A 写 EAGAIN/同 fd 加 EPOLLOUT，B 见 ready 后 PONG，A 恢复读取后排空并取消写关注。用户口述慢读场景主线正确，笔记两个章节与 daily 新增 §20.1 均已检阅；Day6 检阅未改源码、永久 tests、note 或冻结 daily。Day6 整日正式通过；2026-10-11 Day7 R1 以 application 差异口述正式通过 `100/100`：SET 修改先于回复送达、已编码 reply 独立于后续 store 修改、条件性前缀重扫可达平方级工作量均判断正确。当前源码只读核对，复用既有测试，不把复杂度风险写成已测瓶颈；R2/R3 已依据口述和真实复制动作定向校准，R1 与代码保留。Day7 收口第 4 题核心正确：命令串行、socket non-blocking 与进程总线程数应分别描述；第 5 题 TTL/内存压力淘汰/持久化的三个目的均正确。结合本周既有代码与验证，Day7 整日最终 `100/100`，Week12 正式通过，主线累计 84 个通过单元。Week13 Day1 整日于 2026-10-14 正式通过 `98/100`，主线累计 85 个通过单元。R1 既有 SQL/三组实际计划、20000 行总数/20 条匹配、相同 records 与两列投影证据复用；本轮只检阅最新 note 和教程增补，没有 SSH 或重跑/修改数据库。第三组 SQL 引用已修好，撤销旧扣分；保留原预测，R3 已正确解释同一 idx_course 的候选定位、四列查询回表与两列查询覆盖。两项各扣 1 分：rows 是对实际检查规模的估计，不能说与实际规模“无关”；判断速度收益还需相同条件下的计时，建索引成本须与单次查询延迟分开。五道收口题逐项点评，基础主键角色和 Using index condition 补准在对话，不要求重复抄写或新实验。当前教程的索引条目/节点/页增补已核对，混合 Git diff 中既有 Codex 重编不计为用户本轮新增；未改冻结 Day1、note、SQL 或代码。Week13 尚未整周通过；Day2 已于 2026-10-14 生成并进入 R1 待实现/验收，主线累计 85 个通过单元、86 份已生成 daily。Day2 只升级原 KvStore 的毫秒 TTL 与可控时钟：保留 const get/exists/pttl 的只读失效判断及物理 size，新增 expire_ms 与默认/注入 Now；SET 清旧期限、erase 有效计数、时间范围与错误优先级明示，附最小 checker/CMake。生成时只读核对 Ubuntu 原 source/dispatcher/CMake，独立 chrono demo 零 warning 编译并精确运行，checker 只做声明匹配的语法检查，不冒充 TTL 已实现。下一步先独立完成 Day2 R1，之后按真实代码定向润色 R2/R3；EXPIRE/PTTL 命令、主动维护与网络接入仍分属 Day3/4/5，不重写 Reactor/RESP，不把入口观察推广为 MySQL 面试准备完成或已测性能。Day1/Day3/Day4 临时代表 cases 的持久化可在授权后委托，不阻塞当前推进；原工程 `74/74` 与 Day4 原工程加临时 10 项的 `84/84` 分开记录。AI Theory T1~T6 已正式通过，T6 最终 `100/100`。最新 134 行源码的 CE 已在 ndim/dtype 使用前验证 float64 ndarray logits 与 ndarray labels；最后入口扣分撤销。R1 `14/14`、后半 `24/24`、同一五个类型场景 `5/5 PASS`，共 43 项有限独立检查，巨大偏移 log(2)、下溢 loss=1000、输入不变和错误类型均成立，用户脚本 exit 0。源码 SHA256 5f4e952a366aebf679994592488d3175262274966755b3ccb0f9e674ca31fda4，前后未改；T6 教程增补与注释点评保持，不要求新增 note。下一步进入 Ex1/T7 共用的一份线性回归训练 evidence，T7 提前稿已结合 T6 实际结果、现有 ML 理论与 Ubuntu 工作区定向核对润色，不重讲数学、不复制第二份实现。ML 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization，Ex1 尚未提交 executable evidence，不提前把 T7 标为通过。后续 Ex1 与 T7 只实现一次。
+最新进度快照（2026-10-16）：Week1~Week12 已完成。Week10 Reactor V1 与 Week11 HTTP Server V1 均正式通过；Week11 Day7 最终评分 `95/100`。Week12 Day1~Day6 已正式完成，分数分别为 `94/100`、`96/100`、`96/100`、`100/100`、`100/100`、`100/100`；Day5 R1 的历史评分为 `97/100`，Day6 R1 为 `100/100`。当前 Mini Redis 使用 main_ 持有的一份 map 版 KvStore，每 Connection 独立 input/output，owner 在 poll 返回后清理；TCP 正常链、partial suffix、跨 client 数据共享、command-error 继续、protocol-error exact reply/坏 socket EOF/健康连接继续均已验证。Day5 的 prefix、Error break、入口 catch return 1 等旧扣分已经撤销。Day6 用户已保存 46 行 R1 和 151 行 extra checker；原 6380 server 与当前源码私有 Debug/ASan/UBSan server 上完整矩阵均通过，两个新构建各零 warning、固定 CTest `74/74 PASS`，网络覆盖路径无 sanitizer 报告，`-O` 运行也通过。每个私有 server 的 fd 都回到 `5 -> 5`；trace 实际观察 A 写 EAGAIN/同 fd 加 EPOLLOUT，B 见 ready 后 PONG，A 恢复读取后排空并取消写关注。用户口述慢读场景主线正确，笔记两个章节与 daily 新增 §20.1 均已检阅；Day6 检阅未改源码、永久 tests、note 或冻结 daily。Day6 整日正式通过；2026-10-11 Day7 R1 以 application 差异口述正式通过 `100/100`：SET 修改先于回复送达、已编码 reply 独立于后续 store 修改、条件性前缀重扫可达平方级工作量均判断正确。当前源码只读核对，复用既有测试，不把复杂度风险写成已测瓶颈；R2/R3 已依据口述和真实复制动作定向校准，R1 与代码保留。Day7 收口第 4 题核心正确：命令串行、socket non-blocking 与进程总线程数应分别描述；第 5 题 TTL/内存压力淘汰/持久化的三个目的均正确。结合本周既有代码与验证，Day7 整日最终 `100/100`，Week12 正式通过，主线累计 84 个通过单元。Week13 Day1 整日于 2026-10-14 正式通过 `98/100`，主线累计 85 个通过单元。R1 既有 SQL/三组实际计划、20000 行总数/20 条匹配、相同 records 与两列投影证据复用；本轮只检阅最新 note 和教程增补，没有 SSH 或重跑/修改数据库。第三组 SQL 引用已修好，撤销旧扣分；保留原预测，R3 已正确解释同一 idx_course 的候选定位、四列查询回表与两列查询覆盖。两项各扣 1 分：rows 是对实际检查规模的估计，不能说与实际规模“无关”；判断速度收益还需相同条件下的计时，建索引成本须与单次查询延迟分开。五道收口题逐项点评，基础主键角色和 Using index condition 补准在对话，不要求重复抄写或新实验。当前教程的索引条目/节点/页增补已核对，混合 Git diff 中既有 Codex 重编不计为用户本轮新增；未改冻结 Day1、note、SQL 或代码。Week13 尚未整周通过；Day2 整日已于2026-10-16修后复检正式通过 `100/100`，R1保持100/100，上一轮4分扣分全部撤销。当前155行source在ttl<=0分支复用本次now_ms，先区分物理缺失/已过期与有效记录，前两者返回false，有效才删除并返回true；不再二次取时。输入校验优先级、GCC安全加法和默认clock按值保存起点保持正确。本轮fresh完整构建零warning，原工程CTest `75/75 PASS`，同一组私有normal与ASan/UBSan各 `24/24 PASS`，覆盖路径无sanitizer诊断。主线累计86个整日通过单元、87份已生成daily；Week13整周尚未通过。Day3教程已生成，R1待学习/验收：先接EXPIRE/PTTL与三个最小checker，再于R2/R3处理范围、异常来源和多key同一时刻；本轮未改用户代码。代码/永久测试/CMake/note/冻结Daily保持只读。 主线累计 86 个通过单元、87 份已生成 daily。Day2 已按网页反馈重排为状态模型先行：先用记录/可选期限/当前时刻区分物理存在与逻辑有效，再推出 API 和可替换时间能力。Day2 只升级原 KvStore 的毫秒 TTL 与可控时钟：保留 const get/exists/pttl 的只读失效判断及物理 size，新增 expire_ms 与默认/注入 Now；SET 清旧期限、erase 有效计数、时间范围与错误优先级明示，附最小 checker/CMake。生成时只读核对 Ubuntu 原 source/dispatcher/CMake，独立 chrono demo 零 warning 编译并精确运行，checker 只做声明匹配的语法检查，不冒充 TTL 已实现。当前进入已生成的 Day3 R1，在已通过组件上接 EXPIRE/PTTL 命令；EXPIRE/PTTL 命令、主动维护与网络接入仍分属 Day3/4/5，不重写 Reactor/RESP，不把入口观察推广为 MySQL 面试准备完成或已测性能。Day1/Day3/Day4 临时代表 cases 的持久化可在授权后委托，不阻塞当前推进；原工程 `74/74` 与 Day4 原工程加临时 10 项的 `84/84` 分开记录。AI Theory T1~T7 已正式通过，T6 最终 `100/100`、T7 最终 `98/100`。Ex1 的餐车与房价两个实际脚本作为 T7 等价产出；用户已修复半 MSE 的 1/2 系数，20/20 私有检查和预测口述成立。房价 J≈20.43 亿美元平方、RMSE≈6.39 万美元，梯度下降已接近独立最小二乘参照；不因原始 cost 数值大就追加特征工程。保留两项各 1 分的轻量记录扣分：bias 注释 x0=0 与真实全 1 不符，旧餐车图片与当前正确脚本不一致。最小二乘参照由 Codex 私有验收补上，不要求用户重写求解器、重复测试或第二份 T7 实现。下一步进入已据本轮结果与口述定向润色的 T8，多分类与 train/validation/test workflow 尚待实现；Theory Gate 1 尚未通过。ML 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization；已有知识不重复教学。
 
 ### Week1：已完成
 
@@ -1719,6 +1719,7 @@ CMU 10-414/714 或 ML systems：由 AI 理论 Gate 接管；Theory Gate 前不�
 - 不喜欢为了“完成计划”重复已经掌握的 work。
 - 喜欢从具体问题、运行现象、warning 或错误实验出发理解机制。
 - 需要知道“为什么”，不接受只堆高级代码或只列接口。
+- 讲解语气以用户认可的 2026-10-16 TTL 反馈文本为参照：平等、耐心，顺着读者当下会产生的疑问推进，用自然的中文短句把具体场景一步步讲通。先让用户看懂发生了什么，再解释术语和约定，最后联系真实代码；可以承接“key 都不存在了，为什么还要检查 TTL？”这样的自然疑问，不能一上来使用“旧私有 case / 错误优先级没有兑现”等检阅摘要代替讲解。语言易懂与技术深度同时保留，不降成泛泛科普、随意大白话或居高临下的训诫；也不机械模仿外部文本的夸张评价、篇幅和口头禅。此风格适用于主线、理论线和日常解释，各自原有结构与练习规则不变。
 - 喜欢先看到从起因、调用、状态修改、CPU 交接直到恢复点的完整纵向流程，再拆解其中每个函数和对象。
 - 愿意自己写代码；练习日应保留独立设计和实现空间。
 - 笔记可以省略已经掌握、代码注释已写清的机械内容，但关键机制、错误原因和真实疑问必须保留。
@@ -1972,6 +1973,8 @@ daily 的长度由当天新增机制决定，不追求固定行数，也不以�
 
 先建立逻辑模型，再解释具体物理组织。例如先用 (course_id,id) 与四列/两列查询讲“还缺哪些列、怎样取齐”，再命名回表/覆盖，最后用 B+ 树映射查找；T6 先接通 input example -> 每个 class 的 score -> probabilities -> T5 sampler，再用极端值展示数值稳定性。概念名称放在动作刚被理解的位置，首次英文仍在该处给中文含义和当前作用。
 
+当多个接口围绕同一个状态工作时，先用一份具体对象讲清状态及可观察结果，再展开 API：例如 TTL 先建立“记录 + 可有可无的到期位置 + 当前时刻”，分开物理保存和逻辑有效，再推出 get/exists/pttl/erase/size 的职责。需要可替换依赖时，先提出真实运行无法精确控制测试输入的问题，再引入 clock/callable；不要先抛出 std::function 等语法让学生倒推用途。这里前置的是公开语义模型，不是 private members、完整 helper、清理算法或主练习实现答案。
+
 例子优先连续复用，让同一对象沿数据流逐步变化。需要反例、极端值或非方阵来暴露新问题时，明确它与普通例子相比改变了什么，不为“只用一个例子”牺牲有效验证。从**最小但有意义的完整单位**开始，再推广到 batch/一般情形；softmax 的入口是一条输入对应的多个类别分数，不能为了固定 scalar -> vector 模板先造一个没有比较意义的单值任务。
 
 讲解顺序服务用户产生疑问的顺序，同时保留真正必要的知识依赖。硬件、语法或底层对象是理解当天机制的前置时，先补最小模型；不一律禁止先讲硬件，也不把物理实现无条件后置。一次只推进一个主要理解任务，避免同时堆多层陌生对象；不强制每段只能有一个概念、两三个术语，也不机械拆成七层目录。
@@ -1979,6 +1982,10 @@ daily 的长度由当天新增机制决定，不追求固定行数，也不以�
 **独立练习的必要前置不后移。** 闸门前给足程序用途、public contract、输入范围、错误与所有权/生命周期语义、必要语法和无关主练习答案的最小调用；工具最小读法按 §9.7 提供。内部表示、helper 组织、具体控制流、参考设计与待发现现象仍保留到闸门后。这条编排链只调整当前允许讲解内容的顺序，不能成为提前泄露 R1 答案的理由。
 
 R1 后定向润色先翻译用户的真实结果，再接其预测、实现或笔记中的理解缺口；对照实验指出实际改变的条件，再解释机制。用于发现现象的实验须**先预测、再运行、再观察和记录**，不能运行后补写成事前预测。逐节检查真实教学依赖和顺序，不是给每节添加用户变量与结果就算完成；从最新正文修改并保留用户增补，主线三 Part、独立设计空间和理论线按需闸门保持。
+
+**解释边界测试，先把场景走清楚，再讲约定与修法。** 先交代初始对象、状态和精确输入，用一个正常调用建立对照；再明确这次改变了哪个输入、是否故意让两种情况同时成立，以及各自会引出什么结果。接着说明预期结果的依据，最后对照用户真实控制流，指出在哪个返回或状态修改处产生差别。表格和“私有测试未通过”等验收摘要放在场景之后，不能让读者靠结果表反推测试在做什么。相邻问题分开展开，例如负 clock、非正 TTL、剩余时间算术各有自己的条件与动作，不挤成同一段修复指令。
+
+**把项目选定的接口策略与通用机制分开。** “先验证输入还是先返回 key 缺失”等结果顺序存在设计选择时，明确本项目采用哪一种、为什么这样选，以及它已经在哪里公开约定；不能把私有测试的预期值当作天然正确的依据，也不能借官方 Redis/C++ 资料替项目自己的选择背书。数值例子须分清参数本身可表示与运算结果可表示。为理解补足因果过程，不等于增加未声明的要求、回退已通过的 R1、泄露闸门前的实现答案，或把所有错误边界都扩成长篇；只在当前新机制或用户真实卡点处按需展开。
 
 知识深度按当前总规划、周计划、模块目标和真实掌握情况分为“必须现在理解 / 理解后选看 / 未来连接”，只在需要时标明，不在每个小节重复标签。不能按外部建议的固定名单擅自后置必学内容：当前 T6 的 log-sum-exp 与稳定 cross entropy 已是本模块目标，仍须完成；后置的是无关高级扩展，不是既定正确性要求。
 
@@ -3006,6 +3013,7 @@ Week8 Day2~Day4 全量勘误复核：
 [ ] 每个关键关系是否说明两端对象、方向、归属和失效条件？
 [ ] 新操作前是否已讲清对象来源、每项含义、下游需要与当前缺口？具体动作是否先于脱离场景的定义，物理细节是否有真正必要的前置理由？
 [ ] 是否沿一个具体例子推进到最小完整场景，再推广到一般情形？切换反例时是否说明改变的条件，而非让例子和术语同时突然跳变？
+[ ] 边界测试是否先说明初始状态、具体输入与同时成立的条件，再解释预期结果？可选的错误处理顺序是否明确标为项目约定，而非从私有测试倒推通用规则？
 [ ] 是否写清操作前、操作后以及保持不变的状态？
 [ ] hardware / kernel / user space 的责任是否分开？
 [ ] 存在多步执行、分支或跨层交接时，是否需要一张 Mermaid flowchart？图与正文是否一致？
@@ -3106,6 +3114,7 @@ Round 3：补 deterministic tests、TSan/stress/benchmark、README 与最终证�
 
 - Round 1 的 contract 只规定 caller 可观察的行为，不应顺手规定内部使用哪些 members、哪把锁、哪个 flag、怎样排列函数调用；这些属于设计空间。必要的新语言/API 语法可以在闸门前用与主练习无关的最小 demo 教清，但不能把多个 API 组合成主练习答案。
 - Round 1 允许首版不完整。constructor rollback、shutdown overlap、backpressure、deterministic oracle 等复杂 case 可以成为 Round 2 的 code-review 问题；先让用户暴露自己的真实判断，再逐轮打磨，比动手前列完全部坑点更能训练设计能力。
+- 提前声明完整 public/error contract，不等于首版一次验收所有极端输入。教程须明确“R1 主链 / 后续状态稳固 / 最终范围与异常”各自何时完成；首版限定在已声明的合法输入上，最终约定不删，关键错误安全不能用降低优先级掩盖。后半主要把行为模型映射到用户实际实现、解释新关系并补证据，不重复朗读前半 API。此分层细化首版允许不完整规则，不改变三 Part、独立闸门、输入/错误语义前置或 R1 通过后定向润色。
 - 阅读闸门不是排版装饰。生成后必须做一次“截断测试”：假设 Round2/3 完全不可见，只阅读到 Round1 末尾，用户是否已经能实际创建文件、开始 coding、编译并运行第一版。Round1 至少自包含：
 
 ```text
@@ -3262,7 +3271,7 @@ weekN/dayN/dayN_note.md
 
 ## 13. 当前下一步
 
-2026-10-14 当前学习状态：系统主线 Week1~Week12 已完成。Week12 Day1~Day6 已正式完成，分数分别为 `94/100`、`96/100`、`96/100`、`100/100`、`100/100`、`100/100`。Day6 的 R1/extra 两个已保存脚本在原 server 与当前源码新 Debug/ASan/UBSan 实例上均通过；两种新构建零 warning、固定 CTest 各 `74/74 PASS`、网络路径无 sanitizer 报告，fd 各 `5 -> 5`。可选 trace 实际捕获写 EAGAIN、动态 EPOLLOUT、B 在 marker ready 后 PONG 与 A 续传排空。note 的两个部分、daily 新增 §20.1 和慢读口述已逐项检阅；Day6 检阅未改用户代码、tests、note 或 daily。Week12 Day7 R1 已于 2026-10-11 正式通过 `100/100`：application 差异与三题口述均正确，已补准 get/encoder/output 的实际拥有和复制链、条件性平方级重扫与实测瓶颈的区别。未新增 note、不重画旧图、不重复 Day6 矩阵；只读核对当前源码后，保留 R1 与用户内容并定向校准完整 R2/R3。用户已补充第 4/5 题口述：最终能区分普通命令串行与后台多线程工作，TTL、内存压力淘汰和进程重启恢复的三个目标均正确；补准串行只保证执行不重叠、不等于跨客户端固定发送顺序，进程总线程数描述整个进程。Day7 整日最终 `100/100`，Week12 正式通过，累计 84 个主线通过单元。Week13 Day1 整日于 2026-10-14 正式通过 `98/100`，累计 85 个主线通过单元、86 份已生成 daily；Week13 整周尚未通过。最新 note 的第三组引用已修正，旧扣分撤销；候选定位/回表/覆盖模型正确，rows 估计与实际规模的关系及性能计时证据各保留 1 分精度扣分，正确表述已在对话补准，不阻塞推进。本轮复用已有 SQL/实际计划证据，未 SSH、重跑数据库或修改用户 note/冻结教程/代码。Day2 已于 2026-10-14 生成，当前进入原 KvStore 毫秒 TTL/可控时钟的独立 R1，尚未验收通过。const 查询与物理 size 保留，expire_ms/pttl、状态替换与显式范围失败已在闸门前规定；附最小 GTest/CMake，未替用户改代码。下一步完成并验收这份 R1，再按真实实现定向润色后半；EXPIRE/PTTL 命令、有限维护与空闲集成仍按 Day3/4/5 推进，不重写 Reactor 或 RESP。有限 correctness 不推广为性能、公平性或所有 fatal socket 错误隔离。临时代表测试可在用户明确授权后持久化，普通 review 不自动 commit/push。AI Theory T1~T6 已正式通过，T6 最终 `100/100`；CE 入口最后缺口已修复并撤销扣分，本次同一 R1 `14/14`、后半 `24/24`、类型拒绝 `5/5 PASS`。下一步 Ex1/T7 的线性回归等价验收，沿 Ubuntu 原 ML 工作区完成一份 training loop；T7 提前稿已按实际进展核对润色，保持真实数据推荐路径和 synthetic fallback 二选一，不重写已会数学或 T6 函数，不提前把 T7/Theory Gate 1 记通过。Ex1 完成后可作为 T7 等价产出，不重复实现。
+2026-10-16 当前学习状态：系统主线 Week1~Week12 已完成。Week12 Day1~Day6 已正式完成，分数分别为 `94/100`、`96/100`、`96/100`、`100/100`、`100/100`、`100/100`。Day6 的 R1/extra 两个已保存脚本在原 server 与当前源码新 Debug/ASan/UBSan 实例上均通过；两种新构建零 warning、固定 CTest 各 `74/74 PASS`、网络路径无 sanitizer 报告，fd 各 `5 -> 5`。可选 trace 实际捕获写 EAGAIN、动态 EPOLLOUT、B 在 marker ready 后 PONG 与 A 续传排空。note 的两个部分、daily 新增 §20.1 和慢读口述已逐项检阅；Day6 检阅未改用户代码、tests、note 或 daily。Week12 Day7 R1 已于 2026-10-11 正式通过 `100/100`：application 差异与三题口述均正确，已补准 get/encoder/output 的实际拥有和复制链、条件性平方级重扫与实测瓶颈的区别。未新增 note、不重画旧图、不重复 Day6 矩阵；只读核对当前源码后，保留 R1 与用户内容并定向校准完整 R2/R3。用户已补充第 4/5 题口述：最终能区分普通命令串行与后台多线程工作，TTL、内存压力淘汰和进程重启恢复的三个目标均正确；补准串行只保证执行不重叠、不等于跨客户端固定发送顺序，进程总线程数描述整个进程。Day7 整日最终 `100/100`，Week12 正式通过，累计 84 个主线通过单元。Week13 Day1 整日于 2026-10-14 正式通过 `98/100`，累计 85 个主线通过单元、86 份已生成 daily；Week13 整周尚未通过。最新 note 的第三组引用已修正，旧扣分撤销；候选定位/回表/覆盖模型正确，rows 估计与实际规模的关系及性能计时证据各保留 1 分精度扣分，正确表述已在对话补准，不阻塞推进。本轮复用已有 SQL/实际计划证据，未 SSH、重跑数据库或修改用户 note/冻结教程/代码。Day2 整日已于2026-10-16修后复检正式通过 `100/100`，R1保持100/100，上一轮4分扣分全部撤销。当前155行source在ttl<=0分支复用本次now_ms，先区分物理缺失/已过期与有效记录，前两者返回false，有效才删除并返回true；不再二次取时。输入校验优先级、GCC安全加法和默认clock按值保存起点保持正确。本轮fresh完整构建零warning，原工程CTest `75/75 PASS`，同一组私有normal与ASan/UBSan各 `24/24 PASS`，覆盖路径无sanitizer诊断。主线累计86个整日通过单元、87份已生成daily；Week13整周尚未通过。Day3教程已生成，R1待学习/验收：先接EXPIRE/PTTL与三个最小checker，再于R2/R3处理范围、异常来源和多key同一时刻；本轮未改用户代码。代码/永久测试/CMake/note/冻结Daily保持只读。const 查询与物理 size 保留，expire_ms/pttl、状态替换与显式范围失败已在闸门前规定；附最小 GTest/CMake，未替用户改代码。Day2 已前移逻辑状态图与统一接口结果，先理解“记录仍在但当前不可读”；Now 从精确控制时间的需求引出。两处快照缺口已修复，后半已从当前磁盘版本定向更新；Day2最终public/error contract已通过，当前完成Day3独立R1后再检阅；EXPIRE/PTTL 命令、有限维护与空闲集成仍按 Day3/4/5 推进，不重写 Reactor 或 RESP。有限 correctness 不推广为性能、公平性或所有 fatal socket 错误隔离。临时代表测试可在用户明确授权后持久化，普通 review 不自动 commit/push。AI Theory T1~T7 已正式通过，T6 最终 `100/100`、T7 最终 `98/100`。Ex1 的餐车与房价两个实际脚本作为 T7 等价产出；用户已修复半 MSE 的 1/2 系数，20/20 私有检查和预测口述成立。房价 J≈20.43 亿美元平方、RMSE≈6.39 万美元，梯度下降已接近独立最小二乘参照；不因原始 cost 数值大就追加特征工程。保留两项各 1 分的轻量记录扣分：bias 注释 x0=0 与真实全 1 不符，旧餐车图片与当前正确脚本不一致。最小二乘参照由 Codex 私有验收补上，不要求用户重写求解器、重复测试或第二份 T7 实现。下一步进入已据本轮结果与口述定向润色的 T8，多分类与 train/validation/test workflow 尚待实现；Theory Gate 1 尚未通过。ML 自学已覆盖多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 与 L2 regularization；已有知识不重复教学。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。Day3 与 Day4 R1 正式通过时均已执行该规则；后续仍从最新磁盘版本编辑，保留用户新增内容。
 
@@ -3306,6 +3315,8 @@ AI Theory 前期默认约 70% 概念讲解与推导、30% 手推/实验/coding�
 Txx.md 默认是一份从头可以连续阅读的自包含讲义：当前问题 -> 新对象/术语 -> 最小数值或 shape 例子 -> 完整推导 -> 紧邻小实验 -> 下一概念，不把知识拆成术语表、资料清单和孤立问答
 新理论对象先接上旧心智模型：谁产生它、每项/每行代表什么、为什么下游还不能直接使用、转换后的对象由谁消费。用一条普通完整场景贯穿来源 -> 计算 -> 输出 -> 用途，不能只写“承接上一课”或给对象起名就算接通；极端值/异常例子放在普通对象与用途讲清之后
 知识出现顺序与发布前内容审计复用 §9.3 / §9.11：从最小有意义的完整单位推广，不强制每个 T 都从 scalar 开始。这里只共用内容编排原则，不合并两条线的模板、动手比例或闸门；理论线有独立练习时也必须先给足必要前置，具体答案留在闸门后
+首次把标量偏导压缩为矩阵梯度时，先选当前模型里的一个具体参数，画清它到中间量、再到loss的依赖路径，写出链式法则和每个局部导数；再展开一个小型完整梯度矩阵，解释行列分别对应谁，最后才命名外积/写矩阵乘法并推广到batch。只说“把所有d,c排起来就是外积”或shape恰好匹配，不算讲清来源。数学的行/列向量与NumPy一维数组的转置、加轴要明确对应；这是把已学数学用到当前模型，不重讲整门线性代数，也不交付完整主练习实现。
+同一内容跨ML讲义、经典作业和T模块承接时，核对loss的平均因子、正则项系数、样本数量符号与gradient是否一致；默认沿用已学约定，采用另一种参数化时须说明换算。实验讲解还要落实数据的实际排列、切分后类别组成、预处理统计量来源、提前固定的选择指标和最终采用哪份参数，不能只写“固定split/选最好的配置”。这些细化现有知识顺序、去重与证据规则，只约束理论线，不改变主线daily规则，不新增重复作业或无限调参。
 引入算法先建立转换需求，再解释各动作怎样满足需求；若需求不能唯一确定算法，明确它是常用选择而非必然唯一答案。近义词按当前角色区分，例如 input example、random draw 与 true label；当前必学内容与可选扩展仍按理论规划和实际进度决定
 外部视频与官方文档是校准、查证或第二解释源。先由 Txx.md 把必学内容讲清，再把精确链接放到概念出现的位置并标明选看/延伸；不能让用户先跳出教程读一份冗长资料，再猜它应该插在何处
 通常只保留一个综合 coding 产出和 3~5 个高价值理解问题，不用“完成 checklist”冒充理解；简单 numerical exercise 不包装成大型工程 contract。这里的“一个产出”按 learning contract 计数：若 ML 经典作业已经提供同等或更强证据，T module 复用该 artifact 并只补 AI mapping，不另写同构程序
@@ -8091,3 +8102,116 @@ MEMORY 当前快照/下一步、总规划、理论规划、Week13 同步为 T1~T
 独立 chrono/callable 例子在 Ubuntu 以 C++17、Wall/Wextra/Werror/g 零 warning 编译，exit 0，输出精确 elapsed_ms=1500、now_ms=1000/2999；不把构造时间差写成实际等待。最小 GTest 对本日公开声明 fsyntax-only 检查零 warning；当前 CMake GoogleTest help 核验 PROPERTIES TIMEOUT 支持。上述只是教材准备验证，用户尚未写 TTL，不声称组件 tests/原 CTest 或 sanitizer 已运行通过。自己的远端临时目录已经核对清理，未修改原 source/CMake/tests、旧 daily 或 note。
 
 同步当前快照/下一步、总规划、理论规划系统状态、Week13 与 DAILY_INDEX：主线通过 85、已生成 daily 86，Day1 最终 98/100保持，Day2 R1 待实现/验收，整周未通过；理论 T1~T6/T6最终100与Ex1/T7待验收保持。沿既有知识顺序/API 演进/证据规则记经验，不追加重复 canonical 规则。新 daily 触发 Git 发布流程；审计累计文档/笔记后提交并推送，实际结果以本轮发布工具记录为准。
+
+## 2026-10-14：Ex1/T7 整课正式通过，训练与预测等价验收
+
+按原检阅规则读取冻结 T7、Ex1 作业、最新 ex1_note、Ubuntu 实际两个脚本及图片。Note 的 Path/parents[2]、loadtxt、shape 属性、前五行切片四部分均正确；没有独立 T7_note，不要求重复抄写。当前 T7/Ex1_note 工作区 diff 为空；T7 相对首次生成的大幅变化是此前 Codex 定向改稿，不能冒充用户本轮增补。
+
+首次实测指出房价 cal_loss 为 MSE 而 gradient 对应半 MSE；用户自行保存 e=(e**2)/2 后，同一私有检查 20/20 PASS、exit 0，撤销这项旧扣分。餐车 97 行，1500 步 theta≈[-3.63029144,1.16636235]，原题两组 cost≈32.07273388/54.24245508；房价 47 行，bias 保持全 1、有效特征 mean/std 正确、同步参数更新与数值梯度成立。当前房价 J≈2043282709.93 美元平方、MSE≈4086565419.87、RMSE≈63926.25 美元；独立 lstsq 的 RMSE≈63926.21。新房 1650/3 的预测约293098.47美元，参照293081.46美元，差约17美元。上述是私有独立参照，不写成用户已做最小二乘或已单独提交预测程序；训练误差接近最优不等于泛化已验证。未缩放 alpha=0.01 的私有复测在第32个零基迭代发现 overflow，是本例真实数值现象，不要求把 inf/nan 继续画成曲线。
+
+用户新房预测口述正确：用训练集均值/标准差，不加入新输入重算，再用已学 theta。仅新输入是待预测样本，不自动成为验证集；保留真实答案并承担配置选择职责才是 validation。这是 T8 的新增内容，当前只补准术语、不扣未学内容。正规方程/最小二乘与 L2 正则化的作用区别尚无单独口述，不把它写成已回答；已学数学不因此重复布置。
+
+最终评分98/100，Ex1/T7 等价正式通过。两项各1分的轻量记录问题：linear_regression.py 注释 x0=0 与代码实际全1不符；保存的 food_truck_fit.png 为旧错误图，当前源码私有重跑产生正确97个散点和单条拟合线，需要用户重新运行更新图片，但不是当前训练算法错误。不要求用户再手写求解器、重复机械 correctness 或另做 synthetic T7。
+
+本轮未修改用户 source、note、原图片或冻结T7。餐车源码SHA256为3e2ada968ae0ac7fdb3e7d325a8fcc0747f6a74ce2b54e8a65133ec4d3d5b93a；用户修复后的房价源码为6004e066639c7779e5bd237a0782a666ae71cc5631e22b09b0f3f16ef8192720。只据本轮结果定向润色提前生成的T8：连续输出到多类别分数、预测/验证集职责、训练统计量复用、实际T6导入位置与float64约束；修正bias共享轴、log命令和矩阵L2的Frobenius记号。保留原讲义与独立闸门，不改变主线daily规则。同步MEMORY当前快照/下一步、总规划、理论规划、Week13；主线85通过/86生成与Week13Day2待R1不变。普通review不自动commit/push；独立私有测量在临时目录运行，远端私有目录已核对绝对路径后清理并确认不存在。T8导入示例已在Ubuntu精确运行，probabilities≈[0.66524096,0.24472847,0.09003057]、loss≈1.40760596444；代码围栏/显示公式静态闭合检查与git diff --check通过，不冒充T8整课运行或Typora视觉预览。T7与ex1_note前后SHA256一致；用户在杂教程/python的并行修改保留未触碰。
+
+## 2026-10-14：Week13 Day2 按公开状态模型调整知识次序
+
+用户认可网页 GPT 对 Day2 的反馈：原稿时间线正确，但物理保存/逻辑有效的核心模型到 R2 才站稳，R1 先铺 API 与错误造成负担。先扫描并审计同主题规则，判断为 §9.3 对象先行与 §10 首版分层的细化，不替换三 Part、独立设计、主线/理论线分离或用户修改保护。已在这两个 canonical 位置合并，不另建重复编写模板。
+
+从磁盘最新版增量修改并保存 before 副本；Day2 未有用户未提交 diff。开场之后加入 key/value/可有可无的 deadline 逻辑记录、2999/3000 两个观测时刻图、统一有效条件与四行接口状态表，明确 record 仍保存但 get/exists/pttl 可按缺失返回，size 继续计物理记录。模型不指定 optional 成员、Entry、第二张 map 或完整 is_live helper；没有采用反馈里的完整分支伪代码作为 R1 参考实现。
+
+Public API 前先提出真实时间无法精确控制测试读数的需求，走完 fake_now -> caller get -> 保存的取时间能力 -> 当前读数 -> 可观察结果，再引入 Now/std::function。接口小节先设置/查询期限，再删除/物理计数；完整签名、ownership、const、返回值与错误优先级保留。R1 核心限定到期主链与 SET 清旧 TTL；删除/重建/重设、非正长度与完整范围/异常在 R2/R3 打磨，最终 contract 不删。R2 删除已前移的重复定义，转为对照真实调用链、一次快照、const、范围算术与 owning 副本；R1 正式通过后仍必须逐节定向润色后半。
+
+最小 checker 补充过期后普通 SET 新值、get 与 pttl=-1 的关系，覆盖清旧 TTL；仅对公开声明拼接检查以 C++17/Wall/Wextra/Werror/g 做 stdin fsyntax-only，exit 0、零 warning，不链接或运行用户 TTL 实现。新图采用 graph/引号标签的旧 Mermaid 兼容形式；代码围栏、显示公式静态闭合和 git diff --check通过，未声称 Typora 实际视觉预览。修改过程发现字符串替换会将 $$ 解释成单个 $，已修正并用单行孤立 $ 检查确认无残留；公式交付应检查最终落盘内容，不能只看构造字符串。
+
+同步 MEMORY 当前状态/下一步、总规划下一步、Week13 Day2 分层与 DAILY_INDEX 摘要。实际进度不变：主线85通过/86生成，Week13 Day2 R1尚待实现/验收；理论T1~T7通过/T7最终98、下一步T8保持。没有修改代码、永久tests、note或已通过Day1；用户并行的杂教程/python修改保留。只修改既有daily，不触发新daily的自动commit/push。备份在工作区tmp/w13d2_state_model_20261014，可与Git首次生成基线对照回溯。
+
+## 2026-10-16：Week13 Day2 R1 首次检阅，暂评94/100，待单次时间快照修复
+
+依总规划、MEMORY、Week13 与10-14修订后的R1层次验收。Git首次生成基线0fc23e60bec06a2a0f754b3b8f4c3c642c7c9b9e；累计diff中的状态图/表、clock能力链、接口重排和分层主要来自上一轮Codex改稿，不能全算用户本轮增补。本轮用户另把“获取时间能力”加粗、删除范围示意代码块里的0、增加“各种clock在类内部都作为callable”的解释；前后两处语义正确，删除0没有改变正文非负范围，但“上面第二行”已变为一行，是轻量引用失配，未擅自改回。
+
+day2_note唯一R1章节的四个判断逐项核对：用户选择map<string,node>并把value/deadline放在一起可行，不是唯一表示；fields确实为value/deadline；constructor保存Now能力、之后调用它取当前时刻的理解正确；默认constructor的lambda确实读取steady_clock并计算相对start的毫秒。五道整日收口题均未单独作答，不算R1缺项；1~3由代码/私有状态检查支持，4现有key的overflow异常与保留旧状态已验证，但解释未口述，5相对/跨进程时间仍待后半。
+
+只读源码在Ubuntu cpp/week10。header采用全局node{string value,TimeMs deadline=-1}、map<string,node>、Now now_与Clock::time_point start；source的SET整条替换node清旧期限，get/exists/erase各自对命中记录读时并判定，const查询不擦除，size物理计数，get owning副本正确。测试文件已保存教程ExactDeadline及SET清期限检查，CMake正确追加target。原工程在自有/tmp目录完整构建零warning，同一固定入口cmake -E chdir ... ctest --output-on-failure为75/75 PASS，不与历史74项混淆，也不把旧组件测试都叫TTL新增测试。
+
+私有独立GTest用原source构建，C++17/Wall/Wextra/Werror/g零warning；15项中12PASS/3FAIL、CTest非零。6项固定时间核心、3项状态升级、已有key溢出保状态/空Now/负时间及抛异常保状态均通过。两个Snapshot失败同根：pttl先exists读2999再now_读3000，实际remaining=0、calls=2；expire_ms先exists读2999再now_读3000，用100ms生成3100而非3099，在下一固定3000时返回100而非99。有效、非负、单调时钟即能触发，不是并发或极端异常；闸门前§9.1已明确单次操作同一时间快照，因此R1先只修此根因，扣6分，暂评94/100，R1不正式通过。用户生产代码由本人修，不替写。
+
+第3项FAIL是expire_ms在缺失key时先return false，跳过负clock/正TTL越界校验，与最终错误优先级不符；属于已允许后置的范围/异常层，不扣本轮R1，R2/R3补齐。另静态发现默认Now捕获this而类仍可隐式复制/移动，搬动或销毁原对象后的clock ownership有风险；本轮未执行此路径，本轮未运行复制/移动ASan复现，作为后半明确语义的待办，不冒充已观测UAF、不算额外R1扣分。GCC10.5官方文档确认__builtin_add_overflow对所有参数有定义，已有key越界检查和保状态实测成立；保留用户合法独立方案，不强迫改成教程max-now写法。
+
+可复用经验沿已有依赖流/单次快照/证据分层规则：同一callable接口不保证同次操作多次调用的结果相同；固定时间checker只证明指定时刻的行为，另用每次调用递增的合法fake clock才能暴露时间混用。先复现业务返回错误，再说明多次调用关系，不能仅因代码重复就判错。源码、测试、note和daily默认只读保持；本轮R1未正式通过，不触发后半定向润色，复检通过后必须从届时最新版执行。
+
+同步MEMORY当前快照/下一步、总规划、Week13、理论规划系统状态与DAILY_INDEX。主线仍85正式通过/86生成，Week13 Day2 R1暂94待修、整日及整周未通过；理论T1~T7已通过/T7最终98、下一步T8保持。未新增永久tests，未改用户代码/构建/笔记/教程或无关杂教程；普通review不自动commit/push。私有artifact在本机tmp/w13d2_r1_review_20261016，原源码只读快照可用于准确引用；远端私有目录已核对绝对路径后清理并确认不存在。源码/header/测试/CMake的SHA256前后相同，daily与note哈希也保持；本轮未运行ASan/UBSan，不声称sanitizer通过。
+
+## 2026-10-16：Week13 Day2 R1 修后复检，暂评97/100，剩PTTL快照
+
+用户通知修正后，重新读取最新源码、note与当前Git状态。note的R1四点和daily增补均未变化，沿用上轮逐项点评；daily SHA256 D920C4183ECFA1B64CF73ECAF33DA12AA2BA178EDE6D6C468A4EF44A885D1C82、note SHA256 1375BCCEF68B7DB9D16F2A55C7AA3E2AB567B7E0BFB7B558EDB3127A0960DC03保持。source新增expire_ms内直接find和一次now_ms，正TTL路径不再先exists再读时；变量重命名不影响get/exists/erase的已知行为。
+
+相同15项私有GTest重新引用当前source，以C++17/Wall/Wextra/Werror/g零warning构建；13/15 PASS、2FAIL。Snapshot.ExpireUsesOneTimeReading已PASS，calls=1且新期限剩余99ms正确；撤销对应部分扣分。pttl仍在source126~140先exists再now_，同一Snapshot.PttlUsesOneTimeReading仍实测calls=2/remaining=0，保留3分，R1暂评97/100、不正式通过。另一FAIL仍是缺失key的最终错误优先级，不扣本轮R1；expire_ms非正TTL分支仍委托erase而再读时，属于已后置的非正长度路径，后半要统一，不能把正TTL修复扩大成整个方法所有路径已完成。
+
+当前header/test/CMake哈希与初检相同，source SHA256更新为d83a80588f8434a4607d4439247342679a56f8e29019159ea2256f57b0897953。原工程75/75是前轮完整构建运行证据，本轮只重跑同一15项私有检查，不冒充再次运行75项；ASan/UBSan未运行。五道整日收口题仍未单独作答，不追加R1要求或机械tests。下一步只需修当前pttl单次读时并短复检；R1正式通过后才从最新daily保留用户增补、定向润色整个R2/R3。
+
+同步MEMORY当前快照/下一步、总规划、Week13、理论规划系统状态与DAILY_INDEX；主线85通过/86生成、Day2整日未通过与T7最终98/T8下一步保持。用户代码、永久tests、note、daily和无关修改均未动；普通复检不commit/push。本轮远端自有临时目录已核对解析路径，收尾仅清理该目录。
+
+## 2026-10-16：Day2 R1 再复检，PTTL 内层变量遮蔽，97/100保持
+
+读取最新保存源码（SHA256 96222a04fb79b3574a33c158153e0c12aa852e60a355cfc3a0cf7fca091cc977）、note与daily。pttl现已在128行取得外层now_ms并直接find判定，但145行else内部仍auto now_ms=now_()，内层变量遮蔽外层且第二次取时，因此行为尚未修复；问题不再描述成当前仍调用exists。额外Wshadow语法检查精确提示145行遮蔽128行；此项额外诊断不等于默认Wall/Wextra编译出现warning。
+
+复用上一轮同一私有工程，默认C++17/Wall/Wextra/Werror/g构建零warning，只筛选Snapshot两项：expire正TTL PASS、pttl FAIL，仍calls=2/remaining=0，CTest exit非零。本轮实际1/2，不冒充重跑全15或原75项。评分97/100保持，不因只增加外层变量而机械加分；仍只需移除145行的整次取时，后续差值使用128行已有now_ms。后半错误优先级、非正TTL委托erase与默认clock复制移动问题继续沿原分层，不增加R1扣分。
+
+note唯一R1章节四点未变，沿用正确点评；整日五题仍未单独作答、不算本轮缺项。更新当前下一步并追加本轮真实证据；R1尚未通过，不触发R2/R3润色，代码/tests/note/daily均未改，分数/主线85通过86生成/理论T7最终98等状态不变。私有目录已核对解析路径，收尾仅清理该目录。
+
+## 2026-10-16：Week13 Day2 R1 正式通过100/100，完整后半按真实实现定向校准
+
+用户最后保存后重新读取150行source，pttl的else已经不再调用now_，减法复用外层128行读数。当前source SHA256为30c27385b18acd7db2da4c98c26bdb335c815e52852948df0dd1c9540ded5652；header、永久test、CMake与初检相同。相同私有15项在C++17/Wall/Wextra/Werror/g零warning构建后14/15 PASS，两项Snapshot均PASS，旧扣分全部撤销。唯一FAIL仍为已允许后置的MissingKeyStillValidatesRange，不把完整矩阵说成全通过，也不因后置项否定已满足本轮范围的R1。当前原工程重新完整构建零warning，固定CTest入口75/75 PASS，本轮不是沿用旧运行。R1正式通过100/100；Day2整日与Week13整周尚未通过，主线85个整日通过/86份已生成保持。
+
+note唯一R1四点未变：结构体表示可行但不是唯一、value/deadline对应、clock injection是能力、默认lambda读取真实时间，逐项正确点评保持。当前daily与首次Git基线差异仍区分此前Codex改稿与用户增补；获取能力的加粗、各种callable统一接口解释、删除示意0等用户内容不改。五道整日题仍未单独回答；1~3有代码/实测支持，4已有key范围失败保状态已测、机制口述尚缺，5相对/跨进程时间留后半，不冒充新答案。
+
+依R1通过的standing authorization，从磁盘最新daily逐节定向修改整个R2/R3。14接map<string,node>/deadline=-1与get真实调用；15串默认start/now_、正TTL/PTTL快照修复及旧shadowing经历，指出非正TTL委托erase还会二次取时；16映射const/data_/size与逻辑失效；17解释node{value,-1}整体SET、现有期限替换和erase计数；18保留已验证GCC builtin、把最终错误优先级落到缺失/过期早退，pttl已取到的负clock也应立即拒绝；19解释owning string已成立和默认Now捕获this的复制移动生命周期，明确升级为按值保存原时间起点，不重置复制后的时间轴；20对齐小林过期字典/惰性删除的阅读位置和Redis绝对Unix时间，与本项目相对时钟区分。生命周期是当前源码分析，本轮没有复制/移动ASan复现，正文明确未执行，不写成已测UAF。
+
+21不列泛化如果，明确三项后续动作：校验早退顺序、非正TTL同次删除、默认clock捕获起点；22区分永久ExactDeadline、已通过私有证据与新增小关系，不要求重写已通过矩阵，未擅自落永久tests；23保留固定CMake/CTest和sanitizer能力边界，说明需要真正复制/移动场景才覆盖clock生命周期，本轮未运行ASan/UBSan；24保留R1成绩并明确整日最终要求；25保留五道口述题不重复答卷；26接Day3命令、Day4维护，不改路线。完整后半仅约增加一千字符，目标是定向解释而不是扩清单。
+
+更新后R1闸门前全文与修改前逐字相同，note SHA256 1375BCCEF68B7DB9D16F2A55C7AA3E2AB567B7E0BFB7B558EDB3127A0960DC03保持。代码围栏/显示公式静态闭合，无孤立单行$，git diff --check通过；Mermaid沿旧graph与引号标签格式，未声称Typora视觉预览。保留原稿备份于tmp/w13d2_r1_pass_20261016。已复核Redis SET/EXPIRE官方与小林指定章节，源码中的合法独立方案不替换成预设答案。
+
+同步当前快照/下一步、总规划、Week13实际增量、理论规划系统状态与DAILY_INDEX；理论T1~T7通过/T7最终98、下一步T8保持。普通R1 review/后半润色不自动commit/push，用户source/tests/CMake/note/无关改动均未动。远端私有目录已核对解析绝对路径后清理，并确认不存在；用户source/header/test/CMake的SHA256前后保持。
+
+
+## 2026-10-16：Week13 Day2 整日首检，暂评96/100，剩非正TTL返回语义
+
+重新读取总规划、MEMORY相关规则、Week13、最新Daily/笔记与Ubuntu源码。Daily相对首次Git基线仍包含此前Codex状态模型/后半/§18改稿，本轮blob为b816edb579f63246d30e989850d7f91e8b103495，与上轮讲解修改后相同，不冒充用户新增；原R1加粗/删除示意0/callable补充保留。Note新加R3，准确指出expire_ms非正TTL经公开erase会再取时；R1四点仍正确。五道收口题未单独回答：1~3有现有代码及精确检查支撑，4的builtin拒绝/旧value和期限保留已测但无独立口述，5相对时间跨进程问题仍无用户答案，在对话补准而不要求抄写。
+
+当前source149行SHA256为7b60a09c06156782fc377b23c476c8f0546a42100f36d3d164d53d20ce653003，header为d0f3851c76f6832dc0d3994dabb9c310702c44ec3725551b42ef2a08a5ae4e17。默认clock改为局部start按值捕获、原start成员删除；expire_ms/pttl已在早退前验证已取时间，正TTL在缺失/过期返回前做GCC builtin加法检查。旧15项私有检查全部通过；非正TTL一次取时成立。但source99~104在ttl<=0时直接删除物理记录并无条件true，缺失/已过期key的正常false语义回归。新增两项分别在0/-1/TimeMs最小值上稳定复现；两项症状同根，扣4分，整日暂96/100、未正式通过，R1保持100/100。只修这一分支的有效性/返回值，不强制容器重写，不因重复负检查或额外string copy扩大任务。
+
+原工程fresh完整构建零warning，固定cmake -E chdir <private-original-build> ctest --output-on-failure入口75/75 PASS，包含原有一个TTL测试。另用旧15项+新9项组成独立24项，C++17/Wall/Wextra/Werror/g零warning；normal与ASan/UBSan各22/24 PASS、同两项业务断言FAIL且CTest非零。新增缺失pttl负clock、过期key越界拒绝、非正TTL单次取时、最大合法deadline/越界保状态、负clock非正TTL保状态均通过。默认clock复制/移动、原对象结束后再用新对象已真实执行通过，覆盖路径无ASan/UBSan诊断；不把无诊断写成全部业务通过。原75与私有24分开计数，不声称新增永久cases或测过网络TTL/回收/性能。
+
+本轮只在自有临时目录增加验收文件，用户source/header/永久test/CMake/note/冻结daily均不修改；原永久test与CMake哈希保持。可复用经验已由既有规则覆盖：修复一个分支的取时次数时，也要保留同一分支的状态与bool语义；新行为不能只靠旧全绿测试证明。同步当前状态/下一步、总规划、Week13、理论规划系统状态及DAILY_INDEX；主线85个整日通过/86份已生成、理论T1~T7通过/T7最终98/下一步T8保持。普通检阅不自动commit/push。原source/header/test/CMake及Daily/note前后哈希一致；本机tmp/w13d2_final_review_20261016保留独立测试、只读源码快照和三份LastTest日志。远端自有/tmp/codex-w13d2-final.m2K4fo已核对解析绝对路径后清理，并确认不存在。
+
+## 2026-10-16：T8 补齐参数梯度的中间推导与实验口径
+
+用户认可网页反馈，并明确指出§4.1从所有d,c直接跳外积过快。读取完整附件、最新版T8、理论规划、ML.md正则化公式与MEMORY相关规则后，从当前正文增量修改，原稿备份于本机tmp/t8_targeted_20261016/T8.before.md。保留用户新增的logits坐标/负梯度blockquote、原R1签名、训练机器图和Reading Gate，不替写学习代码，不改主线daily规则。
+
+§0/1先讲一条输入对cat/dog/bird三个候选分别打分，延用[2,1,0]贯穿后文，解释每类一列weights、具体x=[2,3]/W/b怎样产生分数，最后才到batch。区分输入样本与T5随机抽样结果，样本编号统一为i、类别0-based。§4.1画W(1,0)->z0->loss依赖并标两段导数，用链式法则算一个偏导，再展开2x3全部元素，从列乘行命名外积，补NumPy一维.T不加轴、outer/显式加轴的最小例子；§4.2先逐样本贡献再求均值，说明dZ已除B且db沿样本轴相加。用户原有梯度说明逐字保留。
+
+其余反馈已采纳：概率示例改为严格正数；训练/评估均可计算loss，只有训练更新参数；L2统一ML.md的lambda/(2*Ntrain)与lambda/Ntrain梯度，R1纯数据接口保留、R2组合正则，验证/测试只比较纯数据交叉熵。每类100条、噪声std0.8；R2用新seed2027数据池和新参数，split seed2028按类60/20/20切分为180/60/60，固定类别组成、配对行号和互斥覆盖，避免将R1已用全量数据重命名为最终test。候选运行前固定验证CE最小、同值看accuracy、再同值保留预定先者；默认采用选中候选训练结束参数，不临时选择重训policy或看test调参。
+
+对照D2L softmax regression与NumPy outer/transpose官方文档；本机Python3.13.7/NumPy2.3.3独立数值QA37项通过，覆盖单坐标/完整外积、batch和L2有限差分、bias不惩罚、分层切分互斥/计数/复现及短训练smoke。该私有例子的初始loss约1.09861、100步后约0.11299、训练accuracy约0.97778，仅说明新数据设置可用，不是用户T8实现或Gate通过证据；未使用它的test选择配置。31个显示公式与代码围栏静态闭合、用户blockquote/R1签名/Reading Gate对照完全保留，未冒充Typora视觉预览或Ubuntu执行。经验经同主题冲突审计，合并到现有理论线知识顺序与公式/实验对齐规则，不另建模板、不重讲已学线代、不泄露完整主练习。T8与Theory Gate1仍未通过；系统Day2暂96/100待非正TTL返回修复、R1保持100，其他进度不变，未自动commit/push。
+
+## 2026-10-16：Week13 Day2 修后最终复检，100/100正式通过
+
+用户再次通知Day2完成，重新读取最新155行kv_store.cpp与note。source SHA256为a246f8d507e9864614a428c37289b7631785d24ec86c3a2ca63504153a9ec6b9。非正TTL分支已复用本次now_ms，物理缺失/当前过期先返回false，有效记录才data_.erase并返回true；不经公开erase二次取时，也未把正常缺失检查挪到正TTL溢出验证前。新注释明确“存在返回值时，true当且仅当输入key有效”，与本次正常返回路径一致。撤销原4分扣分，Day2整日最终100/100正式通过，R1保持100/100；未发现本日范围内新增阻塞问题。
+
+在新建私有目录fresh配置构建，C++17/Wall/Wextra/Werror/g零warning，同一组旧15+新9项normal 24/24 PASS；另fresh ASan/UBSan构建24/24 PASS，包含默认clock复制/移动、原对象结束后新对象继续使用的路径，无sanitizer诊断。原工程另fresh完整构建零warning，固定cmake -E chdir <private-original-build> ctest --output-on-failure入口75/75 PASS。本轮为当前源码重跑，不沿用上轮结果；原75与私有24分开，不冒充新增永久测试或网络TTL集成。
+
+Note的R1四点及R3单次取时说明未变化，仍逐项正确；Daily与note的SHA256分别保持2778aa86f01c64f8ad348a2f2c4a5258934754e12a71fe7ef7b6c5badfca93c4和9a81f7800d8780e226e0c4907108f7e836a106e68db3fa35eb525a7656f439b2，无新增用户daily改动，不重扣也不把旧Codex改稿算新笔记。五道收口题未新增书面/口述答案，沿上轮对照：1~3代码与精确检查支持，4异常保状态实测成立，5相对时钟跨进程用途已在对话补准，不要求机械抄写或新测试。本轮只读验收，不再重写已定向润色的后半。
+
+同步MEMORY当前状态/下一步、总规划、Week13、理论规划系统状态和DAILY_INDEX：主线累计86个正式通过单元、86份已生成daily；Week13整周尚未通过，Day3尚未生成，下一步待用户指令接EXPIRE/PTTL、秒毫秒转换和多key一致时间观测。理论T1~T7通过、T7最终98、当前T8与Theory Gate1待完成；保留刚才T8定向改稿，不因系统验收修改其规则或进度。用户source/header/永久test/CMake/note/冻结daily未修改，不自动commit/push；私有日志及当前source快照保留于本机tmp/w13d2_pass_20261016。远端自有/tmp/codex-w13d2-passfinal.MiyQrU已核对解析绝对路径后清理并确认不存在。
+
+## 2026-10-16：Week13 Day3 教程生成，接命令并建立命令级时间观测
+
+新建week13/day3/day3.md，严格沿用主线三Part、独立R1闸门及正式通过后定向润色规则。先从SET/EXPIRE/PTTL的1000→2999→3000ms场景和四个主问题出发，说明原网络层不动、今天只扩dispatcher；逐个交代handler用途/调用时点/参数/owning返回、seconds语法与固定Error文本。R1限定普通命令主链、arity和简单整数错误，直接提供三个小GTest与可追加CMake，完整范围、非正秒数、异常来源和多key时刻一致留后半，不把后置目标倒扣首版。
+
+后半以当前真实EXISTS/DEL逐key调用为起点：单次方法一次取时不等于整条命令一次取时。私有递增时钟真实复现EXISTS code code在2999/3000分别判断而返回1，DEL a b也可跨同一期限只计1；新约定是在同一命令时刻下分别应计2。DEL同名重复只计1，时间固定不冻结命令自己的修改。给出有限read_time_ms/exists_at/erase_at/expire_ms_at能力，保留旧API/map/node；clock取得与显式期限检查分开，避免把Now自身overflow_error误译成客户端时长错误。秒数正值安全换算、非正值不乘/不取绝对值、失效不复活、失败保旧状态均与Day2和周计划对齐；不提前引入Day4主动维护/Day5网络/Day6淘汰。
+
+核对Redis EXPIRE/PTTL/EXISTS官方及C++ from_chars规范。整数语法明确为项目子集：允许前导零/-0，拒绝+、空白、尾字节/NUL及超出int64，不宣称完整Redis文本兼容。Ubuntu GCC10.5/C++17/Wall/Wextra/Werror下demo与原库引用零warning构建，16组from_chars语法/范围输入、两个旧dispatcher取时现象和demo组成4项生成QA，固定cmake -E chdir ... ctest --output-on-failure -R入口4/4 PASS。R1三个新功能tests已按正文头文件/链接与gtest_discover_tests编译登记，但未运行尚待用户实现的EXPIRE/PTTL期待，不能冒充功能通过；本轮未跑sanitizer或整套原CTest，Day2的75/75与私有24/24保持为上一轮证据。私有QA最初因测试宏外围缺花括号触发-Werror，已修Codex自己的harness后重建全绿，未改用户源码。
+
+静态审计通过3Part/唯一教程开始/26节编号/24个代码围栏块/3个显示公式/2张旧Mermaid graph结构与R1截断前置；未声称Typora视觉预览。全仓现有87份daily，与目录相符；Day2教程/note和Ubuntu source/header/永久test/CMake哈希保持，T8及用户杂教程改动保留。新增资料不改变主线/理论线模板或既有规则，不追加重复长期规则。同步当前快照/下一步、总规划、Week13、理论规划系统进度和DAILY_INDEX：主线86整日通过/87生成，Day3待R1，Week13未整周通过，理论T1~T7通过/T7最终98/T8待学保持。生成QA源码与LastTest日志在本机tmp/w13d3_generate_20261016；远端私有/tmp/codex-w13d3-qa.yQLVhw已核对解析绝对路径后清理并确认不存在。新daily按既有授权审计当前全部文档改动后执行git add ./commit/push repo master，实际发布结果以Git返回为准。
