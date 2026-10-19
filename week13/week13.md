@@ -1,10 +1,10 @@
 # Week13：Mini Redis V2，让 key 按时过期
 
-> 版本：2026-10-16，Day3 教程已生成、R1待实现；Day2整日100/100、Day1最终98/100保持，Day7独立C++补缺安排保持
+> 版本：2026-10-19，Day3整日98/100正式通过、R1保持100，Day4教程已生成待R1；理论T8整课100/100、Theory Gate 1正式通过、下一步T9；Day2整日100/100、Day1最终98/100和Day7补缺安排保持
 > 系统主线：Week1~Week12 已完成，共 84 个正式通过单元；进入 Milestone E
 > 本周产出：沿用现有 Mini Redis，增加 EXPIRE/PTTL、可控时钟和有限的过期清理
-> AI 理论线：T1~T7 已通过，T7 最终 98/100；下一步 T8 多分类/workflow；Theory Gate 1 尚未通过，本周主线不等待理论线
-> 当前状态：Day1整日98/100、Day2整日100/100均已正式通过，主线累计86个通过单元、87份已生成daily；Week13整周尚未通过。Day2原CTest75/75、normal与ASan/UBSan私有各24/24保持为已通过证据。Day3已生成，当前完成独立R1：接EXPIRE/PTTL与三个最小checker，后半再升级范围/异常来源和多key一致时间；示例生成QA不算用户完成Day3
+> AI 理论线：T1~T8已通过，T7最终98/100、T8最终100/100；Theory Gate 1正式通过，下一步T9，本周主线继续独立推进
+> 当前状态：Day1整日98/100、Day2整日100/100均已正式通过，主线累计87个整日通过单元、88份已生成daily；Week13整周尚未通过。Day2原CTest75/75、normal与ASan/UBSan私有各24/24保持。Day3整日于2026-10-19正式通过98/100，R1保持100；安全单位换算、clock异常原样传播/期限越界Error和命令一次取时已完成。fresh Debug完整构建零warning、原CTest99/99，独立ASan/UBSan的TTL24/24、覆盖路径无报告。笔记两处用词各扣1分，不要求重抄；下一步Day4有预算主动清理
 
 ---
 
@@ -251,7 +251,7 @@ R1 前说明 `seconds` 的整数输入规则，包括负号、空输入、非法
 
 重复表驱动 GTest 可以由我编写。你负责定义错误输入、预期回复以及“失败设置不会覆盖原 deadline”的判断依据。
 
-Day3 教程现已生成：[设置与查询有效期](day3/day3.md)。R1先复用Day2已通过的`expire_ms/pttl`接通普通链、参数数量及简单整数错误，附三个小checker与可直接追加的CMake。完整数字范围、非正秒数与clock异常来源在R2/R3落实；整日仍要求一条多key命令共用同一时刻。当前EXISTS/DEL各轮分别调用原store方法的跨期限现象已用递增假时钟复现，属于本日新增关系，不回退Day2。后半给出有限的显式时间能力，保留旧API，不引入新线程/锁；R1正式通过后仍依据用户真实首版定向润色。
+Day3整日已正式通过98/100，R1保持100，见[设置与查询有效期](day3/day3.md)。已完成安全换算、非正秒数、期限错误回复/clock原异常传播及命令共用时刻；EXISTS重复key为2、DEL重复key为1，递增clock下单条命令只取时一次。原API、map/node和网络底座保留；fresh完整构建零warning、CTest99/99，独立ASan/UBSan的TTL24/24无报告。仅笔记的异常类型和返回/抛出两处表述各扣1分；Week13整周尚未通过，下一步Day4。
 
 命令名仍按原来的规则匹配；binary key/value 原样保留。新增时间参数是文本整数，并不把整条 request 改成 C-string。
 
@@ -260,6 +260,8 @@ Day3 教程现已生成：[设置与查询有效期](day3/day3.md)。R1先复用
 ---
 
 ## 8. Day4：没人访问的过期 key 也要回收
+
+教程已生成：[Day4：分批回收过期 key](day4/day4.md)，当前待R1实现与验收。只新增组件维护；Day3正式通过状态保持。
 
 ### 今日主问题
 
@@ -460,23 +462,23 @@ cmake -E chdir build ctest --output-on-failure
 
 ## 13. AI 理论伴随线：按真实起点走
 
-**T1~T7 已通过，Ex1/T7 最终 98/100；当前进入 T8 多分类与完整 ML workflow。** 不能因为系统进入 Week13，就在周规划中写成理论线已到 T10。
+**T1~T8已正式通过，Ex1/T7最终98/100，T8最终100/100；Theory Gate 1正式通过，下一步T9。** 不因系统进入Week13就把理论线静默记成已到T10。
 
-2026-10-14 Ex1/T7 正式通过 `98/100`。餐车与房价两个实际脚本已闭合训练；用户修正半 MSE 的系数后，20/20 私有检查通过，包括数值梯度、原题 cost checkpoints、独立最小二乘与新房预测参照。用户口述训练集统计量和已学 theta 的复用正确。两处轻量记录精度问题不阻塞推进；不要求另写 synthetic 回归或最小二乘求解器。T8 提前稿已接上本轮结果和预测/验证集角色区别；T8 与 Theory Gate 1 尚未通过。
+2026-10-14 Ex1/T7 正式通过 `98/100`。餐车与房价两个实际脚本已闭合训练；用户修正半 MSE 的系数后，20/20 私有检查通过，包括数值梯度、原题 cost checkpoints、独立最小二乘与新房预测参照。用户口述训练集统计量和已学 theta 的复用正确。两处轻量记录精度问题不阻塞推进；不要求另写 synthetic 回归或最小二乘求解器。T8整课与R3于2026-10-17最终100/100正式通过，R1/R2各100保持。原五项、参数dtype/有限值、标签维数/数量/范围及公共入口shape与N/D/C非空限制全部修复；同一24项私有检查24/24、当前实际训练/评估回归16/16，均exit0。仍选A，validation loss0.269190679540/accuracy86.67%，最终test loss0.289091944672/accuracy85%。Theory Gate 1正式通过，下一步T9（PyTorch Tensor/Storage/Layout），不重写已通过分类器或重复旧学习。旧永久checker90/100仅属R1历史结果，未适配的新签名本轮由私有检查覆盖。
 
 本周顺序：
 
 ```text
 T7 已由 Ex1 等价完成，不重复回归训练或 T6 数值实验
--> 当前进入 T8 多分类 softmax classifier 与 train/validation/test workflow
--> T8 出口核对 Theory Gate 1 后，再推进 T9
+-> T8整课100/100、Theory Gate 1已正式通过，下一步T9 Tensor/Storage/Layout
+-> 接着学习T9的Tensor/Storage/Layout，主线TTL按原计划推进
 ```
 
 你已经学会的多变量线性回归、gradient descent、feature scaling、正规方程、logistic regression 和 L2 regularization 不重讲。Ex1/T7 已用同一份实际产出等价通过，不重复造两份。
 
 每天仍安排 30~60 分钟，周计划值 4~6 小时。按模块教程中的准确视频节号学习；本周不额外列一套 AI 视频，也不为 TTL 日插入 CUDA/serving 框架。
 
-总规划的 Week13/T10 仍是协调目标，**当前真实状态是 T7 已完成、T8 尚待实现**。10 月下半依据 T8 与 Theory Gate 1 的实际结果再评估 T9/T10 能否接上；未完成部分如实记账，不硬塞模块，也不让理论进度阻塞 TTL 工程。
+总规划的Week13/T10仍是协调目标，**当前真实状态是T1~T8与Theory Gate 1正式通过，下一步T9**。10月下半根据T9的实际学习情况评估T10能否接上；未完成部分如实记账，不硬塞模块，也不让理论进度阻塞TTL工程。
 
 ---
 

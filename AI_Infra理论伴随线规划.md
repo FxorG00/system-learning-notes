@@ -1,7 +1,7 @@
 # AI Infra 理论伴随线规划
 
-> 版本：2026-10-16，系统主线 Week13 Day2整日修后100/100正式通过、累计86个主线单元；Ex1/T7 最终 98/100，理论线下一步 T8
-> 适用对象：FxorG，中山大学计算机科学与技术专业；系统主线 Week1~Week12 已完成，Day7 整日最终 100/100，Week13 Day1 整日已于 2026-10-14 正式通过 98/100，主线累计 85 个通过单元，索引候选/回表/覆盖模型已收口，复用既有 SQL 证据；本次未重跑或修改 Ubuntu。Week13 整周尚未通过，Day2整日修后正式通过100/100、R1保持100，主线累计86个通过单元；本轮原工程75/75、normal与ASan/UBSan私有各24/24，无sanitizer诊断；Day3教程已生成、R1待学习验收，理论线T8不因系统进入新日而自动验收；主线已生成 daily 87 份；理论线 T1~T7 已通过，T6 最终 100/100、T7 最终 98/100。Ex1 两个实际脚本作为等价产出，半 MSE 系数修复后 20/20 私有检查通过，用户预测口述正确；独立最小二乘参照由本轮验收补上，不重写同一训练系统。下一步 T8 多分类/workflow，提前稿已结合实际结果和口述定向润色；T8/Theory Gate 1 尚未通过
+> 版本：2026-10-19，系统Week13 Day3整日98/100通过、Day4教程已生成待R1；理论T8/Gate1已通过、下一步T9，范围/Gate与AIInfraGuide安排保持；主线仍按原Week16完整学完后再做简历试投
+> 适用对象：FxorG，中山大学计算机科学与技术专业；系统主线 Week1~Week12 已完成，Day7 整日最终 100/100，Week13 Day1 整日已于 2026-10-14 正式通过 98/100，主线累计 85 个通过单元，索引候选/回表/覆盖模型已收口，复用既有 SQL 证据；本次未重跑或修改 Ubuntu。Week13 整周尚未通过，Day2整日修后正式通过100/100、R1保持100，主线累计86个通过单元；本轮原工程75/75、normal与ASan/UBSan私有各24/24，无sanitizer诊断；Day3整日于2026-10-19正式通过98/100，R1保持100；fresh完整构建零warning、CTest99/99，独立ASan/UBSan的TTL24/24无报告；主线累计87个整日通过、88份已生成daily，Day4教程已生成待R1；理论线仍按实际证据独立验收；理论线 T1~T8 已通过，T6 最终 100/100、T7 最终 98/100。Ex1 两个实际脚本作为等价产出，半 MSE 系数修复后 20/20 私有检查通过，用户预测口述正确；独立最小二乘参照由本轮验收补上，不重写同一训练系统。T8整课与R3于2026-10-17最终100/100正式通过，R1/R2各100保持。原五项、参数dtype/有限值、标签维数/数量/范围及公共入口shape与N/D/C非空限制全部修复；同一24项私有检查24/24、当前实际训练/评估回归16/16，均exit0。仍选A，validation loss0.269190679540/accuracy86.67%，最终test loss0.289091944672/accuracy85%。Theory Gate 1正式通过，下一步T9（PyTorch Tensor/Storage/Layout），不重写已通过分类器或重复旧学习。旧永久checker90/100仅属R1历史结果，未适配的新签名本轮由私有检查覆盖。
 > 职业目标：本科就业，主攻 LLM inference systems / serving 与 CUDA/Triton kernel optimization
 > 本文件定位：`plan_strengthened.md` 的 AI Infra 理论伴随线，不替代 C++ / Linux / OS / 网络 / Reactor / Mini Redis 主线
 
@@ -164,7 +164,7 @@ AI Theory T module：只补 NumPy/PyTorch、数值稳定性、framework mechanis
 
 ```text
 Week1 ~ Week12 已完成
-当前：Week13 Day1 整日正式通过 98/100，主线累计 85 个通过单元；Day2整日修后正式通过100/100、R1保持100，主线累计86个通过单元；本轮原工程75/75、normal与ASan/UBSan私有各24/24，无sanitizer诊断；Day3教程已生成、R1待学习验收，理论线T8不因系统进入新日而自动验收；主线已生成 daily 87 份。理论线 T1~T7 已通过，Ex1/T7 最终 98/100；下一步 T8 多分类与完整 workflow，不新增重复回归学习，Theory Gate 1 尚未通过
+当前：Week13 Day1 整日正式通过 98/100，主线累计 85 个通过单元；Day2整日修后正式通过100/100、R1保持100，主线累计86个通过单元；本轮原工程75/75、normal与ASan/UBSan私有各24/24，无sanitizer诊断；Day3整日于2026-10-19正式通过98/100，R1保持100；fresh完整构建零warning、CTest99/99，独立ASan/UBSan的TTL24/24无报告；主线累计87个整日通过、88份已生成daily，Day4教程已生成待R1；理论线仍按实际证据独立验收。理论线 T1~T8 已通过，Ex1/T7 最终 98/100；T8整课与R3于2026-10-17最终100/100正式通过，R1/R2各100保持。原五项、参数dtype/有限值、标签维数/数量/范围及公共入口shape与N/D/C非空限制全部修复；同一24项私有检查24/24、当前实际训练/评估回归16/16，均exit0。仍选A，validation loss0.269190679540/accuracy86.67%，最终test loss0.289091944672/accuracy85%。Theory Gate 1正式通过，下一步T9（PyTorch Tensor/Storage/Layout），不重写已通过分类器或重复旧学习。旧永久checker90/100仅属R1历史结果，未适配的新签名本轮由私有检查覆盖。
 后续：TTL / AOF / tests / benchmark / README -> 项目证据与投递
 ```
 
@@ -183,7 +183,7 @@ T 不等于一个自然周
 
 ```text
 AI 理论线：每天 30~60 分钟
-系统主线：每天至少 3 小时
+系统主线：平常计划每天3小时以上，区域赛备赛期按实际精力调整
 ```
 
 折算为：
@@ -191,7 +191,7 @@ AI 理论线：每天 30~60 分钟
 ```text
 AI 名义上限：每周 3.5~7 小时
 AI 可持续计划值：每周 4~6 小时
-考试、主线故障或休息会使个别周低于计划值
+区域赛备赛/参赛、考试、主线故障或休息会使个别周低于计划值
 ```
 
 推荐把一个自然周拆成短块，而不是等某一天硬学 3 小时：
@@ -226,7 +226,7 @@ AI 可持续计划值：每周 4~6 小时
 
 ### 3.4 系统 milestone 与 T module 的硬锚点
 
-| 系统主线出口 | AI 理论至少到达 | 目标日期 | 当时应有的 AI 证据 |
+| 系统主线出口 | AI 理论至少到达 | 原目标月份（协调估算） | 当时应有的 AI 证据 |
 |---|---|---|---|
 | Week9 | T1 | 2026.08 末~09 初 | `numpy_basics.py`，能解释 shape/dtype/nbytes |
 | Week10 | T3 | 2026.09 | matmul/broadcast reference 与 shape 推导 |
@@ -239,18 +239,23 @@ AI 可持续计划值：每周 4~6 小时
 
 这里的“至少到达”是进度控制锚点，不是主线代码的编译依赖。若 Week10 已结束而 T3 未完成，必须在进度记录中写明欠账和补齐日期，不能把 T 线静默冻结。
 
+2026-10-18用户澄清：先按原规划学完Week16，再整理简历并向中小厂试投，11月为期望时间。不能据此拆“提前投递版”、前移任务或缩减主线；本表的学习范围和Gate保持，日历日期按区域赛与实际进度核对，不强行赶时长。
+
 ### 3.5 求职日期锚点
+
+以下月份保留为协调估算；首次整理投递简历、试投的触发条件是原Week16正式完成，不是到了11月、12月或1月就自动开始。学习范围与Gate不变，实际完成日期另据进度校准。
 
 ```text
 2026.10.15 前：T1~T8，Theory Gate 1
 2026.12.15 前：T1~T13 + T15~T16，T14 允许延期
-2027.01 第一轮投递：T17~T18 作为 AI Infra 冲刺项，不等待 T24
+Week16正式完成后：再整理简历并首批试投，用户希望11月，实际以完成为准
+2027.01：持续投递/按实际反馈补缺；T17~T18作为AI Infra冲刺项，不等待T24
 2027.02：T19~T21
 2027.03：进取目标，T22~T24，形成 tiny_transformer_reference
-2027.Q2：若周均只有约 4h，这是 T24 的正常后备窗口，不影响 2027.01 首轮投递
+2027.Q2：若周均只有约4h，这是T24的正常后备窗口；首批不以提前完成T24为条件
 ```
 
-第一次投递时：
+学完Week16后第一次投递时，按真实完成的AI内容呈现，既有方向分工保持：
 
 ```text
 后台/C++ Infra：Mini Redis 是主项目，AI 线是差异化证据
@@ -313,22 +318,20 @@ AI Theory Tn.md
 
 视频与官方文档承担校准、补充或第二解释源，不能用“去看第几 P”代替教程正文；反过来，也不应把一份很长的外部资料变成必读前置，再让用户猜它应该插在教程哪一段。
 
-理论线每个概念应在主线第一次需要它的位置直接讲清楚。默认认知顺序改为：
+理论线每个概念应在讲解主线第一次需要它的位置直接讲清楚，教学呈现以 `MEMORY.md` §1.1 为最高优先级：**先走通用途，再命名概念**。这项要求逐个关键转折执行，不以首屏有例子、术语已译成中文或表格齐全代替；不改变系统主线 daily 的结构与闸门。默认认知顺序为：
 
 ```text
-一个旧方法真正卡住的具体问题
--> 最小 scalar / 单样本 / 小 Tensor 数值例子
--> 亲手算出当前现象
--> 说明为什么需要一种新的能力
+从已有能力产生一个具体新问题
+-> 用熟悉对象走通一次最小完整动作、结果与用途
 -> 从这个需要推出最小机制
 -> 再命名正式术语
 -> 展开公式与因果链
--> scalar -> vector -> batch / matrix
+-> 从当前最小有意义单位推广到 batch / 一般情形
 -> code 对应与紧邻小实验
 -> AI Infra workload / memory / numerical connection
 ```
 
-术语、最终矩阵公式和 framework metadata 不能承担第一次理解的责任。读者应先看见“为什么非要有它”，再知道“这个已经出现的对象叫作什么”。重要公式必须先用一个可手算的小例子落地；第一次从 scalar 推广到 matrix 时，必须说明哪个 axis 被归约、哪些 axes 被保留，以及 output shape 为什么与目标对象相同。
+术语、最终矩阵公式和 framework metadata 不能承担第一次理解的责任。读者应先看见“为什么需要它、怎样使用”，再知道“这个已经出现的对象叫作什么”；不是要求每种需求都只有一种解法。重要公式必须先用一个可手算的小例子落地；不强制每个概念从 scalar 开始，确实从标量推广到矩阵时，必须说明哪个 axis 被归约、哪些 axes 被保留，以及 output shape 为什么与目标对象相同。
 
 ### Theory、Lab 与 Gate 的职责分开
 
@@ -994,6 +997,8 @@ fallback：linear_regression_numpy.py
 
 ## T8：logistic / softmax regression 与 ML workflow
 
+**当前状态（2026-10-17）：T8整课与R3最终100/100，正式通过；Theory Gate 1正式通过。** 最新源码a35aca0a...完整保留三批独立数据、三候选L2训练、验证纯data loss选择及最后test；原输入/数值24项24/24、当前真实main与R2回归16/16，均exit0。此前入口dtype/finite、labels数量/维数、公共shape与空维度扣分全部撤销；仍选A，validation loss0.269190679540/accuracy86.67%，test loss0.289091944672/accuracy85%。旧永久checker90/100只属R1历史；本轮用真实签名的私有检查，不改用户代码、checker、note或T8。下一步T9，不重复训练或另写分类器。
+
 ### 本周问题
 
 ```text
@@ -1057,18 +1062,20 @@ softmax_classifier_numpy.py
 
 ## Theory Gate 1：进入 PyTorch / 深度学习阶段
 
+**实际状态：2026-10-17正式通过。** T1~T7已有验收与本轮T8最终100/100共同覆盖下列条件；不要求重做已通过的实验。下一步进入T9，CPU baseline按原计划执行。
+
 必须全部满足：
 
 ```text
-[ ] 会使用 Python / NumPy 编写并测试小程序
-[ ] 能推导 matmul output shape
-[ ] 能手算简单 gradient
-[ ] 能解释 expectation / variance / conditional probability
-[ ] 能独立实现 stable softmax
-[ ] Ex1 或 T7 fallback 已提供一份 linear-regression training evidence，不重复实现
-[ ] 能实现 NumPy multiclass softmax classifier
-[ ] 能区分 train / validation / test，并避免 preprocessing leakage
-[ ] 当前系统主线没有因为理论线停摆
+[x] 会使用 Python / NumPy 编写并测试小程序
+[x] 能推导 matmul output shape
+[x] 能手算简单 gradient
+[x] 能解释 expectation / variance / conditional probability
+[x] 能独立实现 stable softmax
+[x] Ex1 或 T7 fallback 已提供一份 linear-regression training evidence，不重复实现
+[x] 能实现 NumPy multiclass softmax classifier
+[x] 能区分 train / validation / test，并避免 preprocessing leakage
+[x] 当前系统主线没有因为理论线停摆
 ```
 
 未满足时，不通过“多看一个视频”解决；回到对应代码产出补齐。
@@ -2105,6 +2112,25 @@ Gate C 后：KuiperLlama / CUDA
 官方框架文档
 可运行代码与测试
 ```
+
+---
+
+## 10. AIInfraGuide：按当前问题调用的中文补充
+
+2026-10-18 核对后纳入 [AIInfraGuide](https://caomaolufei.github.io/AIInfraGuide/)。具体文章、小节、适用位置及技术勘误见 [统一阅读映射](reference_materials/ai_infra/AIInfraGuide_阅读映射.md)；这里仅规定它在本路线中的位置。
+
+| 当前模块 | 对应补充 | 何时使用 |
+|---|---|---|
+| T9 | PyTorch 入门的 Tensor、形状与 dtype 小节 | 先接上已经会的 NumPy；独立 layout 预测完成后再对照外部形状示例 |
+| T10~T12 | 同文的 Module、autograd、完整训练循环 | 分别在本课对应机制讲清后选读；完整实现留在独立练习后，不新增同构训练作业 |
+| T15~T18 | 词元/词嵌入、Self-Attention、Decoder Block | 跟随自己的 token -> attention -> block 链；先做本课 reference，再读相关完整代码 |
+| T20~T21 | 训练显存账、LLM 推理基础、PagedAttention | 先列清自己的参数/梯度/状态/KV 对象，再对照估算与分块示例 |
+| T22~T23 | Continuous Batching、LLM 推理指标与瓶颈分析 | 复用自己的调度仿真和 benchmark；不把站内速度或利用率数字当作本机结果 |
+| Theory Gate 3 之后 | 与总规划 Gate C/D/E 对应的 CUDA、serving、通信文章 | 继续等待各 Gate 的实际前置；没有 GPU 时保留 CPU 路径，不照跑 CUDA 示例 |
+
+**当前 T1~T8 与 Theory Gate 1 已通过，先进入 T9。** 新资料计入原有每天 30~60 分钟预算，替换重复的第二讲解，不额外加一份每日阅读任务。T13 已有 ML/T8 generalization 基础，T14 仍可延期；不能因为网站目录齐全就新增重复课程或改变求职日期。
+
+生成或获准润色 T 教程时，Codex 先查映射、实读相关小节，再把有用解释编排在当前对象与需求出现的位置。必学机制仍由正文讲清；外部阅读标明用途和停止点。API、数值语义及硬件限制由官方文档复核，遵守 MEMORY §9.8 的资料分工与独立练习保护规则。
 
 ---
 

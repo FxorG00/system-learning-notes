@@ -1,6 +1,6 @@
 # Week13 Day3：让客户端设置和查询 key 的有效期
 
-> 版本：2026-10-16，依据 Day2 最终通过的 KvStore 与当前命令分发器生成
+> 版本：2026-10-19，保留 R1 与定向后半；本次只补接口升级范围和验证表的定位提示
 > 前置：Day2 整日正式通过 100/100；今天继续原工程，不另造一套服务器
 > 今日产出：EXPIRE/PTTL 两条命令；后半把时间判断从“单次方法”推进到“整条命令”
 > 学习方式：完整保留 R1 独立实现、R2 对照讲解、R3 定向升级；R1 通过后再按你的真实首版润色后半
@@ -14,6 +14,13 @@
 **让使用者能够发送 `EXPIRE code 2`，给 code 设置两秒有效期，再用 `PTTL code` 查询剩余毫秒数。**
 
 昨天你已经让 KvStore 做到了“到期后读不到”。今天给这项能力增加命令入口。主要改动落在原来的 `command_dispatcher.hpp/.cpp`；RESP parser、Buffer 和 Reactor 都继续使用。
+
+今天分成两个层次，按轮次推进：
+
+- **R1：接通两条新命令。** 使用昨天的组件，实现 EXPIRE/PTTL，让使用者能设置和查询有效期。
+- **R2/R3：让旧的多 key 命令适应 TTL。** EXISTS/DEL 会在一条命令里检查多个 key；加入时间以后，还需要明确整条命令如何一致地判断有效期。
+
+因此，后半回到 EXISTS/DEL，是处理 TTL 带来的新关系。**首版仍只做两条新命令的主链，不提前要求你修改这些旧 handlers。**
 
 先看一个固定时钟下的使用场景。这里的命令写成便于阅读的形式，实际 dispatcher 接收的是已经解析好的字符串数组。
 
@@ -451,13 +458,17 @@ CTest 的 `-R` 按正则选择测试名。这里仅运行三个新增 tests：�
 
 ---
 
-## 14. Round2：先把“合法请求”和“合法命令”接起来
+## 14. Round2：从你已经通过的两个 handler 继续
 
-本节以下是 R1 后的讲解。届时先对照你自己的 handler，再看新增关系。
+**你的 R1 已于 2026-10-19 正式通过，100/100。** 当前 `execute_command` 已接入两个分支；`expire_handler` 用 `result.ec` 与 `result.ptr` 一起判断整个 seconds 参数，`pttl_handler` 把有符号结果直接交给 integer encoder。这三处保留。
+
+你保存的三个 `TtlCommandR1` tests 均通过；本次 fresh Debug 完整构建零 warning，原工程 CTest **78/78 PASS**。私有的 8 项 R1 检查在 normal、ASan/UBSan 下各 **8/8 PASS**，覆盖了参数数量、完整整数文本、含 NUL 参数、binary key 与普通 handler 单次取时。私有检查没有写进你的 tests，也没有验证后半的极端秒数换算。
+
+代码里你写了“把参数解析出来，然后传进去；具体 kvstore 的规则不理”。**不在 handler 里重复实现过期判断，这个分层是对的。** 接下来只补命令层自己的工作：安全换算单位，把期限范围失败变成 Error reply，以及让多 key 命令共用一个时刻。数据是否有效、怎样更新 deadline，仍交给 KvStore。
 
 以 `{"EXPIRE", "k", "2x"}` 为例：原 parser 已经证明它是一条完整的 Array of Bulk Strings，arguments 也已经交付。它能证明字符串边界，却不会替 EXPIRE 解释 `2x` 的业务含义。
 
-你的 handler 接着验证 seconds，发现不符合整数规则，返回 Error reply。**一次完整请求，可以对应一次失败的命令执行。**
+你的 `expire_handler` 在 `from_chars` 停在 x 时，由 `result.ptr` 检查拒绝它，返回 Error reply。第三个已通过的 test 随后检查旧 TTL、旧 value 和 PING，都正确。**一次完整请求，可以对应一次失败的命令执行。**
 
 因此应用层处理完这条完整 request 后，仍按 parser 给出的 `consumed_bytes` 消费它，并继续检查 input 中下一条完整 request。反过来，RESP framing Error 是请求结构不合法，仍沿用 Week12 的协议错误策略。
 
@@ -475,13 +486,15 @@ RESP framing Error
 
 ## 15. 秒与毫秒：分清数值、长度和期限
 
-回到普通例子：now=1000ms，seconds=2。这里有三个不同对象：
+你的首版现在直接调用 `store.expire_ms(arguments[1], seconds * 1000)`。对 R1 的小正整数，这条适配已经正确：时钟读出 1000ms，使用者发送 `EXPIRE code 2`，计算可以直接走完：
 
-- seconds：客户端提交的相对长度，单位是秒。
-- ttl_ms：交给组件的相对长度，单位是毫秒。
-- deadline：组件保存的绝对比较点，单位也是毫秒，与 Now 使用同一个时间起点。
+1. 使用者希望 code 再有效 **2 秒**，命令层把它换成 **2000 毫秒**。
+2. KvStore 把这段长度加到本次时刻 1000 上，得到**到期位置 3000ms**。
+3. 后续查询把当前读数与 3000 比较：2999 时仍有效，到 3000 时已经过期。
 
-它们的关系是：
+这里，客户端给的 `seconds` 和组件接收的 `ttl_ms` 都表示**还能活多久**，只是单位不同；组件保存的 `deadline` 表示**到哪个位置失效**。这个位置和 Now 使用同一个时间起点，不是日历上的时间戳。
+
+把刚才的两个计算写成一般形式：
 
 $$
 \text{ttl\_ms}=1000\times\text{seconds}
@@ -493,7 +506,14 @@ $$
 
 第一步是命令层的单位适配，第二步才是 Day2 组件已经实现的设置期限。**知道 seconds 能放进 int64_t，只证明输入整数可表示，不能证明这两个后续算式都放得下。**
 
-设 `TimeMs` 最大值为 `M = 9223372036854775807`。正 seconds 的安全乘法需要：
+先看第一步为什么也会失败。`TimeMs` 的最大值是 `M = 9223372036854775807`，若使用者给出：
+
+```text
+seconds = 10000000000000000          -> 这个整数本身能放进 int64_t
+乘以 1000 = 10000000000000000000     -> 毫秒长度已经超过 M
+```
+
+整数文本可以成功转换，单位换算却放不下。你现在的 `ec/ptr` 检查只管前一个步骤，不能保护之后的 `seconds * 1000`。**这就是本轮要在 `expire_handler` 补的第一项：正秒数先检查换算范围，通过后再乘。** 这个上限就是把 M 除以 1000 后向下取整：
 
 $$
 0 < \text{seconds} \le \left\lfloor\frac{M}{1000}\right\rfloor
@@ -501,7 +521,7 @@ $$
 
 当满足这个范围时再乘 1000；或者使用目标环境已支持、并经 Day2 核对的 GCC checked arithmetic（带溢出检查的算术）取得乘积。无论采用哪种正确方式，都不能先执行可能溢出的 signed multiplication，再拿结果判断。
 
-随后组件检查最终 deadline。举一个能区分两个检查的输入：
+通过乘法检查，只说明 2000ms 这样的**长度**能保存，还要看它加上本次时刻后，**到期位置**是否也能保存。把秒数改回很小的 1，但让当前时刻接近上限：
 
 ```text
 seconds = 1                         -> 1000ms，换算本身合法
@@ -511,29 +531,17 @@ now_ms + 1000                       -> 超出 M，最终期限不合法
 
 这时 EXPIRE 返回 §10 的数字 Error，旧 value 和 deadline 保持。这个例子测试的是期限加法，不是 from_chars。
 
-还有一个不同分支：seconds 是最小负整数。它在文本转换时合法，但命令含义只是“立即删除”。**非正 seconds 不做乘法，也不取绝对值；直接走已经定义的非正 TTL 行为。** 这样既落实语义，也不制造一个本来不需要计算的越界表达式。
+还有一个不同分支：seconds 是最小负整数。它在文本转换时合法，但命令含义只是“立即删除”。**非正 seconds 不做乘法，也不取绝对值；给组件一个非正 TTL，例如 0，即可表达立即删除。** 你的当前代码对所有成功转换的整数都乘 1000，需要把这个分支先分开；这属于 §12 明确后置的升级，不撤销 R1。
 
-## 16. 一次失败，究竟该归因给谁
-
-先看一个正常的范围失败：clock 成功返回一个合法时刻，正 TTL 与这个时刻相加放不下。Day2 的组件报告 `std::overflow_error`，handler 把它转换成使用者可以读懂的整数范围 Error。
-
-再只改变 clock：注入的 `Now` 自己抛了 `std::overflow_error`。这次根本没有得到当前时刻，不能判断用户的 TTL 是否越界。
-
-如果 handler 把“取时 + 设置”整个过程都包在同一个 `catch (std::overflow_error)` 里，这两种来源会被合并。使用者明明输入合法的 2，却可能收到“整数写错”。
-
-**异常类型相同，不代表错误来源相同。我们要先保留“取得时间失败”和“已知时间后的期限范围失败”这两个步骤。**
-
-下面的显式时间接口既用来解决这件事，也用来完成下一节的多 key 一致观测。它属于后半升级，不要求 R1 先猜出来，更不要求引入自定义异常继承体系。
-
-## 17. 从单次方法，走到整条命令的时间快照
-
-**时间快照（time snapshot）：一次命令先取得一个 now_ms，后续这条命令的有效性判断都以这个读数为准。**
+## 16. 单次方法已经只取一次时间，整条命令呢
 
 昨天 `pttl` 内部只读一次时间，解决的是一次方法调用里的混用。今天还要看：一条命令可能调用很多次 store 方法。
 
-### 17.1 用你已有 EXISTS handler 看一个具体场景
+先沿你已有的 EXISTS/DEL 走一遍，看看原来成立的调用关系，在 key 有期限以后会发生什么。
 
-你的当前代码会遍历 arguments，对每个 key 调一次 `store.exists`，并累加 true 的次数。key 还没有期限时，这样做的结果已经通过 Week12。
+### 16.1 用你已有 EXISTS handler 看一个具体场景
+
+你的 `exists_handler` 当前保留了 Week12 的循环：遍历 arguments，对每个 key 调一次 `store.exists(arguments[i])`，并累加 true 的次数。key 还没有期限时，这样做的结果已经通过 Week12。
 
 现在给 code 设置 deadline=3000，让时钟每次调用递增 1ms，然后执行：
 
@@ -550,17 +558,19 @@ EXISTS code code
 
 没有别的线程，也没有修改 value，变化的只有两次取时。这条命令却把同一个 key 一次算有效、一次算无效。
 
-本项目选定的行为是：**命令以同一时刻判断所有 key。** 本次快照若为 2999，两次都有效，EXISTS 返回 2；若为 3000，两次都过期，返回 0。
+本项目选定的行为是：**命令以同一时刻判断所有 key。** 本次统一使用 2999，两次都有效，EXISTS 返回 2；统一使用 3000，两次都过期，返回 0。
+
+这就产生了一个具体需要：命令先取得一个 `now_ms`，后续判断都使用这个读数。**这份供本条命令共同使用的时间读数，就叫时间快照（time snapshot）。** 单个方法已经只取一次时间，还需要把这个一致性范围接到整条命令上。
 
 真实 Redis 的 EXISTS 明确按出现次数计数：同一个有效 key 写两次，计两次，见 [EXISTS 官方说明](https://redis.io/docs/latest/commands/exists/)。这里的可控时钟快照是我们为本项目明确建立的实现约定；不是引用这条计数规则就自动证明自己的时间处理正确。
 
-**当前旧 dispatcher 的这条路径已在生成阶段用递增假时钟复现：返回 1，取时两次。** 这用于说明 TTL 接入后的新增关系，不撤销旧 Day2 或 Week12 的验收。
+**本次验收又在你当前保存的 dispatcher 上复现了这条路径：`EXISTS k k` 返回 `:1\r\n`，clock 调用 2 次。** 测试先在固定 1000ms 设好 deadline=3000，再让待测命令从 2999 开始逐次递增；准备阶段没有混进计数。这是后半要升级的真实行为，不撤销 R1、Day2 或 Week12 的验收。
 
-### 17.2 DEL 还包含真实修改
+### 16.2 DEL 还包含真实修改
 
 先准备两个不同 key：a、b，二者 deadline 都是 3000。命令快照为 2999，执行 `DEL a b`：二者都在这个时刻有效，应删除两个并返回 2。
 
-若分别调用两次会重新取时的 erase，就可能第一次看到 2999、第二次看到 3000，最终只记 1。今天要把这里也接到同一命令时刻。
+你的 `del_handler` 当前逐个调用 `store.erase(arguments[i])`。本次相同设置下实测 `DEL a b` 也是取时 2 次、返回 1：第一次看到 2999，第二次看到 3000。今天要让这两个删除判断都使用命令开始时的 2999，于是返回 2。
 
 另一个例子是 `DEL a a`。第一次删除后，第二次已经没有 a，所以只计 1。**共用时间读数，仍然保留命令内部按顺序发生的真实修改。** 它不意味着第二次访问要看见“删除以前”的一份数据副本。
 
@@ -573,32 +583,68 @@ EXISTS code code
 
 这里不加 mutex，不暂停真实时间，也不复制整个 map。你需要统一的是这条命令拿来比较 deadline 的数值。
 
+## 17. 为什么从 store 取得时间，又把时间传回 store
+
+现在我们已经知道需要什么：你的 `exists_handler` / `del_handler` 要让多个 key 使用同一个 t。当前 `now_` 是 KvStore 的 private member（私有成员），handler 没有、也不需要另存一份 clock；那么它应该去哪里取这个 t？
+
+**仍然向 KvStore 取。KvStore 保存 Now，负责怎样取得当前时刻、怎样检查这个读数；handler 负责把同一个读数用于这条命令。**
+
+这里有两件不同的事：
+
+- **时间从哪里来：** 仍由 KvStore 保存的 Now 决定。它可以是默认的真实时钟，也可以是测试注入的 fake clock。
+- **一个读数用多大范围：** 由执行命令的 handler 决定。它取到一次 t 后，让这条命令访问的多个 key 都使用 t。
+
+所以“先取出来、再传回去”有具体用途：**把取时这一步做一次，把使用这个时刻的判断做多次。** 这让 handler 可以协调一整条命令，又继续沿用 store 的时间来源、单位与起点。
+
+例如默认 Now 从自己的起点计算经过的毫秒数；测试 Now 则可能直接返回 2999。handler 取得的是这个时间体系里已经检查过的一个 `TimeMs` 数值，无需自己再建立另一套起点或保存一个 clock。
+
+把职责串起来就是：
+
+```text
+KvStore 保存 Now，提供取得并检查时间的能力
+    -> handler 取得本条命令使用的 t
+    -> handler 对每个 key 传入同一个 t
+    -> KvStore 按给定 t 判断有效期，必要时修改记录
+```
+
+现在才有理由给原组件增加两种调用能力：“取得一次时间”和“在给定时间判断某个 key”。
+
 ## 18. 给原组件补一组能使用同一读数的调用
 
-针对现有接口，一个有限升级是增加以下 public declarations。名字中的 `_at` 表示“在调用者提供的时刻判断”：
+**今天只为确实需要复用本次时刻的命令路径补最小能力；`*_at` 不是所有 API 都要配套新增的模板。**
+
+我们要完成的动作已经明确：**取一次时刻，再用这个时刻检查或删除多个 key。** 你的当前 `kv_store.hpp` 还没有这组能力；在原 KvStore 增加三个 public declarations（对外函数声明），实现继续放在原 `src/kv_store.cpp`：
 
 ```cpp
 TimeMs read_time_ms() const;
 
 bool exists_at(const std::string& key, TimeMs now_ms) const;
 bool erase_at(const std::string& key, TimeMs now_ms);
-bool expire_ms_at(const std::string& key, TimeMs ttl_ms, TimeMs now_ms);
 ```
 
-这几项写在 `KvStore` 类中，`TimeMs` 继续使用你已有 alias。**这是 R2/R3 的新增调用能力，不要求另建 Clock 类或换掉 map/node。**
+这几项写在 `KvStore` 类中，`TimeMs` 继续使用你已有的类型别名。`read_time_ms()` 读取并验证时刻；名字中的 `_at` 表示**在调用者给出的时刻判断**，方法使用这个数值而不再调用 Now。
+
+接回 §16 的场景：假设 code 的 deadline 已设为 3000，fake clock 的下一次读数是 2999，之后每次读取递增 1。下面只是接口调用片段，不是完整 handler：
+
+```cpp
+const auto t = store.read_time_ms();  // 本次只读一次，得到 2999。
+const bool first = store.exists_at("code", t);
+const bool second = store.exists_at("code", t);
+```
+
+`first` 和 `second` 都为 true，因为两次都比较 `2999 < 3000`。第二次调用没有重新读到 3000：**时间由第一次读取确定，后续只使用已经取得的值。** EXISTS handler 再把这两个 true 计成 2；DEL 则用同一个 t 调 `erase_at`，每次删除仍然修改原 map。
+
+这就是新接口在整条命令里的实际用途。现在再把返回值和失败约定集中列清：
 
 | 接口 | 谁调用、用来干什么 | 返回与失败约定 |
 |---|---|---|
 | `read_time_ms()` | 需要一次命令时间的 handler 调用；执行一次保存的 Now | 返回非负毫秒数；负数抛 `invalid_argument`，callable 自身异常原样传播 |
 | `exists_at(key, t)` | EXISTS handler 在多个 key 上复用 t | 在 t 时有效返回 true；缺失/过期 false；负 t 抛 `invalid_argument` |
 | `erase_at(key, t)` | DEL handler 在多个 key 上复用 t | 只有删除 t 时有效 key 才 true；缺失/过期 false；可沿现有策略清掉物理过期记录；负 t 抛异常 |
-| `expire_ms_at(key, ttl, t)` | EXPIRE handler 已成功读时后设置期限 | 沿 Day2 expire_ms 语义；负 t 或期限加法越界时先抛异常，旧 value/期限不变 |
 
-三个 `_at` **都不再调用 Now**。`expire_ms_at` 对正 ttl 的范围检查仍在缺失/过期早退之前；非正 ttl 对当前有效 key 立即删除，缺失/过期 false。
+**这是 R2/R3 的新增调用能力，不要求另建 Clock 类或换掉 map/node。** 下一节再看 EXPIRE 为什么也需要一条使用已知时刻的设置入口。
 
 为了保持 Day2 旧调用方可用，原 `get/exists/erase/expire_ms/pttl` 的签名与对外语义保留。你可以让原方法复用新判断逻辑，避免维护两份期限规则；原 get/exists/erase 对物理缺失不读时的既有路径也可以保留。今天不把统一命令时刻扩展成“每条 PING 都必须读时”。
-
-一个单 API 的使用例子：已知 k 的 deadline 为 3000，`store.exists_at("k", 2999)` 返回 true；`store.exists_at("k", 3000)` 返回 false，两次都不会取得新时刻。
 
 接回整条命令后，时间关系可以读成：
 
@@ -610,11 +656,29 @@ graph TD
     D --> E["handler 累计结果并返回 Integer reply"]
 ```
 
-图里固定的是时间参数，map 仍是原来的共享业务状态。后续若你的 R1 有同等清晰的批量接口方案，可以保留等价能力；不会为迎合 `_at` 命名而重写正确设计。
+图里固定的是时间参数，map 仍是你的原 `data_`。这次保留 `map<string, node>`、`deadline == -1` 与 `Now now_`；只把原来需要重新读时的判断拆出“使用给定 t”的入口。`exists_handler` 改用 `exists_at`，`del_handler` 改用 `erase_at`，不用复制容器或另造一套 dispatcher。
 
-## 19. 用这层拆分收住 EXPIRE 的错误边界
+## 19. 这层拆分还让 EXPIRE 的错误来源更清楚
 
-把 §16 的两种失败接到新能力上：
+前面为多 key 命令分出了“取得时间”和“使用给定时间”两个动作。**这还有一个收益：EXPIRE 可以分别处理取时失败与期限范围失败。**
+
+先准备一个仍有效的 k，value 为 v，旧 deadline 为 `M-1`。clock 成功读出 `M-500`，使用者发送 `EXPIRE k 1`。1 秒能换成 1000ms，但新期限要落在 `M+500`，超过了可表示范围。Day2 的组件报告 `std::overflow_error`；命令层应返回数字范围 Error，保留旧 value 和期限。
+
+再看另一种失败：命令仍是 `EXPIRE k 1`，但这回 Now 在取得时刻时就抛出 `std::overflow_error`。**这次失败发生在读时，连本次时刻都没有拿到。** 应保留 clock 的原异常，不能从它推出用户的 1 秒写错了。
+
+你的首版没有 catch：`store.expire_ms(...)` 抛什么，当前就向外传播什么。因此 clock 异常没有被吞掉，但最终期限越界也还没有变成约定的 Error reply。**现在要补的是只转换期限范围失败，同时保留 clock 的原异常。**
+
+若直接给现有整个 `store.expire_ms(...)` 套一个 `catch (std::overflow_error)`，上面两种失败都会进入它。让 EXPIRE 先完成取时，再单独执行期限设置，才能在正确的位置转换错误。
+
+因此补上第四个声明：
+
+```cpp
+bool expire_ms_at(const std::string& key, TimeMs ttl_ms, TimeMs now_ms);
+```
+
+**`expire_ms_at` 用已经取得的 now_ms 设置期限，沿用 Day2 的过期规则，不再调用 Now。** 负 now_ms 抛 `invalid_argument`；正 TTL 的加法越界抛 `overflow_error`，这些检查仍先于缺失/过期早退，失败保持旧 value/期限。非正 TTL 不做加法：当前有效 key 立即删除并返回 true，缺失/过期返回 false。
+
+它与 §18 的三个入口共同构成本日有限升级，旧 `expire_ms` 仍然可用。实际 EXPIRE 的动作顺序于是成为：
 
 ```text
 合法的 seconds 文本与正时长换算
@@ -625,9 +689,9 @@ graph TD
     -> 正常 bool 结果编码成 Integer 1/0
 ```
 
-这条链解释的是职责和错误来源，不要求把整个 handler 写成一串嵌套 catch。**只在能确定错误属于哪个动作的边界上进行转换。**
+在这条链里，取时异常原样传播；已知合法 t 之后的期限加法异常才转换为命令 Error。**错误含义由发生的动作确定，只比较异常类型还不够。** 这解释的是转换位置，不要求把整个 handler 写成一串嵌套 catch。
 
-PTTL 单次只需要当前 store 的 `pttl(key)`，它已经保证方法内只取一次时；没有必要为了凑形式再增加一个 `pttl_at`。同样，GET 今天可以继续用原 get，SET 沿原替换语义，PING/ECHO 不需要 clock。
+你的 `pttl_handler` 已经只调用一次 `store.pttl(arguments[1])`，本次计数也确认为一次取时；**这个 handler 保持原样**，无需再增加 `pttl_at`。同样，GET 继续用原 get，SET 沿原替换语义，PING/ECHO 不需要 clock。
 
 两种特意保留的失败对照：
 
@@ -640,11 +704,11 @@ PTTL 单次只需要当前 store 的 `pttl(key)`，它已经保证方法内只�
 
 ## 20. 本日复用哪些旧能力
 
-**原 SET 清除旧期限，删除后重建同名 key 不继承旧期限，过期 key 不被 EXPIRE 复活。** 这几项 Day2 的组件语义继续成立；今天只确认命令接线没有绕开它们。
+**原 SET 清除旧期限，删除后重建同名 key 不继承旧期限，过期 key 不被 EXPIRE 复活。** 你的 `set` 仍保存 `node{value, -1}`，`expire_handler` 仍借助组件判断 key 是否有效；这些 Day2 语义保留。R1 的第二条 test 已证明 SET 后 PTTL 回到 -1，第一条已证明到期后 EXPIRE 返回 0，不要求重写这两条检查。
 
 例如：在 t=1000 设置 k 的两秒 TTL；t=2000 再设置两秒；t=3000 查询时应还剩 1000ms。这里证明重新设置是从本次时刻计算。
 
-key/value 仍是 owning string（自己拥有内容的字符串）。假如 key 是 `std::string("a\0b", 3)`，handler 应把这三个 bytes 原样交给 store。只对命令名做 ASCII 大小写匹配；不把 key 转小写，也不把 key 当 C-string 截断。
+key/value 仍是 owning string（自己拥有内容的字符串）。本次已用 `std::string("K\0x", 3)` 核对你的 handler：完整 key 能设定和查询 TTL，`"K"` 与大小写不同的 key 仍是缺失。你对 `arguments[1]` 的原样传递已经正确；只对命令名做 ASCII 大小写匹配的原逻辑保留。
 
 reply 继续通过原 encoder 形成独立字符串。生成 `":1000\r\n"` 之后，即使真实时间继续前进，已经生成的回复内容也不会自动更新；PTTL 报告的是执行这条查询时观察到的剩余量。
 
@@ -656,25 +720,29 @@ reply 继续通过原 encoder 形成独立字符串。生成 `":1000\r\n"` 之�
 
 ## 21. Round3：今天具体把首版升级到哪里
 
-在 R1 的两个 handlers 上继续维护，不复制第二份 dispatcher。后续正式 R1 review 会把本节进一步落到你的实际代码行和已经正确的部分；当前预定新增量只有三组。
+**继续维护你的原工程，R1 已通过的两个命令入口、`ec/ptr` 文本检查、`pttl_handler` 和三个 tests 都保留。** 下面三组是你现在实际还要完成的工作；不用复制第二份 dispatcher，也不重写 parser 或 server。
 
 ### 21.1 完成时长与错误输入
 
-把 §10 的整数文本规则落实完整，正秒数安全转毫秒，非正秒数立即删除；期限溢出回复固定 Error，旧 value 与 deadline 保持。
+修改 `src/command_dispatcher.cpp` 的 `expire_handler`：保留现有参数数量与完整文本检查；成功读到数值后，先区分非正与正 seconds。非正直接表达立即删除，正数检查换算范围后才乘 1000。换算或最终期限放不下时，返回现有固定数字 Error，旧 value/deadline 保持。
+
+你的文本检查已通过空串、负号、前导加号、空白、尾巴、NUL 和 int64 文本越界的私有核对，这部分不用另写一个数字扫描器。剩余风险在转换成功后的算术与错误回复。
 
 续期、普通 SET 清期限和过期不复活，用现有 KvStore 语义接通即可，不新写一个 store。
 
 ### 21.2 完成命令级时间一致性
 
-在原 KvStore 增加 §18 的显式时间能力，保留旧 API。将你当前 EXISTS/DEL handler 中“每轮调用会重新取时的方法”，改成“本条命令取得一次 t，循环使用同一个 t”。
+在原 `include/mini_redis/kv_store.hpp` / `src/kv_store.cpp` 增加 §18~§19 的四项时间能力，保留旧 API、map/node 和 Now。修改 `exists_handler` / `del_handler`：参数数量合法后取得一次 t，循环分别使用 `exists_at` / `erase_at`，不再逐 key 调用会重新取时的旧方法。
 
-EXPIRE 把取时失败与期限范围失败分开，落实 §19 的异常来源约定。PTTL 继续使用原单次取时查询。
+EXPIRE 使用 `read_time_ms` 与 `expire_ms_at`，按 §19 把取时和期限设置分开；只把后者的范围失败转换成命令 Error。`pttl_handler`、GET、SET、PING/ECHO 保留当前正确路径。
 
 这是今天真正超出“加两个函数”的新关系。现在不扩展后台定时任务，也不引入新的线程或锁。
 
 ### 21.3 用少量确定性 cases 留下证据
 
-保留三个 R1 tests。新增重点是以下关系，不要求你手写几十条同构断言：
+**下表只是为 §15～§19 已学过的行为留下证据，不是八个新知识点。**
+
+保留你已保存并通过的三个 R1 tests。新增重点是下面的关系，不要求你手写几十条同构断言；需要委托时明确让我补 `tests/ttl_command_test.cpp`，本次 review 没有自动修改它：
 
 | 场景 | 怎样建立 | 期望结果 |
 |---|---|---|
@@ -695,7 +763,7 @@ EXPIRE 把取时失败与期限范围失败分开，落实 §19 的异常来源�
 
 ## 22. 最终怎样运行和读结果
 
-先只跑当天目标，再做一次原工程 regression（回归检查：确认旧能力没有被本次修改破坏）：
+本次已经在独立临时构建里完成原工程 78/78 回归；那是 R1 当前版本的证据。**完成上面三组修改后**，再运行下面入口，验证升级后的版本，不是让你为了收下 R1 分数先重跑一次：
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
@@ -723,11 +791,11 @@ ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
 
 ## 23. 今天的完成标准
 
-**核心通过：** 使用者能经 execute_command 设置与查询 TTL，秒/毫秒单位正确；命令错误返回可理解的固定回复；一次完整命令的时间判断一致。
+**R1 已正式通过；整日仍待后半升级与复检。** 最终核心要求是：使用者能经 execute_command 设置与查询 TTL，秒/毫秒单位正确；命令错误返回可理解的固定回复；一次完整命令的时间判断一致。
 
 **重点错误路径：** 非法整数、正时长范围失败不破坏旧状态；clock 内部异常不被错翻成参数错误；缺失、无期限、过期的返回值分清。
 
-R1 三个 tests、后半新增关系与原工程回归共同提供证据。已经能从真实代码/测试说明的机械事实，不另写一份答案集。note 只记录本次真正卡住的连接，例如“为什么 EXISTS 也要改”或“为什么 catch 的范围影响错误含义”。
+R1 三个 tests、后半新增关系与修改后的原工程回归共同提供证据。本地本轮未见 `day3_note.md`，不因没有额外抄写已由代码证明的内容扣分；note 只记录真正卡住的连接，例如“为什么 EXISTS 也要改”或“为什么 catch 的范围影响错误含义”。代码里的分层注释已在 §14 对照解释。
 
 不要求今天重新画整个服务器、写 README/interview、做网络慢读或实现 TTL 主动维护。今天的主线是命令适配与一致时间，范围到这里。
 

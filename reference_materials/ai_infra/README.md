@@ -1,6 +1,6 @@
 # AI Infra 本地参考资料索引
 
-> 建立日期：2026-09-17；最近校准：2026-09-19
+> 建立日期：2026-09-17；最近增补：2026-10-19（Week16 后岗位与资源预调研）；§4 仍为 2026-09 生态快照，不代表本次重查了全部框架版本
 >
 > 定位：服务后续 AI Theory 与 AI Infra 教程编写，不构成新的并行课程。
 
@@ -146,3 +146,23 @@ SGLang latest GitHub release：v0.5.19（2026-09-05）
 截至 2026-09-19，vLLM 已以 V1 为主架构，SGLang 的近期变化集中在 hierarchical cache、disaggregation、serving frontend 与多后端，DeepSeek FlashMLA 则直接体现模型结构、KV format、fused kernel 与 GPU architecture 的协同。它们共同支持当前规划中的 T20~T23 增强项，但不构成提前学习完整框架、Rust、多 GPU、DeepEP 或 CUDA 的理由。
 
 刘胜与的《我不得不把才华埋葬在昨天》按个人工程文章处理，不归类为 DeepSeek 官方研究院 publication。可吸收的只有 AI-assisted engineering 方法：人负责 contract、oracle、workload、baseline 与 profiler 判断，agent 可协助检索、读代码和生成候选 patch；其中任何时间预测都不能写进硬性学习日程。
+
+---
+
+## 5. AIInfraGuide 中文补充资料
+
+- 网站：[AIInfraGuide](https://caomaolufei.github.io/AIInfraGuide/)
+- 上游：[caomaolufei/AIInfraGuide](https://github.com/caomaolufei/AIInfraGuide)
+- 具体使用：[AIInfraGuide 阅读映射](AIInfraGuide_阅读映射.md)，核对日期 2026-10-18。
+
+用途是辅助解释 PyTorch -> Transformer -> 推理内存/调度，并提供按岗位筛选的面试问题线索。T9~T12、T15~T18、T20~T23 分别调用对应小节；CUDA、完整 serving 源码与多卡内容仍由总规划 Gate C/D/E 控制。已有书籍负责量化分析、InfraTech 提供实验线索，本网站补中文教学；同一疑问择优使用，不让学生重复刷三份材料。
+
+本次抽读代表文章，不等于全站技术审计。已发现的 API 简化、版本敏感参数和性能概括列在阅读映射中，后续引用须先核验。独立“性能分析”栏目本次显示 0 篇，相关内容存在于 PyTorch/推理文章内，不能把目录标题当成已完成课程。仅保存来源链接与自己的阅读映射，未镜像文章、代码或图片，也未新增安装任务。
+
+---
+
+## 6. Week16 后岗位与资源预调研
+
+[2026-10-19 预调研记录](2026-10-19_Week16后岗位与资源预调研.md)整理了官方岗位样本、BOSS/牛客/公开作品集的证据边界，以及用户提供的 nano-vLLM、vLLM、InfiniTrain、nano-deepspeed、Mini-SGLang、BBuf、dlog、AIInfraGuide 的用途与前置。另补查 Stanford CS336、CMU DLSys、GPU MODE、KuiperInfer 与 MLC 教材。
+
+这是后续选材依据，不是新必修清单：原 Week16 收口后才定实际课表，届时重新核对招聘、版本、硬件、用户进度与精力；推理与训练路线分开，同类教学引擎择主去重。当前 Week13~Week16、T 线进度与 Gate 保持，不新增安装、购买或整仓复刻任务。
