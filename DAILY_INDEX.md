@@ -1,8 +1,8 @@
 # Daily 教程总目录
 
-> 更新日期：2026-10-19
+> 更新日期：2026-10-20
 >
-> 收录范围：主线 Week1 Day1 至 Week13 Day4，共 88 份正式 daily 教程；正式通过为 87 个主线单元。
+> 收录范围：主线 Week1 Day1 至 Week13 Day5，共 89 份正式 daily 教程；正式通过为 88 个主线单元。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -22,7 +22,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 Week1 Day7 的 backup 文件不重复收录
 Week8 Day7 的 README 不是 daily，不单独收录
 Week1 到 Week11 已通过
-Week13 Day1整日98/100、Day2整日100/100、Day3整日98/100均已正式通过，主线整日通过87、已生成daily88；Week13整周未通过。Day3 R1保持100，fresh完整构建零warning、原CTest99/99，独立ASan/UBSan的TTL24/24无报告；Day4有预算主动清理教程已生成，待R1实现与验收。Day2原有证据保留；Day1原SQL/索引证据复用，本次未重跑数据库。
+Week13 Day1整日98/100、Day2整日100/100、Day3整日98/100、Day4整日99/100均已正式通过，主线整日通过88、已生成daily89；Week13整周未通过。Day4 R1历史100保持，fresh完整构建零warning、CTest124/124，Day4 ASan/UBSan与同模式迭代器检查各25/25；Day5教程已生成、待R1，目标是事件循环维护与真实TCP的TTL。此前Day1~Day4验收证据保留；本次网络运行属于教材私有副本QA，不计用户Day5通过，数据库未重跑。
 Week12 Day1~Day7 已正式完成，累计 84 个主线通过单元，Day7 最终 100/100；Day4/Day5/Day6 最终均 100/100。Day6 保存的 R1/extra 在原 server 与当前源码新 Debug/ASan/UBSan 实例上通过，覆盖双半帧、共享 store、状态型 pipeline、既有 good/fresh、binary、有限慢读和 100 次连接。两个 fresh builds 零 warning、固定 CTest 各 74/74，fd 各 5 -> 5，trace 捕获写 EAGAIN/EPOLLOUT 与 B 在 ready 后 PONG、A 续传排空。Day7 application 差异、线程模型与 TTL/eviction/persistence 第一层口述已收口，Week12 正式通过；下一步 Week13 数据库第一层与 TTL；正确性不推广为性能。原工程 74/74 与 Day4 临时合并 84/84 分开记录
 ```
 
@@ -44,7 +44,7 @@ Week12 Day1~Day7 已正式完成，累计 84 个主线通过单元，Day7 最终
 | Reactor V1 | [Week10](#week10reactor-v1) | Buffer、Channel、EventLoop、Acceptor、Connection，继续加固 callback lifetime |
 | HTTP Server V1 | [Week11](#week11http-server-v1) | incremental request parser、response encoder、Reactor integration、keep-alive |
 | Mini Redis V1 | [Week12](#week12mini-redis-v1) | RESP2 encoder/parser、command dispatcher、KV store、multi-client integration |
-| 数据库与 Mini Redis V2 | [Week13](#week13mysql-与-mini-redis-v2) | Day1~Day3整日已正式通过；Day4有限主动清理教程已生成待R1，整周未通过 |
+| 数据库与 Mini Redis V2 | [Week13](#week13mysql-与-mini-redis-v2) | Day1~Day3整日已正式通过；Day4有限主动清理R1已通过100/100，当前R2/R3，整周未通过 |
 
 ---
 
@@ -223,7 +223,8 @@ Week12 Day1~Day7 已正式完成，累计 84 个主线通过单元，Day7 最终
 | [Day1：MySQL 小表与索引路径](week13/day1/day1.md) | SELECT/EXPLAIN 最小读法；先看逻辑索引条目已有/缺少的字段，串清回表与覆盖，再映射 B+ 树、页与聚簇索引；辨别 type=ref/ref=const、估计与实际结果 | 整日 98/100 正式通过；SQL/计划/结果证据复用，R3 正确修正候选定位→回表/覆盖；估计与计时表述补准，教程与 note 保留 | MySQL, SQL, SELECT, primary key, secondary index, B+ tree, page, clustered index, covering index, EXPLAIN, rows, Using index, 回表 |
 | [Day2：KvStore 有效期与可控时钟](week13/day2/day2.md) | 先建记录/期限/当前时刻的状态模型；物理存在与逻辑有效；由同一状态推出 API，再引出 clock injection；§18 用正常调用与缺失 key 的异常对照解释项目选定的错误优先级；R1 主链与最终边界分层 | 原 KvStore 增量实现；到期/SET 最小 GTest checker 与 CMake；R1与整日均100/100正式通过；非正TTL返回语义修复，原CTest75/75、normal和ASan/UBSan私有各24/24，不复制网络底座 | TTL, deadline, fake clock, Now, expire_ms, pttl, steady_clock, chrono, duration_cast, const, 物理存在, 逻辑有效, 过期, 有效期, 错误优先级 |
 | [Day3：EXPIRE/PTTL 与命令时刻](week13/day3/day3.md) | 将秒参数接到毫秒TTL；完整整数文本/命令Error；区分clock故障与期限越界；EXISTS/DEL整条命令共用同一时间读数 | 整日98/100正式通过，R1保持100；安全换算/异常来源/命令快照完成；fresh原CTest99/99，独立ASan/UBSan的TTL24/24；笔记两处用词补准，不重写RESP或网络底座 | EXPIRE, PTTL, from_chars, arity, command error, seconds, milliseconds, time snapshot, exists_at, erase_at, expire_ms_at |
-| [Day4：分批回收过期 key](week13/day4/day4.md) | 逻辑失效与物理回收；检查预算/删除计数；有限集合持续推进；跨轮SET/DEL/续期、单次取时与异常状态 | 教程已生成待R1；原KvStore增量、三个GTest/CMake；后半讲巡检位置、erase失效及RSS证据边界，Day5再接事件循环 | active expiration, sweep_expired, work budget, examined, removed, cursor, upper_bound, iterator invalidation, RSS |
+| [Day4：分批回收过期 key](week13/day4/day4.md) | 逻辑失效与物理回收；检查预算/删除计数；有限集合持续推进；节点位置与自有排序边界、upper_bound恢复当前后继；跨轮SET/DEL/续期、单次取时与异常状态 | 整日99/100正式通过，R1历史100保持；自有key边界已落地，原3项加22项R3，完整回归124/124、两类诊断各25/25；保留RSS证据边界，Day5再接事件循环 | active expiration, sweep_expired, work budget, examined, removed, cursor, 排序边界, upper_bound, iterator invalidation, RSS |
+| [Day5：维护运行机会与网络TTL](week13/day5/day5.md) | 原owner接有限维护；有限等待、100ms时间位置与16条预算；空闲/活跃机会；两种时间与物理回收证据 | 已生成待R1；原server增量与Python检查脚手架，先读维护日志再GET；后半按真实首版校准，不重写组件或新增线程 | maintenance, bounded wait, poll_once, steady_clock, time_point, next_sweep_at, 空闲回收, 维护频率, 运行机会, TCP TTL |
 
 ---
 
@@ -338,7 +339,9 @@ TTL / deadline / fake clock / expire_ms    -> Week13 Day2
 EXPIRE / PTTL / from_chars / 秒毫秒转换     -> Week13 Day3
 命令时间快照 / EXISTS重复key / DEL计数      -> Week13 Day3
 主动过期 / 检查预算 / sweep_expired / 回收计数 -> Week13 Day4
-巡检位置 / upper_bound / 删除失效 / RSS     -> Week13 Day4
+巡检位置 / 排序边界 / upper_bound / 删除失效 / RSS -> Week13 Day4
+有限等待 / 空闲回收 / 维护频率 / TCP TTL     -> Week13 Day5
+steady_clock / time_point / next_sweep_at  -> Week13 Day5
 ```
 
 ## 并发与工程工具
