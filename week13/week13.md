@@ -1,10 +1,10 @@
 # Week13：Mini Redis V2，让 key 按时过期
 
-> 版本：2026-10-20，Day4整日99/100正式通过、R1历史100保持；Day5教程已生成待R1，88个整日通过/89份生成；理论T9整课99/100已通过、T10待学习，原Day6/Day7补缺安排保持
-> 系统主线：Week1~Week12 已完成；Week13 Day1~Day4 通过后累计88个正式通过单元，当前为 Milestone E
+> 版本：2026-10-21，Day4整日99/100正式通过、R1历史100保持；Day5整日已正式通过100/100，R1初检96/100保留为历史；Day6已生成、待R1（缓存场景与MySQL事务观察），89个整日通过/90份生成；理论T9整课99/100已通过、T10待学习，原Day6/Day7补缺安排保持
+> 系统主线：Week1~Week12 已完成；Week13 Day1~Day5 通过后累计89个正式通过单元，当前为 Milestone E
 > 本周产出：沿用现有 Mini Redis，增加 EXPIRE/PTTL、可控时钟和有限的过期清理
 > AI 理论线：T1~T9与Theory Gate 1已通过，T9最终99/100、R1历史98/100保持；下一步T10，本周主线继续独立推进
-> 当前状态：Day1整日98/100、Day2整日100/100均已正式通过，主线累计88个整日通过单元、89份已生成daily；Week13整周尚未通过。Day2原CTest75/75、normal与ASan/UBSan私有各24/24保持。Day3整日于2026-10-19正式通过98/100，R1保持100；安全单位换算、clock异常原样传播/期限越界Error和命令一次取时已完成。fresh Debug完整构建零warning、原CTest99/99，独立ASan/UBSan的TTL24/24、覆盖路径无报告。笔记两处用词各扣1分，不要求重抄；Day4整日于2026-10-20正式通过99/100，R1历史100保持；本轮fresh完整构建零warning、CTest124/124，Day4 ASan/UBSan与同模式迭代器检查各25/25，下一步Day5
+> 当前状态：Day1整日98/100、Day2整日100/100均已正式通过，主线累计89个整日通过单元、90份已生成daily；Week13整周尚未通过。Day2原CTest75/75、normal与ASan/UBSan私有各24/24保持。Day3整日于2026-10-19正式通过98/100，R1保持100；安全单位换算、clock异常原样传播/期限越界Error和命令一次取时已完成。fresh Debug完整构建零warning、原CTest99/99，独立ASan/UBSan的TTL24/24、覆盖路径无报告。笔记两处用词各扣1分，不要求重抄；Day4整日于2026-10-20正式通过99/100，R1历史100保持；本轮fresh完整构建零warning、CTest124/124，Day4 ASan/UBSan与同模式迭代器检查各25/25，当前Day5整日100/100通过，Day6已生成、待R1（缓存场景与MySQL事务观察）
 
 ---
 
@@ -50,7 +50,7 @@
 | owner 在 poll 返回后处理 pending close | 保留已有安全清理点 |
 | `EventLoop::poll_once(timeout_ms)` | 在已有等待接口上安排维护机会 |
 
-目前主循环使用无限等待。**当所有客户端都不发请求时，网络事件不能替你触发过期清理。** Day5 专门补上这一处新增关系。
+本周起点的主循环使用无限等待。Day5现已升级为有限等待与完成后安排下次维护；空闲时也能清理过期记录。Day6复用这一成果，不再修改服务器。
 
 Week12 已通过的 74 项 CTest、binary/pipeline、多客户端、协议错误隔离、有限慢读、fd 回落和写背压观察都保留。它们是原底座的证据；本周围绕新增时间语义补验证，不为形式重做旧图、旧表和整套旧实验。
 
@@ -261,7 +261,7 @@ Day3整日已正式通过98/100，R1保持100，见[设置与查询有效期](da
 
 ## 8. Day4：没人访问的过期 key 也要回收
 
-[Day4：分批回收过期 key](day4/day4.md) 整日已于2026-10-20正式通过99/100，R1历史100/100保持。用户已将跨调用位置升级为自有string边界；删除、清空重建、插入、复制/移动、覆盖续期、binary/empty与clock路径均已验证。原测试追加22项R3、共25项；fresh完整回归124/124，ASan/UBSan和同模式迭代器检查各25/25。仅缺显式<algorithm>，不阻塞；每条upper_bound的定位代价留性能阶段测量，不为此重写。下一步Day5接事件循环。
+[Day4：分批回收过期 key](day4/day4.md) 整日已于2026-10-20正式通过99/100，R1历史100/100保持。用户已将跨调用位置升级为自有string边界；删除、清空重建、插入、复制/移动、覆盖续期、binary/empty与clock路径均已验证。原测试追加22项R3、共25项；fresh完整回归124/124，ASan/UBSan和同模式迭代器检查各25/25。仅缺显式<algorithm>，不阻塞；每条upper_bound的定位代价留性能阶段测量，不为此重写。Day5网络维护现已整日通过100/100，下一步Day6。
 
 ### 今日主问题
 
@@ -295,7 +295,7 @@ R1 后才按你的方案讲解：为什么可能一直检查同一部分、删�
 
 ## 9. Day5：把维护接入原服务器
 
-[Day5：让过期清理在原服务器里真正运行](day5/day5.md) 已生成，当前待R1。首版只接有限等待、有限维护与本地日志；后半再把网络事件次数与维护时间分开，保留原pending close路径。脚手架先从无请求窗口的实际删除建立证据，再查询GET；教材私有QA不登记为用户Day5通过。
+[Day5：让过期清理在原服务器里真正运行](day5/day5.md) 整日已于2026-10-21正式通过100/100，R1初检96/100保留为历史。最新代码已修正两处吞异常与维护前取时；Debug/ASan/UBSan完整构建零warning，CTest各124/124，空闲/活跃TTL、覆盖续期、command-error、binary/partial跨维护与fd回落均通过。37条按16/16/5回收；私有延迟诊断确认完成后再间隔约100ms，非性能结论。当前累计89个整日通过/90份生成，Day6已生成、待R1（缓存场景与MySQL事务观察）。
 
 ### 今日主问题
 
@@ -334,7 +334,7 @@ R1 后才按你的方案讲解：为什么可能一直检查同一部分、删�
 
 ## 10. Day6：缓存为什么失效，事务为什么需要
 
-这天以讲解和小观察为主，让前四天新增的时间语义与数据库使用连起来，减少连续硬写组件的负担。
+[Day6教程](day6/day6.md)已生成、待R1。沿用Day5已通过的TTL与维护，不新增C++组件。R1完成缓存场景、提交/回滚和双会话RR预测后停在§12；R2解释版本视角并引出锁定读，R3只做RC对照与有界锁等待。建表脚手架使用同一MySQL实例中的独立infra_transaction_lab，不改Day1索引表；短SQL结果和口述可等效，不写并发runner。
 
 ### 第一段：从业务问题区分三种缓存故障
 
@@ -352,7 +352,7 @@ R1 后才按你的方案讲解：为什么可能一直检查同一部分、删�
 
 ### 第二段：一组 SQL 修改怎样共同完成
 
-用 Day1 的同一实验库，先观察一组 UPDATE 后 ROLLBACK，再观察 UPDATE 后 COMMIT。由“多个动作需要一起完成”引出 transaction，事务。
+沿用Day1的同一教学实例，在独立事务实验库先观察一组 UPDATE 后 ROLLBACK，再观察 UPDATE 后 COMMIT。由“多个动作需要一起完成”引出 transaction，事务。
 
 在具体例子上解释 ACID：Atomicity 原子性、Consistency 一致性、Isolation 隔离性、Durability 持久性。Consistency 指事务维护定义好的数据约束，不能简单等同于复制系统中的副本一致性。
 
@@ -368,7 +368,7 @@ R1 后才按你的方案讲解：为什么可能一直检查同一部分、删�
 
 学到能解释“为什么单线程 Mini Redis 的命令串行，不等于 MySQL 已经解决了多会话事务问题”。不实现 MULTI/EXEC，不为 KvStore 加事务，不细背所有 gap lock、next-key lock 组合。
 
-资料定向到 [InnoDB 多版本机制](https://dev.mysql.com/doc/refman/8.4/en/innodb-multi-versioning.html)、[隔离级别](https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html)，配合小林“事务隔离级别是怎么实现的”里的事务/Read View 图。redo/undo/binlog 的日志分工在 Week14 结合恢复正式讲，不在这里展开第二套教程。
+资料定向到 [InnoDB 多版本机制](https://dev.mysql.com/doc/refman/8.0/en/innodb-multi-versioning.html)、[隔离级别](https://dev.mysql.com/doc/refman/8.0/en/innodb-transaction-isolation-levels.html)，配合小林“事务隔离级别是怎么实现的”里的事务/Read View 图。redo/undo/binlog 的日志分工在 Week14 结合恢复正式讲，不在这里展开第二套教程。
 
 ---
 

@@ -1,9 +1,11 @@
 # AI Infra 理论伴随线规划
 
-> 版本：2026-10-20，系统Week13 Day3整日98/100通过、Day4整日已正式通过99/100、R1历史100保持，Day5教程已生成、待R1；理论T8/Gate1已通过，T9整课99/100正式通过、R1历史98/100保持，下一步T10已校准待学习；范围/Gate与AIInfraGuide安排保持，主线仍按原Week16完整学完后再做简历试投
-> 适用对象：FxorG，中山大学计算机科学与技术专业；系统主线 Week1~Week12 已完成，Day7 整日最终 100/100，Week13 Day1 整日已于 2026-10-14 正式通过 98/100，主线累计 85 个通过单元，索引候选/回表/覆盖模型已收口，复用既有 SQL 证据；本次未重跑或修改 Ubuntu。Week13 整周尚未通过，Day2整日修后正式通过100/100、R1保持100，主线累计86个通过单元；本轮原工程75/75、normal与ASan/UBSan私有各24/24，无sanitizer诊断；Day3整日于2026-10-19正式通过98/100，R1保持100；fresh完整构建零warning、CTest99/99，独立ASan/UBSan的TTL24/24无报告；Day3通过时主线累计87个整日通过、88份已生成daily；Day4整日现已通过99/100、R1历史100保持，当前累计88个整日通过/89份生成，Day5教程已生成、待R1；理论线仍按实际证据独立验收；理论线 T1~T9 已通过，T6 最终 100/100、T7 最终 98/100。Ex1 两个实际脚本作为等价产出，半 MSE 系数修复后 20/20 私有检查通过，用户预测口述正确；独立最小二乘参照由本轮验收补上，不重写同一训练系统。T8整课与R3于2026-10-17最终100/100正式通过，R1/R2各100保持。原五项、参数dtype/有限值、标签维数/数量/范围及公共入口shape与N/D/C非空限制全部修复；同一24项私有检查24/24、当前实际训练/评估回归16/16，均exit0。仍选A，validation loss0.269190679540/accuracy86.67%，最终test loss0.289091944672/accuracy85%。Theory Gate 1正式通过，T9整课于2026-10-19正式通过99/100，R1历史98/100保持；现有代码、笔记与教程增补等效覆盖最终汇总。下一步T10已校准待学习，Theory Gate 2尚未通过，不重写已通过分类器或重复旧学习。旧永久checker90/100仅属R1历史结果，未适配的新签名本轮由私有检查覆盖。
+> 版本：2026-10-21，T13阅读分段与T14首版/归一化后置同步；系统Week13 Day3整日98/100通过、Day4整日已正式通过99/100、R1历史100保持，Day5整日已正式通过100/100，R1初检96/100保留为历史；Day6已生成、待R1（缓存场景与MySQL事务观察）；理论T8/Gate1已通过，T9整课99/100正式通过、R1历史98/100保持，下一步T10已校准待学习；范围/Gate与AIInfraGuide安排保持，主线仍按原Week16完整学完后再做简历试投
+> 适用对象：FxorG，中山大学计算机科学与技术专业；系统主线 Week1~Week12 已完成，Day7 整日最终 100/100，Week13 Day1 整日已于 2026-10-14 正式通过 98/100，主线累计 85 个通过单元，索引候选/回表/覆盖模型已收口，复用既有 SQL 证据；本次未重跑或修改 Ubuntu。Week13 整周尚未通过，Day2整日修后正式通过100/100、R1保持100，主线累计86个通过单元；本轮原工程75/75、normal与ASan/UBSan私有各24/24，无sanitizer诊断；Day3整日于2026-10-19正式通过98/100，R1保持100；fresh完整构建零warning、CTest99/99，独立ASan/UBSan的TTL24/24无报告；Day3通过时主线累计87个整日通过、88份已生成daily；Day4整日现已通过99/100、R1历史100保持，当前累计89个整日通过/90份生成，Day5整日已正式通过100/100，R1初检96/100保留为历史；Day6已生成、待R1（缓存场景与MySQL事务观察）；理论线仍按实际证据独立验收；理论线 T1~T9 已通过，T6 最终 100/100、T7 最终 98/100。Ex1 两个实际脚本作为等价产出，半 MSE 系数修复后 20/20 私有检查通过，用户预测口述正确；独立最小二乘参照由本轮验收补上，不重写同一训练系统。T8整课与R3于2026-10-17最终100/100正式通过，R1/R2各100保持。原五项、参数dtype/有限值、标签维数/数量/范围及公共入口shape与N/D/C非空限制全部修复；同一24项私有检查24/24、当前实际训练/评估回归16/16，均exit0。仍选A，validation loss0.269190679540/accuracy86.67%，最终test loss0.289091944672/accuracy85%。Theory Gate 1正式通过，T9整课于2026-10-19正式通过99/100，R1历史98/100保持；现有代码、笔记与教程增补等效覆盖最终汇总。下一步T10已校准待学习，Theory Gate 2尚未通过，不重写已通过分类器或重复旧学习。旧永久checker90/100仅属R1历史结果，未适配的新签名本轮由私有检查覆盖。
 > 职业目标：本科就业，主攻 LLM inference systems / serving 与 CUDA/Triton kernel optimization
 > 本文件定位：`plan_strengthened.md` 的 AI Infra 理论伴随线，不替代 C++ / Linux / OS / 网络 / Reactor / Mini Redis 主线
+
+补充资料：“AI不止算法”的公开CPU推理/CUDA/LLM kernel内容纳入[候选筛选](reference_materials/ai_infra/2026-10-21_AI不止算法_资料筛选.md)，不新增T线作业或付费前置。目录与长期路线重合不等于T10以后的能力已通过，使用时继续遵守原Gate及知识先后。
 
 ---
 
@@ -147,12 +149,38 @@ AI Theory T module：负责把已学数学映射到 NumPy/PyTorch、Tensor shape
 传统机器学习讲义、经典作业与 T module 也执行同一条去重规则：
 
 ```text
-ML/ML.md：负责第一次学懂模型原理、数学直觉和算法全貌
-ML/ML_配套练习.md：负责在真实课程数据上形成 executable evidence
-AI Theory T module：只补 NumPy/PyTorch、数值稳定性、framework mechanism 和 AI Infra mapping
+Tn.md：当前阶段的主教材，负责讲清本课第一次需要的原理、代码与AI Infra联系
+ML/ML.md：按当前T需要调用的理论参考；已在这里学会的内容不重复讲，不要求顺序读完其余章节
+ML/ML_配套练习.md：有明确模块映射时，在真实课程数据上形成或复用executable evidence
 ```
 
 同一个 learning contract 已经由一份实现和一组证据完整覆盖时，允许跨资料等价验收，不再要求换一份 synthetic data 重写同一算法。等价验收必须逐条映射 shape、value、gradient、workflow 与 failure/evidence，不能因为“看过”或“感觉会”直接跳过。抽象层发生变化时不算重复，例如 finite-difference gradient checker、NumPy 到 PyTorch autograd、training 到 inference memory、CPU reference 到 GPU kernel。
+
+### 2.6 传统ML、深度学习与Transformer怎样交接
+
+**现在直接沿T10 → T11 → T12推进，不需要旁边再通关完整ML或DL课程。** 已通过Theory Gate 1，说明当前线性模型、概率/损失、梯度与workflow基础已达到下一阶段门槛，不代表已经学过神经网络结构。
+
+传统ML的连续学习在T8暂时收口。KNN、完整SVM、树/boosting、EM/HMM/CRF等不作为当前前置；后续由岗位、学校课程或项目的具体需要再定向补。T13仍要在深度学习场景使用泛化与正则化，不把“暂时收口”误解为后续不再接触任何共用ML知识。
+
+```text
+已完成：线性回归、logistic/softmax分类、loss、正则化与ML workflow
+-> T9：Tensor / storage / layout / dtype / device（已通过）
+-> T10：用已会线性分类器学习Module、状态与保存恢复
+-> T11：用已会标量链学习autograd
+-> T12：首次从XOR进入神经网络、隐藏层、ReLU与MLP训练
+-> T13：泛化与正则化
+-> T14：CNN/ResNet第一层（原有可延期范围保持）
+-> T15：token / embedding / mask
+-> T16：single-head self-attention
+-> Theory Gate 2
+-> T17及以后：Transformer与LLM推理机制
+```
+
+T9～T11是PyTorch对象、状态与求导的过渡，不依赖先学完整神经网络课程。T12本身承担本路线的DL（deep learning，深度学习）入门；不是先去补完DL才有资格开始T12。
+
+资料也沿这条路线使用：**Tn.md负责当前主讲，ML.md和吴恩达/李沐课程提供按需的第二种解释，官方文档用于机制与API查证。** 视频写在对应概念之后，标清具体课节、阅读时点、必看/选看及要解决的问题；没有必要额外视频时直接写明。经典作业沿既有映射提供或替代证据，不因此新增一条Ex1～Ex8顺序通关线。已有Kaggle与Gate要求保持，不擅自删减。
+
+“负责第一次学懂”只用于实际选来主讲该概念的资料，不再表示ML.md拥有所有后续理论的独占职责。比如T7理论已由ML讲义学会，就复用Ex1；T12尚未学过的MLP，则必须由T12正文完整讲清。
 
 ---
 
@@ -164,7 +192,7 @@ AI Theory T module：只补 NumPy/PyTorch、数值稳定性、framework mechanis
 
 ```text
 Week1 ~ Week12 已完成
-当前：Week13 Day1 整日正式通过 98/100，主线累计 85 个通过单元；Day2整日修后正式通过100/100、R1保持100，主线累计86个通过单元；本轮原工程75/75、normal与ASan/UBSan私有各24/24，无sanitizer诊断；Day3整日于2026-10-19正式通过98/100，R1保持100；fresh完整构建零warning、CTest99/99，独立ASan/UBSan的TTL24/24无报告；Day3通过时主线累计87个整日通过、88份已生成daily；Day4整日现已通过99/100、R1历史100保持，当前累计88个整日通过/89份生成，Day5教程已生成、待R1；理论线仍按实际证据独立验收。理论线 T1~T9 已通过，Ex1/T7 最终 98/100；T8整课与R3于2026-10-17最终100/100正式通过，R1/R2各100保持。原五项、参数dtype/有限值、标签维数/数量/范围及公共入口shape与N/D/C非空限制全部修复；同一24项私有检查24/24、当前实际训练/评估回归16/16，均exit0。仍选A，validation loss0.269190679540/accuracy86.67%，最终test loss0.289091944672/accuracy85%。Theory Gate 1正式通过，T9整课于2026-10-19正式通过99/100，R1历史98/100保持；现有代码、笔记与教程增补等效覆盖最终汇总。下一步T10已校准待学习，Theory Gate 2尚未通过，不重写已通过分类器或重复旧学习。旧永久checker90/100仅属R1历史结果，未适配的新签名本轮由私有检查覆盖。
+当前：Week13 Day1 整日正式通过 98/100，主线累计 85 个通过单元；Day2整日修后正式通过100/100、R1保持100，主线累计86个通过单元；本轮原工程75/75、normal与ASan/UBSan私有各24/24，无sanitizer诊断；Day3整日于2026-10-19正式通过98/100，R1保持100；fresh完整构建零warning、CTest99/99，独立ASan/UBSan的TTL24/24无报告；Day3通过时主线累计87个整日通过、88份已生成daily；Day4整日现已通过99/100、R1历史100保持，当前累计89个整日通过/90份生成，Day5整日已正式通过100/100，R1初检96/100保留为历史；Day6已生成、待R1（缓存场景与MySQL事务观察）；理论线仍按实际证据独立验收。理论线 T1~T9 已通过，Ex1/T7 最终 98/100；T8整课与R3于2026-10-17最终100/100正式通过，R1/R2各100保持。原五项、参数dtype/有限值、标签维数/数量/范围及公共入口shape与N/D/C非空限制全部修复；同一24项私有检查24/24、当前实际训练/评估回归16/16，均exit0。仍选A，validation loss0.269190679540/accuracy86.67%，最终test loss0.289091944672/accuracy85%。Theory Gate 1正式通过，T9整课于2026-10-19正式通过99/100，R1历史98/100保持；现有代码、笔记与教程增补等效覆盖最终汇总。下一步T10已校准待学习，Theory Gate 2尚未通过，不重写已通过分类器或重复旧学习。旧永久checker90/100仅属R1历史结果，未适配的新签名本轮由私有检查覆盖。
 后续：TTL / AOF / tests / benchmark / README -> 项目证据与投递
 ```
 
@@ -1155,7 +1183,7 @@ tensor_layout.py
 
 **当前仍待学习与验收。** 本课保留部署/状态主线，按三个能力闭环推进同一份`module_inference.py`：R1为§0～§6的模型与注册状态，R2为§7～§9的train/eval与求导记录，R3为§10以后的保存、全新对象恢复和Module.to。前两轮各有暂停检阅点，不代表三轮都是独立发现闸门。
 
-第一版先运行两层模型；固定预处理缩放也需要保存时再加入buffer，普通Tensor属性在登记对照时出现，Dropout在执行模式实验时出现。按MEMORY §9.3写清每次对同一类的修改与实例重建；不预装未来角色，也不新增同构训练作业。
+第一版沿用T8已经会的线性多分类器：XW+b对应nn.Linear的一次乘加，不引入隐藏层、ReLU或MLP。固定预处理缩放也需要保存时再加入buffer，普通Tensor属性在登记对照时出现；Dropout只在R2作用于缩放后的输入，用于观察train/eval。按MEMORY §9.3写清每次对同一类的修改与实例重建；不预装未来角色，也不新增同构训练作业。
 
 ### 学习内容
 
@@ -1176,7 +1204,7 @@ save / load
 ```text
 Module object
 parameter Tensor
-activation Tensor
+本次forward临时产生的Tensor
 checkpoint/state_dict
 ```
 
@@ -1194,16 +1222,18 @@ inference_mode() 控制 autograd-related execution behavior
 module_inference.py
 ```
 
-构造最小两层 Module，保存/加载 state_dict，并比较 output。
+将已会的多分类线性计算包装为Module，逐步加入input_scale和模式对照，保存/加载state_dict并比较output。参数名单为linear.weight/bias，持久buffer为input_scale，不要求学习或训练新模型。
 
 ### 对应视频
 
-- 李沐：[16 `PyTorch 神经网络基础`](https://www.bilibili.com/video/BV1AK4y1P7vs/) 中的“模型构造”“参数管理”“自定义层”“读写文件”。
-- 吴恩达 forward/inference 对应：[P45 `代码中的推理`](https://www.bilibili.com/video/BV1owrpYKEtP?p=45)、[P46 `TensorFlow 中的数据`](https://www.bilibili.com/video/BV1owrpYKEtP?p=46)、[P47 `构建神经网络`](https://www.bilibili.com/video/BV1owrpYKEtP?p=47)、[P48 `单层前向传播`](https://www.bilibili.com/video/BV1owrpYKEtP?p=48)、[P49 `前向传播通用实现`](https://www.bilibili.com/video/BV1owrpYKEtP?p=49)。这些不负责 PyTorch `Module` API。
+- 李沐：[16 `PyTorch 神经网络基础`](https://www.bilibili.com/video/BV1AK4y1P7vs/) 中的“模型构造”“参数管理”“读写文件”，在正文对应机制讲清后选看。视频可能采用多层例子，只对照Module/状态API，不跟做其新模型。
+- 吴恩达P45～P49统一留T12的对应片段，不作为T10前置或新增必看内容。
 
 ---
 
 ## T11：computation graph、autograd 与 backpropagation
+
+沿T4已经会的标量乘加/平方链学习，不依赖神经网络。R1完成manual、finite difference、autograd三路对照并保留累积预测；R2处理清理、graph与grad寿命、中间梯度后暂停；R3才进入向量目标与执行边界。动态分支是补充解释，不另增作业。
 
 ### 学习内容
 
@@ -1223,7 +1253,7 @@ dynamic graph 直觉
 必须能从：
 
 ```text
-x -> Linear -> ReLU -> Linear -> loss
+固定x、y；w、b -> z=w*x+b -> loss=(z-y)^2
 ```
 
 说明：
@@ -1246,7 +1276,7 @@ autograd_inspect.py
 ### 对应视频
 
 - 李沐：[07 `自动求导`](https://www.bilibili.com/video/BV1KA411N7Px/) 全部三节，重点对应 PyTorch autograd 代码。
-- 吴恩达：[P67 `什么是导数（可选）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=67)、[P68 `计算图（可选）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=68)、[P69 `更大神经网络示例（可选）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=69)。
+- 吴恩达：[P67 `什么是导数（可选）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=67)、[P68 `计算图（可选）`](https://www.bilibili.com/video/BV1owrpYKEtP?p=68)。T4已经会的微积分不重听；P69更大神经网络示例留T12后需要时选看，不作为T11前置。
 
 ### 通过标准
 
@@ -1255,6 +1285,8 @@ autograd_inspect.py
 ---
 
 ## T12：MLP、activation、loss 与 optimizer
+
+本模块首次正式讲神经网络结构：XOR暴露单层线性分类器的局限 → 两次Linear仍可合并 → 需要非线性 → ReLU的四点变换 → 隐藏表示与MLP → 训练/保存/恢复。T10的状态管理与T11自动求导是已备好的工具，不倒过来要求T10先接受本模块结构。
 
 ### 学习内容
 
@@ -1321,7 +1353,9 @@ random seed 与 reproducibility 边界
 overfit_observation.py
 ```
 
-在小数据集上故意制造 overfitting，再加入一种 regularization，记录 train/validation curves。
+在固定小数据集上观察train/validation curves，再配对加入一种regularization，比较实际变化。不把一定过拟合或一定改善当作通过条件。
+
+Round2分两段阅读：R2-A先解释自己的曲线与weight decay，暂停整理已经观察到的现象；R2-B再接Dropout、模式、公平比较和checkpoint。暂停不新增文件、实验或验收，仍沿同一个程序完成后半。
 
 ### 对应视频
 
@@ -1371,13 +1405,15 @@ ResNet block forward
 
 能对一个小 ResNet block 标注每一步 shape；不要求手推完整 convolution backward。
 
+R1只用Conv/ReLU构建两条分支，独立处理shape改变时怎样汇合，不预装BatchNorm。闸门后先解释projection，再引入BatchNorm的数值作用、运行统计量与train/eval；此后才对照真实BasicBlock。在同一组件上增加归一化层并重建实例，保留R1证据，不把教学首版没有归一化判为错误。
+
 ### 代码产出
 
 ```text
 residual_block_forward.py
 ```
 
-只做 forward、shape assertions 和 parameter/activation memory 粗略统计。
+只做forward、shape assertions和parameter/buffer/selected activation字节粗算，区分R1与加入BatchNorm后的状态；这些数字不是实测peak memory。不新增CNN训练作业，原可延期范围保持。
 
 ### 对应视频
 
