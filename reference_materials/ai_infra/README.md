@@ -1,10 +1,16 @@
 # AI Infra 本地参考资料索引
 
-> 建立日期：2026-09-17；最近增补：2026-10-21（AI不止算法公开资料筛选）；§4 仍为 2026-09 生态快照，不代表本次重查了全部框架版本
+> 建立日期：2026-09-17；最近核对：2026-10-22（规划、岗位与官方资料）。§4仍为2026-09生态快照，不代表本次重查了全部框架版本
 >
 > 定位：服务后续 AI Theory 与 AI Infra 教程编写，不构成新的并行课程。
 
 ---
+
+## 0. 本轮从哪里看
+
+最新入口：[2026-10-22规划对齐与岗位资料更新](2026-10-22_规划对齐与岗位资料更新.md)。包含官方岗位样本及资格限制、benchmark/算子集成/课程资料的使用阶段，以及本轮修正和保留范围。
+
+原[10月19日预调研](2026-10-19_Week16后岗位与资源预调研.md)与[AI不止算法课程映射](2026-10-22_AI不止算法_课程对齐.md)保留为各自日期和主题的记录，不相互覆盖。现阶段进入Week13 Day7（教程已生成待R1，Day6整日96/100）与T10，后续实际课表等原Week16收口后安排。
 
 ## 1. 本地资料
 
@@ -55,13 +61,13 @@
 
 | 本地相对路径 | 主要用途 | 预计使用阶段 |
 |---|---|---|
-| `deeplearning_framework/mini_dl_framework.ipynb` | 从小型计算图到 MLP training flow | T7~T12 的补充实验，不替代自己的 reference implementation |
-| `models/modules/rope_principle.ipynb` | RoPE 的 shape、position 与旋转机制 | T15~T18，进入 Transformer block 后再用 |
+| `deeplearning_framework/mini_dl_framework.ipynb` | 小型计算图与MLP training flow | T12正式理解MLP后按需对照；不把完整MLP实现前置到T7/T10/T11，也不重复自己的训练程序 |
+| `models/modules/rope_principle.ipynb` | RoPE 的 shape、position 与旋转机制 | T17~T18，进入 Transformer block 后按需使用；T15只准备编号、嵌入与读取规则，不以本notebook作前置 |
 | `llm_infer/LLM_sampling.ipynb` | temperature、top-k、top-p 等 sampling 行为 | T19；T5/T6 只建立概率与 stable softmax 基础 |
 | `llm_infer/nano_vllm.ipynb` | Sequence、block table、KV block 与简化 serving flow | T21~T23；先完成 attention/decoder/KV 基础 |
 | `llm_infer/vllm_mem_snapshot.ipynb` | vLLM memory snapshot 的最小观察 | T20~T21，配合内存估算与实测 |
 | `llm_infer/vllm_basic_scheduler.ipynb` | waiting/running sequence 与 batch scheduling | T22；先写自己的 batching simulation，再对照 |
-| `llm_infer/quantization.ipynb` | quantization 第一层实验 | T24 后或正式推理优化阶段 |
+| `llm_infer/quantization.ipynb` | 量化实验的第二解释与对照线索 | CPU浮点reference正确后的补强或正式推理优化阶段；T20只补概念与容量，不以完整notebook作前置 |
 | `llm_infer/parallel_strategies.ipynb` | tensor/pipeline/data parallel 的映射 | 单 GPU serving 稳定后的 distributed gate |
 | `deeplearning_framework/collective_operations.ipynb` | collective communication 基本操作 | NCCL / distributed inference gate，不提前进入当前主线 |
 
@@ -170,3 +176,18 @@ SGLang latest GitHub release：v0.5.19（2026-09-05）
 ## 7. AI不止算法公开资料
 
 [2026-10-21资料筛选](2026-10-21_AI不止算法_资料筛选.md)记录公众号“AI不止算法”与作者别名“不归牛顿管的熊猫”的公开入口、访问限制和阶段映射。CPU推理、CUDA/kernel与系统级推理优化可在对应阶段择需参考；当前不购买、不增加整套课程，不改变Week16后的排课时点。课程目录重合不等于用户已经掌握全部主题。
+
+[2026-10-22课程对齐](2026-10-22_AI不止算法_课程对齐.md)进一步把截图六块目录对应到已有T线和Gate，写清CPU性能、GPU算子、模型接入、部署与量化框架/runtime的学习位置。§4集中说明原规划需补实的四处实验衔接；§5区分本地4060与按需租卡。它是详细选材/差距记录，不是新周课表，不要求整套付费内容，也不把CV部署或全部量化方案变成必修。
+
+## 8. 低精度量化：概念、数值参考与实际收益
+
+学习入口与实践出口统一见[理论规划T20](../../AI_Infra理论伴随线规划.md)的量化衔接段：T20讲表示/误差/容量，CPU浮点线性层正确后做小型INT8数值参考，有匹配算子与硬件后再测真实性能。当前只登记后续能力，不安装库、购买课程或生成新的固定周课表。
+
+硬件资源统一见[环境记录§2.1](../../ai_theory/ENVIRONMENT.md)：本机RTX 4060 Laptop GPU约8 GiB，后续基础CUDA与小模型实验优先本地；资源或架构不匹配时才按实验需要评估租卡。GPU存在、当前Ubuntu能用CUDA、具体框架支持该GPU，是三个需要分别确认的条件。
+
+| 官方入口 | 用它核对什么 | 使用边界 |
+|---|---|---|
+| [NVIDIA量化方案](https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/quantized-types-schemes.html) | 用明确刻度把浮点数映射到INT8及恢复，区分取整、表示范围与误差 | 先读INT8一小段；框架特定方案不概括成唯一量化规则，其他数据格式遇到需求再展开 |
+| [TorchAO量化实现层次](https://docs.pytorch.org/ao/stable/contributing/quantization_overview.html) | 数据类型、量化/反量化操作、辅助信息与实际计算算子的分工 | 自己的数值参考建立后选看，不要求当前安装TorchAO或运行其硬件示例 |
+
+权重存储变小、量化误差符合标准、实际执行更快，分别需要自己的证据。恢复为浮点再计算可以验证近似行为，但不算INT8计算加速；真实优化结果继续由用户独立测量与解释，Codex可提供重复测试和脚手架。

@@ -84,6 +84,26 @@ AI packages：NumPy 2.5.2、CPU PyTorch 2.14.0+cpu、Matplotlib 3.11.2
 
 Python 3.12.14 使用 Python 官方 source tarball 构建，并通过 `make altinstall` 安装到 `/usr/local`。`altinstall` 的目的正是并存安装，避免覆盖发行版的 `python3` 文件。
 
+### 2.1 本地GPU与可用环境分开记录（2026-10-21）
+
+**本机已有单张NVIDIA GPU，后续基础CUDA实验优先使用本机。** Windows下只读执行`nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader`，实际读数为：
+
+| 项目 | 本次读数 |
+|---|---|
+| 型号 | NVIDIA GeForce RTX 4060 Laptop GPU |
+| 显存总量 | 8188 MiB，约8 GiB |
+| Windows驱动 | 560.94，仅记录本次快照 |
+
+这与Ubuntu的CPU学习环境是两件事。2026-10-21教材实测使用的仍是PyTorch `2.14.0+cpu`，`torch.cuda.is_available()`为`False`；它说明该Python环境不能使用CUDA，不能据此推断电脑没有GPU。
+
+本轮未验证CUDA Toolkit、CUDA版PyTorch、WSL2的GPU访问或profiler（性能分析工具），也没有安装、升级或迁移环境。进入相应Gate时，再选择本机实际可用的运行路径，核对驱动、工具链和框架兼容性；若采用WSL2，按[NVIDIA官方WSL指南](https://docs.nvidia.com/cuda/wsl-user-guide/index.html)单独验证，不能把当前SSH Ubuntu默认视为WSL2或已能访问GPU。
+
+**本地先做基础kernel、小模型和适配的低精度实验；资源确实不足时再租卡。** 用户愿意租卡，但这不是开通实例或付费授权。需要更大显存、指定架构或多卡时，先明确要验证的问题、卡型/显存、软件要求、预算与时长，再获准执行，并安排数据保护、实例关停与费用核对。
+
+8 GiB是资源边界，不是对任意模型可运行的保证。具体模型需先估算权重、KV Cache和临时空间。笔记本benchmark（性能测量）还要记录供电/功耗模式、温度与后台负载，结果不直接推广到桌面4060或数据中心GPU。
+
+以上只校准硬件条件，不提前启动CUDA课程，不改当前CPU环境、Mini Redis主线或Week16后的排课时点。
+
 ## 3. 验证默认解释器
 
 ```bash
