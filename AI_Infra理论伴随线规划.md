@@ -1,7 +1,7 @@
 # AI Infra 理论伴随线规划
 
-> 对齐日期：2026-10-23。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
-> 当前状态：T1～T9及Theory Gate 1已通过；T10 R1学习中、尚未验收。T11～T15是未通过的提前稿，Theory Gate 2未通过。
+> 对齐日期：2026-10-25。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
+> 当前状态：T1～T9及Theory Gate 1已通过；T10 R1正式通过99/100，当前学习R2，整课未通过。T11～T17是未通过的提前稿，Theory Gate 2未通过。
 > 系统主线：Week13 Day1～Day6已通过，Day6整日96/100、R1历史98/100；90个整日通过、91份Daily已生成；Day7已生成待R1。
 > 目标：LLM inference systems / serving与CUDA/Triton kernel optimization；本线不替代系统项目。
 > 时间边界：先完整学完原Week16再整理简历试投；Week17以后实际课表等Week16收口后安排。既有能力Gate与理论范围不变。
@@ -1190,9 +1190,9 @@ tensor_layout.py
 
 ## T10：`nn.Module`、parameter、forward 与 inference mode
 
-**当前R1学习中、尚未验收。** 本课保留部署/状态主线，按三个能力闭环推进同一份`module_inference.py`：R1找全并取出模型需要的数值，R2明确比较输出时的运行方式，R3保存、重建对象并实际比较输出，然后检查尺寸不匹配与统一转换。前两轮各有暂停检阅点，不代表三轮都是独立发现闸门。
+**T10 R1于2026-10-25正式通过99/100；当前继续R2，整课未通过。** 结合笔记与Ubuntu真实脚本验收，实际main及22项私有检查通过；未另写机械state_dict检查不扣分。用户已正确区分共享数据的原地修改与state映射value重新绑定，上一轮对应2分误扣已撤销；只保留weight注释方向这一项轻微精度问题，不阻塞推进。本课保留部署/状态主线，按三个能力闭环推进同一份`module_inference.py`：R1找全并取出模型需要的数值，R2明确比较输出时的运行方式，R3保存、重建对象并实际比较输出，然后检查尺寸不匹配与统一转换。前两轮各有暂停检阅点，不代表三轮都是独立发现闸门。
 
-第一版沿用T8已经会的线性多分类器：XW+b对应nn.Linear的一次乘加，不引入隐藏层、ReLU或MLP。先访问linear/weight/bias，再用debug_tensor区分普通属性与框架管理，解释登记后分别读named_modules和named_parameters的完整输出；此时才用树描述本例的包含关系。固定缩放需要共同保存时加入buffer，随后用state_dict收集数值并观察共享与快照。model(inputs)的正常用法就近给出，hook放选读；Dropout仅在R2用于观察模式。按MEMORY §9.3保持同一对象的需求链，不按API目录横向展开。三轮任务、CPU环境和不新增训练的范围不变。
+第一版沿用T8已经会的线性多分类器：XW+b对应nn.Linear的一次乘加，不引入隐藏层、ReLU或MLP。先访问linear/weight/bias，再用debug_tensor区分普通属性与框架管理，解释登记后分别读named_modules和named_parameters的完整输出；此时才用树描述本例的包含关系。固定缩放需要共同保存时加入buffer，随后用state_dict收集数值并观察共享与快照。model(inputs)的正常用法就近给出，hook放选读；Dropout仅在R2用于观察模式，第一次出现先用普通概率和具体向量走通随机置零、缩放与eval原样通过，极端概率只作确定性验证。inference mode先用同一个标量乘加展示“不写仍能预测、写了不留求导记录”，再解释with范围并回到当前分类器；四组合必须有可运行观察代码，不只给职责表。保存恢复统一服务于“旧进程消失后，新进程用同类/配置/checkpoint恢复同一预测”，先交代数值文件与可执行对象各缺什么，再出现load链；Module.to另从真实dtype不匹配推出，不混作checkpoint步骤。按MEMORY §9.3保持同一对象的需求链，不按API目录横向展开。三轮任务、CPU环境和不新增训练的范围不变。
 
 ### 学习内容
 
@@ -1482,6 +1482,10 @@ embedding_and_mask.py
 
 ## T16：self-attention 的 Q / K / V 主线
 
+**教材状态（2026-10-23）：[T16提前稿](ai_theory/T16/T16.md)已生成，尚未学习或通过。** 正式学习仍从当前T10推进；T15通过后或实际进入T16时，再按真实实现和笔记校准，不因生成教材自动通过Theory Gate 2。
+
+讲解沿“输入位置需要别处内容 -> 按比例汇总 -> 怎样算比例 -> 查询与来源匹配 -> Q/K/V从X投影 -> 缩放/softmax/加权和”连续推进。R1先完成一条序列的手算与PyTorch计算，暂停；R2在同一程序接T15批次和True=允许的mask，验证未来/补位/跨序列隔离与允许来源的影响，再对照逐行参照。复用已会softmax和线性组合，不提前加入多头、训练语言模型或KV Cache。
+
 ### 本周问题
 
 ```text
@@ -1524,7 +1528,9 @@ output: [B, S, D]
 single_head_attention.py
 ```
 
-先用小矩阵手算，再写 NumPy/PyTorch reference；验证 mask 后不允许关注的位置概率为 0 或数值上接近 0。
+先用小矩阵手算，再写PyTorch单头主实现；独立逐行参照可用NumPy或PyTorch，机械checker可委托，不要求两份同构产品代码。R1输入`[S,H]`，R2兼容`[B,S,H]`，三个W按`[H,D]`保存；返回`(output, probabilities)`。CPU float64完成本课数值证据，不以GPU环境作前置。
+
+mask复用T15非空、右补位规则；本函数只接完整`[S,S]`或`[B,S,S]`的bool允许表，softmax前屏蔽，主动拒绝全False行。核对禁止概率为0、逐行参考数值、有效输出的位置隔离，并区分补位读取行与真实输出。课程最终只要求`single_head_attention.py`，正式收口时提醒本人做笔记；显式S平方中间表只作容量解释，不作性能结论。
 
 ### 对应视频
 
@@ -1567,6 +1573,10 @@ single_head_attention.py
 
 ## T17：multi-head attention 与 Transformer block
 
+**教材状态（2026-10-24）：[T17提前稿](ai_theory/T17/T17.md)已生成，尚未学习或通过。** 正式进入前核对T16及Theory Gate 2；生成文件不代表前置已过，不新增Week16首批C++/后台试投门槛。
+
+R1只解决“同一位置怎样保留多组读取结果”：从T16逐头参照出发，具体编号演示拆头、交换轴和合并，再用输出投影组合结果。R1暂停后，R2才从“保留旧表示并取得更新”引出残差，从“分支输入尺度”引出LayerNorm，最后接逐位置FFN，完成同一个前置归一化block。首次术语沿具体动作出现，不把未来组件提前装进首版。
+
 ### 学习内容
 
 ```text
@@ -1586,7 +1596,9 @@ pre-norm / post-norm 只到识别
 transformer_block_reference.py
 ```
 
-要求逐步 assert shape，不能只调用一个现成 Transformer layer 后打印结果。
+CPU float64，逐步assert shape；以逐头计算和手写LayerNorm公式核对完整输出，不能只调用一个现成Transformer layer后打印结果。R1产出MultiHeadSelfAttention，R2在同文件新增TransformerBlock；输入保持`[B,S,H]`，True=允许表保持`[B,S,S]`，返回输出和`[B,N,S,S]`比例。核心固定前置LayerNorm，不含Dropout；RMSNorm与pre/post-norm只要求辨认，不另交第二套模型。
+
+检查拆合顺序、数值、零分支残差、未来/补位/跨序列隔离，以及参数/输入不被forward改写。容量统计区分参数与显式注意力比例，不登记性能结论。完成后提醒用户亲自写笔记；T16通过或实际进入T17时，按真实实现再校准，R1通过后定向润色R2。T18的完整decoder forward范围保持。
 
 ### 对应视频
 
