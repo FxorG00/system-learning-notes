@@ -94,6 +94,12 @@ self.register_buffer(
 )
 ```
 
+### model 里的各个角色
+
+- **parameter**：如linear.weight，以**训练参数**身份登记，默认允许求梯度。
+- **buffer**：如input_scale，是模型需要**长期保留的固定数值**，本课不让优化器更新它。
+- **本次计算的临时Tensor**：如scaled，由当前输入产生，不作为模型状态登记或保存。
+
 ### state_dict
 
 ```text
@@ -312,7 +318,9 @@ converted = inputs.to(dtype=torch.float64)
 
 #### 让模型登记的状态一起转换
 
-> Module.to 原地转换已经注册的 parameters 与 buffer
+> Module.to 原地转换已经注册的 parameters 与 buffer，返回模型本身。前后的别名，仍让是指向同一个模型。我们没有得到新的模型！
+>
+> `assert returned_model is probe_model`
 
 ```python
 probe_model = TinyClassifier(4, 3)
