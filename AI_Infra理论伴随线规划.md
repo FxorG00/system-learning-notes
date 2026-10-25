@@ -1243,7 +1243,7 @@ module_inference.py
 
 ## T11：computation graph、autograd 与 backpropagation
 
-沿T4已经会的标量乘加/平方链学习，不依赖神经网络。R1完成manual、finite difference、autograd三路对照并保留累积预测；R2处理清理、graph与grad寿命、中间梯度后暂停；R3才进入向量目标与执行边界。动态分支是补充解释，不另增作业。
+沿T4已经会的标量乘加/平方链学习，不依赖神经网络。R1完成manual、finite difference、autograd三路对照并保留累积预测；R2处理清理、graph与grad寿命、中间梯度后暂停；R3连续检查三条边界：最终对哪个scalar目标求导、哪段计算需要记录、backward依赖的旧值能否修改。动态分支放到核心闭环后的补充解释，不另增作业。
 
 ### 学习内容
 
@@ -1253,9 +1253,11 @@ leaf Tensor
 requires_grad
 grad_fn
 backward
-gradient accumulation
-zero_grad
-dynamic graph 直觉
+gradient accumulation / clearing
+vector output 与 upstream gradient / VJP
+no_grad / detach / inference_mode 的用途边界
+saved value 与 in-place version check
+dynamic graph 直觉（补充）
 ```
 
 ### 学到什么程度
@@ -1290,7 +1292,7 @@ autograd_inspect.py
 
 ### 通过标准
 
-不要求读 PyTorch autograd engine 源码，但必须理解 graph 与保存 activation 会影响 memory。
+不要求读PyTorch autograd engine源码，但必须理解graph与保存activation会影响memory，并能用“目标、记录、旧值”解释R3三个实验为什么属于同一次正确求导的边界。
 
 ---
 
@@ -1437,7 +1439,7 @@ residual_block_forward.py
 
 ## T15：sequence、token、embedding 与 mask
 
-**教材状态（2026-10-21）：[T15提前稿](ai_theory/T15/T15.md)已按用户本次要求生成，尚未学习或通过。** 当前理论下一步仍是T10。T15沿原T13之后的安排学习，T14保留可延期边界；相邻前课通过或正式进入时，再根据最新真实产出校准。
+**教材状态（2026-10-21，进度校准至2026-10-25）：[T15提前稿](ai_theory/T15/T15.md)已按用户要求生成，尚未学习或通过。** 当前理论下一步是T11。T15沿原T13之后的安排学习，T14保留可延期边界；相邻前课通过或正式进入时，再根据最新真实产出校准。
 
 本课分两段能力阶段，不机械套三轮：R1先把固定词表、两个不同长度的序列、右侧补位与embedding查表接通，得到编号`[B,S]`和向量`[B,S,H]`后暂停；R2在同一程序中引入“来源是否真实”与“是否在当前前缀内”，组成允许表并验证屏蔽后的softmax。Q/K/V分数来源留T16。
 
