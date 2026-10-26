@@ -178,7 +178,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-10-26）：Week13 Day7 R1已以95/100正式通过，下一步继续R2/R3虚函数补缺；Day7整日与Week13整周尚未通过。系统主线仍90个整日通过/91份生成。T10整课正式通过99/100，R1历史99/100保持；T1～T10与Theory Gate 1已通过，理论下一步T11，T11～T17仍为未通过的提前稿，Theory Gate 2未通过。本轮继续以真实代码、本人笔记、口述和委托机械检查组合取证，不新增“只看笔记就自动通过”的规则。
+当前快照（2026-10-26）：Week13 Day7整日以98/100正式通过，R1历史95/100保持；Week13整周正式完成，系统主线91个整日通过/91份生成，下一步进入Week14的AOF与恢复。T10整课正式通过99/100，R1历史99/100保持；T1～T10与Theory Gate 1已通过，理论下一步T11，T11～T17仍为未通过的提前稿，Theory Gate 2未通过。本轮继续以真实代码、本人笔记、口述和委托机械检查组合取证，不新增“只看笔记就自动通过”的规则。
 
 T10 R1证据：逐节检阅T10_note.md的nn、Linear维度、model调用、对象关系、buffer和state_dict。Ubuntu实际29行module_inference.py已注册input_scale并在forward中先缩放再Linear，真实main输出(2,3)与正确参数/buffer名单；源码SHA256为cc9252a4b26a59ed1f4417b1ee2efb82e0d4f6b7a15ef86c26f1bf67caa697c4。Python3.12.14/PyTorch2.14.0+cpu，实际main及私有检查22/22、无warning，覆盖非默认缩放数值、不同D/C、状态名单、共享storage/独立对象、深拷贝与字典重新绑定。state_dict部分是Codex本次补证，不冒称用户脚本已有；不要求追加重复打印或永久tests。
 
@@ -207,6 +207,12 @@ Day7讲解校准（2026-10-26）：用户指出§11同时堆静态/动态类型�
 Week13 Day7 R1验收（2026-10-26）：用户完整口述§4.1～§4.4，能沿同一key说明“到期后GET/PTTL先按逻辑不存在处理，sweep再物理删除并改变size”，能说明普通SET把当前node改为新value与无期限、续期写入当前deadline，且用“有序值域上的边界”解释已删除key之后仍可寻找后继；也能定位应用层`next_sweep_at`并说明它由owner保存和使用。R1正式通过95/100。扣5分只来自三处精确性：把物理node仍存在说成PTTL已经找不到（1分）；把自有string cursor称为指针（1分）；首次把50ms与100ms都归为poll等待，并把命令局部时刻的用途说成泛化的“需要时间就使用”，未立即说出一条命令只取一次、多个key共用（3分）。这些均在当轮点评补准，不要求重复口述或补代码。
 
 R1没有新代码产出，正式依据为本轮口述与Day2～Day5已经通过的源码/命令/维护/网络证据；未SSH、未重新运行CTest、网络checker或sanitizer，不冒充本轮动态实测。按既定规则保留R1正文，只定向润色R2/R3：§6.1补物理查到node与逻辑不存在、RESP null bulk和`-2`的区别；§6.3明确cursor是独立string而非pointer/iterator；§6.4按真实口述拆开50ms/100ms/16，并把handler局部`t`与application owner的`next_sweep_at`分别落到具体用途。用户代码、tests、CMake与note保持不动；Day7整日、虚函数补缺和Week13整周仍未通过，90个整日/91份生成不变。
+
+Week13 Day7整日验收（2026-10-26）：最终98/100正式通过，Week13整周随之通过。最新`week13/day7/day7_note.md`为用户本人笔记，SHA256为`431AA34E0BE0D6B35062D5004C0476B4F352FBE76BBC8F3908E3DF3FCB86D9FE`；本轮只读检阅后原文保持不动。笔记与口述准确覆盖：普通成员通过基类引用按静态类型选择；虚调用按完整对象的实际类型选择；`override`要求编译器核对重写签名；基类拥有指针配合虚析构先结束派生部分再结束基类部分；构造/析构阶段按当前层调用；按值复制发生切片；vptr/vtable是常见实现模型而非标准固定布局。用户还能说明编译器先根据虚函数声明决定是否需要动态分派，再在运行时依据对象选择入口。
+
+Day7扣2分：口述一处把`override`说成“重载”，应为“重写”（1分）；最终检阅未独立保留`virtual_dispatch_lab.cpp`的新编译/运行轨迹，理解证据完整但运行证据不新增（1分）。笔记本身已正确区分override与overload，因此前者按口误处理，不阻塞通过。按§9.9对机械/重复任务的处理，接受本人笔记与能独立说明每个lab oracle的口述作为本次等效证据，不要求重新抄写实验；这不产生“以后所有代码实验都可只靠笔记通过”的新规则。本轮未SSH、未运行编译、CTest、网络checker或sanitizer，也未修改任何用户代码、tests、CMake或note。
+
+Day7最终验收按用户要求完成三遍不同目的的复核：第一遍检查笔记与口述的技术语义，确认vptr/vtable边界与普通/虚调用、销毁、切片结论；第二遍按§9.9核对证据强度和通过闸门，保留R1历史分数、不重复机械lab；第三遍同步Day7、Week13、Daily索引、总/理论/C++补缺规划和两份资料入口。现行状态统一为91个整日通过/91份生成、Week13通过、系统下一步Week14、理论下一步T11；带日期的旧阶段记录保留为历史。91条Daily索引、相对链接、围栏偶数、控制字符、敏感模式和note哈希均已核对；九份状态文档的`git diff --check`通过。原样纳入Git的用户note第163行保留一处既有行尾空格，因用户文件ownership不擅改，已单独登记；没有新增相反规则。收尾按§9.12留下本地Git提交，未经授权不push。
 
 T11相邻定向校准（2026-10-25）：T10正式通过后，按本人笔记、实际checkpoint恢复、Dropout/`with`/加载链三次真实阅读反馈复核T11整篇。R1三路梯度对照与R2累积/生命周期主线保留；R3不再让向量目标、动态分支、三个执行边界与原地修改并排抢主线，而是连续回答“最终对哪个scalar求导 -> 哪段关系需要记录 -> backward依赖的旧值能否修改”。`no_grad`首次用同一乘法展示不用/使用/退出恢复，`detach`按已有结果交给后续解释，`inference_mode`只承接T10已会的整段纯预测；动态分支移到核心闭环后的补充观察。同步理论规划、总规划、资料映射和T12证据措辞；T11仍是未通过的提前稿，不把教材QA计作用户学习证据。
 
@@ -3541,7 +3547,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13 Day7 R1已以95/100正式通过，V2新增关系完成口述收口；当前继续R2/R3原定虚函数基础补缺。Day6整日96/100保持；当前90个整日通过/91份已生成，Day7整日与Week13整周尚未通过。Day2～Day5既有实现与测试证据复用，语法补缺独立记账。理论T10整课已通过99/100，R1历史99/100保持，下一步T11；Theory Gate 2未通过，完整证据见§4。
+Week13 Day7整日已以98/100正式通过，R1历史95/100保持；V2新增关系和虚函数基础补缺均已收口，Week13整周完成。当前91个整日通过/91份已生成，系统下一步进入Week14的AOF与恢复。Day2～Day5既有实现与测试证据继续复用，不重做。理论T10整课已通过99/100，R1历史99/100保持，下一步T11；Theory Gate 2未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -3560,7 +3566,7 @@ Milestone A / Week9：non-blocking I/O、epoll、EAGAIN、partial I/O、Epoll Ec
 Milestone B / Week10：Reactor V1，明确 EventLoop/Channel/Acceptor/Connection ownership
 Milestone C / Week11：HTTP Server V1，验证 incremental parse、keep-alive 和 Reactor
 Milestone D / Week12：Mini Redis V1，RESP/KV、network 与多 client（已通过）
-Milestone E / Week13：Mini Redis V2，生命周期与 TTL（当前）
+Milestone E / Week13：Mini Redis V2，生命周期与 TTL（已通过）
 Milestone F / Week14：Mini Redis V3，AOF 与恢复
 Milestone G / Week15：测试、故障与性能
 Milestone H / Week16：原定完整项目出口、文档与表达收口
