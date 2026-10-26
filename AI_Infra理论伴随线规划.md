@@ -3,7 +3,7 @@
 > 对齐日期：2026-10-25。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
 > 当前状态：T1～T10及Theory Gate 1已通过；T10整课与R1均为99/100，下一步T11。T11～T17是未通过的提前稿，Theory Gate 2未通过。
 > Git留痕与发布权限统一按`MEMORY.md` §9.12：正式仓库文件有变化就本地commit；push需另行明确授权。
-> 系统主线：Week13 Day1～Day6已通过，Day6整日96/100、R1历史98/100；90个整日通过、91份Daily已生成；Day7已生成待R1。
+> 系统主线：Week13 Day1～Day6整日已通过；90个整日通过、91份Daily已生成。Day7 R1已于2026-10-26以95/100通过，整日继续R2/R3，Week13整周尚未通过。
 > 目标：LLM inference systems / serving与CUDA/Triton kernel optimization；本线不替代系统项目。
 > 时间边界：先完整学完原Week16再整理简历试投；Week17以后实际课表等Week16收口后安排。既有能力Gate与理论范围不变。
 

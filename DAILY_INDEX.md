@@ -1,6 +1,6 @@
 # Daily 教程总目录
 
-> 更新日期：2026-10-23（新增Week13 Day7，待R1）
+> 更新日期：2026-10-26（Week13 Day7 R1已通过95/100，整日待R2/R3）
 >
 > 收录范围：主线 Week1 Day1 至 Week13 Day7，共 91 份正式 daily 教程；正式通过为 90 个主线单元。
 >
@@ -20,7 +20,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 
 - Week1 Day7的backup不重复收录；Week8 Day7的README不单独计为Daily。
 - Week1～Week12已通过；Week13 Day1～Day6整日已通过，分数依次为98、100、98、99、100、96。
-- Week13 Day6整日通过96/100，R1历史98/100；Day7已生成待R1，Week13尚未整周通过。
+- Week13 Day6整日通过96/100，R1历史98/100；Day7 R1已通过95/100，整日与Week13整周尚未通过。
 - 当前90个整日通过、91份Daily已生成。历史测试数量、分轮成绩和修复经过见MEMORY §4。
 - 教材QA不计用户通过。索引负责快速查阅，不在这里维护第二份验收日志。
 
@@ -42,7 +42,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 | Reactor V1 | [Week10](#week10reactor-v1) | Buffer、Channel、EventLoop、Acceptor、Connection，继续加固 callback lifetime |
 | HTTP Server V1 | [Week11](#week11http-server-v1) | incremental request parser、response encoder、Reactor integration、keep-alive |
 | Mini Redis V1 | [Week12](#week12mini-redis-v1) | RESP2 encoder/parser、command dispatcher、KV store、multi-client integration |
-| 数据库与 Mini Redis V2 | [Week13](#week13mysql-与-mini-redis-v2) | Day1~Day6整日已正式通过；Day6最终96/100，R1历史98/100；累计90个整日通过，Day7已生成待R1，整周未通过 |
+| 数据库与 Mini Redis V2 | [Week13](#week13mysql-与-mini-redis-v2) | Day1~Day6整日已正式通过；Day7 R1已通过95/100、整日待R2/R3；累计90个整日通过，整周未通过 |
 
 ---
 
@@ -223,8 +223,8 @@ MEMORY.md：长期规则、进度与历次检阅结论
 | [Day3：EXPIRE/PTTL 与命令时刻](week13/day3/day3.md) | 将秒参数接到毫秒TTL；完整整数文本/命令Error；区分clock故障与期限越界；EXISTS/DEL整条命令共用同一时间读数 | 整日98/100正式通过，R1保持100；安全换算/异常来源/命令快照完成；fresh原CTest99/99，独立ASan/UBSan的TTL24/24；笔记两处用词补准，不重写RESP或网络底座 | EXPIRE, PTTL, from_chars, arity, command error, seconds, milliseconds, time snapshot, exists_at, erase_at, expire_ms_at |
 | [Day4：分批回收过期 key](week13/day4/day4.md) | 逻辑失效与物理回收；检查预算/删除计数；有限集合持续推进；节点位置与自有排序边界、upper_bound恢复当前后继；跨轮SET/DEL/续期、单次取时与异常状态 | 整日99/100正式通过，R1历史100保持；自有key边界已落地，原3项加22项R3，完整回归124/124、两类诊断各25/25；保留RSS证据边界，Day5再接事件循环 | active expiration, sweep_expired, work budget, examined, removed, cursor, 排序边界, upper_bound, iterator invalidation, RSS |
 | [Day5：维护运行机会与网络TTL](week13/day5/day5.md) | 有限等待、16条预算、约100ms完成后间隔；空闲/活跃维护、两种时间、异常传播与物理回收证据 | 整日100/100通过；R1初检96/100为历史，后续修正已复验；原checker在附录A，冻结正文与笔记保留 | maintenance, bounded wait, poll_once, steady_clock, time_point, next_sweep_at, 空闲回收, 维护频率, 运行机会, TCP TTL |
-| [Day6：缓存场景与MySQL事务](week13/day6/day6.md) | 缓存故障的下游流量；RR/RC行为与具体版本读取；何时读到新值；读后修改为何加锁；A/B持锁、等待、释放与重试 | 整日96/100通过，R1历史98/100；本轮以笔记理解验收，复用R1，RC/锁超时未冒记新实测；原SQL/note保留，三处边界见Memory点评；当前进入Day7 | cache miss, penetration, breakdown, avalanche, eviction, transaction, ACID, COMMIT, ROLLBACK, RR, RC, MVCC, Read View, FOR UPDATE, lock wait, deadlock |
-| [Day7：TTL V2收口与虚函数补缺](week13/day7/day7.md) | 复用TTL证据；沿对象借用、两次真实调用走到类型区分、重写、抽象与销毁，再看构造期调用、切片和虚表；访问/重载/隐藏/final后置对照 | 已生成待R1；2026-10-26讲解校准不计通过；V2差异口述与独立virtual_dispatch_lab，补缺可分次单独记账 | Mini Redis V2, TTL, class, inheritance, virtual, override, final, abstract class, virtual destructor, object slicing, vtable |
+| [Day6：缓存场景与MySQL事务](week13/day6/day6.md) | 缓存故障的下游流量；RR/RC行为与具体版本读取；何时读到新值；读后修改为何加锁；A/B持锁、等待、释放与重试 | 整日96/100通过，R1历史98/100；本轮以笔记理解验收，复用R1，RC/锁超时未冒记新实测；原SQL/note保留，三处边界见Memory点评；随后进入Day7，当前Day7 R1已通过 | cache miss, penetration, breakdown, avalanche, eviction, transaction, ACID, COMMIT, ROLLBACK, RR, RC, MVCC, Read View, FOR UPDATE, lock wait, deadlock |
+| [Day7：TTL V2收口与虚函数补缺](week13/day7/day7.md) | 复用TTL证据；沿对象借用、两次真实调用走到类型区分、重写、抽象与销毁，再看构造期调用、切片和虚表；访问/重载/隐藏/final后置对照 | R1于2026-10-26以95/100通过；V2口述已收口，50/100ms、cursor与命令快照已补准；整日继续virtual_dispatch_lab与R2/R3 | Mini Redis V2, TTL, class, inheritance, virtual, override, final, abstract class, virtual destructor, object slicing, vtable |
 
 ---
 
