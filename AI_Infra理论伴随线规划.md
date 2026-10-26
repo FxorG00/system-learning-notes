@@ -1243,7 +1243,7 @@ module_inference.py
 
 ## T11：computation graph、autograd 与 backpropagation
 
-沿T4已经会的标量乘加/平方链学习，不依赖神经网络。第一次出现computation graph时，必须用同一条标量链画出forward节点/依赖边和backward反向梯度，不让`grad_fn`先于图本身成为抽象名词。R1完成manual、finite difference、autograd三路对照并保留累积预测；R2核心处理清理以及graph saved state与leaf `.grad`的不同寿命，中间节点`retain_grad()`只作补充观察；R3连续检查三条边界：最终对哪个scalar目标求导、哪段计算需要记录、backward依赖的旧值能否修改。向量输出先走通“上游权重怎样组成标量目标”，再命名VJP；动态分支放到核心闭环后的补充解释，不另增作业。
+沿T4已经会的标量乘加/平方链学习，不依赖神经网络。第一次出现computation graph时，必须用同一条标量链画出forward节点/依赖边和backward反向梯度，不让`grad_fn`先于图本身成为抽象名词。首次使用`grad_fn`时拆明`grad = gradient`、`fn = function`，并与保存梯度数值的`.grad`分开。首次打印`requires_grad/is_leaf/grad_fn/.grad`等观察属性时，先展示带标签的代表性输出，再逐项解释值与用途；不能先写抽象职责总结。R1完成manual、finite difference、autograd三路对照并保留累积预测；R2核心处理清理以及graph saved state与leaf `.grad`的不同寿命，中间节点`retain_grad()`只作补充观察；R3连续检查三条边界：最终对哪个scalar目标求导、哪段计算需要记录、backward依赖的旧值能否修改。向量输出先走通“上游权重怎样组成标量目标”，再命名VJP；动态分支放到核心闭环后的补充解释，不另增作业。
 
 ### 学习内容
 
