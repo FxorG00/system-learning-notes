@@ -224,7 +224,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 | [Day4：分批回收过期 key](week13/day4/day4.md) | 逻辑失效与物理回收；检查预算/删除计数；有限集合持续推进；节点位置与自有排序边界、upper_bound恢复当前后继；跨轮SET/DEL/续期、单次取时与异常状态 | 整日99/100正式通过，R1历史100保持；自有key边界已落地，原3项加22项R3，完整回归124/124、两类诊断各25/25；保留RSS证据边界，Day5再接事件循环 | active expiration, sweep_expired, work budget, examined, removed, cursor, 排序边界, upper_bound, iterator invalidation, RSS |
 | [Day5：维护运行机会与网络TTL](week13/day5/day5.md) | 有限等待、16条预算、约100ms完成后间隔；空闲/活跃维护、两种时间、异常传播与物理回收证据 | 整日100/100通过；R1初检96/100为历史，后续修正已复验；原checker在附录A，冻结正文与笔记保留 | maintenance, bounded wait, poll_once, steady_clock, time_point, next_sweep_at, 空闲回收, 维护频率, 运行机会, TCP TTL |
 | [Day6：缓存场景与MySQL事务](week13/day6/day6.md) | 缓存故障的下游流量；RR/RC行为与具体版本读取；何时读到新值；读后修改为何加锁；A/B持锁、等待、释放与重试 | 整日96/100通过，R1历史98/100；本轮以笔记理解验收，复用R1，RC/锁超时未冒记新实测；原SQL/note保留，三处边界见Memory点评；当前进入Day7 | cache miss, penetration, breakdown, avalanche, eviction, transaction, ACID, COMMIT, ROLLBACK, RR, RC, MVCC, Read View, FOR UPDATE, lock wait, deadlock |
-| [Day7：TTL V2收口与虚函数补缺](week13/day7/day7.md) | 复用有效性/回收/当前node/维护证据；从对象、基类引用走到虚调用、重写/隐藏、抽象、虚析构、切片与虚表模型 | 已生成待R1；V2差异口述与独立virtual_dispatch_lab，补缺可分次单独记账；教材QA不计通过 | Mini Redis V2, TTL, class, inheritance, virtual, override, final, abstract class, virtual destructor, object slicing, vtable |
+| [Day7：TTL V2收口与虚函数补缺](week13/day7/day7.md) | 复用TTL证据；沿对象借用、两次真实调用走到类型区分、重写、抽象与销毁，再看构造期调用、切片和虚表；访问/重载/隐藏/final后置对照 | 已生成待R1；2026-10-26讲解校准不计通过；V2差异口述与独立virtual_dispatch_lab，补缺可分次单独记账 | Mini Redis V2, TTL, class, inheritance, virtual, override, final, abstract class, virtual destructor, object slicing, vtable |
 
 ---
 

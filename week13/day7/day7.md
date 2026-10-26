@@ -3,7 +3,8 @@
 > 生成：2026-10-23。Day1～Day6整日已通过；Day6为96/100，R1历史98/100。
 > 今天先完成Mini Redis V2的新增关系收口，再补类、继承与虚函数。
 > 项目部分复用已有代码和证据；语法部分只做一个独立的小实验，可分两次学习。
-> 本文已生成，Day7尚未验收，Week13尚未整周通过。理论线继续T10 R1。
+> 本文已生成，Day7尚未验收，Week13尚未整周通过。理论线T10已通过，下一步T11。
+> 2026-10-26定向修订：保留本周收口与语法范围，重新展开每次调用、对象关系和术语的出现顺序。
 
 [TOC]
 
@@ -13,7 +14,7 @@
 
 ## 1. 今天要得到什么
 
-**先说明你的Mini Redis怎样让数据按时失效、随后回收；再用一个小程序看清：同一个基类引用，为什么能够执行不同对象的实现。**
+**先说明你的Mini Redis怎样让数据按时失效、随后回收；再用一个小程序看清：同一个函数接到不同对象，怎样分别打印文字和累加字节。**
 
 项目部分从你已经写好的行为出发。假设可控时钟当前为1000ms，`code`的期限为1100ms：
 
@@ -57,7 +58,7 @@ Day5最终验收已有完整构建、CTest 124/124、相关ASan/UBSan和真实�
 1. 一条记录已经不能读取，却仍占着map条目，这两个状态分别由谁改变？
 2. SET、DEL、再次EXPIRE以后，清理为什么仍能依据当前记录正确工作？
 3. 网络等待、维护间隔、检查预算分别控制什么，已有证据支持哪些结论？
-4. 给一个函数传入基类引用以后，调用和销毁如何保留实际对象的行为？
+4. 同一个函数接到打印对象或计数对象时，怎样分别做对工作？如果还要负责保存、销毁这些对象，又需要什么？
 
 前三个属于V2出口，第四个属于另记的基础补缺。V2已经成立的正确性不会因为语法补缺尚未做完而被撤销；补缺仍保留为明确待完成项，最迟Week16投递准备前闭环。
 
@@ -125,7 +126,7 @@ R1可以用口述、已有note中的具体段落，或一份很短的新增笔�
 
 ## Round2：先收住V2，再补统一调用的语言机制
 
-## 6. 你的两个入口怎样使用同一份记录
+## 6. 命令查询和定期清理，怎样使用同一份记录
 
 ### 6.1 命令先判断能否使用，维护负责回收
 
@@ -161,7 +162,15 @@ graph TD
 
 你当前初值为空string，到末尾就绕回begin。空key本身仍是合法数据；初始边界可以让它在绕回时被检查。稳定有限集合上，持续推进和不重复检查的证据已有Day4测试覆盖。数轴类比对应**排序关系**；字符串`"10"`和`"2"`按字符串规则排序，不能当成整数10和2。
 
-### 6.4 两份时间各自回答一个问题
+### 6.4 key是否到期，与何时再清理一次，是两个判断
+
+先沿你的代码问两个具体问题。
+
+`code`的deadline是1100，store这次读到1100，便能判断它已失效。这里需要的是**记录期限和当前时刻处于同一套毫秒坐标中**。
+
+owner却在问另一件事：上次清理刚结束，要等约100ms再允许下一次。它把这个未来时刻保存在`next_sweep_at`，每次poll回来比较一次。即使这一轮没有key到期，它也仍需要控制检查频率。
+
+再把四个位置放回各自的问题：
 
 | 位置 | 保存或取得的值 | 用它回答什么 |
 |---|---|---|
@@ -170,7 +179,9 @@ graph TD
 | handler中的`now_ms` | 本条命令读出的一次时刻 | 多个key是否用同一时刻判断 |
 | owner的`next_sweep_at` | steady_clock的下次允许时刻 | 现在是否该启动一轮维护 |
 
-你的默认store clock从构造时保存的起点计算经过的毫秒；owner直接保存steady_clock的时间点。二者服务不同判断。handler把store给出的毫秒传回`*_at`；owner用自己的时间点比较维护机会，不拿这两类数值直接相减。
+你的默认store clock从构造时保存的起点计算经过的毫秒。handler取到这个毫秒读数后，把同一个值传给各次`*_at`调用，所以一条EXISTS不会对两个key使用两个时刻。
+
+owner直接保存`steady_clock`时间点，并和同类时间点比较。**store管数据在此刻是否有效，owner管此刻是否启动检查。** 它们不用互相减出一个差值。
 
 当前主循环顺序是：poll返回，必要时维护，随后处理pending close。关闭清理仍在本轮事件分发返回以后执行；教程按你的实际顺序描述。
 
@@ -192,13 +203,24 @@ graph TD
 
 至此V2主问题已经闭合。接下来切换到原计划中的语法补缺：它回答“同一个调用入口怎样操作不同类型”，不改这套服务器。
 
-## 8. 先认识将要操作的对象
+## 8. 后半只沿一个场景：同一段文字，交给不同对象处理
 
 后半用一个小场景贯穿：接收一段文字，或者把它打印出来，或者统计它有多少字节。
 
-调用者只想说“处理这段文字”。为了让它不必分别写两套调用逻辑，我们逐步找到统一入口。先从最熟悉的计数状态开始，之后每一步只增加一个关系。
+最终想得到的用法是：
+
+```text
+deliver(打印对象, "abc") -> 控制台出现 abc
+deliver(计数对象, "abc") -> 那个计数对象增加 3
+```
+
+**`deliver`只写一次；换一个传入对象，具体工作跟着改变。** 今天的继承和虚函数就服务于这个目标。
+
+先从“两个计数器各改各的数”开始。接着让不同对象能够交给同一个函数，再解决函数究竟执行哪一份实现，最后处理谁负责销毁。常见的虚表模型在这些行为都看懂以后解释。
 
 本节到§16的完整示例都可单独编译。它们是讲解材料；最终练习只保留§18的一份`virtual_dispatch_lab.cpp`。已经能准确解释的小例子可以读过，不要求逐份抄写。
+
+阅读分两步：先完成§9～§17的“创建 -> 借用 -> 调用 -> 结束”主链；再看附录A里原计划已有的访问规则、重载/隐藏和final对照。附录只调整阅读位置，不删除知识范围，也不增加第二份作业。
 
 ## 9. 一个类可以创建两份互不影响的状态
 
@@ -235,13 +257,33 @@ int main() {
 }
 ```
 
-结果为`3 10`。`Counter`这份类定义规定数据与操作；`first`、`second`是依照它创建的两个**object（对象）**。各自拥有一份`bytes_`，函数代码并不需要在每个对象里复制一份。
+### 9.1 先追踪这次3到底加到了哪里
 
-`reference`是first的引用，调用`reference.add()`仍然修改first。进入这个成员函数时，`this`指向当前被操作的对象。因此`this->bytes_`能明确指出这次改谁；你通常省略`this->`，含义相同。
+程序输出`3 10`。沿main看三步：
 
-`public`把操作提供给外部，`private`把数据访问限制在类成员及其友元等授权范围内。`bytes() const`表示这个查询不通过当前对象修改普通成员。这里的**class（类）**是类型规则，对象才保存这一次具体的状态。
+1. `first(0)`创建第一份计数状态，起点是0；`second(10)`创建第二份，起点是10。
+2. `reference`引用first，因此`reference.add("abc")`是在操作first。
+3. `"abc"`有3个字节，first从0变成3；这次没有操作second，它仍是10。
 
-`Counter(0)`调用**constructor（构造函数）**。冒号后的`bytes_(start)`先初始化成员，再执行函数体。`explicit`要求调用者明确构造这个对象，避免一个整数被隐式转成Counter。普通局部对象在作用域结束时执行**destructor（析构函数）**，随后结束其成员；本例编译器提供的析构已足够。你在UniqueFd/Connection里借对象结束释放资源，依赖的就是这个生命周期。
+**`Counter`规定怎样保存和修改计数；`first`和`second`才是两份具体计数器。** 前者叫**class（类）**，后两者分别叫**object（对象）**。`bytes_`是对象里面保存的成员数据。
+
+### 9.2 同一份add代码，怎样知道这次修改first
+
+进入`reference.add()`时，成员函数中的`this`指向first。因此`this->bytes_`访问的是first自己的计数。若调用`second.add()`，这次的`this`就指向second。
+
+**`this`表示本次成员调用正在操作哪个对象。** 函数代码可以共用，每个对象的计数仍分别保存。这里省略`this->`写成`bytes_`，含义一样。
+
+外部用`add()`和`bytes()`操作计数器，这两个函数放在`public`后，表示外部可以调用。`bytes_`放在`private`后，所以main不能直接写`first.bytes_ = 20`；Counter自己的成员函数可以操作它。
+
+`bytes() const`是只读查询写法：这个函数通过当前对象读取计数，不修改本例的`bytes_`。更完整的访问权限规则按需回查小册，本节先跟住这一次计数。
+
+### 9.3 初始的0和10从哪里来
+
+创建first时，`Counter(std::size_t start)`接到0。冒号后的`bytes_(start)`先把成员初始化为0，然后才执行空的函数体。这个建立对象初始状态的函数叫**constructor（构造函数）**。
+
+`explicit`限制自动转换。例如`Counter first(0)`明确创建计数器，可以；`Counter first = 0`想让整数自动转成Counter，会被拒绝。它不是本次“改谁的计数”的关键，看到两种写法的区别即可。
+
+main结束时，两份局部计数器依次结束。C++在结束对象时执行**destructor（析构函数）**，再结束它的成员；本例编译器提供的析构足够。后面需要通过统一指针销毁不同对象时，我们再专门看析构调用。
 
 ## 10. 要让两种处理器共用入口，先让它们有共同的类型
 
@@ -285,7 +327,9 @@ int main() {
 
 输出依次是`7`、`Console: hello`、`Sink`。先看对象关系，再解释最后一行为什么没选Console。
 
-`ConsoleSink : public Sink`建立**inheritance（继承）**关系。Sink是**base class（基类）**，ConsoleSink是**derived class（派生类）**。这个ConsoleSink对象中包含一个Sink基类部分，里面保存编号7。
+创建`console`时，先执行`Sink(7)`，把编号初始化为7。`console.id()`使用这份编号，所以第一行输出7。直接调用`console.write("hello")`则使用ConsoleSink里写的函数，打印`Console: hello`。
+
+这说明一个console里面既有Sink规定的编号，又能提供ConsoleSink自己的打印操作。代码中的`ConsoleSink : public Sink`建立这种类型关系，它叫**inheritance（继承）**。Sink叫**base class（基类）**；在它之上扩展的ConsoleSink叫**derived class（派生类）**。
 
 ```text
 console：完整 ConsoleSink 对象
@@ -294,13 +338,15 @@ console：完整 ConsoleSink 对象
 deliver 的 Sink&：借用上面这一个对象的基类部分
 ```
 
-这幅图表达组成关系，不承诺成员在内存里的固定偏移。`Sink(7)`负责先构造基类部分；随后才进入派生类构造函数体。基类的private数据仍由基类成员访问，所以console通过`id()`取得编号，而不是直接访问`id_`。
+这幅图表达一个对象内部的组成，不规定它们在内存中的字节位置。编号属于Sink的private成员，所以ConsoleSink也要通过公开的`id()`读取它。
 
-**基类引用给已有对象提供一个基类视角。** 它没有新建Sink，也没有把ConsoleSink变成另一个对象。public继承让本例可以把ConsoleSink传给`Sink&`。
+现在看`deliver(console, "hello")`。`public Sink`允许外部把console交给接收`Sink&`的函数。`&`表明这里借用已有对象：函数里的sink和main里的console，访问的是同一个完整对象中的那份Sink部分。**没有创建第二份编号，也没有复制console。**
 
-但在`deliver()`里，表达式`sink`的声明类型是Sink引用；`write()`还是普通成员函数，所以这里选中`Sink::write`。我们已经统一了入口类型，却还没实现“根据实际对象选择具体工作”。下一节只补这个能力。
+那么为什么最后只打印`Sink`？看deliver的函数体：它的参数写成`Sink&`，在这个位置使用的是Sink声明的操作。这里的write是普通成员函数，因此选中`Sink::write`。
 
-补充访问规则：`protected`允许派生类按受保护访问规则使用成员；`private`成员仍属于基类部分，只是派生类不能直接访问。`class`默认私有继承，`struct`默认公开继承，本例显式写public。其他继承方式留在需要时查，不改变眼前调用链。
+**我们已经做到“能把console传进去”，但还没做到“传进去以后执行Console的write”。** 下一节只改变这一点。
+
+访问权限的额外对照放在附录A.1。这里始终显式写`public`，先让同一条调用链完整走通。
 
 ## 11. virtual让同一个入口执行实际对象的实现
 
@@ -345,19 +391,74 @@ int main() {
 }
 ```
 
-输出`Console: abc`和`bytes=3`。两次都经过同一个deliver，第一次执行ConsoleSink的打印，第二次执行CountingSink的累加。
+### 11.1 第一次借console，第二次借counter
 
-**virtual（虚函数）规定：通过基类指针或引用进行普通虚调用时，使用实际对象对应的重写实现。** 这种选择过程叫**dispatch（调用分派）**；统一接口可以表现出不同对象的行为，叫**polymorphism（多态）**。
+先暂时只看两次调用各做了什么：
 
-这里有两个类型信息：参数声明为`Sink&`，所以表达式`sink`以Sink这个**static type（静态类型）**访问对象；借到的完整对象的**dynamic type（动态类型）**分别是ConsoleSink和CountingSink。前者决定这个位置允许使用哪些接口，后者决定虚调用采用哪个重写实现。
+```text
+deliver(console, "abc")
+  -> sink这次借到console
+  -> sink.write("abc")进入ConsoleSink的write
+  -> 打印 Console: abc
 
-所以`deliver()`里不能直接写`sink.bytes()`：Sink没有声明这个成员。虚函数改变的是已有虚接口的执行选择，不会把派生类全部接口自动暴露给基类调用者。
+deliver(counter, "abc")
+  -> sink这次借到counter
+  -> sink.write("abc")进入CountingSink的write
+  -> counter内部的bytes_从0变成3
+```
 
-`override`告诉编译器“这项声明必须确实重写一个基类虚函数”，下一节用一个错误来说明它的价值。这里的两个完整对象都由main中的局部变量管理，deliver只借用；§13再加入“通过基类指针拥有并销毁”的需求。
+最后main读取`counter.bytes()`，所以完整输出是：
+
+```text
+Console: abc
+bytes=3
+```
+
+deliver的代码始终只有同一行`sink.write(text)`。它没有自己判断“是打印还是计数”，区别来自这次传入的对象。
+
+让这个选择成立的关键，是Sink里的write加了`virtual`。**`virtual`把这个成员函数声明为虚函数：像本例这样通过基类引用调用时，使用所借对象为它提供的实现。** ConsoleSink和CountingSink各自提供write，叫对这个虚函数的**override（重写）**。代码里的override还承担一项编译检查，下一节专门看。
+
+### 11.2 既然借到counter，为什么不能直接写sink.bytes()
+
+在main里，`counter.bytes()`合法，因为CountingSink声明了bytes。但在deliver里面，编译器只按参数的`Sink&`检查代码。Sink声明了write，没有声明bytes。
+
+如果在deliver里加入`sink.bytes()`，会编译失败。即使某次真的传进counter，也不能保证每次都有bytes：另一次传进来的console就没有这个计数接口。
+
+因此要分开两个判断：
+
+- **这行调用能不能写：** `sink.write(text)`能写，因为Sink公开声明了write。
+- **合法调用最终执行谁：** write声明为virtual，所以本次借到counter就执行CountingSink的write，借到console就执行ConsoleSink的write。
+
+这样你就能先理解：**函数允许使用的共同操作没有变，执行这些操作的具体对象可以变。**
+
+### 11.3 现在才给这两个类型信息取名
+
+先看不需要运行程序就能读到的信息：deliver的参数声明写着`Sink&`。编译器据此把函数体里的表达式`sink`按Sink检查。这个表达式在代码中确定的类型叫**static type（静态类型）**；本例是Sink，参数声明本身是Sink引用。
+
+再看调用时实际借到的对象。main创建的console从头到尾都是ConsoleSink；counter从头到尾都是CountingSink。对于这里引用所访问的完整对象，它实际的类型叫**dynamic type（动态类型）**。
+
+两次调用放在一起就是：
+
+| 本次调用 | 函数体里的sink按什么类型检查 | 这次实际借到什么对象 | virtual write执行哪份实现 |
+|---|---|---|---|
+| `deliver(console, "abc")` | Sink | ConsoleSink | ConsoleSink的write |
+| `deliver(counter, "abc")` | Sink | CountingSink | CountingSink的write |
+
+“动态”在这里指调用时要看实际对象。**console没有先变成Sink再变回来；两次调用只是分别借用了两个已有对象。** 这些名称用来概括你刚才已经跟完的过程。
+
+### 11.4 多态与分派，在本例各指哪件事
+
+**同一个deliver调用方式，可以表现出打印和计数两种行为，这叫polymorphism（多态）。** 对这次virtual调用选择实际执行的write，则叫**dispatch（调用分派）**。
+
+先能沿§11.1说清两次调用就够了，不需要把四个词连成一句定义背下来。本节只讨论对象已构造完成时的普通调用；构造和析构中的规则到§14用时间线单独解释。
+
+目前main的两个局部变量负责对象存活，deliver只借用。先解决下一节的“怎样防止写错write”，再处理§13的“怎样统一拥有并销毁”。类型名称可查证[C++17静态类型定义](https://timsong-cpp.github.io/cppwp/n4659/defns.static.type)与[动态类型定义](https://timsong-cpp.github.io/cppwp/n4659/defns.dynamic.type)。
 
 ## 12. override帮你发现：名字相同，但没有接上原来的入口
 
-假设基类有`virtual void write(const std::string&)`，你却在派生类写成`void write(int)`。它们接受不同输入，原来的虚入口不会因此被替换。
+上一节依赖一件事：派生类确实提供了与Sink同一个操作的实现。现在故意写错一次，看看编译器怎样帮你发现。
+
+Sink接受一段string，你却在派生类写成接受int。调用者仍然会把文字交给Sink的write，所以这个接收整数的函数不能接替它。
 
 加上override以后，这个误写在编译阶段就会被拒绝。下面是专门用于失败观察的完整程序，**预期编译失败，不运行**。
 
@@ -376,46 +477,31 @@ int main() {}
 
 找编译输出里含`override`和`does not override`的那一行。不同版本的完整措辞可以不同；关键是声明没有匹配基类虚函数，所以没有生成新的可运行程序。
 
-参数列表、成员函数末尾的const及引用限定等要匹配相应重写规则。返回类型也受规则约束；本课的void沿用原签名即可。这里的override叫**重写**，与给同名函数增加不同参数的**overload（重载）**是两件事。
+**override是在请编译器检查：我写的这个函数，确实接替了基类已有的某个虚函数。** 去掉override并不能把错误签名变成重写，只会失去这次显式检查。若基类像本例这样有函数体，通过`Sink&`的字符串调用仍会执行基类版本。
 
-再看为什么派生类同名函数可能让原来的用法暂时找不到。示例D借同一个write入口说明查名字与虚调用是两个步骤。
+本课照着基类的`void write(const std::string&)`提供实现即可。成员函数末尾的const等限定也参与匹配，不能随意加减。更完整的匹配与返回类型规则可在[C++17虚函数规则](https://timsong-cpp.github.io/cppwp/n4659/class.virtual)按需查证。
 
-示例D：`lookup_demo.cpp`。
+至此，“统一接收对象 -> 正确选择实现 -> 防止接口写错”已经走通。重载、名字隐藏和final继续保留在附录A.2～A.3；它们解释另一组编译现象，等主链走完再读，不在这里打断销毁问题。
 
-```cpp
-#include <iostream>
-#include <string>
-struct Sink {
-    virtual void write(const std::string&) { std::cout << "text\n"; }
-};
-struct NumberSink : Sink {
-    using Sink::write;
-    void write(int) { std::cout << "number\n"; }
-};
-int main() {
-    NumberSink sink;
-    sink.write(7);
-    sink.write(std::string("abc"));
-    Sink& base = sink;
-    base.write("abc");
-}
-```
+## 13. 调用已经选对了，接着解决“必须提供实现”和“谁负责销毁”
 
-输出`number`、`text`、`text`。NumberSink的`write(int)`提供了另一个参数入口，原字符串虚函数仍使用Sink实现。
+### 13.1 如果漏写write，就不允许创建处理器
 
-如果删掉`using Sink::write`，直接对NumberSink查找write时先找到派生类同名声明，第二次字符串调用就不能采用基类那个入口。这叫**name hiding（名字隐藏）**。using把基类的write声明带回这个作用域，允许按参数选择；它本身不产生重写。
+前面的Sink有一个演示用write，只打印`Sink`。现在希望一个真正可用的处理器必须明确选择怎样处理文字，不能漏写实现后悄悄回到这句通用输出。
 
-`final`则用于限制继续派生或继续重写。例如把某个重写写成`void write(const std::string&) final`，后续派生类再重写它会编译失败；`class ConsoleSink final`限制继续从这个类派生。先理解这些是编译期约束，不需要为当前服务器添加final。
+可以把Sink中的那一行改为`virtual void write(const std::string& text) = 0;`。这表示：**这里只规定共同操作，具体处理器必须补出实现，才能创建那种对象。** 这样的函数叫**pure virtual function（纯虚函数）**。`= 0`是声明语法，不是让函数返回0。
 
-查证时只看[C++17虚函数规则](https://timsong-cpp.github.io/cppwp/n4659/class.virtual)的override/final例子，以及[成员名字查找](https://timsong-cpp.github.io/cppwp/n4659/class.member.lookup)。第一次学习以这里的调用过程为主，不要求阅读整份标准。
+改完以后，`ConsoleSink console;`仍可创建，因为它已经实现write；`Sink sink;`则会编译失败，因为它还没有可用的write实现。这种仍有纯虚函数待实现、不能直接创建实例的类，叫**abstract class（抽象类）**。
 
-## 13. 只有具体处理器能工作，统一接口还能负责正确销毁
+`Sink&`仍有用途：它借用的是已经完整实现write的ConsoleSink。**不能直接创建Sink，与能借用一个具体对象的Sink部分，是两件事。** §19给出只编译、不运行的对照。
 
-现在Sink本身没有有用的处理策略。我们希望它只规定“具体处理器必须提供write”，而不让调用者创建一个只打印通用标记的Sink。
+### 13.2 如果调用者还要保存处理器，并负责最后销毁
 
-在虚函数声明后写`= 0`，就把它声明为**pure virtual function（纯虚函数）**。还有未完成纯虚入口的类是**abstract class（抽象类）**，不能单独创建对象，但可以用它的指针或引用访问具体派生对象。`= 0`是语法标记，不表示这个函数返回数字0。
+目前deliver用`Sink&`借一次对象，调用结束就返回。假设现在要把处理器保存下来，并在结束时自动释放，可以复用你已经会的`unique_ptr`。
 
-接着考虑拥有关系：调用函数只借用`Sink&`已经够了；若另一个对象需要保存处理器并负责最后销毁，可以使用`std::unique_ptr<Sink>`。
+新问题在于：变量的类型统一写`unique_ptr<Sink>`，实际创建的却是ConsoleSink。我们要确认**它既能正确调用ConsoleSink的write，也能在结束时完整销毁ConsoleSink**。
+
+下面只增加拥有和销毁这两个动作。Sink的析构前也写上virtual，原因随运行结果说明。
 
 示例E：`owned_sink_demo.cpp`。
 
@@ -445,21 +531,32 @@ int main() {
 }
 ```
 
-先打印`Console: hello`，离开作用域时再打印`destroy ConsoleSink`、`destroy Sink`。
+输出按顺序是：
 
-沿一次结束过程看：owner结束，默认删除器通过Sink指针发起删除；虚析构把销毁入口带到ConsoleSink。派生析构函数体执行以后，派生成员继续析构，最后基类部分也结束。本例没有额外派生成员，所以日志只显示两层。
+```text
+Console: hello
+destroy ConsoleSink
+destroy Sink
+```
 
-**通过基类指针多态删除派生对象时，基类需要合适的虚析构约定。** 在本课C++17和unique_ptr默认删除器的用法下，删掉基类析构上的virtual会使这种删除成为未定义行为。不要运行错误删除来观察“好像只打印一行”，那不是可靠规则。
+第一行来自write，后两行才是结束过程。逐步对应：
 
-一个类只被引用借用、从不通过基类删除时，可以采用其他受限制的设计；这里选择公开虚析构，是因为我们已经明确需要`unique_ptr<Sink>`拥有并销毁完整对象。
+1. `make_unique<ConsoleSink>()`创建一个完整的ConsoleSink。owner负责拥有它，指针入口统一按Sink使用。
+2. main结束时，owner自动发起删除。它通过Sink指针执行这个动作。
+3. Sink的析构是virtual，所以先执行ConsoleSink的析构函数体，打印第二行。
+4. 随后结束派生成员，最后结束Sink基类部分，打印第三行。本例没有额外派生成员。
 
-抽象类仍可以有数据成员、构造函数和普通成员函数；派生对象中仍有它的基类部分。抽象说的是不能把这个未完成接口单独实例化。参考[抽象类](https://timsong-cpp.github.io/cppwp/n4659/class.abstract)与[C++17 delete规则](https://timsong-cpp.github.io/cppwp/n4659/expr.delete)。
+后两行表示**一个完整对象的两层先后结束**，不是同一个对象被删除两次。
+
+**本例要通过`unique_ptr<Sink>`的默认删除方式销毁ConsoleSink，所以Sink必须有公开的虚析构。** 在C++17中，若删掉这里的virtual，再经Sink指针删除ConsoleSink，会成为未定义行为，也就是语言不再保证这次程序会怎样执行。不能把某次“只打印了一行”当成正确规则；错误删除不安排运行。
+
+前面只用局部变量保存具体对象的示例不需要通过Sink删除；这次是新增加了“统一指针还负责销毁”的需求，才加入虚析构。抽象类仍然可以有成员和构造函数，它们属于具体派生对象中的基类部分。参考[抽象类](https://timsong-cpp.github.io/cppwp/n4659/class.abstract)与[C++17 delete规则](https://timsong-cpp.github.io/cppwp/n4659/expr.delete)。
 
 ## 14. 对象还没构造完，虚调用应该依靠哪一层
 
 前面的virtual调用发生在完整对象已经构造好以后。现在只改变调用时机：把一次调用放进构造函数或析构函数。
 
-**构造/析构期间对当前对象的虚调用，选择当前正在构造/析构的这一层实现。** 基类构造时，派生层尚未建好；基类析构时，派生层已经结束。下面用同一个`kind()`观察这一点。
+比如刚在执行Base构造函数时，Derived自己的初始化还没完成。此时如果调用虚函数，应不应该使用Derived的实现？下面把`kind()`放在对象一生的五个位置，让打印结果回答这个问题。`kind`在这里就是“告诉我这次执行了哪一层”的小函数。
 
 示例G：`lifetime_demo.cpp`。
 
@@ -492,15 +589,23 @@ Derived dtor: Derived
 Base dtor: Base
 ```
 
-对象经历“基类部分建立 -> 派生层建立 -> 完整使用 -> 派生层结束 -> 基类部分结束”。每一行放回这个时间线，就不需要记一条“构造时多态失效”的模糊口诀。
+| 当前执行到哪里 | kind这次返回什么 | 为什么在这一层 |
+|---|---|---|
+| Base构造函数 | Base | 正在建立Base部分，Derived层尚未完成 |
+| Derived构造函数 | Derived | 已进入Derived这一层的构造 |
+| main通过reference调用 | Derived | 完整Derived已构造好，回到前面普通虚调用的情形 |
+| Derived析构函数 | Derived | 当前还在执行Derived层的收尾 |
+| Base析构函数 | Base | Derived层已结束，正在收尾Base部分 |
+
+因此规则可以从这五行收束出来：**构造/析构期间，对当前这个对象的虚调用，按当前正在构造/析构的这一层选择实现，不继续走向更派生的层。** 本例两层都写了自己的kind，所以分别打印Base或Derived。正常使用时按完整对象选择，建立或结束过程中按当前层选择；关键是调用发生在哪个阶段。
 
 这里Base提供了实际函数体。不要把示例改成构造函数调用纯虚入口；那属于另一条非法使用边界，本课不执行。规则见[构造和析构期间的调用](https://timsong-cpp.github.io/cppwp/n4659/class.cdtor)。
 
 ## 15. 基类引用保留原对象，按值复制会创建另一个对象
 
-前面一直传`Base&`。如果改为`Base copy = object`，发生的是一次新对象构造：从Derived中的Base部分复制内容，得到一个真正的Base对象。
+前面说“引用不会复制对象”。现在只改变保存方式，对同一个Derived分别写`Base& reference = object`和`Base copy = object`。我们要看：这两种写法，最后调用的还是不是同一个对象？
 
-这叫**object slicing（对象切片）**。原Derived没有被剪坏；是新建的Base只包含基类那一部分，原派生层的数据和行为不属于这个新对象。
+下面让Base保存id=7，Derived再增加extra=9。两个字段使“复制了哪些内容”也能看出来。
 
 示例H：`slicing_demo.cpp`。
 
@@ -524,7 +629,22 @@ int main() {
 }
 ```
 
-结果是`Derived Base`和`9 7`。引用仍指向原对象，新copy的实际类型就是Base。函数参数写成`void use(Base value)`也会产生这种按值复制；写成`Base&`则是借用。
+结果是`Derived Base`和`9 7`。先画出这时真正存在的对象：
+
+```text
+object：原来的Derived
+  Base部分：id = 7
+  自己增加的成员：extra = 9
+  reference借用这里的Base部分
+
+copy：新创建的Base
+  id = 7
+  没有extra成员
+```
+
+`reference.kind()`仍通过原来的Derived调用，所以得到Derived。`copy.kind()`操作的是新建的Base，所以得到Base。原object的extra仍为9；它没有被剪掉。
+
+**从派生对象复制出一个基类值时，新对象只包含基类那部分内容，这叫object slicing（对象切片）。** 函数参数写成`void use(Base value)`也会创建这样的值；写成`Base&`则借用原对象。
 
 这也解释了为什么统一保存多种派生对象时，经常使用`vector<unique_ptr<Base>>`，而不是`vector<Base>`：前者让指针拥有各自完整对象，后者的每个元素本来就只能是Base值。
 
@@ -532,7 +652,7 @@ int main() {
 
 现在语言行为已经站稳：基类引用不复制对象，虚调用仍能找到派生实现。剩下的问题是，机器执行到这个入口时，可以从哪里取得函数位置？
 
-常见实现给多态对象关联一份函数入口信息。对象内保存的关联指针通常叫**vptr（虚表指针）**，它指向类型相关的**vtable（虚函数表）**。表里可以找到相应虚调用所需的函数入口。
+先想一个可行的实现办法：为ConsoleSink准备一份“write对应ConsoleSink::write”的函数地址信息；为CountingSink准备另一份“write对应CountingSink::write”的信息。每个对象关联到适合自己的那一份，调用时就有地方找到目标函数。
 
 ```text
 基类引用借用 ConsoleSink 对象
@@ -550,7 +670,9 @@ ConsoleSink::write
 CountingSink::write
 ```
 
-图只解释为什么“同一个调用入口”能走到不同实现。表通常由同一具体类型的对象共享，不是每创建一个对象就把所有函数代码复制进去。
+图里那份保存虚函数入口的表，通常叫**vtable（虚函数表）**；对象中关联到这张表的指针，通常叫**vptr（虚表指针）**。名字是在概括刚才的“对象怎样找到对应函数地址”。
+
+同一种具体类型的对象通常共享对应表信息，所以创建多个ConsoleSink，不需要每次复制一份write函数代码。
 
 这是常见编译器模型。**C++标准保证调用行为，不固定vptr的字节偏移、虚表槽位数或对象大小。** 编译器还可能在已知具体类型时直接生成调用，消除间接查表。想看实际二进制约定，可选读[Itanium C++ ABI的虚表部分](https://itanium-cxx-abi.github.io/cxx-abi/abi.html#vtable)开头说明。ABI是Application Binary Interface（应用二进制接口），规定对象布局与调用等实现协作规则；本次理解这层作用即可停止。
 
@@ -587,13 +709,15 @@ CountingSink::write
 | 逐步增加的动作 | 你要观察什么 | 这一步证明什么 |
 |---|---|---|
 | 给Task普通`label()`和虚`run()`；派生类提供同名label及各自run | 通过Task引用分别调用label/run，先写两次短预测再运行 | 普通成员选择与虚调用选择的区别 |
-| 写`run_one(Task&)`，依次借用两个派生对象 | 同一个函数进入两个具体run | 基类视角与实际对象类型可以不同 |
+| 写`run_one(Task&)`，依次借用两个派生对象 | 同一个函数进入两个具体run | 参数都写Task引用，实际分别借到FirstTask和SecondTask |
 | Task有虚析构，通过一个`unique_ptr<Task>`拥有派生对象 | 离开一个小作用域后，派生与基类析构各发生一次，顺序正确 | 统一拥有方式仍结束完整对象 |
 | 临时把一个override参数写错，编译后改回 | 错误版本被编译器拒绝，正确版本可运行 | override能检查接口误写 |
 
 每个run打印自己的身份就够了。`run_one`只借用对象，不保存引用；对象在调用期间由main中的变量或unique_ptr保持存活。最后加`VIRTUAL LAB PASS`时，前面的观察应已经核对，不能只打印标签代替实验。
 
-纯虚、构造/析构调用和切片可以直接借§13～§15完整例子做预测与解释，不要求把它们全塞进Task。如果你愿意用同一实验展示抽象接口，可以最后把Task的run改成纯虚，再保留能编译的派生实现；按值切片则用有具体基类实现的示例H观察。
+纯虚、构造/析构调用和切片可以直接借§13～§15完整例子解释，不要求把它们全塞进Task。例子的输出已经给出，读过后说明原因即可，不把复述答案算成事前预测。如果你愿意用同一实验展示抽象接口，可以最后把Task的run改成纯虚，再保留能编译的派生实现；按值切片则用有具体基类实现的示例H观察。
+
+附录A的额外语法只需能解释其中的调用变化，不要求再复制一份实验或测试框架。今天新增的唯一代码产出仍是这个Task小程序。
 
 输出和注释已能解释的地方不再抄到note。记录你真正判断错的一行，以及修正后的原因即可。机械检查脚手架可以委托；调用和拥有关系由你说明。
 
@@ -613,7 +737,7 @@ g++ -std=c++17 -Wall -Wextra -g virtual_dispatch_lab.cpp -o virtual_dispatch_lab
 ./virtual_dispatch_lab
 ```
 
-本课示例A～H也使用相同参数，替换输入文件名和输出程序名。失败示例F1只检查编译：
+本课完整示例也使用相同参数，替换输入文件名和输出程序名；示例D已放到附录A.2。失败示例F1只检查编译：
 
 ```bash
 g++ -std=c++17 -Wall -Wextra -g -fsyntax-only bad_override.cpp
@@ -671,7 +795,7 @@ R1已经回答的项直接引用。后半语法题可以用实验输出和简短
 1. **有效与占用：** deadline已经到达，GET不存在但size仍大于0，这两份结果是否矛盾？分别由什么动作改变？
 2. **当前状态：** 普通SET和再次EXPIRE以后，维护读哪一份期限？保存的巡检key已被删除，下一轮为什么仍能定位？
 3. **执行机会：** 50ms、100ms、16分别限制什么？为什么不能据此承诺某条请求最多150ms完成？
-4. **调用选择：** 把FirstTask交给`run_one(Task&)`时，对象复制了吗？普通label和虚run分别依据什么选择？
+4. **调用选择：** 把FirstTask交给`run_one(Task&)`时，对象复制了吗？为什么同一个函数里的普通label使用Task版本，而虚run可以使用FirstTask版本？先沿调用说明，再用静态/动态类型概括即可。
 5. **对象结束：** `unique_ptr<Task>`怎样结束完整派生对象？构造期在基类里调用虚函数时采用哪一层实现？
 6. **项目边界：** 你的TTL、内存淘汰、数据库事务和持久化分别解决什么问题？哪几项已经在当前Mini Redis实现，哪几项只是理解或后续计划？
 
@@ -689,4 +813,67 @@ Day7收口分开记录两件事：**V2核心关系与证据是否闭合；虚函
 
 还有一个具体前置会随之出现：你当前deadline使用“从本次store起点经过多少毫秒”的坐标。新进程起点变了，直接保存一个旧毫秒数还不足以说明重启后何时到期。Week14会结合恢复任务重新讲清时间表示；今天先把这道问题带过去，不提前改clock或写AOF。
 
-**停止点：能解释当前V2，知道证据在哪里，完成或明确登记独立虚函数补缺。** Week14仍按原规划进入AOF与恢复；Week15再做故障/性能，完整Week16以后再准备简历试投。T10按自己的进度继续，不因系统周数推进而登记理论通过。
+**停止点：能解释当前V2，知道证据在哪里，完成或明确登记独立虚函数补缺。** Week14仍按原规划进入AOF与恢复；Week15再做故障/性能，完整Week16以后再准备简历试投。理论线下一步T11，不因系统周数推进而登记理论通过。
+
+---
+
+# 附录A：主调用链走通后，再看三组语法对照
+
+这里接住原§10、§12的补充内容。它们仍属于原定补缺范围，只是不会插在第一次理解“调用谁、销毁谁”的中间。沿现有例子说明即可，不新增产出文件。
+
+## A.1 为什么例子一直显式写public继承
+
+§10需要外部函数能够接收console：`deliver(console, "hello")`的参数是`Sink&`。本例写`class ConsoleSink : public Sink`，就是允许外部使用这种基类引用转换。
+
+如果把这里的public改成private，main中的这次传参会因基类不可访问而编译失败。**继承存在，与外部可以把它当作基类使用，是两个判断。** `class`省略继承权限时默认private；`struct`默认public，所以示例显式写public来说明意图。
+
+成员的protected是另一项访问规则：当基类希望某个成员可由派生类直接使用，但不开放给任意外部调用者时，可以把它放在protected下。例如Sink里的编号若是protected，ConsoleSink的成员函数可以直接访问自己对象中的这份编号。
+
+本课编号仍为private，ConsoleSink通过公开的`id()`读取。private成员仍在对象里面，只是派生类不能直接用它的名字访问。protected还有限定访问对象等细则，回查小册即可，不把它记成“派生类可以操作任何基类对象的protected成员”。
+
+## A.2 都叫write，怎样区分“接替原实现”和“多收一种输入”
+
+§12的错误版本本来想接替字符串write，却误写成int。现在改变需求：**我们确实想同时接受整数和字符串**，那就应该保留两个不同的函数，而不是把它们当成一次重写。
+
+下面NumberSink接受整数时打印number，接受字符串时沿用Sink的text。`using Sink::write`把基类的write也加入这个位置的候选；先带着它运行，再看删掉会怎样。
+
+示例D：`lookup_demo.cpp`。
+
+```cpp
+#include <iostream>
+#include <string>
+struct Sink {
+    virtual void write(const std::string&) { std::cout << "text\n"; }
+};
+struct NumberSink : Sink {
+    using Sink::write;
+    void write(int) { std::cout << "number\n"; }
+};
+int main() {
+    NumberSink sink;
+    sink.write(7);
+    sink.write(std::string("abc"));
+    Sink& base = sink;
+    base.write("abc");
+}
+```
+
+三行输出分别是number、text、text：
+
+1. `sink.write(7)`给整数，选择NumberSink的整数函数。
+2. `sink.write(std::string("abc"))`给字符串，选择using带进来的字符串函数。
+3. `base.write("abc")`通过Sink引用调用字符串虚函数。NumberSink没有重写这个字符串函数，所以仍执行Sink的实现。
+
+**同一个名字可以接受不同参数，调用时根据参数选函数，这叫overload（重载）。** 它和§11的重写不同：重写是在同一个虚函数操作上提供具体对象的实现。
+
+再只删掉`using Sink::write`。第二行会编译失败：编译器在NumberSink中找到write这个名字后，看到的是接收int的版本，不再自动把基类同名函数一起拿来选择。这个现象叫**name hiding（名字隐藏）**。
+
+恢复using以后，第二行又能编译。using解决的是“让哪些同名函数参加选择”；它并没有替字符串函数写一个新实现。第三行通过Sink引用调用的规则也没有改变。查证：[成员名字查找](https://timsong-cpp.github.io/cppwp/n4659/class.member.lookup)。
+
+## A.3 如果这个实现不希望再被后继类更换
+
+假设ConsoleSink已经确定了write的实现，并希望继续从它派生的类不能再重写write。可以把该成员声明的末尾写成`override final`。**final在这个位置表示：这个虚函数到此为止，后续派生类不能再重写。**
+
+如果限制的是整个类型，写`class ConsoleSink final : public Sink`，表示不能再从ConsoleSink派生新类。这是两种不同的限制位置：一个管函数，一个管类。
+
+两种限制都由编译器检查。它们不负责释放资源，也不改变当前server的设计；理解用途即可，不要求给原工程添加final。对应编译失败示例可查[C++17虚函数规则](https://timsong-cpp.github.io/cppwp/n4659/class.virtual)中的final段。

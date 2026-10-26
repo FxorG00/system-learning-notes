@@ -298,9 +298,11 @@ Connection **拥有** Buffer，并不表示 Connection 是一种 Buffer。前者
 
 但问题还没结束：调用者手里只看到 `Sink&`，怎样选中 `ConsoleSink` 的实现？
 
-**virtual（虚函数）让这种调用按实际对象的类型选择最终重写的函数。** 这种在运行时选择实现的方式，叫 dynamic dispatch（动态分派）。
+先把预期说清楚：同一个`emit`拿到终端输出对象时，要执行打印；拿到文件输出对象时，要执行写文件。**我们需要让一次调用跟着收到的对象走。** C++用`virtual`支持这种选择，下面先看它在终端输出对象上实际做了什么。
 
 ### 3.2 看一次真实调用与销毁
+
+这是把调用与销毁合在一起看的参考例子。第一次学习可先读[Day7 §§9～15](../week13/day7/day7.md)，那里逐步加入每个能力；这里不再开一份同构作业。下面先跟`emit`的两次调用，随后看`owner`怎样结束同一个对象。`override`、`= 0`和`final`分别在§3.3～3.4解释。
 
 ```cpp
 #include <iostream>
@@ -353,14 +355,20 @@ ConsoleSink destroyed
 Sink destroyed
 ```
 
-顺着对象看，就能解释四行输出：
+先只追踪前两行。`make_unique<ConsoleSink>()`创建了一个ConsoleSink；`emit(*owner)`借用的仍是这个对象，没有复制出另一个Sink。
 
-1. `make_unique<ConsoleSink>()` 创建的是 ConsoleSink 对象；`owner` 通过基类类型拥有它。
-2. `emit` 收到的引用类型是 `Sink&`。普通成员 `describe()` 根据这里的静态类型选择 Sink 版本。
-3. `write()` 是虚函数，实际对象为 ConsoleSink，因此选择其 `write()`。
-4. 离开 main 后，owner 销毁所拥有的对象。基类析构为虚函数，所以先执行派生析构，再执行基类析构。
+在`emit`里，参数写成`Sink& sink`，编译器先按Sink提供的接口检查调用。`describe()`是普通成员，因此`sink.describe()`执行Sink版本，打印`Sink interface`。`write()`则在Sink中声明了`virtual`：本次借到的完整对象是ConsoleSink，所以`sink.write("hello")`执行ConsoleSink版本，打印`console: hello`。
 
-**static type（静态类型）是编译器从表达式看到的类型；dynamic type（动态类型）是这里实际对象的类型。** `Sink&` 是前者，ConsoleSink 是后者。
+**这里要分开两个问题：代码在这个位置允许调用什么；本次虚函数实际执行谁。** 假如ConsoleSink另有一个专属的`flush()`，也不能直接在这个函数体里写`sink.flush()`，因为Sink接口没有它。虚函数选择具体实现，不等于把所有专属接口都交给这个引用。
+
+到这里再给两种类型信息命名：
+
+- `sink`这个表达式由代码确定的类型是`Sink`，叫**static type（静态类型）**；`Sink&`是参数声明中的引用形式。
+- 这次引用访问的完整对象是`ConsoleSink`，叫**dynamic type（动态类型）**。它没有变成另一个对象，只是通过Sink引用被访问。
+
+沿实际对象选中虚函数实现的过程叫**dynamic dispatch（动态分派）**。名称概括的是刚才已经看到的调用选择。
+
+最后两行来自销毁。`owner`负责对象最终结束，`emit`只借用；main结束时，虚析构使ConsoleSink先收尾，再让它里面的Sink部分收尾。因此打印两行析构信息，**结束的是一个完整对象，不是删除两次。**
 
 ```mermaid
 graph TD
@@ -385,6 +393,8 @@ graph TD
 
 **名字一样，不足以构成重写。** 参数、const 等限定必须满足重写规则。`using Base::function;` 可以把基类的重载集合引入派生作用域；它处理名字查找，而不是创造一次新的重写。
 
+这张表用于回查区别；第一次辨认三者时，跟着[Day7附录A.2](../week13/day7/day7.md)的字符串/整数两次调用，以及删除`using`后的编译拒绝看。先看到哪条调用改变，再用表中的名称归纳。
+
 `final（禁止继续派生或重写）` 写在类上，禁止再派生；写在虚函数上，禁止后续派生类继续重写该函数。
 
 ### 3.4 纯虚函数与抽象类为什么存在
@@ -397,7 +407,9 @@ graph TD
 
 ### 3.5 虚表：先解释语言行为，再看常见实现
 
-在常见 GCC/Linux ABI 中，编译器会借助 **vptr（虚表指针）** 和 **vtable（虚函数表）** 实现这类调用：
+上例已经能按对象选择`write`。机器怎样找到具体函数的地址？一个直观办法是给每种类型安排函数地址表，对象保存找到相关表的指针。表中的`write`位置便能指向ConsoleSink的实现。
+
+在常见GCC/Linux实现中，这类表叫**vtable（虚函数表）**，对象中用于找到表的指针叫**vptr（虚表指针）**。沿这条链读取，就把“本次对象是谁”接到了“去哪个函数执行”：
 
 ```text
 当前对象中的虚表指针
