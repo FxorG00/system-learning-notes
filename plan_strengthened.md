@@ -2,7 +2,7 @@
 
 > 对齐日期：2026-10-26。最新岗位与资料核对见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
 > 学习者：FxorG，中山大学计算机科学与技术专业，2029届。
-> 系统主线：Week1～Week13已通过；Day7整日98/100，R1历史95/100。累计91个整日通过、91份Daily已生成；下一步进入Week14的AOF与恢复。
+> 系统主线：Week1～Week13已通过；Day7整日98/100，R1历史95/100。累计91个整日通过、91份Daily已生成；[Week14周规划](week14/week14.md)已生成，Day1尚未生成或开始。
 > 理论线：T1～T10与Theory Gate 1已通过；T10整课与R1均为99/100，下一步T11。T11～T17均为未通过的提前稿，Theory Gate 2未通过。
 > Git：正式仓库文件有变化时按`MEMORY.md` §9.12完成本地commit；push与本地留痕分开授权，当前不自动推送。
 > 投递顺序：完整学完原Week16，再整理简历并向匹配中小厂试投。11月是期望窗口，不据此缩减项目。
@@ -602,7 +602,7 @@ Day7 的 V2 核心收口后，另安排约 90~150 分钟的虚函数/对象模�
 
 完成状态（2026-10-26）：Day7整日98/100正式通过，V2与虚函数/对象模型补缺均已收口；`override`的重写/重载术语已补准。机械lab未在最终验收中重复执行，理解证据来自本人笔记与口述，不冒记新的编译结果。
 
-### Milestone F / Week14：Mini Redis V3 - AOF 与恢复
+### Milestone F / [Week14](week14/week14.md)：Mini Redis V3 - AOF 与恢复
 
 ```text
 append-only command log
@@ -614,6 +614,11 @@ crash consistency 只做到能证明的层次
 
 出口：重启后数据可恢复，有故障实验，不声称完整 Redis durability。
 
+具体七日依赖以Week14周规划为准：先从SET/EXPIRE后重启丢状态的行为问题推出可重放记录，
+再依次完成完整追加、clean replay、TTL跨重启、服务器接入和尾部/同步故障。
+小林Coding用于建立行为入口，Redis/Linux/MySQL官方资料用于校准实现边界；
+不把外部目录机械改写成本周知识清单。
+
 伴随补缺：
 
 ```text
@@ -623,7 +628,7 @@ replication、sharding、consistency、RPC 的最低系统词汇
 不实现 Redis Cluster、Raft 或分布式事务
 ```
 
-C++ 伴随小节跟着 AOF 多文件组件讲声明/定义、static/extern/inline、编译与链接、模板定义可见性和库的第一层。构造/析构、特殊成员函数、const/noexcept 与 move/forward 先对照已有代码诊断，只补不能解释的点；不新增完整编译原理课程。
+C++ 伴随小节跟着 AOF 的 `.hpp/.cpp` 多源文件构建，讲声明/定义、static/extern/inline、编译与链接、模板定义可见性和库的第一层。这里的“多源文件”不是 Redis 7+ 的多文件 AOF。构造/析构、特殊成员函数、const/noexcept 与 move/forward 先对照已有代码诊断，只补不能解释的点；不新增完整编译原理课程。
 
 ### Milestone G / Week15：测试、故障与性能
 
@@ -672,12 +677,12 @@ atomic/CAS、acquire/release、happens-before 第一层
 
 ## 6. 双线推进顺序与时间边界
 
-当前系统主线进入Week14的AOF与恢复，理论线进入T11。Week13已整周通过，完整状态见文件开头，历史证据见MEMORY §4；旧月份与旧计数不再作为“当前任务”。
+当前系统主线的Week14周规划已生成，Day1尚未生成或开始；理论线下一步T11。Week13已整周通过，完整状态见文件开头，历史证据见MEMORY §4；旧月份与旧计数不再作为“当前任务”。
 
 | 顺序 | 系统主线 | 理论线协调目标 | 保持的边界 |
 |---|---|---|---|
 | 已完成Week13 | [Day7整周收口](week13/day7/day7.md)（整日98/100，R1历史95/100） | T11：从已会标量链进入autograd | TTL与虚函数补缺已经收口，不重做；T11不提前讲MLP，也不重做T10模式实验 |
-| 当前Week14 | 原AOF/恢复范围 | T11～T12：autograd，再首次MLP | 不把恢复语义换成只会写文件 |
+| 当前Week14 | [AOF/恢复周规划](week14/week14.md)，Day1待生成 | T11～T12：autograd，再首次MLP | 不把恢复语义换成只会写文件 |
 | Week15 | 原故障测试、瓶颈定位与性能证据 | T13、T15～T16；T14可延期 | 用户掌握性能问题、测量与结论，机械脚手架可委托 |
 | Week16 | 原项目文档、表达与完整出口 | 复检理论欠账；T17～T18为进阶项 | 不拆提前投递版，不降低原项目标准 |
 | 原Week16正式完成后 | 整理简历、小范围试投、用反馈定位缺口 | 按真实完成能力呈现 | 此时再制定Week17以后实际课表 |
@@ -789,7 +794,7 @@ replication / sharding / consistency / RPC 的最低系统词汇
 | Week11 | HTTP versions、HTTPS/TLS、协议 parser | HTTP Server、curl/抓包 |
 | Week12 | Redis/KV/cache 第一层、真实 Redis 数据模型地图 | KV implementation、真实 Redis 对照 |
 | Week13 | MySQL 表模型、B+ tree/index、expiration/eviction；独立虚函数补缺 | 三组 EXPLAIN 对照、TTL tests、可控时钟；另一个小调用/析构实验 |
-| Week14 | AOF/RDB、WAL/recovery、replication/consistency；C++ 编译链接 | restart/fault experiment、实际多文件构建 |
+| Week14 | AOF/recovery 主线；RDB、WAL、replication/consistency 只作角色对照；C++ 编译链接 | restart/fault experiment、实际 `.hpp/.cpp` 多源文件构建 |
 | Week15 | CPU/memory/I/O/lock bottleneck、工具选择；内存与容器代价 | benchmark 与排查链、对象和分配的实际观察 |
 | Week16 | project deep dive、system trade-off、行为问题 | README、代码、指标和时间说明 |
 
@@ -1006,7 +1011,7 @@ Gate D：先读 mini-sglang 的小型实现，再对照 vLLM V1 与 SGLang 的�
 | T20~T23 | 补内存账、KV Cache 分块、连续批处理和推理指标的第二解释 | 用自己的 reference/simulation 对照；CPU 仿真不能声称得到 GPU 性能结论 |
 | Gate C/D/E | 分别补 CUDA、单卡 serving、通信与多卡主题 | 继续遵守下列硬件与能力前置；既定 mini-sglang 路径不被替换成第二个完整框架项目 |
 
-它是第三方教学资料，不是 PyTorch/vLLM 的规范或招聘官方要求。已抽读的文章中存在 API 简化和无统一实验条件的性能概括，使用前按映射中的官方来源核验；面经先辨岗位内容，再决定是否补缺。本站的全栈顺序不替代本规划的项目优先级与求职时间锚点。当前主线Week13已完成：Day3整日98/100、Day4整日99/100、Day5整日100/100、Day6整日96/100、Day7整日98/100；系统下一步Week14。理论T10整课99/100已过，下一步T11。
+它是第三方教学资料，不是 PyTorch/vLLM 的规范或招聘官方要求。已抽读的文章中存在 API 简化和无统一实验条件的性能概括，使用前按映射中的官方来源核验；面经先辨岗位内容，再决定是否补缺。本站的全栈顺序不替代本规划的项目优先级与求职时间锚点。当前主线Week13已完成：Day3整日98/100、Day4整日99/100、Day5整日100/100、Day6整日96/100、Day7整日98/100；Week14周规划已生成，Day1尚未生成或开始。理论T10整课99/100已过，下一步T11。
 
 ### Gate A：AI workload literacy
 
@@ -1256,7 +1261,7 @@ CUDA kernel correctness + profiler + benchmark
 
 ## 13. 当前下一步
 
-1. 系统主线进入Week14的AOF与恢复；Week13已整周通过，TTL与虚函数既有证据不重做。后续仍按原Week14～Week16完成恢复、性能与项目出口。
+1. 系统主线的Week14 AOF与恢复周规划已生成，Day1尚未生成或开始；Week13已整周通过，TTL与虚函数既有证据不重做。后续仍按原Week14～Week16完成恢复、性能与项目出口。
 2. 理论线进入T11：T10已完成线性分类器的Module/state、运行边界与checkpoint恢复；T11从已会标量链学习自动求导，T12首次MLP。T13主实验连续闭环，T14的BatchNorm为核心课后的选读扩展。
 3. T10整课与R1均以99/100通过；T11～T17提前稿仍未通过。相邻前课整课验收后按真实代码、理解与反馈再校准；T11已补齐计算图、两类寿命、向量目标和版本冲突的技术图，先拆明`grad = gradient`、`fn = function`及它与`.grad`的区别，再把观察属性按“带标签的代表性输出 -> 逐项读值 -> 正式定义”讲解。R2只把梯度清理/寿命作为核心，`retain_grad()`降为补充；R3沿“求导目标 -> 记录范围 -> backward所需旧值”推进，不重做T10模式实验，也不新增学生画图任务。每课结束提醒用户自己做笔记，不代写个人理解。
 4. C++类/对象/继承/虚函数补缺已随Week13 Day7收口；后续链接、并发与内存问题按原Week14/15落点，不改项目架构来凑语法。
