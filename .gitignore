@@ -10,3 +10,6 @@
 
 # Disposable review scaffolding; keep formal tests with the source project.
 /.review_tmp/
+
+# Local reproducible-document tooling; generated sources/assets stay tracked.
+/.tools/

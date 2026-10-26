@@ -1,0 +1,41 @@
+direction: down
+
+inputs: {
+  label: "先准备输出与它们进入目标的权重"
+  direction: right
+  style.fill: "#FAFCFF"
+  style.stroke: "#C5D5EB"
+  style.border-radius: 8
+
+  y: "向量输出\ny = [y₀, y₁, y₂]" {
+    style.fill: "#DCEBFF"
+    style.stroke: "#4D83D1"
+  }
+
+  v: "上游梯度\nv = [1, 0.5, -1]" {
+    style.fill: "#FFF0D8"
+    style.stroke: "#E59A2E"
+  }
+}
+
+objective: "先说清最终标量目标\nF = vᵀy = y₀ + 0.5y₁ - y₂" {
+  shape: hexagon
+  style.fill: "#FFE2E5"
+  style.stroke: "#D95D6C"
+}
+
+backward: "y.backward(v)\n对 F 求导" {
+  shape: hexagon
+  style.fill: "#F2E9FF"
+  style.stroke: "#8B63C7"
+}
+
+result: "输入梯度\ndF/dx = [2, 2, -6]" {
+  style.fill: "#DFF6EA"
+  style.stroke: "#3C9A69"
+}
+
+inputs.y -> objective
+inputs.v -> objective: "规定各 yᵢ 怎样进入 F"
+objective -> backward
+backward -> result: "直接计算 VJP，不先存完整 Jacobian"

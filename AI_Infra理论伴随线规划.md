@@ -1,6 +1,6 @@
 # AI Infra 理论伴随线规划
 
-> 对齐日期：2026-10-25。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
+> 对齐日期：2026-10-26。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
 > 当前状态：T1～T10及Theory Gate 1已通过；T10整课与R1均为99/100，下一步T11。T11～T17是未通过的提前稿，Theory Gate 2未通过。
 > Git留痕与发布权限统一按`MEMORY.md` §9.12：正式仓库文件有变化就本地commit；push需另行明确授权。
 > 系统主线：Week13 Day1～Day6整日已通过；90个整日通过、91份Daily已生成。Day7 R1已于2026-10-26以95/100通过，整日继续R2/R3，Week13整周尚未通过。
@@ -1243,7 +1243,7 @@ module_inference.py
 
 ## T11：computation graph、autograd 与 backpropagation
 
-沿T4已经会的标量乘加/平方链学习，不依赖神经网络。R1完成manual、finite difference、autograd三路对照并保留累积预测；R2处理清理、graph与grad寿命、中间梯度后暂停；R3连续检查三条边界：最终对哪个scalar目标求导、哪段计算需要记录、backward依赖的旧值能否修改。动态分支放到核心闭环后的补充解释，不另增作业。
+沿T4已经会的标量乘加/平方链学习，不依赖神经网络。第一次出现computation graph时，必须用同一条标量链画出forward节点/依赖边和backward反向梯度，不让`grad_fn`先于图本身成为抽象名词。R1完成manual、finite difference、autograd三路对照并保留累积预测；R2核心处理清理以及graph saved state与leaf `.grad`的不同寿命，中间节点`retain_grad()`只作补充观察；R3连续检查三条边界：最终对哪个scalar目标求导、哪段计算需要记录、backward依赖的旧值能否修改。向量输出先走通“上游权重怎样组成标量目标”，再命名VJP；动态分支放到核心闭环后的补充解释，不另增作业。
 
 ### 学习内容
 
@@ -1283,7 +1283,7 @@ parameter.grad 在哪里累积
 autograd_inspect.py
 ```
 
-用手推 gradient、finite difference 和 PyTorch autograd 三者交叉验证。
+用手推 gradient、finite difference 和 PyTorch autograd 三者交叉验证。正文技术图由本地可复现的D2源与SVG维护，只帮助理解现有对象关系，不新增学生画图或可视化任务。
 
 ### 对应视频
 
@@ -1292,7 +1292,7 @@ autograd_inspect.py
 
 ### 通过标准
 
-不要求读PyTorch autograd engine源码，但必须理解graph与保存activation会影响memory，并能用“目标、记录、旧值”解释R3三个实验为什么属于同一次正确求导的边界。
+不要求读PyTorch autograd engine源码，也不把`retain_grad()`记忆作为阻塞项；但必须能沿标量计算图说明forward留下什么、backward怎样返回leaf，理解graph与保存activation会影响memory，并能用“目标、记录、旧值”解释R3三个实验为什么属于同一次正确求导的边界。
 
 ---
 

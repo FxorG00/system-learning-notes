@@ -1,0 +1,51 @@
+direction: down
+
+forward_state: {
+  label: "Forward 时留下的依据"
+  direction: right
+  style.fill: "#F7FAFF"
+  style.stroke: "#A8C5F5"
+  style.border-radius: 8
+
+  saved: "1. forward\nsaved = 2，version = 0" {
+    style.fill: "#DCEBFF"
+    style.stroke: "#4D83D1"
+  }
+
+  record: "2. 平方节点保存反传依据\n需要 value = 2，version = 0" {
+    style.fill: "#FFF0D8"
+    style.stroke: "#E59A2E"
+  }
+
+  saved -> record
+}
+
+after_forward: {
+  label: "Forward 之后发生修改，再尝试 backward"
+  direction: right
+  style.fill: "#FFF9FA"
+  style.stroke: "#E7A6AE"
+  style.border-radius: 8
+
+  mutate: "3. saved.add_(1)\nvalue = 3，version = 1" {
+    style.fill: "#FFE2E5"
+    style.stroke: "#D95D6C"
+  }
+
+  compare: "4. backward 检查\n记录版本 0 ≠ 当前版本 1" {
+    shape: hexagon
+    style.fill: "#F2E9FF"
+    style.stroke: "#8B63C7"
+  }
+
+  error: "RuntimeError\n拒绝用错误旧值求导" {
+    style.fill: "#FCE8EA"
+    style.stroke: "#C74454"
+    style.bold: true
+  }
+
+  mutate -> compare: "版本计数已经变化"
+  compare -> error
+}
+
+forward_state.record -> after_forward.mutate: "forward 后发生原地修改"

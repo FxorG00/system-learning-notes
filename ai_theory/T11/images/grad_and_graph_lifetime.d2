@@ -1,0 +1,55 @@
+direction: down
+
+before: {
+  label: "第一次 backward 之前"
+  direction: right
+  style.fill: "#F7FAFF"
+  style.stroke: "#A8C5F5"
+  style.border-radius: 8
+
+  loss: "loss 对象\n带 grad_fn" {
+    style.fill: "#DCEBFF"
+    style.stroke: "#4D83D1"
+  }
+  saved: "backward 需要的 saved state\n例如平方输入 e = -3.5" {
+    style.fill: "#FFF0D8"
+    style.stroke: "#E59A2E"
+  }
+  grad: "w.grad = None\nb.grad = None" {
+    style.fill: "#EEF2F7"
+    style.stroke: "#8A96A8"
+  }
+
+  loss -> saved: "反向规则稍后要读取"
+  loss -> grad: "尚未反传"
+}
+
+after: {
+  label: "第一次 backward 之后"
+  direction: right
+  style.fill: "#F8FCFA"
+  style.stroke: "#8BC9A8"
+  style.border-radius: 8
+
+  loss: "Python 仍可持有 loss\n也可能仍看见 grad_fn" {
+    style.fill: "#E6F0FF"
+    style.stroke: "#5F8FD4"
+  }
+  saved: "本例再次反传所需的 saved state\n已经释放" {
+    style.fill: "#FCE8EA"
+    style.stroke: "#D95D6C"
+  }
+  grad: "leaf 梯度仍保存\nw.grad = 14\nb.grad = -7" {
+    style.fill: "#DFF6EA"
+    style.stroke: "#3C9A69"
+  }
+
+  loss -> saved: "旧 loss 再 backward 会失败" {
+    style.stroke: "#D95D6C"
+  }
+  loss -> grad: "已有梯度不会因此消失" {
+    style.stroke: "#3C9A69"
+  }
+}
+
+before -> after: "执行一次 backward"
