@@ -1314,15 +1314,16 @@ autograd_inspect.py
 ### 学习内容
 
 ```text
-Linear layer
-ReLU / GELU 直觉
-hidden dimension
-depth / width
-cross entropy
-SGD / Adam 只到使用与机制第一层
-batch
-epoch / iteration
+XOR暴露单层Linear的表达限制
+两次Linear仍可合并 -> ReLU产生非线性隐藏表示
+TinyMLP logits -> CrossEntropyLoss
+zero_grad -> forward -> loss -> backward -> optimizer.step
+R1：训练四个XOR点 -> 保存 -> fresh object严格加载 -> 独立推理
+R2：沿一次iteration分清parameter、.grad与optimizer分别何时变化
+R3：区分“恢复同一预测”和“接着原训练继续走”所需的状态
 ```
+
+SGD/AdamW比较、GELU和mini-batch只放在核心闭环后的选读区。`epoch / iteration / batch size`可在选读时命名，不与第一次训练、保存和恢复并排展开。
 
 ### 代码产出
 
@@ -1348,7 +1349,7 @@ inference_mode 下执行
 
 ### 通过标准
 
-能完整串出 training flow 与 inference flow，并指出 inference 少了哪些对象和步骤。
+能完整串出training与inference两条flow；能说明`backward()`只写gradient、`optimizer.step()`才修改parameter；能用fresh model恢复同一预测，并说明model-only checkpoint为何不足以保证完全相同的续训轨迹。
 
 ### 可选外部 workflow lab
 

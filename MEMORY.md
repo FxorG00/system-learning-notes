@@ -9163,3 +9163,15 @@ R1笔记能从`loss.backward()`的调用与`.grad`结果出发，沿`loss -> err
 最终评分98/100，正式通过。扣2分均为表述精度：第一，R1开头的`x=3,w=2,b=-1,target=4`应得到`w.grad=6,b.grad=2`，而R2把另一组`x=-2,w=1.5,b=0.5,target=1`得到的`14,-7`写成“R1的单次梯度”，应明确两组输入不同；第二，“一次forward只能对应一次backward”过于绝对，准确说法是默认backward后会释放这张旧图所需的保存状态，普通训练重新forward，确需复用时才显式使用`retain_graph=True`。两处都不动摇主干理解，不要求回头重写个人笔记。
 
 本轮没有新的PyTorch动态运行或独立`autograd_inspect.py`证据，不冒称重新执行；教材既有QA只用于技术校准。理论当前状态更新为T1～T11与Theory Gate 1通过，下一步T12首次从XOR进入MLP/hidden/ReLU；Theory Gate 2仍未通过。T11继续作为后续AI Theory讲解标杆，但其三轮、篇幅与例子不是固定模板。
+
+## 2026-10-27：T12按T11标杆与最新真实进度完成相邻校准
+
+用户指出先前只把理论进度改成“下一步T12”，还没有把近期关于唯一认知主干、API用途先行、最小充分推导和防御式讲解清理等反馈真正落实到T12。此次不新增一套教学规则，而是执行§1.1、§9.3和已通过T11的现行质量标准。
+
+T12前半保留“XOR无法线性分开 -> 两次Linear仍可合并 -> ReLU产生隐藏表示 -> TinyMLP”的问题链。后半从并列展开loss曲线、SGD、GELU、batch、mode与checkpoint，收束为三轮：R1只完成训练、保存、fresh object严格加载和独立推理；R2只沿一次iteration观察parameter、`.grad`与optimizer的变化；R3只区分恢复同一预测和恢复原训练轨迹所需的状态。SGD/AdamW比较、GELU与mini-batch移到核心闭环后的选读区，不影响T12通过。
+
+正文同时修正三处可执行性与技术表达：`learning_rate`在optimizer示例前赋值；R2观察明确放回R1的`train_model`循环内，从而确实复用同一个optimizer；`state_dict`只保存model state，模型结构和输入/class mapping仍是加载时必须同时满足的外部规则。删除“R1通过后再润色”“后半不能覆盖”等作者工作流，证据按学习、恢复、推理三类组织，长配置段改成可扫描步骤。
+
+同步`AI_Infra理论伴随线规划.md`、`plan_strengthened.md`和AIInfraGuide阅读映射。T13仍直接复用T12的MLP、训练流与checkpoint，不需改范围；T14～T17依赖未受影响。真实进度保持T1～T11与Theory Gate 1通过、下一步T12，T12～T17仍未通过，Theory Gate 2未通过；教材修改不冒充学习证据。
+
+三遍审查分别覆盖技术/可执行性、学习顺序和全局状态。T12的9段Python围栏全部通过AST解析，92个代码围栏与10个display-math定界符成对，章节引用与本地Kaggle链接可解，无控制字符，`git diff --check`除仓库既有换行提示外无错误。本轮没有新的PyTorch动态运行或SSH实测，不冒称更新后的完整程序已经执行。用户的T11正文增补、note、PDF与assets保持不改、不提交；系统Week14 Day1和Week13～16范围不变。收尾只提交本轮获准修改的T12及关联规划/映射/Memory，不push。

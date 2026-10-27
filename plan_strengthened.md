@@ -1266,7 +1266,7 @@ CUDA kernel correctness + profiler + benchmark
 ## 13. 当前下一步
 
 1. 系统主线的Week14 AOF与恢复周规划及Day1教程已生成，Day1 R1尚未开始；Week13已整周通过，TTL与虚函数既有证据不重做。后续仍按原Week14～Week16完成恢复、性能与项目出口。
-2. 理论线进入T12：T10已完成线性分类器的Module/state与checkpoint恢复，T11已把同一标量链映射到autograd；T12第一次从XOR推出hidden representation、ReLU与MLP训练。T13主实验连续闭环，T14的BatchNorm为核心课后的选读扩展。
+2. 理论线进入T12：T10已完成线性分类器的Module/state与checkpoint恢复，T11已把同一标量链映射到autograd；T12先从XOR推出hidden representation、ReLU与MLP，再闭合训练/保存/fresh-load推理，随后只追一次更新的状态变化，以及“恢复预测”和“恢复训练”所需状态的区别。SGD/GELU/mini-batch留在核心后的选读区。T13主实验连续闭环，T14的BatchNorm为核心课后的选读扩展。
 3. T11整课以98/100正式通过，T10整课与R1均为99/100；T12～T17提前稿仍未通过。T11以本人笔记为主证据，已覆盖一次反向传播、`.grad`与旧图保存状态的不同寿命，以及向量目标/记录范围/旧值修改三个边界。两处表述精度已在检阅中补准，不要求重写笔记。进入T12前只做相邻校准，不重讲T11，也不把提前稿或教材QA登记为学习通过；每课结束继续由用户亲自记笔记。
 4. C++类/对象/继承/虚函数补缺已随Week13 Day7收口；后续链接、并发与内存问题按原Week14/15落点，不改项目架构来凑语法。
 5. 本轮岗位与官方资料只补充阶段对应的参考入口、实验口径和缺口判断，不开新的整套课程，不提前启动完整推理框架、CUDA或分布式路线。
