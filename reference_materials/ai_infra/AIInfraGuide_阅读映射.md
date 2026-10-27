@@ -19,7 +19,7 @@
 |---|---|---|
 | T9 | [PyTorch 入门][pytorch] §1.1 创建、§1.2 形状、§1.4 dtype | 基础对象讲清后可选读创建/dtype；独立 layout 预测完成后再对照形状例子。目标是连接 NumPy 与 Tensor；storage/stride 的精确判断用本地正文和官方文档。停在 §1，不跟跑 CUDA 搬运。 |
 | T10 | [同文][pytorch] §3 `nn.Module` | 先用本课两组打印分清模块与参数，再沿普通属性、buffer、保存清单走完归属问题；需要第二解释时对照组织方式。材料中的多层模型不作为前置；沿本地R1/R2停止点推进，不另写分类器或跟跑训练/GPU。 |
-| T11 | [同文][pytorch] §2.1～§2.3 自动微分 | 本地正文先用固定标量链实际调用`loss.backward()`，看清方法返回`None`、结果写入leaf `.grad`且参数值不更新；再完整重复乘/加/减/平方的局部反传，等共同模式出现后才用表格和术语压缩。计算图按真实分叉讲：`AddBackward0`分别通向`MulBackward0`与`AccumulateGrad(b)`，`MulBackward0`再通向`AccumulateGrad(w)`和不求梯度的`x -> None`；由此解释leaf `.grad`与累积。之后才讲scalar seed 1、`grad_fn`与`.grad`的区别。R1后可对照网页短代码；网页“只能对标量调用”是入门简化，向量输出以本地§12为准。R2处理graph saved state与leaf `.grad`的不同寿命，`retain_grad()`只作补充；R3按“最终标量目标、记录范围、backward所需旧值”推进。 |
+| T11 | [同文][pytorch] §2.1～§2.3 自动微分 | 本地正文先用固定标量链实际调用`loss.backward()`，看清方法返回`None`、结果写入leaf `.grad`且参数值不更新；随后沿`loss -> error -> z -> product -> w/b`倒走一次，平方、减法、加法、乘法各推进一步。共同模式出现后立即用紧凑计算图收束，不把四个运算扩成四篇同构说明。图只保留当前需要的加法分叉与`w.grad/b.grad`落点，engine内部节点后置。`grad_fn`用代表性输出解释，并与保存数值的`.grad`分开。R1后可对照网页短代码；网页“只能对标量调用”是入门简化，向量输出以本地§8为准。R2只处理graph saved state与leaf `.grad`的不同寿命，`retain_grad()`为短选看；R3按“最终标量目标、记录范围、backward所需旧值”推进。 |
 | T12 | [同文][pytorch] §4 完整训练循环 | 自己的 MLP 闭环后，对照 forward、loss、backward、step 的连接。不增加另一套数据集、训练器或混合精度任务。 |
 | T15 | [3.9 Tokenization 与词嵌入][embedding] §1、§4.3、§6 | 先沿[本地T15](../../ai_theory/T15/T15.md)完成编号与查表，再选看对应解释。位置限制仍由本地正文从补位/前缀需求推出；不提前加入分词算法实现或位置编码。提前稿不是学习进度，当前仍从T11推进。 |
 | T16 | [3.3 Self-Attention][attention] §2、§3、§5~§6 | 先沿[本地T16提前稿](../../ai_theory/T16/T16.md)完成单条读取、批次与T15允许表；单头reference完成后再选看Q/K/V用途、矩阵轴和缩放。§4完整代码后读；多头与优化留后续。生成不计学习通过，资料小节真正启用时再核对。 |

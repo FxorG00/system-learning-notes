@@ -365,7 +365,11 @@ AI Theory Tn.md
 
 术语、最终矩阵公式和 framework metadata 不能承担第一次理解的责任。读者应先看见“为什么需要它、怎样使用”，再知道“这个已经出现的对象叫作什么”；不是要求每种需求都只有一种解法。重要公式必须先用一个可手算的小例子落地；不强制每个概念从 scalar 开始，确实从标量推广到矩阵时，必须说明哪个 axis 被归约、哪些 axes 被保留，以及 output shape 为什么与目标对象相同。
 
-若一个抽象来自多个实例的共同模式，第一次教学不能直接把实例压成表格。先用相同结构完整走2～4个具体例子，让学习者依次看到对象、规则、输入状态、结果与名称；能预测下一次后，再给共同公式、术语或API。这里保留的是形成模式所需的重复推理，不是重复同一句定义。表格与总公式负责复习和压缩，不替代第一次理解。
+若一个抽象来自重复模式，第一次教学不能直接把它压成表格；同时也不按固定次数机械展开。先完整走通能让模式出现的最小实例。一个连续例子若已包含数次同类动作，就沿同一数据流逐步完成；模式仍不可见时才补第二个例子。学习者能够预测下一步后，立即用共同公式、术语、表格或API收束。保留的是形成理解所需的推理，不是同义复述。
+
+用户新增内容应融入教程主线。保留其理解、例子、纠错与已验证事实，但不要求保留临时编号、重复段落或审稿语气；用户独立note/code继续不改。最终教程只呈现当前最清楚的学习顺序，修订过程留给Memory与Git。
+
+每一课、每一Round先确定一条认知主干。正文中的例子、公式、API与图必须推进这条主干；技术上正确但当前不参与因果链的内部实现、例外和未来接口，降为短选看、附录或删除。不要为了预防所有潜在误解提前堆边界；只有当前简化会直接妨碍下一步时才补最小限定。若学习者完成后的笔记是一条短链，而教程仍分裂成大量平行小节，应从笔记反推主干并重排，不继续累加修补段落。
 
 讲懂之后还要按 `MEMORY.md` §6.1 检查阅读负担：**一句推进一个主要认知动作，一段回答一个主要问题。** 先让主结论和例子站稳，再分开原因与必要限定。完整性由整节承担，不靠连续长句同时塞入 API、例外和未来联系。
 
@@ -1245,7 +1249,7 @@ module_inference.py
 
 ## T11：computation graph、autograd 与 backpropagation
 
-沿T4已经会的标量乘加/平方链学习，不依赖神经网络。`backward()`第一次调用时，先用同一标量例子展示调用前`.grad=None`、方法返回`None`、调用后leaf梯度写入`.grad`、参数值保持不变；先让学习者会用API。随后按同一模板完整走乘、加、减、平方四次：forward动作 -> 局部导数 -> 上游梯度 -> 具体结果 -> 节点命名；学习者已经看见重复模式后，才压缩成表格并命名computation graph。真实图不能画成`Pow -> Sub -> Add -> Mul`单链：`AddBackward0`须分叉到`MulBackward0`和`AccumulateGrad(b)`，`MulBackward0`再连`AccumulateGrad(w)`与不需梯度的`x -> None`；说明`AccumulateGrad`不对应forward算术运算，却解释leaf `.grad`为何得到并累加结果。首次使用`grad_fn`时拆明`grad = gradient`、`fn = function`，与保存数值的`.grad`分开；先展示代表性输出再定义属性。标量起始梯度1在完整反传以后解释。R1完成manual、finite difference、autograd三路对照并保留累积预测；R2核心处理清理以及graph saved state与leaf `.grad`的不同寿命，中间节点`retain_grad()`只作补充观察；R3连续检查最终scalar目标、记录范围与backward依赖旧值。向量输出先走通“上游权重怎样组成标量目标”，再命名VJP；动态分支放到核心闭环后的补充解释，不另增作业。
+沿T4已经会的标量乘加/平方链学习，不依赖神经网络。`backward()`第一次调用时，先展示调用前`.grad=None`、方法返回`None`、调用后leaf梯度写入`.grad`、参数值保持不变；先让学习者会用API。随后沿同一条`loss -> error -> z -> product -> w/b`反向路径走一次：平方、减法、加法、乘法各推进一个局部导数动作，节点名紧跟对应动作出现。一次完整反传已经提供足够重复，模式出现后立即收束并命名computation graph，不拆成四篇同构说明。图只画当前理解所需的分叉与`w.grad/b.grad`落点，不把`AccumulateGrad`、`next_functions`等engine边界前置。首次使用`grad_fn`时拆明`grad = gradient`、`fn = function`，先给代表性输出，再解释它指向产生当前结果的最后一个运算求导节点，并与保存数值的`.grad`分开。R1完成manual、finite difference、autograd三路对照并保留累积预测；R2只处理梯度清理以及graph saved state与leaf `.grad`的不同寿命，`retain_grad()`降为短选看；R3连续检查最终scalar目标、记录范围与backward依赖旧值。向量输出先走通“上游权重怎样组成标量目标”，再命名VJP；动态分支不进入核心任务。
 
 ### 学习内容
 
@@ -1259,7 +1263,6 @@ gradient accumulation / clearing
 vector output 与 upstream gradient / VJP
 no_grad / detach / inference_mode 的用途边界
 saved value 与 in-place version check
-dynamic graph 直觉（补充）
 ```
 
 ### 学到什么程度

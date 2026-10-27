@@ -1,108 +1,50 @@
 direction: down
 
-forward: {
-  label: "Forward：算出数值，同时建立本次依赖关系"
-  direction: right
-  style.fill: "#F7FAFF"
-  style.stroke: "#A8C5F5"
+loss: "loss\n起点 dL/dL = 1" {
+  style.fill: "#FFE2E5"
+  style.stroke: "#D95D6C"
   style.border-radius: 8
-
-  w: "w = 2\nrequires_grad = True" {
-    style.fill: "#DCEBFF"
-    style.stroke: "#4D83D1"
-  }
-  x: "x = 3\nrequires_grad = False" {
-    style.fill: "#EAF2FF"
-    style.stroke: "#7AA2DE"
-  }
-  mul: "乘法\nproduct = w × x = 6" {
-    shape: hexagon
-    style.fill: "#FFF0D8"
-    style.stroke: "#E59A2E"
-  }
-  b: "b = -1\nrequires_grad = True" {
-    style.fill: "#DCEBFF"
-    style.stroke: "#4D83D1"
-  }
-  add: "加法\nz = product + b = 5" {
-    shape: hexagon
-    style.fill: "#FFF0D8"
-    style.stroke: "#E59A2E"
-  }
-  target: "target = 4.0\nPython 标量常量" {
-    style.fill: "#EAF2FF"
-    style.stroke: "#7AA2DE"
-  }
-  sub: "减法\nerror = z - target = 1" {
-    shape: hexagon
-    style.fill: "#FFF0D8"
-    style.stroke: "#E59A2E"
-  }
-  square: "平方\nloss = error² = 1" {
-    shape: hexagon
-    style.fill: "#FFE2E5"
-    style.stroke: "#D95D6C"
-  }
-
-  w -> mul
-  x -> mul
-  mul -> add
-  b -> add
-  add -> sub
-  target -> sub
-  sub -> square
 }
 
-backward: {
-  label: "Autograd / Backward：运算求导节点 + leaf 梯度累积节点"
-  direction: down
-  style.fill: "#FFF9FA"
-  style.stroke: "#E7A6AE"
+pow: "PowBackward0\nloss = error²\n传给 error: 2" {
+  style.fill: "#FFECEF"
+  style.stroke: "#D95D6C"
   style.border-radius: 8
-
-  loss_seed: "loss 端起点\ndL/dL = 1" {
-    style.fill: "#FFE2E5"
-    style.stroke: "#D95D6C"
-  }
-  pow: "PowBackward0\n1 × 2error = 2" {
-    style.fill: "#FFECEF"
-    style.stroke: "#D95D6C"
-  }
-  sub: "SubBackward0\n把 2 传给 z" {
-    style.fill: "#FFECEF"
-    style.stroke: "#D95D6C"
-  }
-  add: "AddBackward0\n把上游梯度 2 分成两路" {
-    style.fill: "#FFF4DF"
-    style.stroke: "#D8922B"
-  }
-  mul: "MulBackward0\n2 × x = 6" {
-    style.fill: "#DFF6EA"
-    style.stroke: "#3C9A69"
-  }
-  b_acc: "AccumulateGrad(b)\nb.grad += 2" {
-    style.fill: "#E6F7EF"
-    style.stroke: "#3C9A69"
-  }
-  w_acc: "AccumulateGrad(w)\nw.grad += 6" {
-    style.fill: "#E6F7EF"
-    style.stroke: "#3C9A69"
-  }
-  x_none: "x 不需要梯度\nnext function = None" {
-    style.fill: "#F1F3F6"
-    style.stroke: "#8A94A5"
-  }
-
-  loss_seed -> pow: "seed 1"
-  pow -> sub: "传给 error：2"
-  sub -> add: "传给 z：2"
-  add -> mul: "传给 product：2"
-  add -> b_acc: "传给 b：2"
-  mul -> w_acc: "传给 w：6"
-  mul -> x_none: "第二个输入"
 }
 
-forward -> backward: "forward 建立依赖 DAG；backward 沿需要梯度的边反向执行" {
-  style.stroke: "#7C879B"
-  style.stroke-dash: 4
+sub: "SubBackward0\nerror = z - 4\n传给 z: 2" {
+  style.fill: "#FFECEF"
+  style.stroke: "#D95D6C"
+  style.border-radius: 8
 }
+
+add: "AddBackward0\nz = product + b\n把梯度 2 分给两侧" {
+  style.fill: "#FFF4DF"
+  style.stroke: "#D8922B"
+  style.border-radius: 8
+}
+
+mul: "MulBackward0\nproduct = w × x\n读取 x = 3，得到 6" {
+  style.fill: "#E6F7EF"
+  style.stroke: "#3C9A69"
+  style.border-radius: 8
+}
+
+b_grad: "b.grad = 2" {
+  style.fill: "#DFF6EA"
+  style.stroke: "#3C9A69"
+  style.border-radius: 8
+}
+
+w_grad: "w.grad = 6" {
+  style.fill: "#DFF6EA"
+  style.stroke: "#3C9A69"
+  style.border-radius: 8
+}
+
+loss -> pow
+pow -> sub: "2"
+sub -> add: "2"
+add -> mul: "product 路径"
+add -> b_grad: "b 路径"
+mul -> w_grad: "w 路径"
