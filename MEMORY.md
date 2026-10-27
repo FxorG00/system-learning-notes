@@ -240,6 +240,10 @@ T11技术图三遍复核（2026-10-26）：用户指出§1只说“这张记录�
 
 T11 `grad_fn`与全篇语言复核（2026-10-26）：用户继续指出§4仍先写“观察入口”等抽象总结，没有展示属性是什么、真实输出长什么样，也把多个判断塞入长段。现先拆明`grad = gradient（梯度）`、`fn = function（函数）`，并区分`grad_fn`与保存梯度数值的`.grad`；随后打印带名称的`w/z/loss.grad_fn`，先展示`None / AddBackward0 / PowBackward0`代表性输出，再逐项解释leaf为何为None、节点对应哪一步运算及backward怎样使用，最后才给正向定义与用途。地址和数字后缀标为版本/运行可变。全篇继续按相同标准补`.grad`累积、旧loss二次backward、`retain_grad()`、向量backward与in-place失败的代表性结果；动态graph旁支保留在后置补充，不挤进§4。普通非代码长行先由43条降至0条，随后用75字符阈值复核并继续拆句；剩余超长行仅为URL/本地路径。用户提供的AIInfraGuide §2.1～§2.3只作短代码第二解释；其“backward只能对标量调用”按本地§12补充为“向量输出需显式上游梯度”。T11仍未通过，现阶段、任务和通过标准不变。
 
+T11具体重复与真实DAG复核（2026-10-27）：用户在`T11.md`新增`§6.0 顺着`，用同一结构完整走过乘法、加法、减法、平方的forward动作、局部导数、上游梯度、具体结果与节点命名。本轮原样保留该段，把它提升为Part 1第一次详细讲解；Codex原先位于它前面的抽象定义、属性目录和压缩表后移。四次推理完成后才总结共同模式、解释`requires_grad/is_leaf/grad_fn`并使用表格。由此将“不要过早压缩”合并进§9.3；它只保护产生模式识别所需的逐例推理，不推翻§9.2关于无意义重复的限制。
+
+上一版把反向关系写成`Pow -> Sub -> Add -> Mul`单链，现已判定为误导并由本条覆盖。修正版D2/SVG按常见eager autograd关系画出：`AddBackward0`分叉到`MulBackward0`与`AccumulateGrad(b)`；`MulBackward0`再连接`AccumulateGrad(w)`与不需梯度的`x -> None`。正文明确`AccumulateGrad`没有对应的forward算术运算，负责把到达leaf的贡献累加进`.grad`；`None`表示该输入不继续求梯度，不表示forward未使用它。当前`target=4.0`是Python标量常量，只说明它不接收梯度结果，不在未实测时额外声称一个可见`next_functions`槽位。官方Autograd graph与`Node.next_functions`语义已核对，节点内部名称/地址不作为稳定contract。
+
 T17教材准备（2026-10-24完成）：按用户请求新增`ai_theory/T17/T17.md`提前稿。当前仍T10 R1学习中；T11～T17均未通过，Theory Gate 2未通过；系统90个整日通过/91份生成、Day7待R1不变。R1从T16单头参照推进到多头拆分、计算与合并后暂停；R2才引出残差、逐位置LayerNorm和FFN，完成同一个前置归一化block。RMSNorm及前后置排列只到辨认，不另加模型任务。执行既有§1.1/§6/§9/§13规则，没有新增重复教学口号；T16正式通过或进入T17时再按真实实现校准，不能把提前稿当成用户已写代码。
 
 本轮T17教材QA：9段正文Python在私有参考类和明确片段上下文中执行，连同逐头/整块数值、隔离、零分支、参数量和错误边界共69项检查通过；Ubuntu Python3.12.14、PyTorch2.14.0+cpu，warning为0。QA只经标准输入运行，没有写用户Ubuntu目录或改环境，不计作学习验收。最小同步Memory、总规划、理论规划、Week13与AIInfraGuide映射；真实进度、T14可延期、原Week14～16和完整Week16后试投/再排后续课表保持。T10笔记、T16及其余代码/教程保留；不commit/push。文档与渲染核对证据保存于工作区`review_artifacts/t17_generation_20261023`。
@@ -2166,6 +2170,8 @@ C++ 进程数据与主机内存
 一次引出多个新接口时，就地说明它们服务的具体路径和本次升级范围：只增加当前需求需要的最小能力，保留已经正确的旧入口，不把统一命名样式推广成“所有API都要新增对应版本”。更高层封装等未来方案，在当前需求尚未出现时不提前布置。例如本日显式时间入口只服务命令复用读数与已说明的错误边界，不顺势要求get_at/pttl_at或通用请求上下文。
 
 例子优先连续复用，让同一对象沿数据流逐步变化。需要反例、极端值或非方阵来暴露新问题时，明确它与普通例子相比改变了什么，不为“只用一个例子”牺牲有效验证。从**最小但有意义的完整单位**开始，再推广到 batch/一般情形；softmax 的入口是一条输入对应的多个类别分数，不能为了固定 scalar -> vector 模板先造一个没有比较意义的单值任务。
+
+**不要过早压缩（premature compression）。** 如果一个新抽象依赖学习者先从多个具体实例里看见共同模式，第一次教学必须允许同一推理模板完整重复2～4次：当前对象/动作 -> 局部规则 -> 已有输入或上游状态 -> 具体结果 -> 最后命名本实例。等学习者已经能预测下一次，才指出共同模式、命名抽象，并用表格、统一公式或API压缩。表格是理解后的复习表示，不能替代形成理解的过程；结构重复不自动等于教学冗余。此规则与§9.2“不重复同一定义”不冲突：删除的是不产生新认知的重复结论，保留的是让模式真正长出来的逐例推理。仍按§6.1一句推进一个主要认知动作，不扩成无关铺陈。
 
 **理论线还要检查代码对象的负担。** 开头交代整课目标，但第一版对象只承担当前已经出现的需要；不能为后文实验预装一串尚无动机的成员、层或helper。教学载体优先选用户已经理解的计算或模型，先核对它是否偷偷依赖未来课程；“原理以后再讲”不能代替当前缺失的前置。框架API本身是本课目标时，先用已会模型学习API，不要求用户为此黑箱接受新模型，也不让用户绕出去补一门本课并不需要的理论。需要新能力时，先提出具体问题，再把对应角色加入同一个组件。
 
@@ -9090,8 +9096,18 @@ T14保留R1任务、公式、代码和设计闸门，仅更新开头课程导航
 
 正文现在先用同一标量链打印调用前`.grad=None`，执行`backward_result = loss.backward()`，展示返回`None`、`w.grad=6`、`b.grad=2`以及参数值仍为2和-1。明确这是一次独立API观察，后续属性实验会重新创建对象。§5在API已经会用以后才解释标量起始梯度1，显式/隐式写法分开呈现并标明二选一；另说明本例loss数值恰好为1只是巧合，seed 1来自$\partial L/\partial L=1$。§11的`retain_grad()`和§14的`add_()`按同一既有规则补齐需求、调用、返回值、对象变化与代表性输出。第三遍回读还删除了§0在正式定义前使用leaf和optimizer名称的前置负担，并把§1无必要的英文术语换成当前动作对应的中文；概念仍在负责它的章节命名。
 
-为对齐Forward与Backward，将紧凑表达式展开为`product -> z -> error -> loss`，逐一对应`MulBackward0 -> AddBackward0 -> SubBackward0 -> PowBackward0`；反向按相反方向经过`PowBackward0 -> SubBackward0 -> AddBackward0 -> MulBackward0`。原D2源同步扩为四个反向节点，重新生成SVG并转PNG目视检查，无裁切、重叠或节点缺失。理论规划、当前下一步摘要和AIInfraGuide阅读映射同步同一顺序；其他T10/T12/Week14与阶段小结只陈述进度或相邻依赖，核对后无须制造diff。
+该轮为对齐Forward与Backward，将紧凑表达式展开为`product -> z -> error -> loss`，逐一对应`MulBackward0 -> AddBackward0 -> SubBackward0 -> PowBackward0`；当时曾把反向画成`PowBackward0 -> SubBackward0 -> AddBackward0 -> MulBackward0`单链。2026-10-27后续复核确认这个拓扑会漏掉`b`分支、leaf的`AccumulateGrad`和不求梯度输入的`None`边，现行图与规则统一以后续“具体重复与真实DAG复核”为准。
 
-这次没有新增长期教学规则。现行§9.3已经要求首次API从熟悉输入走通最小调用，并说明返回值、结果位置和原对象状态；§13已经要求理论课先用完整动作建立用途，再命名机制。本轮只把T11改到该规则下，并记录用户补充的图文必须使用同一对象链，不能让Forward结果名与Backward节点名各说一套。
+该轮当时没有新增长期教学规则，只把T11改到既有API顺序下。2026-10-27后续阅读暴露出“把多个实例过早压成表格”的独立问题，因此现行§9.3已补入“不要过早压缩”；本段只保留为当时状态，不再代表当前结论。
 
 三遍审计分开完成：第一遍按PyTorch 2.14官方`Tensor.backward`、autograd教程、`retain_grad`与`add_`核对语义，26段Python围栏全部通过AST解析，标量链独立算得`z=5、error=1、loss=1、dw=6、db=2`；第二遍逐节检查首次API顺序，确认用途在调用前、调用在输出前、API用法在seed机制前，`retain_grad`和`add_`也满足同一顺序；第三遍检查受影响规划、参考映射、进度状态、保护边界、D2/SVG与Git diff。Windows当前Python没有PyTorch，本轮未请求SSH授权，因此不冒称重新动态执行新片段；已有Ubuntu教材QA只作历史证据。SVG XML可解析，`viewBox/width/height`非零，四个反向节点均存在，`git diff --check`仅有现有LF/CRLF提示。按§9.12留下本地Git提交，不push。
+
+## 2026-10-27：T11避免过早压缩并修正真实autograd分叉
+
+用户补充指出：T11虽然已经列出乘/加/减/平方与四个Backward节点，却过早把相同认知动作压成表格；学习者还没亲手重复“forward动作 -> 局部导数 -> 上游梯度 -> 具体结果 -> 节点名称”，就被要求接受computation graph抽象。用户还提供复核：旧图把反向画成单链，漏掉`AddBackward0`到`b`的分支、leaf端`AccumulateGrad`及`x.requires_grad=False`对应的`None`输入函数。
+
+本轮原样保留用户新增的`§6.0 顺着`，并把它置于Part 1的第一次详细讲解位置；原编号保留用于追踪。Codex原有的共同模式、表格、真实图、`requires_grad`、leaf、`grad_fn`与scalar seed全部后移。四次具体推理完成后，才说明operation-specific backward node的共同结构；同时限定“每个Backward节点对应forward运算”只适用于本例四个运算求导节点，不能覆盖`AccumulateGrad`。现行D2/SVG展示`AddBackward0 -> MulBackward0 / AccumulateGrad(b)`分叉，以及`MulBackward0 -> AccumulateGrad(w) / None(x)`；当前target是Python标量，只说明不接收梯度，不虚构一个未实测的可见槽位。
+
+长期规则已合并进§9.3：抽象依赖多个实例的共同模式时，允许同一推理模板完整重复2～4次，等学习者能预测下一次后再命名、制表或公式化；这不推翻§9.2删除无意义重复定义的要求。理论规划、总规划当前下一步和AIInfraGuide映射同步同一顺序。真实进度保持T1～T10与Theory Gate 1通过、下一步T11；教材修订不计作T11学习或通过。
+
+三遍复核分别完成。技术遍：PyTorch官方Autograd graph、`Node.next_functions`、`Tensor.backward`语义核对；140个围栏成对、25段Python通过AST、标量数值通过独立计算、D2关键分支与SVG XML通过，PNG目视无裁切或错误连线。学习顺序遍：用户逐例推理位于共同模式、图、属性和seed之前，节点名不再由Codex过渡段抢先罗列，非URL普通段落无超过150字符的长行。对齐遍：七个追踪文件为本轮唯一修改，当前进度、T12依赖和系统Week14状态未改变，当前文档不再残留单链描述；四张本地图均存在，120个display-math定界符成对。Windows当前无PyTorch且本轮未获新的SSH运行授权，因此不冒称动态重跑graph；用户未追踪的`T11.pdf`、`T11_note.md`和assets保持不改、不提交。`git diff --check`唯一报告是用户新增段落的一处Markdown双空格硬换行，按用户内容ownership原样保留，其余无空白错误。

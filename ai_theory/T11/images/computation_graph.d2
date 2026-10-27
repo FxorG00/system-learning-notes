@@ -1,44 +1,44 @@
 direction: down
 
 forward: {
-  label: "Forward：先算出本次结果，同时留下节点和边"
+  label: "Forward：算出数值，同时建立本次依赖关系"
   direction: right
   style.fill: "#F7FAFF"
   style.stroke: "#A8C5F5"
   style.border-radius: 8
 
-  w: "w = 2\n需要梯度" {
+  w: "w = 2\nrequires_grad = True" {
     style.fill: "#DCEBFF"
     style.stroke: "#4D83D1"
   }
-  x: "x = 3\n固定输入" {
+  x: "x = 3\nrequires_grad = False" {
     style.fill: "#EAF2FF"
     style.stroke: "#7AA2DE"
   }
-  mul: "乘法\nm = w × x = 6" {
+  mul: "乘法\nproduct = w × x = 6" {
     shape: hexagon
     style.fill: "#FFF0D8"
     style.stroke: "#E59A2E"
   }
-  b: "b = -1\n需要梯度" {
+  b: "b = -1\nrequires_grad = True" {
     style.fill: "#DCEBFF"
     style.stroke: "#4D83D1"
   }
-  add: "加法\nz = m + b = 5" {
+  add: "加法\nz = product + b = 5" {
     shape: hexagon
     style.fill: "#FFF0D8"
     style.stroke: "#E59A2E"
   }
-  target: "target = 4" {
+  target: "target = 4.0\nPython 标量常量" {
     style.fill: "#EAF2FF"
     style.stroke: "#7AA2DE"
   }
-  sub: "减法\ne = z - target = 1" {
+  sub: "减法\nerror = z - target = 1" {
     shape: hexagon
     style.fill: "#FFF0D8"
     style.stroke: "#E59A2E"
   }
-  square: "平方\nloss = e² = 1" {
+  square: "平方\nloss = error² = 1" {
     shape: hexagon
     style.fill: "#FFE2E5"
     style.stroke: "#D95D6C"
@@ -54,40 +54,55 @@ forward: {
 }
 
 backward: {
-  label: "Backward：每个反向节点都对应上面一步 forward 运算"
+  label: "Autograd / Backward：运算求导节点 + leaf 梯度累积节点"
   direction: down
   style.fill: "#FFF9FA"
   style.stroke: "#E7A6AE"
   style.border-radius: 8
 
-  loss_seed: "loss 端的起点\ndL/dL = 1" {
+  loss_seed: "loss 端起点\ndL/dL = 1" {
     style.fill: "#FFE2E5"
     style.stroke: "#D95D6C"
   }
-  pow: "PowBackward0\n对应 forward 平方\ndL/de = 2e = 2" {
+  pow: "PowBackward0\n1 × 2error = 2" {
     style.fill: "#FFECEF"
     style.stroke: "#D95D6C"
   }
-  sub: "SubBackward0\n对应 forward 减法\ndL/dz = 2" {
+  sub: "SubBackward0\n把 2 传给 z" {
     style.fill: "#FFECEF"
     style.stroke: "#D95D6C"
   }
-  add: "AddBackward0\n对应 forward 加法\ndL/dm = 2，dL/db = 2" {
+  add: "AddBackward0\n把上游梯度 2 分成两路" {
     style.fill: "#FFF4DF"
     style.stroke: "#D8922B"
   }
-  mul: "MulBackward0\n对应 forward 乘法\n读取 x = 3，dL/dw = 6" {
+  mul: "MulBackward0\n2 × x = 6" {
     style.fill: "#DFF6EA"
     style.stroke: "#3C9A69"
   }
+  b_acc: "AccumulateGrad(b)\nb.grad += 2" {
+    style.fill: "#E6F7EF"
+    style.stroke: "#3C9A69"
+  }
+  w_acc: "AccumulateGrad(w)\nw.grad += 6" {
+    style.fill: "#E6F7EF"
+    style.stroke: "#3C9A69"
+  }
+  x_none: "x 不需要梯度\nnext function = None" {
+    style.fill: "#F1F3F6"
+    style.stroke: "#8A94A5"
+  }
 
-  loss_seed -> pow: "从最终结果开始"
-  pow -> sub: "平方的局部导数 2e"
-  sub -> add: "减法对 z 的局部导数 1"
-  add -> mul: "加法把梯度传给 m 与 b"
+  loss_seed -> pow: "seed 1"
+  pow -> sub: "传给 error：2"
+  sub -> add: "传给 z：2"
+  add -> mul: "传给 product：2"
+  add -> b_acc: "传给 b：2"
+  mul -> w_acc: "传给 w：6"
+  mul -> x_none: "第二个输入"
 }
 
-forward -> backward: "同一条链，反向读取 forward 留下的关系与必要数值" {
+forward -> backward: "forward 建立依赖 DAG；backward 沿需要梯度的边反向执行" {
   style.stroke: "#7C879B"
   style.stroke-dash: 4
 }

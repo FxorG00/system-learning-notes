@@ -1263,7 +1263,7 @@ CUDA kernel correctness + profiler + benchmark
 
 1. 系统主线的Week14 AOF与恢复周规划及Day1教程已生成，Day1 R1尚未开始；Week13已整周通过，TTL与虚函数既有证据不重做。后续仍按原Week14～Week16完成恢复、性能与项目出口。
 2. 理论线进入T11：T10已完成线性分类器的Module/state、运行边界与checkpoint恢复；T11从已会标量链学习自动求导，T12首次MLP。T13主实验连续闭环，T14的BatchNorm为核心课后的选读扩展。
-3. T10整课与R1均以99/100通过；T11～T17提前稿仍未通过。相邻前课整课验收后按真实代码、理解与反馈再校准；T11先用一次完整最小调用讲清`loss.backward()`的用途、`None`返回值、leaf `.grad`副作用及参数不更新，再解释标量起始梯度1。计算图将forward的乘/加/减/平方和`MulBackward/AddBackward/SubBackward/PowBackward`逐点对齐；随后拆明`grad = gradient`、`fn = function`及它与`.grad`的区别，并把观察属性按“带标签的代表性输出 -> 逐项读值 -> 正式定义”讲解。R2只把梯度清理/寿命作为核心，`retain_grad()`降为补充；R3沿“求导目标 -> 记录范围 -> backward所需旧值”推进，不重做T10模式实验，也不新增学生画图任务。每课结束提醒用户自己做笔记，不代写个人理解。
+3. T10整课与R1均以99/100通过；T11～T17提前稿仍未通过。相邻前课整课验收后按真实代码、理解与反馈再校准；T11先用一次最小调用讲清`loss.backward()`的动作、`None`返回值、leaf `.grad`副作用及参数不更新。随后保留用户新增的四次完整局部反传推理，等乘/加/减/平方的共同模式真正出现后才用表格和computation graph压缩。反向图按DAG画：`AddBackward0`分叉到`MulBackward0`与`AccumulateGrad(b)`，`MulBackward0`再连`AccumulateGrad(w)`与`x -> None`；标量起始梯度1和`grad_fn`属性放在具体推理后。R2只把梯度清理/寿命作为核心，`retain_grad()`降为补充；R3沿“求导目标 -> 记录范围 -> backward所需旧值”推进，不重做T10模式实验，也不新增学生画图任务。每课结束提醒用户自己做笔记，不代写个人理解。
 4. C++类/对象/继承/虚函数补缺已随Week13 Day7收口；后续链接、并发与内存问题按原Week14/15落点，不改项目架构来凑语法。
 5. 本轮岗位与官方资料只补充阶段对应的参考入口、实验口径和缺口判断，不开新的整套课程，不提前启动完整推理框架、CUDA或分布式路线。
 6. 原Week16完成后再做实际后续排课和简历试投；区域赛期间按真实精力推进，不把自然日都算作满额学习日。

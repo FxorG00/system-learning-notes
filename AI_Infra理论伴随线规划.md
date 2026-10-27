@@ -365,6 +365,8 @@ AI Theory Tn.md
 
 术语、最终矩阵公式和 framework metadata 不能承担第一次理解的责任。读者应先看见“为什么需要它、怎样使用”，再知道“这个已经出现的对象叫作什么”；不是要求每种需求都只有一种解法。重要公式必须先用一个可手算的小例子落地；不强制每个概念从 scalar 开始，确实从标量推广到矩阵时，必须说明哪个 axis 被归约、哪些 axes 被保留，以及 output shape 为什么与目标对象相同。
 
+若一个抽象来自多个实例的共同模式，第一次教学不能直接把实例压成表格。先用相同结构完整走2～4个具体例子，让学习者依次看到对象、规则、输入状态、结果与名称；能预测下一次后，再给共同公式、术语或API。这里保留的是形成模式所需的重复推理，不是重复同一句定义。表格与总公式负责复习和压缩，不替代第一次理解。
+
 讲懂之后还要按 `MEMORY.md` §6.1 检查阅读负担：**一句推进一个主要认知动作，一段回答一个主要问题。** 先让主结论和例子站稳，再分开原因与必要限定。完整性由整节承担，不靠连续长句同时塞入 API、例外和未来联系。
 
 外部聊天解释应改编成课程所需的连续讲解，不保留现场评价和重复追问。当前任务之外的边界压入短补充；影响正确理解的前置仍就近保留。发布前既查知识顺序，也查连续复句的负担，不把“精简”理解为省略推导或机械切短句。
@@ -1243,7 +1245,7 @@ module_inference.py
 
 ## T11：computation graph、autograd 与 backpropagation
 
-沿T4已经会的标量乘加/平方链学习，不依赖神经网络。`backward()`第一次调用时，先用同一标量例子展示调用前`.grad=None`、方法返回`None`、调用后leaf梯度写入`.grad`、参数值保持不变；先让学习者会用API，再解释标量起始梯度1。第一次出现computation graph时，必须用同一条标量链画出forward节点/依赖边和backward反向梯度，并把`product/z/error/loss`逐一对齐到`MulBackward/AddBackward/SubBackward/PowBackward`，不让节点名成为悬空术语。首次使用`grad_fn`时拆明`grad = gradient`、`fn = function`，并与保存梯度数值的`.grad`分开。首次打印`requires_grad/is_leaf/grad_fn/.grad`等观察属性时，先展示带标签的代表性输出，再逐项解释值与用途；不能先写抽象职责总结。R1完成manual、finite difference、autograd三路对照并保留累积预测；R2核心处理清理以及graph saved state与leaf `.grad`的不同寿命，中间节点`retain_grad()`只作补充观察；R3连续检查三条边界：最终对哪个scalar目标求导、哪段计算需要记录、backward依赖的旧值能否修改。向量输出先走通“上游权重怎样组成标量目标”，再命名VJP；动态分支放到核心闭环后的补充解释，不另增作业。
+沿T4已经会的标量乘加/平方链学习，不依赖神经网络。`backward()`第一次调用时，先用同一标量例子展示调用前`.grad=None`、方法返回`None`、调用后leaf梯度写入`.grad`、参数值保持不变；先让学习者会用API。随后按同一模板完整走乘、加、减、平方四次：forward动作 -> 局部导数 -> 上游梯度 -> 具体结果 -> 节点命名；学习者已经看见重复模式后，才压缩成表格并命名computation graph。真实图不能画成`Pow -> Sub -> Add -> Mul`单链：`AddBackward0`须分叉到`MulBackward0`和`AccumulateGrad(b)`，`MulBackward0`再连`AccumulateGrad(w)`与不需梯度的`x -> None`；说明`AccumulateGrad`不对应forward算术运算，却解释leaf `.grad`为何得到并累加结果。首次使用`grad_fn`时拆明`grad = gradient`、`fn = function`，与保存数值的`.grad`分开；先展示代表性输出再定义属性。标量起始梯度1在完整反传以后解释。R1完成manual、finite difference、autograd三路对照并保留累积预测；R2核心处理清理以及graph saved state与leaf `.grad`的不同寿命，中间节点`retain_grad()`只作补充观察；R3连续检查最终scalar目标、记录范围与backward依赖旧值。向量输出先走通“上游权重怎样组成标量目标”，再命名VJP；动态分支放到核心闭环后的补充解释，不另增作业。
 
 ### 学习内容
 
