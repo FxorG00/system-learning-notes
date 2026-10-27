@@ -1,9 +1,9 @@
 # AI Infra 理论伴随线规划
 
-> 对齐日期：2026-10-26。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
+> 对齐日期：2026-10-27。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
 > 当前状态：T1～T10及Theory Gate 1已通过；T10整课与R1均为99/100，下一步T11。T11～T17是未通过的提前稿，Theory Gate 2未通过。
 > Git留痕与发布权限统一按`MEMORY.md` §9.12：正式仓库文件有变化就本地commit；push需另行明确授权。
-> 系统主线：Week13 Day1～Day7整日均已通过；91个整日通过、91份Daily已生成。Day7整日于2026-10-26以98/100通过，R1历史95/100；Week13整周正式完成，[Week14周规划](week14/week14.md)已生成，Day1尚未生成或开始。
+> 系统主线：Week13 Day1～Day7整日均已通过；91个整日通过、92份Daily已生成。Day7整日于2026-10-26以98/100通过，R1历史95/100；Week13整周正式完成，[Week14 Day1](week14/day1/day1.md)已生成，R1尚未开始。
 > 目标：LLM inference systems / serving与CUDA/Triton kernel optimization；本线不替代系统项目。
 > 时间边界：先完整学完原Week16再整理简历试投；Week17以后实际课表等Week16收口后安排。既有能力Gate与理论范围不变。
 
@@ -194,7 +194,7 @@ T9～T11是PyTorch对象、状态与求导的过渡，不依赖先学完整神�
 
 ### 3.1 当前起点与术语修正
 
-当前系统主线的Week14周规划已生成，Day1尚未生成或开始；Week13 Day1～Day7均已通过。TTL组件、命令、主动清理、网络接入与虚函数补缺已经收口；原Week14～Week16继续AOF/恢复、故障/性能和项目出口。
+当前系统主线的Week14 Day1已生成，R1尚未开始；Week13 Day1～Day7均已通过。TTL组件、命令、主动清理、网络接入与虚函数补缺已经收口；原Week14～Week16继续AOF/恢复、故障/性能和项目出口。
 
 理论下一步T11，已通过的T1～T10不重做。Ex1与T7共用已有线性回归证据；T8/Gate 1与T9的等价产出已验收，不为统一文件名再造一份实现。
 
