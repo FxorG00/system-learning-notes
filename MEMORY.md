@@ -9083,3 +9083,15 @@ T14保留R1任务、公式、代码和设计闸门，仅更新开头课程导航
 同步Memory教材准备、总/理论规划与T12两句前瞻，防止旧“将必学Dropout/BatchNorm”预告反向带回核心。Week13/C++补缺、前后课T9～T15、ML/Kaggle、资源README/AIInfraGuide映射与DAILY_INDEX已核对；未受影响的1087份文件SHA256保持，含代码/tests/CMake、note、冻结Daily、环境及T13参考资产。T14仍可延期，T13+Ex5后的Titanic保留；Day6仅R1过98/100、89个整日通过/90份生成、T1～T9/Gate1已过、下一步T10、T10～T15未过及原Week16之后试投/排课的条件均不变。
 
 28段Python通过语法检查，103条公式KaTeX严格解析，4张流程图用Mermaid8.8.3渲染；查看主实验、projection、R3和补充区预览，无横向溢出/表格裁切/残留加粗标记，不冒称原生Typora实测。PyTorch官方checkpoint、hook、BatchNorm与BasicBlock已核对；本轮未SSH、重跑训练或修改环境，旧教材实测只作原证据，不算本次运行。修前副本与完整对齐/检查记录在review_artifacts/t13_t14_mainline_revision_20261022；不commit/push。
+
+## 2026-10-27：T11先走通`backward()`调用，再解释起始梯度与反向节点
+
+用户在正式进入T11前指出§5直接讲scalar seed，却没有先说明`backward()`是什么API、怎样调用、返回什么和结果写到哪里；随后要求把Backward节点与Forward各步产生的对象逐点对齐。本轮保留用户已在T11加粗的“backward把结果写到需要梯度的leaf的`.grad`”原文，不修改任何用户代码、tests、CMake或note，也不登记T11开始或通过。
+
+正文现在先用同一标量链打印调用前`.grad=None`，执行`backward_result = loss.backward()`，展示返回`None`、`w.grad=6`、`b.grad=2`以及参数值仍为2和-1。明确这是一次独立API观察，后续属性实验会重新创建对象。§5在API已经会用以后才解释标量起始梯度1，显式/隐式写法分开呈现并标明二选一；另说明本例loss数值恰好为1只是巧合，seed 1来自$\partial L/\partial L=1$。§11的`retain_grad()`和§14的`add_()`按同一既有规则补齐需求、调用、返回值、对象变化与代表性输出。第三遍回读还删除了§0在正式定义前使用leaf和optimizer名称的前置负担，并把§1无必要的英文术语换成当前动作对应的中文；概念仍在负责它的章节命名。
+
+为对齐Forward与Backward，将紧凑表达式展开为`product -> z -> error -> loss`，逐一对应`MulBackward0 -> AddBackward0 -> SubBackward0 -> PowBackward0`；反向按相反方向经过`PowBackward0 -> SubBackward0 -> AddBackward0 -> MulBackward0`。原D2源同步扩为四个反向节点，重新生成SVG并转PNG目视检查，无裁切、重叠或节点缺失。理论规划、当前下一步摘要和AIInfraGuide阅读映射同步同一顺序；其他T10/T12/Week14与阶段小结只陈述进度或相邻依赖，核对后无须制造diff。
+
+这次没有新增长期教学规则。现行§9.3已经要求首次API从熟悉输入走通最小调用，并说明返回值、结果位置和原对象状态；§13已经要求理论课先用完整动作建立用途，再命名机制。本轮只把T11改到该规则下，并记录用户补充的图文必须使用同一对象链，不能让Forward结果名与Backward节点名各说一套。
+
+三遍审计分开完成：第一遍按PyTorch 2.14官方`Tensor.backward`、autograd教程、`retain_grad`与`add_`核对语义，26段Python围栏全部通过AST解析，标量链独立算得`z=5、error=1、loss=1、dw=6、db=2`；第二遍逐节检查首次API顺序，确认用途在调用前、调用在输出前、API用法在seed机制前，`retain_grad`和`add_`也满足同一顺序；第三遍检查受影响规划、参考映射、进度状态、保护边界、D2/SVG与Git diff。Windows当前Python没有PyTorch，本轮未请求SSH授权，因此不冒称重新动态执行新片段；已有Ubuntu教材QA只作历史证据。SVG XML可解析，`viewBox/width/height`非零，四个反向节点均存在，`git diff --check`仅有现有LF/CRLF提示。按§9.12留下本地Git提交，不push。

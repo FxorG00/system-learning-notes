@@ -54,32 +54,37 @@ forward: {
 }
 
 backward: {
-  label: "Backward：从 loss 对自己的导数 1 出发，沿图反向传梯度"
-  direction: left
+  label: "Backward：每个反向节点都对应上面一步 forward 运算"
+  direction: down
   style.fill: "#FFF9FA"
   style.stroke: "#E7A6AE"
   style.border-radius: 8
 
-  loss_seed: "dL/dL = 1" {
+  loss_seed: "loss 端的起点\ndL/dL = 1" {
     style.fill: "#FFE2E5"
     style.stroke: "#D95D6C"
   }
-  error_grad: "dL/de = 2e = 2" {
+  pow: "PowBackward0\n对应 forward 平方\ndL/de = 2e = 2" {
     style.fill: "#FFECEF"
     style.stroke: "#D95D6C"
   }
-  z_grad: "dL/dz = 2" {
+  sub: "SubBackward0\n对应 forward 减法\ndL/dz = 2" {
     style.fill: "#FFECEF"
     style.stroke: "#D95D6C"
   }
-  parameter_grads: "dL/dw = 2 × x = 6\ndL/db = 2" {
+  add: "AddBackward0\n对应 forward 加法\ndL/dm = 2，dL/db = 2" {
+    style.fill: "#FFF4DF"
+    style.stroke: "#D8922B"
+  }
+  mul: "MulBackward0\n对应 forward 乘法\n读取 x = 3，dL/dw = 6" {
     style.fill: "#DFF6EA"
     style.stroke: "#3C9A69"
   }
 
-  loss_seed -> error_grad: "平方的局部导数 2e"
-  error_grad -> z_grad: "减法的局部导数 1"
-  z_grad -> parameter_grads: "乘法读取 forward 的 x = 3"
+  loss_seed -> pow: "从最终结果开始"
+  pow -> sub: "平方的局部导数 2e"
+  sub -> add: "减法对 z 的局部导数 1"
+  add -> mul: "加法把梯度传给 m 与 b"
 }
 
 forward -> backward: "同一条链，反向读取 forward 留下的关系与必要数值" {
