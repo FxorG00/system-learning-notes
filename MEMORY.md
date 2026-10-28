@@ -178,9 +178,9 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-10-27）：Week13 Day7整日以98/100正式通过，R1历史95/100保持。Week13整周正式完成，系统主线91个整日通过、92份Daily生成。Week14 Day1已生成，R1尚未开始；周规划不计入Daily数量。
+当前快照（2026-10-28）：Week13 Day7整日以98/100正式通过，R1历史95/100保持。Week13整周正式完成，系统主线91个整日通过、92份Daily生成。Week14 Day1已生成，R1尚未开始；周规划不计入Daily数量。
 
-T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T1～T11与Theory Gate 1已通过，理论下一步T12；T12～T17仍为未通过的提前稿，Theory Gate 2未通过。
+T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T1～T11与Theory Gate 1已通过，理论下一步T12；T12～T18仍为未通过的提前稿，Theory Gate 2未通过。
 
 T11学习者主线版继续作为后续AI Theory讲解质量的标杆。本次主要证据是用户本人笔记，并逐项复用T4的手算/finite difference能力与T11既有教材QA；没有新增“只看笔记就自动通过”的规则，也没有把教材QA冒充用户运行证据。
 
@@ -3597,7 +3597,7 @@ Week13 Day7整日已以98/100正式通过，R1历史95/100保持；V2新增关�
 
 教材准备以§4为唯一当前快照。按T8线性分类器 → T9 Tensor → T10 Module状态 → T11标量autograd → T12首次多层模型的依赖推进；不把提前稿或教材实测记为学习通过。
 
-T15～T17已按用户请求提前生成，T17于2026-10-24完成校验，路径按`ai_theory/Tn/Tn.md`组织；仅更新教材准备，当前理论下一步是T12。T15准备输入和读取规则，T16完成单头Q/K/V与内容汇总，T17扩多头并接前置LayerNorm表示更新block。相邻前课通过后或实际进入时按真实结果校准；T14若延期，进入T15仍按最近已完成的前置校准，不把可延期课重新变成硬前置。T17～T18保留进阶定位，不提前排Week16后的实际课表。
+T15～T18已按用户请求提前生成，路径按`ai_theory/Tn/Tn.md`组织；仅更新教材准备，当前理论下一步仍是T12。T15准备输入和读取规则，T16完成单头Q/K/V与内容汇总，T17扩多头并接前置LayerNorm表示更新block，T18再连接token/position embedding、1～2个block、final norm与LM head，停在最后真实位置的logits。相邻前课通过后或实际进入时按真实结果校准；T14若延期，进入T15仍按最近已完成的前置校准，不把可延期课重新变成硬前置。T17～T18保留进阶定位，不提前排Week16后的实际课表。
 
 量化补强已登记为后续能力：T20从一个数讲刻度、取整/范围与恢复，保留原容量脚本；CPU浮点线性层正确后，在同一项目补INT8权重表示/反量化/输出误差与字节对照；真实低精度计算和部署再按匹配硬件/后端验证收益。详细要求唯一维护在`AI_Infra理论伴随线规划.md`的T20衔接段，总规划Gate B/C/D作阶段引用。数值参考可在CPU完成，恢复为浮点计算不声称INT8加速；用户独立负责性能问题、测量和最终结论，Codex可承担重复正确性测试与脚手架。这不改变当前Mini Redis、理论下一步T12、T1～T24编号或原Gate，不增加Week16首批试投门槛；Week16收口后才确定实际课次。
 
@@ -3627,7 +3627,7 @@ AI Infra 理论伴随线概览（路线建立于2026-08，当前范围以独立�
 ```text
 路径：C:\Users\FxorG\Desktop\gpt_infra\AI_Infra理论伴随线规划.md
 定位：plan_strengthened.md 的理论伴随线，不改变 C++ -> Linux/OS -> 网络 -> Reactor -> Mini Redis 系统主线
-资料职责与交接：T8收住当前传统ML连续学习，T9～T11搭Tensor/Module/autograd过渡，T12首次讲神经网络，再按原T13～T17范围进入泛化、sequence、attention与Transformer。当前主教材是Tn.md；ML.md及吴恩达/李沐只按当前模块需要调用，不并行要求完整ML/DL通关。已由ML讲义学会的原理和作业证据复用；当前尚未学过的原理由T正文讲清，不能沿用旧“ML独占第一次理论、T只补API”的分工。详细路线见理论规划§2.5～§2.6，既有Gate/Kaggle要求不变
+资料职责与交接：T8收住当前传统ML连续学习，T9～T11搭Tensor/Module/autograd过渡，T12首次讲神经网络，再按原T13～T18范围进入泛化、sequence、attention、Transformer block与decoder forward。当前主教材是Tn.md；ML.md及吴恩达/李沐只按当前模块需要调用，不并行要求完整ML/DL通关。已由ML讲义学会的原理和作业证据复用；当前尚未学过的原理由T正文讲清，不能沿用旧“ML独占第一次理论、T只补API”的分工。详细路线见理论规划§2.5～§2.6，既有Gate/Kaggle要求不变
 时间：平常AI理论每天30~60分钟/每周4~6小时、系统主线优先约3小时以上；区域赛备赛/参赛、考试、故障与精力下降时按实际可用时间校准并记录，不要求熬夜补时，不因此改变项目内容或提前跳过Week16去投递
 T1~T8：Python/NumPy、shape/dtype、向量矩阵、matmul/broadcasting、gradient/chain rule、概率最低入口、stable softmax、linear/softmax regression 与 ML workflow；Ex1 和 T7 共用一份 linear-regression evidence
 T9~T16：PyTorch Tensor/layout、Module/inference_mode、autograd、MLP、generalization、ResNet forward、embedding/mask、single-head attention
@@ -9183,3 +9183,13 @@ T12前半保留“XOR无法线性分开 -> 两次Linear仍可合并 -> ReLU产�
 T13保留`baseline curve -> weight decay -> 公平对照 -> validation选checkpoint -> winner恢复 -> test`主链，只把R1后的作者润色说明改成沿用户真实curve继续提问。T14把`Public contract`重排为“两个场景需要哪些信息 -> 最小class接口 -> main branch目标shape -> 两场景证据 -> 正常路径后的输入边界”，R3继续只观察同一个block；技术接口、固定数据和独立shortcut闸门未改变。T15、T16删除“提前稿/R1通过后再校准”的正文编辑历史，分别直接过渡到允许表和批次mask。T17的核心收在MHA、前置LayerNorm、两次残差、FFN与隔离检查；RMSNorm辨认和容量估算明确置于核心后的连接区，不新增第二个block或核心PASS条件。五篇首页只保留当前前置与未验收状态，不再暴露起草过程。
 
 三遍审查各自独立完成。技术遍核对T13～T17共159个围栏块、58段Python和74组display math：围栏/公式成对，Python全部通过AST，本地链接存在，无控制字符，`git diff --check`无内容错误；本轮没有改算法代码，也没有新的PyTorch/SSH动态运行，因此不冒称运行更新后的完整程序。教学遍确认五课各自只有一条主链，作者/审稿口吻命中为0，非代码/表格/URL正文超过150字符的长行为0，扩展均在核心闭环后出现。全局遍同步理论规划、总规划和AIInfraGuide映射中的T17边界；真实状态仍为T1～T11与Theory Gate 1通过、下一步T12、T13～T17未通过、Theory Gate 2未通过，T14可延期和Week13～16/试投条件不变。用户现有T11正文改动、note、PDF与assets保持不改、不提交。
+
+## 2026-10-28：T18 decoder-only forward提前稿生成
+
+用户要求按规划、Memory、真实进度和近期教学反馈提前生成T18，并完成三遍不同目的的彻查。本轮新增`ai_theory/T18/T18.md`；教材存在不表示开始学习或通过，真实理论进度仍是T1～T11与Theory Gate 1通过、下一步T12，T12～T18均未通过，Theory Gate 2未通过。
+
+T18只解决一条对象链：`token IDs -> token/position vectors -> causal Transformer blocks -> final norm -> LM head -> logits`。R1用一条序列和一个T17 block闭合左右两端；R2把同一对象升级为两个独立block和右侧补齐batch，用逐层参照、未来token不影响前缀、batch隔离、最后真实位置提取和Module登记验证整条forward。核心采用可学习位置嵌入与LayerNorm；RMSNorm、RoPE和weight tying只在核心后辨认。T19继续独占logits到probability/sampling，KV Cache继续后置，不把随机初始化tiny model称为已训练语言模型或完整生成服务。
+
+本轮直接执行§1.1、§9.3和T11学习者主线标杆，没有新增另一套教学规则。正文先让一批具体token走完整路径，再压成shape表；`ModuleList`只在第二个独立block需要被登记时出现；LM head先由“H个特征还不能逐一对应V个token”的缺口产生，再命名。两个阶段分别闭合“单序列到logits”和“多层批次不串线”，不照搬T11三轮外形。整课结束保留用户亲自记笔记提醒。
+
+三遍审查分别完成。技术遍：T18共14段Python围栏，全部通过AST解析；58个代码围栏成对，本地链接可解，无控制字符，非代码/表格/URL正文没有超过150字符的长行；并按PyTorch 2.14官方`Embedding`、`ModuleList`、`Linear`、`LayerNorm`文档与GPT-2报告核对shape、模块登记、最后一维映射和pre-norm/final norm依据。Windows当前Python没有PyTorch，本轮也没有新的SSH运行授权，因此不冒称动态执行完整教材；Mermaid只完成源码结构复核，没有冒称在Typora中渲染。教学遍：章节沿唯一forward对象链推进，先出现具体缺口再命名position embedding、residual stream、LM head与ModuleList；shape表只在单序列全链走通后压缩，RMSNorm、RoPE和weight tying均在核心闭环之后。全局遍：理论规划、总规划、Week14、AIInfraGuide映射和当前Memory均统一为T1～T11与Theory Gate 1通过、下一步T12、T12～T18未通过；T19与KV Cache边界一致，六个本轮文件的相对链接全部通过，`git diff --check`只有现有LF/CRLF提示。用户已有T11正文修改、note、PDF与assets保持不改、不提交；本轮只留下T18及关联规划文件的本地Git提交，不push。

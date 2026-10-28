@@ -1,7 +1,7 @@
 # AI Infra 理论伴随线规划
 
-> 对齐日期：2026-10-27。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
-> 当前状态：T1～T11及Theory Gate 1已通过；T11整课98/100，T10整课与R1均为99/100，下一步T12。T12～T17是未通过的提前稿，Theory Gate 2未通过。T11学习者主线版继续作为后续AI Theory讲解标杆。
+> 对齐日期：2026-10-28。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
+> 当前状态：T1～T11及Theory Gate 1已通过；T11整课98/100，T10整课与R1均为99/100，下一步T12。T12～T18是未通过的提前稿，Theory Gate 2未通过。T11学习者主线版继续作为后续AI Theory讲解标杆。
 > Git留痕与发布权限统一按`MEMORY.md` §9.12：正式仓库文件有变化就本地commit；push需另行明确授权。
 > 系统主线：Week13 Day1～Day7整日均已通过；91个整日通过、92份Daily已生成。Day7整日于2026-10-26以98/100通过，R1历史95/100；Week13整周正式完成，[Week14 Day1](week14/day1/day1.md)已生成，R1尚未开始。
 > 目标：LLM inference systems / serving与CUDA/Triton kernel optimization；本线不替代系统项目。
@@ -1627,13 +1627,15 @@ CPU float64，逐步assert shape；以逐头计算和手写LayerNorm公式核对
 
 ## T18：decoder-only Transformer 完整 forward
 
+**教材状态（2026-10-28）：[T18提前稿](ai_theory/T18/T18.md)已生成，尚未学习或通过。** 正式进入前先完成T15～T17；生成文件不前移理论任务，也不增加Week16首批C++/后台试投门槛。
+
 ### 学习内容
 
 ```text
 token embedding
-position information 第一层
+learned position embedding
 causal self-attention
-RMSNorm / LayerNorm
+LayerNorm
 MLP
 residual stream
 final norm
@@ -1647,7 +1649,11 @@ logits
 decoder_only_forward.py
 ```
 
-只做 1~2 layers 的 tiny model，固定随机种子和极小 dimensions，逐层打印 shape。
+只做1～2层tiny model，固定随机种子与极小维度。R1先让一条序列沿`token IDs -> token/position vectors -> 一个T17 block -> final norm -> LM head -> logits`完整走通；R2再升级为两个独立block和右侧补齐batch。
+
+核心使用可学习位置嵌入与LayerNorm，和T15/T17已建立的对象连续。RMSNorm、RoPE和输入/输出权重共享只放在核心后的结构辨认，不另造第二个model，也不增加PASS门槛。T18停在每条序列最后真实位置的`[B,V]` logits；softmax、greedy与sampling由T19接手，KV Cache继续后置。
+
+核心检查同参数逐层参照、shape、重复调用不改输入/参数、未来token不影响已有前缀、batch互不影响，以及两层均被Module登记。完成后提醒用户亲自写笔记；正式进入时按T17真实签名校准，不能把教材QA当作用户学习证据。
 
 ### 对应视频
 
@@ -1656,7 +1662,7 @@ decoder_only_forward.py
 
 ### 通过标准
 
-能够从 token IDs 一直串到 logits，不把 logits 叫作 probabilities。
+能够从token IDs一直串到`[B,S,V]` logits，按长度取出最后真实位置的`[B,V]`，并解释token/position embedding、block、final norm与LM head各补了什么；不把logits叫作probabilities，也不把T18声称为完整生成系统。
 
 ---
 
