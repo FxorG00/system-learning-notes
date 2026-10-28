@@ -9175,3 +9175,11 @@ T12前半保留“XOR无法线性分开 -> 两次Linear仍可合并 -> ReLU产�
 同步`AI_Infra理论伴随线规划.md`、`plan_strengthened.md`和AIInfraGuide阅读映射。T13仍直接复用T12的MLP、训练流与checkpoint，不需改范围；T14～T17依赖未受影响。真实进度保持T1～T11与Theory Gate 1通过、下一步T12，T12～T17仍未通过，Theory Gate 2未通过；教材修改不冒充学习证据。
 
 三遍审查分别覆盖技术/可执行性、学习顺序和全局状态。T12的9段Python围栏全部通过AST解析，92个代码围栏与10个display-math定界符成对，章节引用与本地Kaggle链接可解，无控制字符，`git diff --check`除仓库既有换行提示外无错误。本轮没有新的PyTorch动态运行或SSH实测，不冒称更新后的完整程序已经执行。用户的T11正文增补、note、PDF与assets保持不改、不提交；系统Week14 Day1和Week13～16范围不变。收尾只提交本轮获准修改的T12及关联规划/映射/Memory，不push。
+
+## 2026-10-28：T13～T17按T11标杆完成后续对齐
+
+用户要求把近期关于唯一认知主干、用途先行、最小充分推导、删除防御式讲解和核心/选读分层的反馈，同步到T12之后全部已生成AI Theory教程。仓库中该范围实际为T13～T17；没有尚未生成的T18文件可修改。本轮执行现行§1.1、§9.3与§9.11，不新增另一套教学规则。
+
+T13保留`baseline curve -> weight decay -> 公平对照 -> validation选checkpoint -> winner恢复 -> test`主链，只把R1后的作者润色说明改成沿用户真实curve继续提问。T14把`Public contract`重排为“两个场景需要哪些信息 -> 最小class接口 -> main branch目标shape -> 两场景证据 -> 正常路径后的输入边界”，R3继续只观察同一个block；技术接口、固定数据和独立shortcut闸门未改变。T15、T16删除“提前稿/R1通过后再校准”的正文编辑历史，分别直接过渡到允许表和批次mask。T17的核心收在MHA、前置LayerNorm、两次残差、FFN与隔离检查；RMSNorm辨认和容量估算明确置于核心后的连接区，不新增第二个block或核心PASS条件。五篇首页只保留当前前置与未验收状态，不再暴露起草过程。
+
+三遍审查各自独立完成。技术遍核对T13～T17共159个围栏块、58段Python和74组display math：围栏/公式成对，Python全部通过AST，本地链接存在，无控制字符，`git diff --check`无内容错误；本轮没有改算法代码，也没有新的PyTorch/SSH动态运行，因此不冒称运行更新后的完整程序。教学遍确认五课各自只有一条主链，作者/审稿口吻命中为0，非代码/表格/URL正文超过150字符的长行为0，扩展均在核心闭环后出现。全局遍同步理论规划、总规划和AIInfraGuide映射中的T17边界；真实状态仍为T1～T11与Theory Gate 1通过、下一步T12、T13～T17未通过、Theory Gate 2未通过，T14可延期和Week13～16/试投条件不变。用户现有T11正文改动、note、PDF与assets保持不改、不提交。

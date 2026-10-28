@@ -1600,10 +1600,12 @@ split / transpose / merge heads
 multi-head attention
 output projection
 residual connection
-LayerNorm / RMSNorm 直觉
+LayerNorm
 feed-forward network / MLP
 pre-norm / post-norm 只到识别
 ```
+
+RMSNorm辨认与参数/显式注意力比例的容量估算放在核心block完成后的连接区，不新增第二个模型，也不列入T17核心PASS。
 
 ### 代码产出
 
@@ -1611,9 +1613,9 @@ pre-norm / post-norm 只到识别
 transformer_block_reference.py
 ```
 
-CPU float64，逐步assert shape；以逐头计算和手写LayerNorm公式核对完整输出，不能只调用一个现成Transformer layer后打印结果。R1产出MultiHeadSelfAttention，R2在同文件新增TransformerBlock；输入保持`[B,S,H]`，True=允许表保持`[B,S,S]`，返回输出和`[B,N,S,S]`比例。核心固定前置LayerNorm，不含Dropout；RMSNorm与pre/post-norm只要求辨认，不另交第二套模型。
+CPU float64，逐步assert shape；以逐头计算和手写LayerNorm公式核对完整输出，不能只调用一个现成Transformer layer后打印结果。R1产出MultiHeadSelfAttention，R2在同文件新增TransformerBlock；输入保持`[B,S,H]`，True=允许表保持`[B,S,S]`，返回输出和`[B,N,S,S]`比例。核心固定前置LayerNorm，不含Dropout；pre/post-norm在主链中只到结构辨认，RMSNorm放在核心后的选读连接，不另交第二套模型。
 
-检查拆合顺序、数值、零分支残差、未来/补位/跨序列隔离，以及参数/输入不被forward改写。容量统计区分参数与显式注意力比例，不登记性能结论。完成后提醒用户亲自写笔记；T16通过或实际进入T17时，按真实实现再校准，R1通过后定向润色R2。T18的完整decoder forward范围保持。
+核心检查拆合顺序、数值、零分支残差、未来/补位/跨序列隔离，以及参数/输入不被forward改写。容量统计在核心后区分参数与显式注意力比例，只作对象大小连接，不登记性能结论，也不阻塞PASS。完成后提醒用户亲自写笔记；T16通过或实际进入T17时，按真实实现再校准，R1通过后定向润色R2。T18的完整decoder forward范围保持。
 
 ### 对应视频
 

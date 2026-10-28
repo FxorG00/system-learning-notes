@@ -427,7 +427,7 @@ Tn.md是当前主教材；ML.md、吴恩达和李沐课程按本T的具体需要
 
 提前稿后半编排校准（2026-10-22，进度对齐至2026-10-27）：T13的核心连续完成baseline、weight decay受控对照、validation选checkpoint、恢复与最终test；相关方法和实验纪律扩展随后选读。T14核心完成Conv/residual/projection，并在同一无BatchNorm组件上观察state与Tensor字节；BatchNorm另作可选扩展。两课R1保留，详细任务与PASS统一见[理论规划T13/T14](AI_Infra理论伴随线规划.md)。这只调整授权的教材后半与核心/补充边界，不改变当前T12下一步、T14可延期、既有Kaggle或Theory Gate范围。
 
-教材准备（2026-10-24，状态更新至2026-10-27）：[T15](ai_theory/T15/T15.md)先建立编号/嵌入/补齐与允许表；[T16](ai_theory/T16/T16.md)接过输入与允许表，完成单头内容汇总、批次和位置隔离；新增[T17提前稿](ai_theory/T17/T17.md)，先把多组读取拆开、算完、合并，再复用它完成前置LayerNorm、残差与逐位置FFN的block。T17仍只交付一个参考程序，RMSNorm与前后置排列只到辨认。提前稿不前移学习任务；当前T11整课已通过，下一步T12，Theory Gate 2未通过。T17～T18为进阶准备，T14可延期及Week16完整收口后试投的条件不变。
+教材准备（2026-10-24，状态更新至2026-10-28）：[T15](ai_theory/T15/T15.md)先建立编号/嵌入/补齐与允许表；[T16](ai_theory/T16/T16.md)接过输入与允许表，完成单头内容汇总、批次和位置隔离；[T17](ai_theory/T17/T17.md)先把多组读取拆开、算完、合并，再复用它完成前置LayerNorm、残差与逐位置FFN的block。T17核心仍只交付一个参考程序；pre/post-norm只到结构辨认，RMSNorm与容量估算放在核心后的选读连接，不增加PASS门槛。提前稿不前移学习任务；当前T11整课已通过，下一步T12，Theory Gate 2未通过。T17～T18为进阶准备，T14可延期及Week16完整收口后试投的条件不变。
 
 可展示的代码证据优先是：
 
