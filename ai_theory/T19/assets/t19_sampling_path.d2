@@ -1,0 +1,56 @@
+direction: right
+
+logits: "T18 输出\n每行 V 个 logits" {
+  shape: rectangle
+  style.fill: "#E8F1FF"
+  style.stroke: "#4C78A8"
+}
+
+policy: "这次怎样选？" {
+  shape: diamond
+  style.fill: "#FFF4D6"
+  style.stroke: "#C88719"
+}
+
+greedy: "argmax\n直接选最高分" {
+  style.fill: "#E8F1FF"
+  style.stroke: "#4C78A8"
+}
+
+temperature: "temperature\n调节集中程度" {
+  style.fill: "#E8F7EE"
+  style.stroke: "#3A8D5D"
+}
+
+topk: "可选 top-k\n只保留最高 k 项" {
+  style.fill: "#E8F7EE"
+  style.stroke: "#3A8D5D"
+}
+
+softmax: "softmax\n得到概率" {
+  style.fill: "#E8F7EE"
+  style.stroke: "#3A8D5D"
+}
+
+draw: "multinomial\n按概率抽一个 ID" {
+  style.fill: "#E8F7EE"
+  style.stroke: "#3A8D5D"
+}
+
+token: "next token ID" {
+  style.fill: "#F2EAFE"
+  style.stroke: "#7A5AA6"
+}
+
+eos: "调用者判断\n它是否为 EOS" {
+  style.fill: "#F5F5F5"
+  style.stroke: "#666666"
+}
+
+logits -> policy
+policy -> greedy: "greedy"
+policy -> temperature: "sampling"
+temperature -> topk -> softmax -> draw
+greedy -> token
+draw -> token
+token -> eos

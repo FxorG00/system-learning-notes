@@ -1,13 +1,13 @@
 # AIInfraGuide 怎样用于我们的学习
 
-> 映射对齐：2026-10-28（T11整课98/100通过，下一步T12；T12～T18提前稿尚未学习或通过）。T10线性分类器状态、T11标量求导、T12首次多层模型的依赖保持；T11学习者主线版继续作为讲解标杆；本文不是另一份必修课表。
+> 映射对齐：2026-10-28（T11整课98/100通过，下一步T12；T12～T19提前稿尚未学习或通过）。T10线性分类器状态、T11标量求导、T12首次多层模型的依赖保持；T11学习者主线版继续作为讲解标杆；本文不是另一份必修课表。
 > 来源：[网站][site]、[GitHub][repo]。本次抽读代表文章，未逐篇审校或固定全站 commit；真正使用某篇时重新核对链接与相关事实。
 
 **有帮助，最适合补上“模型在算什么 -> 占用什么资源 -> 推理服务怎样安排这些工作”这条连接。** Mini Redis主线保持；理论T1～T11已通过、下一步T12，不按网站目录重新学一遍数学、C++或机器学习。
 
 ## 1. 当前怎么用
 
-现在主线为Week13 Day4整日99/100、Day5整日100/100、Day6整日96/100、Day7整日98/100；Week13已经正式完成，[Week14 Day1](../../week14/day1/day1.md)已生成，R1尚未开始。理论T1~T11和Theory Gate 1已通过，T11整课98/100、T10整课与R1均为99/100，下一步T12；T12~T18仍属提前稿，按相邻前课通过后的真实结果或正式进入时校准。T14可延期，不因文件存在就登记已学。
+现在主线为Week13 Day4整日99/100、Day5整日100/100、Day6整日96/100、Day7整日98/100；Week13已经正式完成，[Week14 Day1](../../week14/day1/day1.md)已生成，R1尚未开始。理论T1~T11和Theory Gate 1已通过，T11整课98/100、T10整课与R1均为99/100，下一步T12；T12~T19仍属提前稿，按相邻前课通过后的真实结果或正式进入时校准。T14可延期，不因文件存在就登记已学。
 
 进入 T9 时，由我们的讲义先把 NumPy 数组接到 PyTorch Tensor；若需要第二种解释，再读下面指定的小节。网站同一篇文章可能同时含入门、完整实现和 GPU 优化，**只读对应部分，不默认一路读到底**。外部完整代码留在本课独立练习之后；选择性的补充阅读占用原有理论时间，不叠加新课程或重复作业。
 
@@ -24,12 +24,13 @@
 | T15 | [3.9 Tokenization 与词嵌入][embedding] §1、§4.3、§6 | 先沿[本地T15](../../ai_theory/T15/T15.md)完成编号与查表，再选看对应解释。位置限制仍由本地正文从补位/前缀需求推出；不提前加入分词算法实现或位置编码。提前稿不是学习进度，当前仍从T12推进。 |
 | T16 | [3.3 Self-Attention][attention] §2、§3、§5~§6 | 先沿[本地T16](../../ai_theory/T16/T16.md)完成单条读取、批次与T15允许表；单头reference完成后再选看Q/K/V用途、矩阵轴和缩放。§4完整代码后读；多头与优化留后续。生成不计学习通过，资料小节真正启用时再核对。 |
 | T17~T18 | [3.7 Decoder Block][decoder] §2~§3；[Transformer 工程地图][transformer] §3 | 先完成[本地T17](../../ai_theory/T17/T17.md)的多头读取与前置LayerNorm block，再沿[本地T18](../../ai_theory/T18/T18.md)把token/position embedding、两层block、final norm与LM head串到logits。外部材料只在自己的核心路径跑通后对照；RMSNorm/RoPE/权重绑定为结构辨认，sampling与KV Cache不提前并入T18。 |
+| T19 | [vLLM快速入门][vllm-quickstart] §4.1、§6.1 | 先沿[本地T19](../../ai_theory/T19/T19.md)用固定logits独立完成greedy、temperature、top-k、seed与EOS边界；核心通过后才用此页辨认`SamplingParams`怎样把这些名字装进框架接口。只认参数角色，不安装vLLM、不跟跑服务；页面中的默认值、处理顺序、`temperature=0`约定和推荐组合都必须按实际框架版本与任务重新核对。 |
 | T20 | [分布式训练总论][training] §2；[LLM 推理基础][inference] §2.3 | 用自己的Module/optimizer对象核算参数、梯度、优化器状态和激活，再对照推理KV账。本地T20另用一个数讲清INT8刻度、近似误差与辅助信息；本阶段停在概念/容量，不启动分布式训练或量化运行时。CPU实验与性能验证按理论规划分层，不从本站目录直接跳级。 |
 | T21 | [LLM 推理基础][inference] §1~§2；[PagedAttention][paged] §1~§4 | 自己的连续 KV reference 数值正确后，用块表例子理解按需分配与尾块浪费。先做本地规划已有的分块仿真；本站 §8 参数配置与 §9 框架源码后置 Gate D。 |
 | T22 | [Continuous Batching][batching] §1~§4、§7 | 先完成自己的调度仿真，再比较整批等待和按迭代接纳/退出。识别吞吐、排队和延迟的取舍，停止在策略解释；§6 源码留到 Gate D。 |
 | T23 | [LLM 推理基础][inference] §3~§4；[PyTorch 入门][pytorch] §6 选看 | 已有本地计时结果后，再连接首词延迟、逐词延迟、吞吐与计算/访存估算。GPU profiler 示例只在具备硬件后使用；CPU 计时、仿真或上游数字均不能充当本机 GPU 证据。 |
 
-T13继续复用ML/T8基础并完成既定实验，不为引用此站再训练同构模型。T14仍可延期，Week16的AI协调目标保持T1～T13与T15～T16；T17～T18为后续进阶项，不给C++试投追加完整AI路线前置。
+T13继续复用ML/T8基础并完成既定实验，不为引用此站再训练同构模型。T14仍可延期，Week16的AI协调目标保持T1～T13与T15～T16；T17～T18为后续进阶项，不给C++试投追加完整AI路线前置。T19提前稿只补齐更后续的logits到token选择组件，不改变这条Gate。
 
 ML/DL基础视频优先吴恩达、李沐；后续系统/GPU阶段可按问题选用官方、CS336或GPU MODE资料，不新增完整刷课线。指标与API采用前核对官方版本，TPOT/ITL等不能只据中文简写混用，见[本轮调研](2026-10-22_规划对齐与岗位资料更新.md)。
 
@@ -79,6 +80,7 @@ PagedAttention 的分页类比也要限定在相应块池：按需分块减少�
 [attention]: https://caomaolufei.github.io/AIInfraGuide/prerequisites/模块一-前置知识/transformer/33-self-attention机制深入理解/
 [decoder]: https://caomaolufei.github.io/AIInfraGuide/prerequisites/模块一-前置知识/transformer/37-transformer-decoder-block完整解析/
 [transformer]: https://caomaolufei.github.io/AIInfraGuide/prerequisites/模块一-前置知识/transformer/31-ai-infra工程师为什么必须懂transformer/
+[vllm-quickstart]: https://caomaolufei.github.io/AIInfraGuide/guides/模块四-推理优化/第3章-深入vllm/vllm快速入门/
 [training]: https://caomaolufei.github.io/AIInfraGuide/distributed/模块三-分布式训练/11-分布式训练总论/
 [inference]: https://caomaolufei.github.io/AIInfraGuide/inference/模块四-推理优化/第1章-llm推理基础/11-llm推理基础/
 [paged]: https://caomaolufei.github.io/AIInfraGuide/inference/模块四-推理优化/第2章-推理引擎核心技术/21-pagedattention/

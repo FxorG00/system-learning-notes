@@ -1,7 +1,7 @@
 # AI Infra 理论伴随线规划
 
 > 对齐日期：2026-10-28。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
-> 当前状态：T1～T11及Theory Gate 1已通过；T11整课98/100，T10整课与R1均为99/100，下一步T12。T12～T18是未通过的提前稿，Theory Gate 2未通过。T11学习者主线版继续作为后续AI Theory讲解标杆。
+> 当前状态：T1～T11及Theory Gate 1已通过；T11整课98/100，T10整课与R1均为99/100，下一步T12。T12～T19是未通过的提前稿，Theory Gate 2未通过。T11学习者主线版继续作为后续AI Theory讲解标杆。
 > Git留痕与发布权限统一按`MEMORY.md` §9.12：正式仓库文件有变化就本地commit；push需另行明确授权。
 > 系统主线：Week13 Day1～Day7整日均已通过；91个整日通过、92份Daily已生成。Day7整日于2026-10-26以98/100通过，R1历史95/100；Week13整周正式完成，[Week14 Day1](week14/day1/day1.md)已生成，R1尚未开始。
 > 目标：LLM inference systems / serving与CUDA/Triton kernel optimization；本线不替代系统项目。
@@ -1668,6 +1668,8 @@ decoder_only_forward.py
 
 ## T19：probability distribution 与 token sampling
 
+**教材状态（2026-10-28）：[T19提前稿](ai_theory/T19/T19.md)已生成，尚未学习或通过。** 它是T18 logits输出的后续进阶组件，不加入Week16首批C++/后台试投门槛，也不表示Week17以后课表已经排定。
+
 ### 学习内容
 
 ```text
@@ -1680,13 +1682,19 @@ random seed
 EOS
 ```
 
+### 编排与停止边界
+
+R1固定同一行七项logits，先完成greedy，再从“仍想按相对倾向随机选择”接回T5/T6；temperature只在采样已经成立、调用者需要改变集中程度后出现。R1用独立generator与大量抽样分别验证随机序列复现和经验频率，不把某一次抽样结果当作distribution证据。
+
+R2只增加top-k：先用固定三项候选手算筛选和重新归一化，再升级同一个sampling接口，验证batch逐行独立和EOS由调用者解释。Top-p放在核心闭环后的直觉区，只解释候选数量为何随分布变化；本课不实现完整generation loop、KV Cache、beam search、模型训练或性能测试。
+
 ### 代码产出
 
 ```text
 sampling_methods.py
 ```
 
-在同一 logits 上比较 greedy、temperature、top-k，并用大量采样近似验证 categorical probabilities。
+在同一logits上比较greedy、temperature、top-k，并用大量采样近似验证categorical probabilities。核心对象链固定为`[B,V] logits -> probabilities或argmax -> [B] next token IDs`；输入先收窄为CPU float64 Tensor，避免第一次实现同时承担设备、dtype和框架兼容层。
 
 ### 对应视频
 
@@ -1696,7 +1704,7 @@ sampling_methods.py
 
 ### 通过标准
 
-能解释 sampling policy 改变 output distribution，但没有改变 model weights 和前面的 logits computation。
+能解释sampling policy改变output distribution，但没有改变model weights和前面的logits computation；能够区分logits、probabilities与一次next-token结果，并说明temperature、top-k、generator state和EOS分别由谁消费。整课完成后亲自整理T19笔记。
 
 ---
 
@@ -2265,6 +2273,7 @@ Gate C 后：KuiperLlama / CUDA
 | T9 | PyTorch 入门的 Tensor、形状与 dtype 小节 | 先接上已经会的 NumPy；独立 layout 预测完成后再对照外部形状示例 |
 | T10~T12 | 同文的 Module、autograd、完整训练循环 | 分别在本课对应机制讲清后选读；完整实现留在独立练习后，不新增同构训练作业 |
 | T15~T18 | 词元/词嵌入、Self-Attention、Decoder Block | 跟随自己的 token -> attention -> block 链；先做本课 reference，再读相关完整代码 |
+| T19 | vLLM快速入门中的`SamplingParams`参数表 | 本地固定logits实验通过后只用于辨认框架入口；不照抄默认值、推荐组合或`temperature=0`约定，不安装vLLM或启动服务 |
 | T20~T21 | 训练显存账、LLM 推理基础、PagedAttention | 先列清自己的参数/梯度/状态/KV 对象，再对照估算与分块示例 |
 | T22~T23 | Continuous Batching、LLM 推理指标与瓶颈分析 | 复用自己的调度仿真和 benchmark；不把站内速度或利用率数字当作本机结果 |
 | Theory Gate 3 之后 | 与总规划 Gate C/D/E 对应的 CUDA、serving、通信文章 | 继续等待各 Gate 的实际前置；没有 GPU 时保留 CPU 路径，不照跑 CUDA 示例 |
