@@ -1,0 +1,41 @@
+direction: right
+
+classes: {
+  known: { style: { fill: "#EAF2FF"; stroke: "#4B78C2"; border-radius: 6 } }
+  train: { style: { fill: "#FFF1E6"; stroke: "#C66A2B"; border-radius: 6 } }
+  infer: { style: { fill: "#EAF8EF"; stroke: "#3F8F5F"; border-radius: 6 } }
+  absent: { style: { fill: "#F4F4F4"; stroke: "#888888"; stroke-dash: 4; border-radius: 6 } }
+}
+
+checkpoint: "checkpoint\n保存的模型状态" { class: known }
+
+training: "一次训练" {
+  class: train
+  batch: "features + labels" { class: train }
+  model: "model parameters\n模型参数" { class: train }
+  forward: "forward\n中间结果 -> logits -> loss" { class: train }
+  backward: "backward\ngradients 梯度" { class: train }
+  optimizer: "optimizer.step()\n更新状态 + 参数更新" { class: train }
+
+  batch -> forward
+  model -> forward
+  forward -> backward
+  backward -> optimizer
+  optimizer -> model: "更新"
+}
+
+inference: "一次新进程预测" {
+  class: infer
+  requests: "features\n没有 labels" { class: infer }
+  fresh: "fresh model\nload_state_dict" { class: infer }
+  run: "eval + inference_mode\nforward -> logits" { class: infer }
+  output: "prediction" { class: infer }
+  no_train: "没有 loss / backward / optimizer" { class: absent }
+
+  requests -> run
+  fresh -> run
+  run -> output
+}
+
+checkpoint -> training.model: "保存/恢复"
+checkpoint -> inference.fresh: "恢复"

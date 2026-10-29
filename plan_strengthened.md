@@ -3,7 +3,7 @@
 > 对齐日期：2026-10-28。最新岗位与资料核对见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
 > 学习者：FxorG，中山大学计算机科学与技术专业，2029届。
 > 系统主线：Week1～Week13已通过；Day7整日98/100，R1历史95/100。累计91个整日通过、92份Daily已生成；[Week14 Day1](week14/day1/day1.md)已生成，R1尚未开始。
-> 理论线：T1～T11与Theory Gate 1已通过；T11整课98/100，T10整课与R1均为99/100，下一步T12。T12～T19均为未通过的提前稿，Theory Gate 2未通过；T11学习者主线版继续作为后续AI Theory讲解标杆。
+> 理论线：T1～T11与Theory Gate 1已通过；T11整课98/100，T10整课与R1均为99/100，下一步T12。T12～T20均为未通过的提前稿，Theory Gate 2未通过；T11学习者主线版继续作为后续AI Theory讲解标杆。
 > Git：正式仓库文件有变化时按`MEMORY.md` §9.12完成本地commit；push与本地留痕分开授权，当前不自动推送。
 > 投递顺序：完整学完原Week16，再整理简历并向匹配中小厂试投。11月是期望窗口，不据此缩减项目。
 > 长期方向：LLM inference systems / serving与CUDA/Triton kernel optimization。
@@ -48,16 +48,18 @@ C++
 
 需要调整的是目标优先级和项目表达：
 
-1. 第一段实习以 **C++ 后台 / Linux 后台 / 系统基础设施** 为主投方向；学完Week16后先向匹配中小厂试投，再依据真实反馈调整。
-2. **AI 业务中的后台或机器学习基础设施** 是冲刺方向，尤其关注存储、向量检索、参数服务、模型服务外围系统。
-3. **大模型推理引擎 / CUDA AI Infra** 是长期主目标，不把它伪装成 2027 年 1 月已经完全匹配的岗位。
+1. 第一段实习以 **C++ 后台 / Linux 后台 / 系统、存储、网络基础设施** 为主投层；学完Week16后先向匹配中小厂和日常实习试投，再依据真实反馈调整。
+2. **大模型平台后端、推理服务外围与AI云原生基础设施** 作为并行投递层。这些岗位同样需要Linux、网络、容器、调度和问题定位，不必等核心CUDA能力全部完成才尝试。
+3. **大模型推理引擎 / CUDA / kernel优化** 是少量冲刺层与长期主目标，不把它伪装成当前已经完全匹配的岗位。
 4. Reactor 和 HTTP Server 是 Mini Redis 的技术底座，不强行拆成三个注水项目。
 5. BlockingQueue、ThreadPool、AsyncLogger 是重要组件证据，但不是三份独立简历项目。
 6. 课程按项目暴露的问题调用，不再平铺 CSAPP、CS144、15-445、编译原理和分布式系统。
 
 一句话版本：
 
-> 先凭扎实的 C++ / Linux / 网络 / 并发和一个可信的 Mini Redis 拿到系统方向实习，再把这套能力迁移到推理引擎、模型服务与 GPU 优化。
+> 第一段经历优先选择真正写系统代码、做测试与性能定位的岗位：可以叫C++系统，也可以叫AI平台后端；先取得可信工程证据，再向推理引擎、模型服务与GPU优化深入。
+
+C++学习深度统一按[面试查漏地图](杂教程/C++与系统面试查漏地图.md)分层：项目中正确使用是必需项，容器/对象的常见实现、复杂度和失效是面试必需项，只挑StringLike、LRU等代表题手写；完整STL源码、ABI深水区、生产级allocator、lock-free/RCU和C++26提案按岗位或真实瓶颈后置。长期走AI Infra不会取消C++底座，也不要求先把所有C++社招题学到同一深度。
 
 ---
 
@@ -172,7 +174,7 @@ Linux 与高并发服务
 
 结论：
 
-> 这是 2027 年的冲刺方向。最好的桥梁不是立刻堆 CUDA 名词，而是把 Mini Redis 做成可信系统项目，并补一个小而真实的 Python/PyTorch inference 证据。
+> 这是第一轮可以并行尝试的相邻方向，不再统一写成“等未来才投”。当前大模型平台后端岗位存在只要求一门主语言、Linux与工程基础的入口；云原生AI Infra也会从OS、网络、容器、调度和排障招人。最好的桥梁不是立刻堆CUDA名词，而是把Mini Redis做成可信系统项目，同时继续补真实Python/PyTorch inference证据。
 
 ### 3.3 岗位 C：大模型推理引擎 / CUDA AI Infra
 
@@ -195,7 +197,7 @@ vLLM / SGLang / TensorRT-LLM 等推理框架
 
 结论：
 
-> 2027 年 1 月不把“直接大模型推理引擎实习”设为必须命中的目标。可以投、可以冲，但主线成功标准仍是拿到高质量 C++/系统/AI 业务基础设施经历。长期 AI Infra 目标不变。
+> 不把“直接大模型推理引擎实习”设为首批必须命中的目标。当前公开核心岗位常明确要求CUDA、GPU profiling、vLLM/SGLang及cache/调度优化；可以少量冲刺，但主线成功标准仍是拿到高质量C++/系统/AI平台基础设施经历。长期AI Infra目标不变。
 
 ### 3.4 招聘批次与时间条件
 
@@ -1267,10 +1269,11 @@ CUDA kernel correctness + profiler + benchmark
 
 1. 系统主线的Week14 AOF与恢复周规划及Day1教程已生成，Day1 R1尚未开始；Week13已整周通过，TTL与虚函数既有证据不重做。后续仍按原Week14～Week16完成恢复、性能与项目出口。
 2. 理论线进入T12：T10已完成线性分类器的Module/state与checkpoint恢复，T11已把同一标量链映射到autograd；T12先从XOR推出hidden representation、ReLU与MLP，再闭合训练/保存/fresh-load推理，随后只追一次更新的状态变化，以及“恢复预测”和“恢复训练”所需状态的区别。SGD/GELU/mini-batch留在核心后的选读区。T13主实验连续闭环，T14的BatchNorm为核心课后的选读扩展。
-3. T11整课以98/100正式通过，T10整课与R1均为99/100；T12～T19提前稿仍未通过。T11以本人笔记为主证据，已覆盖一次反向传播、`.grad`与旧图保存状态的不同寿命，以及向量目标/记录范围/旧值修改三个边界。两处表述精度已在检阅中补准，不要求重写笔记。进入T12前只做相邻校准，不重讲T11，也不把提前稿或教材QA登记为学习通过；每课结束继续由用户亲自记笔记。
-4. C++类/对象/继承/虚函数补缺已随Week13 Day7收口；后续链接、并发与内存问题按原Week14/15落点，不改项目架构来凑语法。
-5. 本轮岗位与官方资料只补充阶段对应的参考入口、实验口径和缺口判断，不开新的整套课程，不提前启动完整推理框架、CUDA或分布式路线。
-6. 原Week16完成后再做实际后续排课和简历试投；区域赛期间按真实精力推进，不把自然日都算作满额学习日。
+3. T11整课以98/100正式通过，T10整课与R1均为99/100；T12～T20提前稿仍未通过。T20已用同一个TinyMLP串起训练对象、fresh inference对象、权重容量和INT8表示误差，但不前移当前T12。T11以本人笔记为主证据，已覆盖一次反向传播、`.grad`与旧图保存状态的不同寿命，以及向量目标/记录范围/旧值修改三个边界。两处表述精度已在检阅中补准，不要求重写笔记。进入T12前只做相邻校准，不重讲T11，也不把提前稿或教材QA登记为学习通过；每课结束继续由用户亲自记笔记。
+4. C++类/对象/继承/虚函数补缺已随Week13 Day7收口；string/STL常见实现、LRU并发/大value、allocator第一层和系统面试横向题按Week15～16定向复盘，详见[补缺规划](C++项目伴随补缺规划.md)与[查漏地图](杂教程/C++与系统面试查漏地图.md)。不改Mini Redis架构来凑语法，也不通读全部STL源码。
+5. 第一段实习按三层岗位池准备：C++/Linux系统岗主投，AI平台后端/AI云原生并行投，核心推理引擎/CUDA少量冲刺。是否值得去看实际编码、系统问题、性能与协作内容，不只看职位标题。
+6. 本轮岗位与官方资料只补充阶段对应的参考入口、实验口径和缺口判断，不开新的整套课程，不提前启动完整推理框架、CUDA或分布式路线。
+7. 原Week16完成后再做实际后续排课和简历试投；区域赛期间按真实精力推进，不把自然日都算作满额学习日。
 
 当前不要因为 2026 年 serving 生态更新临时插入 Go、Kafka、Kubernetes、完整 vLLM/SGLang、DeepEP 或 CUDA。先把最接近岗位硬要求、也最接近简历项目闭环的 HTTP -> Mini Redis 做穿，同时保持 AI Theory 的稳定推进。
 
@@ -1286,6 +1289,10 @@ CUDA kernel correctness + profiler + benchmark
 - [腾讯：微信 AI Infra 工程师 - 大模型推理方向](https://careers.tencent.com/jobdesc.html?postId=2037411502792798208)
 - [腾讯：机器学习基础设施开发 - 存储 / 向量检索 / 参数服务器](https://careers.tencent.com/jobdesc.html?postId=2029746419665108992)
 - [腾讯：大模型推理引擎研发工程师](https://careers.tencent.com/jobdesc.html?postId=2074414767455518720)
+- [百度：大模型平台后端实习生 J106843](https://talent.baidu.com/jobs/detail/INTERN/fc9116ea-102d-48a9-9945-0bc64d362b3c)
+- [百度：AI Infra云原生平台实习生 J106487](https://talent.baidu.com/jobs/detail/INTERN/d2f2579e-014a-4d3e-bdb7-66eb90cab622)
+- [百度：AI Infra实习生 J104435](https://talent.baidu.com/jobs/detail/INTERN/6ba68d4d-889c-48a1-bed7-d4112c43014b)
+- [百度：AI Infra推理工程师 J101235](https://talent.baidu.com/jobs/detail/GRADUATE/7753cdb4-70b0-462b-a634-ee53818c7c9a)
 - [微信安全后台开发实习生（日常，公开招聘信息）](https://www.nowcoder.com/jobs/detail/383906)
 - [WeChat Backend Developer Intern](https://tencent.wd1.myworkdayjobs.com/en-US/Tencent_Careers/job/WeChat---Backend-Developer-Intern_R107005)
 - [MIT 6.S081 中文课程](https://mit-public-courses-cn-translatio.gitbook.io/mit6-s081/)

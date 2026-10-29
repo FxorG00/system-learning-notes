@@ -103,7 +103,7 @@ R1 正式通过后必须定向润色 Daily 的 R2/R3
   - NOIP 2021、2022 广东省一等奖。
   - CSP-S 2022 第二轮一等奖。
   - CSP-J 2020 第二轮一等奖。
-- 教学节奏含义：常规算法、基础数据结构和熟悉的 STL 使用可以快速通过，避免重复性刷题；重点继续放在工程化 C++、资源生命周期、Linux/OS/网络、并发、测试、benchmark 和项目表达。竞赛能力证明较强的编码与推理基础，但不能据此默认已经掌握系统机制、工程边界或生产级设计，相关内容仍按实际代码和证据验收。
+- 教学节奏含义：常规算法、基础数据结构和熟悉的 STL 使用可以快速通过，避免重复性刷题；重点继续放在工程化 C++、资源生命周期、Linux/OS/网络、并发、测试、benchmark 和项目表达。竞赛能力证明较强的编码与推理基础，但不能据此默认已经掌握系统机制、工程边界或生产级设计，相关内容仍按实际代码和证据验收。C++“底层”按四层控制：项目正确使用必学；常见实现模型、复杂度和失效规则达到面试可解释；只挑StringLike/LRU等代表题手写；完整STL源码、特定ABI、生产allocator、lock-free/RCU与新提案按岗位或真实瓶颈后置。长期走AI Infra不取消C++底座，也不要求首份实习前把所有社招深题学到同一层。
 - 当前已知缺口：计算机硬件基础相对薄弱。讲到 CPU、instruction、register、CSR、MMU、cache、interrupt 等硬件概念时，不能默认已经学过计算机组成原理；应先补足支撑当天 OS 主线的最小硬件模型。
 - AI/ML前置校准（2026-10-20）：用户目前明确掌握的是T1～T9对应的NumPy/Tensor、线性回归、logistic/softmax多分类及已验收的求导与训练流程；尚未正式学习神经网络结构、隐藏层和非线性激活的作用。T10沿用T8线性多分类器管理状态，T11用T4标量链学习自动求导，T12才首次从XOR推导MLP/hidden/ReLU。不能因文件已经生成、看过相关视频标题或写过class，就把后续知识登记为已会。
 - 2026-10-12 用户明确补充：类与对象、继承、虚函数的基础概念尚未系统理解。已经独立写过复杂 class/component 不代表这条语言概念链完整；讲虚函数前须先接起类/对象/成员/this、构造/析构、继承与基类指针/引用，不把使用过的语法默认当作已学透。补缺不回退已通过的项目或重开完整 C++ 主线。
@@ -111,7 +111,7 @@ R1 正式通过后必须定向润色 Daily 的 R2/R3
 - 当前投递安排（2026-10-18最终澄清）：先按原规划完整学完Week16，再开始整理简历、向匹配中小厂小范围试投；目的是检验简历能否约面、体验真实面试并找到缺口，不是当月必须拿offer。11月保留为用户希望的时间窗口，实际先后以Week16完成为准。Mini Redis原Week13~16内容、范围、顺序和通过标准保持，不拆提前投递版本，不前移README/基线或允许以尚未完成的原定出口替代Week16。原12月/1月日期属于先前估算，不能拿日期覆盖用户最新的先后条件。
 - AI Infra 主攻：LLM inference systems / serving 与 CUDA/Triton kernel optimization；多 GPU/NCCL 为第二层。
 - 硬件条件（2026-10-21）：本地已有RTX 4060 Laptop GPU、约8 GiB显存，用户也愿意在确有需要时租卡。后续基础GPU实验优先本机；不能再将Ubuntu的CPU版PyTorch误写成用户没有GPU。环境可用性和租卡授权边界见§12及`ai_theory/ENVIRONMENT.md`，有资源不跳过能力前置。
-- 相邻入口：C++ Infra、高性能服务端、中间件、存储、HPC、模型部署岗位都可以作为第一段实习或就业岗位池，不把职位名称是否完全等于 AI Infra 当作唯一标准。
+- 相邻入口：第一段实习不做“C++或AI Infra”的二选一。主投C++后台/Linux/系统、存储、网络基础设施，并行投大模型平台后端、推理服务外围和AI云原生基础设施；核心推理引擎/CUDA/kernel优化作为少量冲刺与长期目标。判断岗位看实际编码、系统问题、性能定位和协作内容，不把职位名称是否完全等于AI Infra当作唯一标准。
 - 核心目标：不是只会调用 API，而是能解释资源所有权、边界、系统行为和设计取舍，并逐步完成可测试、可说明的工程项目。
 
 主线顺序保持为：
@@ -178,9 +178,9 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-10-28）：Week13 Day7整日以98/100正式通过，R1历史95/100保持。Week13整周正式完成，系统主线91个整日通过、92份Daily生成。Week14 Day1已生成，R1尚未开始；周规划不计入Daily数量。
+当前快照（2026-10-29）：Week13 Day7整日以98/100正式通过，R1历史95/100保持。Week13整周正式完成，系统主线91个整日通过、92份Daily生成。Week14 Day1已生成，R1尚未开始；周规划不计入Daily数量。
 
-T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T1～T11与Theory Gate 1已通过，理论下一步T12；T12～T19仍为未通过的提前稿，Theory Gate 2未通过。
+T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T1～T11与Theory Gate 1已通过，理论下一步T12；T12～T20仍为未通过的提前稿，Theory Gate 2未通过。
 
 T11学习者主线版继续作为后续AI Theory讲解质量的标杆。本次主要证据是用户本人笔记，并逐项复用T4的手算/finite difference能力与T11既有教材QA；没有新增“只看笔记就自动通过”的规则，也没有把教材QA冒充用户运行证据。
 
@@ -3601,7 +3601,7 @@ Week13 Day7整日已以98/100正式通过，R1历史95/100保持；V2新增关�
 
 教材准备以§4为唯一当前快照。按T8线性分类器 → T9 Tensor → T10 Module状态 → T11标量autograd → T12首次多层模型的依赖推进；不把提前稿或教材实测记为学习通过。
 
-T15～T19已按用户请求提前生成，路径按`ai_theory/Tn/Tn.md`组织；仅更新教材准备，当前理论下一步仍是T12。T15准备输入和读取规则，T16完成单头Q/K/V与内容汇总，T17扩多头并接前置LayerNorm表示更新block，T18再连接token/position embedding、1～2个block、final norm与LM head，停在最后真实位置的logits；T19把`[B,V]` logits接到greedy或temperature/top-k sampling，输出`[B]` next-token IDs。Top-p只在核心后建立直觉，完整生成循环、KV Cache和性能结论继续后置。相邻前课通过后或实际进入时按真实结果校准；T14若延期，进入T15仍按最近已完成的前置校准，不把可延期课重新变成硬前置。T17～T18保留既有进阶定位；T19是更后续材料，不加入Week16首批试投Gate，也不提前排Week17以后的实际课表。
+T15～T20已按用户请求提前生成，路径按`ai_theory/Tn/Tn.md`组织；仅更新教材准备，当前理论下一步仍是T12。T15准备输入和读取规则，T16完成单头Q/K/V与内容汇总，T17扩多头并接前置LayerNorm表示更新block，T18再连接token/position embedding、1～2个block、final norm与LM head，停在最后真实位置的logits；T19把`[B,V]` logits接到greedy或temperature/top-k sampling，输出`[B]` next-token IDs；T20用同一个TinyMLP对照训练与fresh inference对象，再补权重容量和INT8表示reference。Top-p只在T19核心后建立直觉，完整生成循环、KV Cache和性能结论继续后置。相邻前课通过后或实际进入时按真实结果校准；T14若延期，进入T15仍按最近已完成的前置校准，不把可延期课重新变成硬前置。T17～T20都是更后续材料，不加入Week16首批试投Gate，也不提前排Week17以后的实际课表。
 
 量化补强已登记为后续能力：T20从一个数讲刻度、取整/范围与恢复，保留原容量脚本；CPU浮点线性层正确后，在同一项目补INT8权重表示/反量化/输出误差与字节对照；真实低精度计算和部署再按匹配硬件/后端验证收益。详细要求唯一维护在`AI_Infra理论伴随线规划.md`的T20衔接段，总规划Gate B/C/D作阶段引用。数值参考可在CPU完成，恢复为浮点计算不声称INT8加速；用户独立负责性能问题、测量和最终结论，Codex可承担重复正确性测试与脚手架。这不改变当前Mini Redis、理论下一步T12、T1～T24编号或原Gate，不增加Week16首批试投门槛；Week16收口后才确定实际课次。
 
@@ -3622,7 +3622,7 @@ Milestone H / Week16：原定完整项目出口、文档与表达收口
 投递先后：先完整学完原Week16，再整理简历向匹配中小厂首批试投，检验面邀/面试缺口；11月是用户期望而非缩减项目的依据，后续按实际反馈持续投递
 ```
 
-执行不按自然周机械计时，而按 milestone exit evidence 推进。Reactor/HTTP 是 Mini Redis 的技术底座和副项目；BlockingQueue/ThreadPool/AsyncLogger 是内部组件证据，不强行各包装成一个简历项目。第一段实习岗位可以是 AI deployment/inference，也可以是高质量 C++ Infra、中间件、存储、网络或性能工程；目标是获得可迁移到 AI Infra 的真实系统经验。
+执行不按自然周机械计时，而按 milestone exit evidence 推进。Reactor/HTTP 是 Mini Redis 的技术底座和副项目；BlockingQueue/ThreadPool/AsyncLogger 是内部组件证据，不强行各包装成一个简历项目。第一段实习按三层岗位池准备：C++/Linux系统、存储、网络主投；AI平台后端、推理服务外围与AI云原生并行投；核心推理引擎/CUDA少量冲刺。目标是获得可迁移到AI Infra的真实系统经验，而不是追求职位标题先一步变成目标名称。C++面试题状态、Week15～16补缺与停止边界见`杂教程/C++与系统面试查漏地图.md`。
 
 **Week16后实际课表待原Week16收口再制定。** 届时先按§9.8重新核对匹配招聘、公开项目/简历与优质教学资源，再结合真实学习状态编排；当前只保留方向/Gate，进入Week14 Day1 R1与T12，不抢跑或改动既定Mini Redis安排。T16是与Week16协调的AI目标，未达时如实记账；不取消原理论Gate，也不把后置完整AI路线变成C++/后台首批试投的新资格。
 
@@ -9211,3 +9211,17 @@ T18只解决一条对象链：`token IDs -> token/position vectors -> causal Tra
 T19只走一条对象链：`[B,V] logits -> greedy或temperature/top-k probabilities -> [B] next token IDs`。R1先让固定七项logits分别经过argmax和完整categorical sampling；只有采样成立、调用者需要调节集中程度后才引入temperature。R2只增加top-k、batch逐行独立和EOS调用者边界。Top-p在核心完成后用两份具体概率解释动态候选数量，不进入实现或PASS；完整generation loop、KV Cache、beam search、训练、质量和性能结论继续后置。T19是T18后的更晚进阶材料，不加入T17～T18的Week16定位或首批C++/后台试投Gate。
 
 三遍审查分别完成。技术遍：T19共29个围栏块、13段Python，全部通过AST解析；2组display math成对，固定temperature与top-k数值由独立标准库计算复核，本地链接、引用式链接、控制字符与正文长行检查通过。Windows Python没有PyTorch，本轮没有新的SSH动态运行授权，因此不冒称完整教材已经执行；PyTorch 2.14的Softmax、`multinomial`、`topk`、`Generator`文档及nucleus sampling论文只用于核验API和算法边界。D2源文件已实际生成PNG并完成视觉检查，图中只保留本课两条选择路径。教学遍确认用途先于术语和接口，greedy、temperature、top-k、EOS分别从当前问题长出，表格只压缩已走过的具体例子，top-p与框架参数位于核心闭环之后，没有编辑历史或防御式旁支。全局遍同步理论规划、总规划、Week14、AIInfraGuide映射与当前Memory；旧T18日期记录保留历史原貌，T14可延期、Week16试投条件和Week17以后未冻结边界不变。用户现有T11正文、note、PDF、assets及Week14 Day1 note保持不改、不提交；本轮只提交T19及获准对齐文件，不push。
+
+## 2026-10-29：T20训练与推理对象账提前稿生成
+
+用户要求继续提前生成T20并严格对齐。新增`ai_theory/T20/T20.md`及可复现D2图；真实理论进度仍是T1～T11与Theory Gate 1通过、下一步T12，T12～T20均未通过，Theory Gate 2未通过。教材只沿同一个TinyMLP推进：R1让参数、选定激活、梯度和AdamW状态实际出现；R2用fresh model说明纯推理保留什么、没有什么；R3才从权重本体容量引出INT8刻度、取整、饱和、辅助信息和误差。`P × dtype bytes`明确只算权重数值本体，不能冒充训练内存、推理显存或进程峰值；本地4060显存准确称GDDR6，不泛称HBM。
+
+本次没有新的SSH运行授权，Windows环境也不具备本课PyTorch动态实测条件，因此只做语法、固定数值、结构、链接和图形核验，不冒称完整程序已运行。T20结束仍要求用户亲自写笔记；T21继续负责prefill/decode/KV Cache，不反塞进T20。用户已有T11正文修改、note/PDF/assets及Week14 Day1 note保持不改、不提交。
+
+## 2026-10-29：C++面试查漏分层，并明确第一段实习岗位梯度
+
+用户提供string/LRU与一批C++、STL、网络、OS面试题，并追问长期走AI Infra是否需要学到同样深度、第一段实习应选C++还是AI Infra。本轮没有把题目列表改造成第二条课程线，而是按“已有项目证据/已学第一层/定向补缺/当前后置”整理成`杂教程/C++与系统面试查漏地图.md`。`C++面试语法小册.md`新增string与LRU两章：string从对象与字符存储推出SSO/SBO、借用寿命和手写StringLike边界；LRU从Week3正确基线推出命中也是写、粗锁、分片语义、大value复制与`shared_ptr<const string>`。具体SSO阈值、容器布局和ABI均限定实现，不冒充标准保证。
+
+现行岗位策略细化为三层而非二选一：C++/Linux/系统、存储、网络为主投；大模型平台后端、推理服务外围、AI云原生基础设施并行投；核心推理引擎/CUDA/kernel优化少量冲刺并继续作为长期目标。当前公开岗位同时证明两条入口：平台后端/云原生AI Infra可从一门语言、Linux、OS/网络、容器与问题定位进入；核心推理岗位则常明确要求CUDA、GPU profiling、推理框架与cache/调度优化。官方岗位样本与日期边界保存于`reference_materials/ai_infra/2026-10-29_第一段实习与C++深度校准.md`。Week16完整收口后才开始首批试投的先后不变，Mini Redis范围不缩减；实际岗位按职责而非标题判断。
+
+本轮三遍审查分别完成。技术遍：T20的21段Python围栏全部通过AST，固定参数/梯度/INT8/GB-GiB数值由独立脚本复核；D2实际渲染PNG并目视检查；新增string/LRU C++片段在GCC 8.1、C++17、`-Wall -Wextra -Werror -fsyntax-only`下通过。教学遍：T20沿同一TinyMLP对象链推进，string从对象与字符存储需求推出SSO，LRU从单线程基线推出同步与大value取舍；扩展和停止边界位于主干之后，没有把题目列表写成必修清单。全局遍：Memory、总/理论/C++补缺/Week14规划、两份资料入口和两本小册统一为T12～T20提前稿、三层岗位池与Week15～16补缺边界；相对链接、围栏和`git diff --check`通过。用户T11正文/note/PDF/assets与Week14 Day1 note哈希保持修前值，不修改或提交；本轮没有SSH/PyTorch动态运行，不冒称T20完整程序已经执行。

@@ -15,7 +15,9 @@
 | sizeof 很小，为什么进程却用了很多内存？ | 第 7 章：对象布局与容器内存 | 区分对象与额外分配 |
 | shared_ptr、捕获和 atomic 能保证什么？ | 第 8 章：共享对象与并发边界 | 先理解所有权，再读同步 |
 | auto/decltype、模板、lambda、cast 是怎样用的？ | 第 9 章：泛型与表达式语法 | 独立小例子，按问题查阅 |
-| 面试题具体对应哪一章？ | 第 10 章：题型索引与范围 | 查漏，不作为背诵清单 |
+| string 为什么有时不分配？手写 string 要守住什么？ | 第 10 章：string 的对象与存储 | 连接 Week1/3 与 Week15 |
+| LRU 怎样处理并发和大 value？ | 第 11 章：从单线程 LRU 到工程取舍 | 先保留正确基线，再谈优化 |
+| 面试题具体对应哪一章？ | 第 12 章：题型索引与范围 | 查漏，不作为背诵清单 |
 
 示例使用 C++17。完整示例可以单独放到临时 `.cpp` 中运行：
 
@@ -1096,7 +1098,336 @@ int main() {
 
 ---
 
-## 10. 面试题型与章节对照：找到缺口，再回讲解
+## 10. `std::string`：对象、字符存储与短字符串优化是三层
+
+### 10.1 先回答“一个 string 对象里到底有什么”
+
+```cpp
+std::string value = "hello";
+```
+
+你得到的是一个 `std::string` 对象。这个对象负责管理一段字符序列，并提供 `size()`、`capacity()`、`data()` 等接口。
+
+第一层先分开：
+
+```text
+string object
+-> 记录当前长度、容量以及怎样找到字符
+
+character payload
+-> 真正的 'h' 'e' 'l' 'l' 'o' 和结尾空字符
+```
+
+标准规定的是接口与行为，不规定所有实现必须把对象内部做成同一种固定布局。因此不能背：
+
+```text
+std::string 永远是三个指针
+SSO 阈值永远是 15
+```
+
+这些数字取决于标准库实现、ABI、字符类型和构建条件。
+
+### 10.2 为什么短字符串可能不去堆上分配
+
+如果每个 `"OK"`、`"PONG"` 都单独申请一次堆内存，申请、释放和访问间接层会很不划算。许多标准库实现会在 string 对象内部留一小块空间，短内容直接放进去。
+
+这叫 SSO，Small String Optimization（短字符串优化）。
+
+```text
+短字符串
+string object 内部的小空间保存字符
+
+长字符串
+string object 指向另外申请的字符存储
+```
+
+SBO，Small Buffer Optimization（小缓冲优化），是更一般的说法：对象内部自带一小块存储，常见的小内容不必额外分配。SSO 是这种思路在 string 上的常见应用。
+
+**SSO 是常见实现策略，不是 C++ 标准要求的固定布局。** 面试时应先说目的和可观察行为，再把具体阈值限定为“当前标准库实现的结果”。
+
+可以在独立小程序观察，不把数字写进业务逻辑：
+
+```cpp
+#include <iostream>
+#include <string>
+
+int main() {
+    std::string short_text = "hello";
+    std::string long_text(200, 'x');
+
+    std::cout << "object bytes: " << sizeof(std::string) << '\n';
+    std::cout << short_text.size() << ' ' << short_text.capacity() << '\n';
+    std::cout << long_text.size() << ' ' << long_text.capacity() << '\n';
+}
+```
+
+这个程序能观察当前环境，不能证明其他平台也有相同阈值。
+
+### 10.3 `size`、`capacity` 与 `data` 分别回答什么
+
+```text
+size()
+当前有多少个字符
+
+capacity()
+不重新分配时，当前字符存储大约还能容纳多少字符
+
+data()
+当前字符序列起点的地址
+```
+
+`reserve(n)` 用于提前准备容量，不直接把字符串长度改成 `n`。追加使容量不够时，string 可能重新分配字符存储；旧的 pointer、reference 或 iterator 是否仍有效，要按相应操作的失效规则判断。
+
+这和你已经学过的 vector 扩容是同一个所有权问题：**容器对象仍是原来的对象，但它管理的元素存储可能已经搬家。**
+
+因此：
+
+```cpp
+const char* old = text.data();
+text += very_long_suffix;
+// 这里不能想当然继续使用 old
+```
+
+你的 Buffer/Connection 同样遵守“修改后重新取得借用地址”的保守规则。面试时不要只背“string 会扩容”，要能解释旧地址为什么可能失效。
+
+### 10.4 `string_view` 只借字符，不拥有字符
+
+`std::string_view` 保存一段字符范围的视图。它不负责让原字符继续存活。
+
+```cpp
+#include <string>
+#include <string_view>
+
+std::string_view bad_view() {
+    std::string local = "temporary";
+    return local;
+}
+```
+
+函数返回后，`local` 已结束，返回的 view 悬空。问题不是 `string_view` 性能差，而是它只借用存储。
+
+在 parser 中使用 view 前必须回答：
+
+```text
+底层 Buffer 由谁拥有？
+这段 view 用到什么时候？
+期间 Buffer 会不会 retrieve、append 或重新分配？
+```
+
+**能零拷贝不等于应该无条件零拷贝。** 生命周期不清楚时，独立 `std::string` 可能是更正确的边界。
+
+### 10.5 手写一个最小 string，面试真正要看什么
+
+手写 string 不是为了替换标准库。它用于检查你能否把一段动态字符存储管理正确。
+
+最小状态可以是：
+
+```cpp
+class StringLike {
+public:
+    StringLike();
+    explicit StringLike(const char* text);
+    StringLike(const StringLike& other);
+    StringLike& operator=(const StringLike& other);
+    StringLike(StringLike&& other) noexcept;
+    StringLike& operator=(StringLike&& other) noexcept;
+    ~StringLike();
+
+private:
+    char* data_;
+    std::size_t size_;
+    std::size_t capacity_;
+};
+```
+
+需要守住的 invariant（始终成立的内部条件）是：
+
+```text
+data_ 指向自己拥有的合法存储，或处于明确空状态
+size_ <= capacity_
+data_[size_] == '\0'
+拷贝后两个对象不共享可写字符存储
+移动后只有一个对象负责释放原存储
+赋值失败时原对象仍保持有效
+```
+
+你在 Week1～2 已经做过 `StringLike`、深拷贝、Rule of Five 和异常安全。Week15 的复盘不是重写一遍，而是把已有实现压成上述所有权解释。
+
+第一次手写先用单独堆存储即可。
+
+**不要为了展示 SSO，把首版同时变成 tagged union（带标签联合体）、allocator（分配器）和异常安全综合题。** 正确基线通过后，才把 SBO/SSO 当可选扩展。是否减少当前 workload（负载）的分配，要实际测量。
+
+查证：[basic_string](https://timsong-cpp.github.io/cppwp/n4659/basic.string)、[string capacity](https://timsong-cpp.github.io/cppwp/n4659/string.capacity)、[string_view](https://timsong-cpp.github.io/cppwp/n4659/string.view)。
+
+---
+
+## 11. LRU：先有正确的单线程结构，再讨论并发与大 value
+
+### 11.1 基线为什么是 `list + unordered_map`
+
+LRU Cache（最近最少使用缓存）要同时回答：
+
+```text
+怎样按 key 快速找到条目？
+怎样把刚访问的条目快速移到“最近使用”一端？
+怎样快速删除“最久未使用”的条目？
+```
+
+常见组合：
+
+```text
+unordered_map<key, list iterator>
+-> 平均快速定位
+
+list<entry>
+-> 维护最近使用顺序
+-> splice 可把现有节点移到队首
+-> 淘汰尾节点
+```
+
+你在 Week3 Day7 已经实现过单线程版本。面试第一步应先把这条数据流说清楚，而不是直接宣布“加分段锁”。
+
+### 11.2 为什么 `get` 也通常是写操作
+
+LRU 的 `get(key)` 不只读取 value。命中后还要把节点移到最近使用端：
+
+```text
+find key
+-> read value
+-> update 最近使用顺序
+```
+
+因此多个 `get` 也可能同时修改 list。
+
+给 map 上 shared lock（共享锁）、把 `get` 全当只读，并不能自动得到正确并发 LRU。
+
+最小正确并发版本通常先用一把 mutex 覆盖 map 与 list 的共同 invariant：
+
+```text
+map 里的 iterator 必须指向 list 中仍存在的对应节点
+list 中每个缓存条目与 map 索引一致
+容量与淘汰顺序在同一临界区更新
+```
+
+粗锁是否成为瓶颈，要测。**“一把锁看起来慢”不是跳过正确基线的理由。**
+
+### 11.3 为什么读写锁不一定帮得上忙
+
+`std::shared_mutex` 允许多个共享持有者或一个独占持有者。它适合真正只读操作占多数的状态。
+
+但标准 LRU 的命中会改 recency：
+
+```text
+get hit
+-> list splice
+-> 需要独占修改
+```
+
+所以“读多写少”不能只按 API 名字判断。要看操作是否改变内部状态。
+
+如果业务允许近似 LRU，例如命中时不总是立即更新顺序，才可能重新设计读路径。
+
+这已经改变了缓存语义。命中率、淘汰准确性和性能取舍都要单独说明。
+
+### 11.4 分片锁解决什么，又会改变什么
+
+可以按 key hash 把缓存分成多个 shard（分片）：
+
+```text
+hash(key) % shard_count
+-> 每个 shard 有自己的 map、list、mutex 和容量
+```
+
+不同分片可以并发操作，锁竞争可能下降。但它不再天然维护一条全局精确 LRU 顺序：
+
+```text
+某个分片已满并淘汰
+另一个分片仍有空位
+全局最旧条目可能位于另一个分片
+```
+
+因此分片不是“把一把锁改成多把锁”这么简单。它同时改变容量分配和淘汰语义。
+
+是否值得做，要用固定 key 分布、命中率、线程数、value 大小和吞吐/尾延迟来比较。
+
+### 11.5 value 很大时，真正昂贵的可能是复制
+
+若 cache 中保存大 `std::string`，下面的接口每次命中都复制 payload：
+
+```cpp
+std::optional<std::string> get(const std::string& key);
+```
+
+一种替代是返回共享所有权：
+
+```cpp
+std::shared_ptr<const std::string> get(const std::string& key);
+```
+
+它的含义是：调用者与 cache 共同让该 value 存活，并且调用者只能通过这个指针读取字符。
+
+与 `std::shared_ptr<std::string>` 相比，`shared_ptr<const string>` 还表达一项约定：调用者共享读取，不能通过这个指针修改缓存内容。
+
+但它没有自动解决全部并发问题：
+
+```text
+shared_ptr 控制块
+-> 管生命周期计数
+
+LRU map/list
+-> 仍需同步
+
+string 内容
+-> const 访问避免通过该指针修改，但其他可写别名仍需由设计禁止或同步
+```
+
+共享指针也有代价：控制块、引用计数更新、可能的额外分配，以及调用者长期持有导致 value 延迟释放。
+
+`make_shared` 常可把对象与控制块放进一次分配。具体内存布局仍不是业务代码应依赖的契约。
+
+所以大 value 的候选方案应比较：
+
+```text
+直接复制 string
+返回 shared_ptr<const string>
+调用者提供输出 buffer
+返回受生命周期约束的 view
+```
+
+最后一种借用方案最容易因淘汰或 rehash 后悬空，不能只因“零拷贝”就优先。
+
+### 11.6 面试手撕与工程优化要分开
+
+面试手撕 LRU 的最低闭环：
+
+```text
+get/put 正确
+覆盖已有 key 不重复计数
+命中更新顺序
+满容量淘汰正确 key
+capacity = 0 有明确行为
+map/list 始终一致
+```
+
+多线程版本再额外说明同步边界。
+
+分片、内存池、`shared_ptr<const string>` 都是候选优化。不应在没有 workload 前同时塞进第一版。
+
+这与 Mini Redis 的性能规则一致：
+
+```text
+先有 correctness tests
+-> 固定 workload 和 baseline
+-> profile 找瓶颈
+-> 一次只改一个变量
+-> 复测 latency / throughput / memory
+```
+
+查证：[list splice](https://timsong-cpp.github.io/cppwp/n4659/list.ops)、[unordered requirements](https://timsong-cpp.github.io/cppwp/n4659/unord.req)、[shared_ptr](https://timsong-cpp.github.io/cppwp/n4659/util.smartptr.shared)、[shared mutex](https://timsong-cpp.github.io/cppwp/n4659/thread.sharedmutex.requirements)。
+
+---
+
+## 12. 面试题型与章节对照：找到缺口，再回讲解
 
 本次对照本地 [200 篇主题汇总](../nowcoder_cpp_infra_aiinfra_200_recent.md)、[500 篇原问题汇总](../nowcoder_cpp_infra_aiinfra_500_recent3y_with_questions.md)，并参考已查证的腾讯后台/客户端实习题型。**这里覆盖常见语言基础主题，不声称包含 7216 条问题的全部答案。** 网络、数据库、性能问题仍由相应主线课程负责。
 
@@ -1115,11 +1446,17 @@ int main() {
 | auto/decltype/constexpr、模板能否 virtual？ | 第 9 章 | 类型推导、实例化、具体虚函数与成员模板 |
 | lambda/函数指针/std::function 怎样联系？ | 第 9 章 + 函数指针专题 | 可调用对象、捕获状态与统一调用接口 |
 | 四种 cast、nullptr、extern C 各解决什么？ | 第 9 章 | 转换条件、实际对象与语言边界 |
+| string 的 size/capacity、SSO/SBO 与手写 string 在考什么？ | 第 10 章 | 对象与字符存储、借用寿命、Rule of Five |
+| LRU 为什么用 list+unordered_map？并发和大 value 怎样处理？ | 第 11 章 | 共同 invariant、锁语义、复制与共享所有权取舍 |
 
 CRTP（静态多态惯用法）、SFINAE（模板替换失败不报错的机制）、复杂模板元编程、多继承虚表布局、C++26 提案、完整 lock-free（无锁）/RCU（读复制更新）仍是后置专题。不会因为某份量化/社招面经出现，就把它们都加成当前必学内容。
 
 ### 与主线保持怎样的关系
 
-详细时间安排仍见 [C++ 项目伴随补缺规划](../C++项目伴随补缺规划.md)：Week13 Day7 补类/继承/虚函数这条基础链，Week14 随 AOF 补编译链接与资源语法，Week15 随内存/性能补实际代价。**独立成册改变的是查阅与讲解顺序，不取消这些项目阶段的位置。**
+详细时间安排仍见 [C++ 项目伴随补缺规划](../C++项目伴随补缺规划.md)与[C++与系统面试查漏地图](C++与系统面试查漏地图.md)。
+
+Week13 Day7 已补类、继承和虚函数基础链。Week14 随 AOF 补编译链接与资源语法。Week15 随内存和性能补 string、STL 与实际代价。
+
+**独立成册改变的是查阅与讲解顺序，不取消这些项目阶段的位置。**
 
 这本册子先用完整小例子讲语言机制，再在必要处联系已有项目；daily 到对应时间点仍按你的实际实现定向讲解。读完一章不自动登记主线通过，也不要求额外写一套与 daily 重复的笔记。
