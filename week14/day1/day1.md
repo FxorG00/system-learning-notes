@@ -1,6 +1,6 @@
 # Week14 Day1：把状态变化变成可重放的 RESP 记录
 
-> 版本：2026-10-27，首次生成；R1 尚未开始
+> 版本：2026-10-29，R1 已以 98/100 正式通过；下一步进入 R2
 > 前置：Week13 整周已通过，Mini Redis V2 已有 RESP parser、dispatcher、KvStore 与 TTL
 > 今日产出：不打开文件、不接服务器；只把已经确认的状态变化编码成独立、按字节保存的 RESP 记录
 > 学习方式：R1 独立实现记录编码；R2 再区分“命令成功”和“状态真的改变”；R3 再统一相对期限与内部记录
@@ -525,7 +525,20 @@ R1 的 PASS 条件：
 
 ## 14. Round2：命令执行成功，不等于状态一定改变
 
-R1 通过后，再回到当前 `command_dispatcher.cpp`。
+R1 已经把一件事情做完整了：上层给出已经选定的命令和参数，encoder 就返回一条自己拥有的 RESP record。
+
+你的实际实现沿着同一条路径工作：
+
+```text
+SET / DEL / PEXPIREAT 的参数
+-> 组成本次调用的局部 vector<string>
+-> .cpp 内部 helper 编码 Array of Bulk Strings
+-> 返回独立 std::string
+```
+
+helper 已放进 `aof_record.cpp` 的匿名命名空间。public header 只保留三个业务入口。这个边界说明 R1 只负责“怎样编码”，没有决定“本次命令是否值得记录”。
+
+现在回到当前 `command_dispatcher.cpp`。
 
 你现在的 `execute_command()` 只返回已经编码的 reply bytes：
 
@@ -551,7 +564,23 @@ std::string execute_command(
 
 Round2 的唯一问题是：**怎样让 application owner 得到“reply + 可选状态变化”，而不是从 wire reply 倒推？**
 
-等你的 R1 真实实现通过后，再根据最新 source 决定最小结果类型。此处不预先强制 command hierarchy、callback 或通用事件总线。
+你当前的 handler 在修改 store 后只返回 reply，因此信息会在这里丢失：
+
+```text
+set_handler
+-> store.set(...)
+-> 只返回 +OK
+
+del_handler
+-> 算出 del_count
+-> 只返回整数 reply
+
+expire_handler
+-> 得到是否成功修改期限
+-> 只返回整数 reply
+```
+
+R2 只要求补回这一份丢失的信息：caller 仍能取得 reply，同时能知道是否存在一条待持久化的状态变化。具体使用小结果类型、callback 还是其他最小方案，由你根据当前代码设计；本课不预先强制 command hierarchy 或通用事件总线。
 
 ## 15. Round3：客户端命令与日志命令不是同一份文字
 
@@ -576,6 +605,12 @@ Round3 再补：
 - 超过现有 parser 限制的内部记录不能被生成；
 - encoder 失败时不留下半条 record；
 - 失败不能修改 store，也不能伪造成功 reply。
+
+你当前的 `encode_aof_pexpireat()` 已经正确限定为“输入绝对毫秒，输出记录”。
+
+它不读取 clock，也不负责把 `EXPIRE code 120` 换算成日历时刻。R3 先保证相对客户端命令不会被原样塞进日志。
+
+真正的 wall clock 与 monotonic clock 换算仍留在 Day4。
 
 Day1 仍然不解决：
 
@@ -619,7 +654,7 @@ cmake -E chdir build ctest --output-on-failure
 
 ## 18. 今天的停止边界
 
-看到下面这条链闭合，就停在 R1：
+R1 已经闭合下面这条链：
 
 ```text
 已确认的状态变化
@@ -638,4 +673,4 @@ cmake -E chdir build ctest --output-on-failure
 - TTL 能跨停机保持原到期时刻；
 - 真实 Redis 的 AOF 行为已经被复刻。
 
-这些边界写清楚，Day1 就完成了自己的职责，也给 Day2 留下了一条完整、可追加的 record。
+接下来进入 R2：让当前 handler 在生成 reply 的同时，把“是否发生了可持久化状态变化”交给 application owner。文件追加仍然留给 Day2。

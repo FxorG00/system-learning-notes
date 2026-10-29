@@ -178,7 +178,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-10-29）：Week13 Day7整日以98/100正式通过，R1历史95/100保持。Week13整周正式完成，系统主线91个整日通过、92份Daily生成。Week14 Day1已生成，R1尚未开始；周规划不计入Daily数量。
+当前快照（2026-10-29）：Week13 Day7整日以98/100正式通过，R1历史95/100保持。Week13整周正式完成，系统主线91个整日通过、92份Daily生成。Week14 Day1 R1已以98/100正式通过，下一步R2；Day1整日尚未完成，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T1～T11与Theory Gate 1已通过，理论下一步T12；T12～T20仍为未通过的提前稿，Theory Gate 2未通过。
 
@@ -3595,7 +3595,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13 Day7整日已以98/100正式通过，R1历史95/100保持；V2新增关系和虚函数基础补缺均已收口，Week13整周完成。当前91个整日通过/92份Daily已生成；Week14 Day1已生成，下一步进入Day1 R1。Day2～Day5既有实现与测试证据继续复用，不重做。理论T11整课已通过98/100，T10整课与R1历史99/100保持，下一步T12；Theory Gate 2未通过，完整证据见§4。
+Week13 Day7整日已以98/100正式通过，R1历史95/100保持；V2新增关系和虚函数基础补缺均已收口，Week13整周完成。当前91个整日通过/92份Daily已生成；Week14 Day1 R1已以98/100正式通过，下一步进入Day1 R2。Day2～Day5既有实现与测试证据继续复用，不重做。理论T11整课已通过98/100，T10整课与R1历史99/100保持，下一步T12；Theory Gate 2未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -9225,3 +9225,13 @@ T19只走一条对象链：`[B,V] logits -> greedy或temperature/top-k probabili
 现行岗位策略细化为三层而非二选一：C++/Linux/系统、存储、网络为主投；大模型平台后端、推理服务外围、AI云原生基础设施并行投；核心推理引擎/CUDA/kernel优化少量冲刺并继续作为长期目标。当前公开岗位同时证明两条入口：平台后端/云原生AI Infra可从一门语言、Linux、OS/网络、容器与问题定位进入；核心推理岗位则常明确要求CUDA、GPU profiling、推理框架与cache/调度优化。官方岗位样本与日期边界保存于`reference_materials/ai_infra/2026-10-29_第一段实习与C++深度校准.md`。Week16完整收口后才开始首批试投的先后不变，Mini Redis范围不缩减；实际岗位按职责而非标题判断。
 
 本轮三遍审查分别完成。技术遍：T20的21段Python围栏全部通过AST，固定参数/梯度/INT8/GB-GiB数值由独立脚本复核；D2实际渲染PNG并目视检查；新增string/LRU C++片段在GCC 8.1、C++17、`-Wall -Wextra -Werror -fsyntax-only`下通过。教学遍：T20沿同一TinyMLP对象链推进，string从对象与字符存储需求推出SSO，LRU从单线程基线推出同步与大value取舍；扩展和停止边界位于主干之后，没有把题目列表写成必修清单。全局遍：Memory、总/理论/C++补缺/Week14规划、两份资料入口和两本小册统一为T12～T20提前稿、三层岗位池与Week15～16补缺边界；相对链接、围栏和`git diff --check`通过。用户T11正文/note/PDF/assets与Week14 Day1 note哈希保持修前值，不修改或提交；本轮没有SSH/PyTorch动态运行，不冒称T20完整程序已经执行。
+
+## 2026-10-29：Week14 Day1 R1正式通过98/100
+
+用户独立实现`encode_aof_set/del/pexpireat`与内部Array-of-Bulk-Strings helper；Codex按授权只补`tests/aof_record_test.cpp`三条机械correctness测试，没有修改production、header、CMake或用户note。SET exact bytes与parser round-trip、DEL顺序和重复项、PEXPIREAT绝对毫秒文本均通过。额外私有合法路径覆盖空key/value、二进制DEL参数、局部输入销毁后的owning record及0/INT64_MAX期限，全部通过。
+
+首次review发现helper被放进public header；用户随后将其移入`.cpp`匿名命名空间。第一次收回声明时定义仍位于调用之后，fresh编译准确暴露“not declared in this scope”；用户自行调整定义顺序后，独立`/tmp` Debug fresh build在GCC 10.5、C++17、`-Werror`下零warning，完整CTest 127/127通过。最终header/source/test/CMake SHA256分别为`e2cd65ef6f951ff7efd7dedf34bdc00fb07882d7bbe95559d6d17766e28d2649`、`c70edb0d0068f9307ff3809e9de28d880ec614480e00baf993bd8acba97b5c09`、`b40e1b8d140934a70b0aef1f67c04573f6fa6a2c45b08f3fdc348db21c0f17f9`、`c653845b52372524dbb0dad017921ca2c3962ca390a78234a4d108c511368d52`；临时build已清理。
+
+用户口述正确掌握写操作与只读命令的持久化区别、二进制长度边界和相对TTL跨停机失真；两个精度点各扣1分：`SET k same`仍需总是记录的关键特例是成功SET会清除旧TTL，不能仅用“它是写操作”证明实际状态必然变化；exact-byte证明完整wire编码，parser round-trip还独立证明Complete、原arguments与精确consumed boundary。最终98/100，R1正式通过；机械测试由Codex编写不扣分，因为用户已经能解释核心oracle。本人`day1_note.md`保持只读，SHA256仍为`6C65747FF5AC61CFFE861630E90B842CAAFBBED80BFE28A521AF4AE785E395DD`。
+
+R1通过后按现行授权定向润色Day1 R2/R3：先复盘真实`arguments -> local vector -> internal helper -> owning string`链，再从当前handler只返回reply导致状态变化信息丢失的问题进入“reply + optional mutation”设计；不预先强制hierarchy/callback。R3明确现有PEXPIREAT encoder只接受已算好的绝对时刻，Day1禁止把相对EXPIRE原样写日志，wall/monotonic转换仍归Day4。当前仍91个整日通过/92份Daily生成，Day1整日未通过，下一步R2；理论下一步T12不变。
