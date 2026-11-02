@@ -1,7 +1,7 @@
 # AI Infra 理论伴随线规划
 
-> 对齐日期：2026-10-29。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)及[C++与系统面试查漏地图](杂教程/C++与系统面试查漏地图.md)。
-> 当前状态：T1～T11及Theory Gate 1已通过；T11整课98/100，T10整课与R1均为99/100，下一步T12。T12～T20是未通过的提前稿，Theory Gate 2未通过。T11学习者主线版继续作为后续AI Theory讲解标杆。
+> 对齐日期：2026-11-02。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)及[C++与系统面试查漏地图](杂教程/C++与系统面试查漏地图.md)。
+> 当前状态：T1～T11及Theory Gate 1已通过；T11整课98/100，T10整课与R1均为99/100，下一步T12。T12～T21是未通过的提前稿，Theory Gate 2未通过。T11学习者主线版继续作为后续AI Theory讲解标杆。
 > Git留痕与发布权限统一按`MEMORY.md` §9.12：正式仓库文件有变化就本地commit；push需另行明确授权。
 > 系统主线：Week13 Day1～Day7整日均已通过；91个整日通过、92份Daily已生成。Day7整日于2026-10-26以98/100通过，R1历史95/100；Week13整周正式完成，[Week14 Day1](week14/day1/day1.md) R1已以98/100通过，下一步R2。
 > 目标：LLM inference systems / serving与CUDA/Triton kernel optimization；本线不替代系统项目。
@@ -1799,6 +1799,8 @@ model_memory_estimate.py
 
 ## T21：prefill、decode 与 KV Cache
 
+**教材状态（2026-11-02）：[T21提前稿](ai_theory/T21/T21.md)已生成，尚未学习或通过。** 它只沿一条固定序列推进：先用完整prefix建立参照，再让prefill留下连续K/V、让单步decode只追加新K/V，最后才把同一份cache放进block table模拟。它不前移当前T12，也不把CPU reference冒充serving性能证据。
+
 ### 本周问题
 
 ```text
@@ -1808,19 +1810,26 @@ model_memory_estimate.py
 ### 学习内容
 
 ```text
-prefill
-decode
-autoregressive generation
-past keys / values
-KV Cache shape
-sequence length growth
-memory cost
-compute-memory trade-off
-block / page based KV layout
-block table 与 logical token position
-prefix reuse / prefix cache
-reference count、eviction 与 free-block lifecycle 第一层
-prefill/decode 间 KV transfer contract 第一层
+R1：固定prompt与后续hidden rows
+    -> full-prefix recompute最后一行作为oracle
+    -> prefill保存prompt K/V
+    -> decode只计算新q/k/v并追加cache
+    -> 两条路径逐步数值对齐
+
+R2：沿同一cache观察sequence length增长
+    -> 区分省掉的历史投影与仍需读取的历史K/V
+    -> 推导layer/batch/KV-head/sequence/head-dim容量公式
+    -> 明确compute-memory trade-off与payload边界
+
+R3：连续cache已经正确
+    -> logical token position
+    -> block table
+    -> scattered physical KV blocks
+    -> gather结果与连续cache完全相等
+
+核心完成后：
+prefix reuse为什么还需要block identity、reference count与eviction contract
+prefill/decode分开执行时，状态交接至少包含哪些identity/shape/layout/lifetime信息
 ```
 
 ### 代码产出
@@ -1842,13 +1851,13 @@ kv_cache_reference.py
 两条基准课程没有 KV Cache / prefill / decode 的直接对应章节，本周无强制视频。
 ```
 
-T21 必须由教程、shape 推导和 `kv_cache_reference.py` 建立机制，不能用普通 Transformer forward 视频冒充 KV Cache 教学。连续 Tensor reference 先证明数值正确，再用 block table simulation 理解 production system 为什么把 KV cache 分块；不在本阶段照抄 vLLM/SGLang allocator。
+T21 必须由教程、shape 推导和 `kv_cache_reference.py` 建立机制，不能用普通 Transformer forward 视频冒充 KV Cache 教学。连续 Tensor reference 先证明数值正确，再用 block table simulation 理解 production system 为什么把 KV cache 分块。prefix reuse、引用数、淘汰和跨worker transfer只解释第一层contract，不在本阶段照抄vLLM/SGLang allocator或网络路径。
 
 只比较 correctness 和 operation shape；性能 benchmark 后续再严谨设计。
 
 ### 通过标准
 
-能画出 prefill 与单步 decode 的不同数据流，估算 KV Cache 随 batch/sequence/layers/heads/head_dim 的增长关系，并解释 prefix reuse 为什么依赖 block identity、lifetime 与 eviction contract。
+能沿固定position说明prefill保存了哪些K/V、decode本步新算什么，并用full recompute oracle证明cache路径正确；能估算KV Cache随layer/batch/KV-head/sequence/head-dim的增长，完成logical position到physical block的寻址模拟，并解释prefix reuse为什么依赖block identity、lifetime与eviction contract。
 
 ---
 

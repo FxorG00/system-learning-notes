@@ -1,0 +1,57 @@
+direction: down
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+    theme-id: 0
+    pad: 24
+  }
+}
+
+prompt: "prompt hidden rows\npositions 0, 1, 2" {
+  style.fill: "#E8F1FF"
+  style.stroke: "#3973C8"
+}
+
+prefill: "prefill\nproject all prompt rows" {
+  style.fill: "#E8F1FF"
+  style.stroke: "#3973C8"
+}
+
+cache_before: "KV Cache after prefill\nK: [3, D]   V: [3, D]" {
+  style.fill: "#EAF8EE"
+  style.stroke: "#2D8A4E"
+}
+
+new_token: "new hidden row\nposition 3" {
+  style.fill: "#FFF4DD"
+  style.stroke: "#C57A16"
+}
+
+project_new: "decode projection\nq3, k3, v3 only" {
+  style.fill: "#FFF4DD"
+  style.stroke: "#C57A16"
+}
+
+cache_after: "append k3 / v3\nK: [4, D]   V: [4, D]" {
+  style.fill: "#EAF8EE"
+  style.stroke: "#2D8A4E"
+}
+
+attention: "q3 attends to\nK[0..3] and V[0..3]" {
+  style.fill: "#F2ECFF"
+  style.stroke: "#7651B5"
+}
+
+output: "current output\nshape [D]" {
+  style.fill: "#F2ECFF"
+  style.stroke: "#7651B5"
+}
+
+prompt -> prefill -> cache_before
+new_token -> project_new
+cache_before -> cache_after: "keep history"
+project_new -> cache_after: "append k3 / v3"
+project_new -> attention: "q3"
+cache_after -> attention: "all K/V"
+attention -> output

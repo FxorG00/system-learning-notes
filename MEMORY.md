@@ -178,9 +178,9 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-10-29）：Week13 Day7整日以98/100正式通过，R1历史95/100保持。Week13整周正式完成，系统主线91个整日通过、92份Daily生成。Week14 Day1 R1已以98/100正式通过，下一步R2；Day1整日尚未完成，周规划不计入Daily数量。
+当前快照（2026-11-02）：Week13 Day7整日以98/100正式通过，R1历史95/100保持。Week13整周正式完成，系统主线91个整日通过、92份Daily生成。Week14 Day1 R1已以98/100正式通过，下一步R2；Day1整日尚未完成，周规划不计入Daily数量。
 
-T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T1～T11与Theory Gate 1已通过，理论下一步T12；T12～T20仍为未通过的提前稿，Theory Gate 2未通过。
+T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T1～T11与Theory Gate 1已通过，理论下一步T12；T12～T21仍为未通过的提前稿，Theory Gate 2未通过。
 
 T11学习者主线版继续作为后续AI Theory讲解质量的标杆。本次主要证据是用户本人笔记，并逐项复用T4的手算/finite difference能力与T11既有教材QA；没有新增“只看笔记就自动通过”的规则，也没有把教材QA冒充用户运行证据。
 
@@ -9235,3 +9235,13 @@ T19只走一条对象链：`[B,V] logits -> greedy或temperature/top-k probabili
 用户口述正确掌握写操作与只读命令的持久化区别、二进制长度边界和相对TTL跨停机失真；两个精度点各扣1分：`SET k same`仍需总是记录的关键特例是成功SET会清除旧TTL，不能仅用“它是写操作”证明实际状态必然变化；exact-byte证明完整wire编码，parser round-trip还独立证明Complete、原arguments与精确consumed boundary。最终98/100，R1正式通过；机械测试由Codex编写不扣分，因为用户已经能解释核心oracle。本人`day1_note.md`保持只读，SHA256仍为`6C65747FF5AC61CFFE861630E90B842CAAFBBED80BFE28A521AF4AE785E395DD`。
 
 R1通过后按现行授权定向润色Day1 R2/R3：先复盘真实`arguments -> local vector -> internal helper -> owning string`链，再从当前handler只返回reply导致状态变化信息丢失的问题进入“reply + optional mutation”设计；不预先强制hierarchy/callback。R3明确现有PEXPIREAT encoder只接受已算好的绝对时刻，Day1禁止把相对EXPIRE原样写日志，wall/monotonic转换仍归Day4。当前仍91个整日通过/92份Daily生成，Day1整日未通过，下一步R2；理论下一步T12不变。
+
+## 2026-11-02：T21 prefill、decode与KV Cache提前稿生成
+
+用户要求按现行Memory、真实进度、规划与总规划提前生成T21，并严格对齐全部相关文件。本轮新增`ai_theory/T21/T21.md`、两份可复现D2源文件及其实际渲染PNG。教材存在不表示已经开始学习或通过：真实理论状态仍为T1～T11与Theory Gate 1通过，下一步是T12；T12～T21均为未通过提前稿，Theory Gate 2仍未通过。
+
+T21只沿一条状态链推进：同一条序列先做prefill并保存历史K/V，随后每次decode只投影新位置并读取历史缓存。R1用固定五行hidden state对齐“完整前缀重算最后一行”和“缓存后只算新行”，并验证cache每步只增长一行；R2在同一对象链上数投影行数，再用`2 × L × B × H_kv × S × D_head × bytes_per_value`计算容量，明确该公式只数K/V数值本体；R3才把连续逻辑位置映射到固定大小的物理block，用block table恢复顺序。prefix reuse、引用计数、释放边界和prefill/decode状态交接只在核心正确性闭环后增加第一层系统连接；采样仍归T19，调度归T22，benchmark与性能结论归T23，allocator/hash/free queue/network均不进入本课实现。
+
+三遍审查分别独立完成。技术遍：11段Python代码通过AST解析，2 GiB容量样例与物理slot序列`[4,5,0,1,6]`由独立脚本复核；76个代码围栏和4个display-math定界符成对，本地链接、正文长行与控制字符检查通过；两张D2图均从源码重新渲染并完成视觉检查。Windows当前Python没有PyTorch，本轮也没有新的SSH运行授权，因此不冒称完整教材已经动态执行。教学遍：先用prompt已经处理完、下一个token仍需读取历史这一具体问题产生KV Cache，再命名prefill/decode；每个首次英文术语带中文说明，表格只压缩已经走过的对象，扩展不打断K/V主链。全局遍：同步理论规划、总规划、Week14定位、AIInfraGuide阅读映射、资料入口和当前Memory；`DAILY_INDEX.md`与C++补缺规划没有因提前稿产生新进度，保持不改。
+
+本轮共涉及5个新文件和6个既有对齐文件。用户现有T11正文、note、PDF、assets、Week14 Day1 note及其他代码均保持不改、不提交，并以修前SHA256复核。收尾只提交T21及获准对齐文件到本地Git，不push。

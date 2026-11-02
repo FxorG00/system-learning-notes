@@ -70,7 +70,7 @@
 | `deeplearning_framework/mini_dl_framework.ipynb` | 小型计算图与MLP training flow | T12正式理解MLP后按需对照；不把完整MLP实现前置到T7/T10/T11，也不重复自己的训练程序 |
 | `models/modules/rope_principle.ipynb` | RoPE 的 shape、position 与旋转机制 | T17~T18，进入 Transformer block 后按需使用；T15只准备编号、嵌入与读取规则，不以本notebook作前置 |
 | `llm_infer/LLM_sampling.ipynb` | temperature、top-k、top-p 等 sampling 行为 | T19；T5/T6 只建立概率与 stable softmax 基础 |
-| `llm_infer/nano_vllm.ipynb` | Sequence、block table、KV block 与简化 serving flow | T21~T23；先完成 attention/decoder/KV 基础 |
+| `llm_infer/nano_vllm.ipynb` | Sequence、block table、KV block 与简化 serving flow | 先完成[本地T21](../../ai_theory/T21/T21.md)的连续KV reference与block table模拟；T21~T23核心完成后再对照，不提前抄serving实现 |
 | `llm_infer/vllm_mem_snapshot.ipynb` | vLLM memory snapshot 的最小观察 | T20~T21，配合内存估算与实测 |
 | `llm_infer/vllm_basic_scheduler.ipynb` | waiting/running sequence 与 batch scheduling | T22；先写自己的 batching simulation，再对照 |
 | `llm_infer/quantization.ipynb` | 量化实验的第二解释与对照线索 | CPU浮点reference正确后的补强或正式推理优化阶段；T20只补概念与容量，不以完整notebook作前置 |

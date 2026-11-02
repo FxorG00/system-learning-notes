@@ -1,0 +1,51 @@
+direction: down
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+    theme-id: 0
+    pad: 24
+  }
+}
+
+logical: "logical token positions" {
+  grid-rows: 1
+  p0: "0"
+  p1: "1"
+  p2: "2"
+  p3: "3"
+  p4: "4"
+  style.fill: "#E8F1FF"
+  style.stroke: "#3973C8"
+}
+
+table: "block table\nlogical blocks [0, 1, 2]\n→ physical IDs [2, 0, 3]" {
+  style.fill: "#FFF4DD"
+  style.stroke: "#C57A16"
+}
+
+physical: "physical KV block pool" {
+  direction: right
+
+  b0: "block 0\npositions 2, 3" {
+    style.fill: "#EAF8EE"
+    style.stroke: "#2D8A4E"
+  }
+  b1: "block 1\nfree / unrelated" {
+    style.fill: "#F3F3F3"
+    style.stroke: "#8A8A8A"
+  }
+  b2: "block 2\npositions 0, 1" {
+    style.fill: "#EAF8EE"
+    style.stroke: "#2D8A4E"
+  }
+  b3: "block 3\nposition 4, unused" {
+    style.fill: "#EAF8EE"
+    style.stroke: "#2D8A4E"
+  }
+}
+
+logical -> table: "p // 2, p % 2"
+table -> physical.b2: "logical block 0"
+table -> physical.b0: "logical block 1"
+table -> physical.b3: "logical block 2"
