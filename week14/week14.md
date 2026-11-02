@@ -1,6 +1,6 @@
 # Week14：Mini Redis V3，让进程重启后重新长回原来的状态
 
-> 对齐日期：2026-10-29；Day1 R1 已以 98/100 正式通过，下一步进入 Day1 R2。
+> 对齐日期：2026-11-02；Day1 R1 已以 98/100 正式通过，下一步进入 Day1 R2。
 > 系统起点：Week13 已正式完成，当前 91 个整日通过、92 份 Daily 已生成。
 > 理论起点：T1～T11 与 Theory Gate 1 已通过，T11 整课 98/100，下一步 T12；理论线不阻塞本周工程。
 > Git：本周正式文件修改按 `MEMORY.md` §9.12 留下本地 commit；push 仍需单独授权。
@@ -319,12 +319,13 @@ private representation 由你决定，不先给完整实现。
 
 ### R2/R3 怎样跟进
 
-R2 用 dispatcher 的真实结果决定是否记日志：成功 SET 总是建立 value 与无 TTL 状态；
-DEL/EXPIRE 只有真正生效时才留下记录。
+R2 让 application owner 同时取得 reply 与可选持久化事实：成功 SET 总是建立 value 与无 TTL 状态；
+DEL/EXPIRE 只有真正生效时才留下对应事实，不能从 wire reply 倒推。
 
 R3 再把“客户端怎样写”与“日志怎样统一保存”分开：客户端的
 `EXPIRE code 120` 会变成内部的 `PEXPIREAT code <绝对时刻>`。
-这个收敛动作叫 command normalization（命令规范化）。随后补非法内部记录的失败边界。
+成功的非正 EXPIRE 统一记为 DEL。随后分别用空 DEL、负绝对时刻、整帧超限、无半条返回值和 store/reply 不提前提交的小场景收紧失败边界。
+这些检查先于状态修改；双时钟换算仍留 Day4。
 本日不打开文件、不接网络、不讨论重写。
 
 ---

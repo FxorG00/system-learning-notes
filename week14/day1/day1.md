@@ -1,9 +1,9 @@
 # Week14 Day1：把状态变化变成可重放的 RESP 记录
 
-> 版本：2026-10-29，R1 已以 98/100 正式通过；下一步进入 R2
+> 版本：2026-11-02，R1 已以 98/100 正式通过；下一步进入 R2
 > 前置：Week13 整周已通过，Mini Redis V2 已有 RESP parser、dispatcher、KvStore 与 TTL
 > 今日产出：不打开文件、不接服务器；只把已经确认的状态变化编码成独立、按字节保存的 RESP 记录
-> 学习方式：R1 独立实现记录编码；R2 再区分“命令成功”和“状态真的改变”；R3 再统一相对期限与内部记录
+> 学习方式：R1 独立实现记录编码；R2 让 reply 与可持久化事实一起返回；R3 再统一相对期限与失败边界
 
 [TOC]
 
@@ -523,7 +523,11 @@ R1 的 PASS 条件：
 
 ---
 
-## 14. Round2：命令执行成功，不等于状态一定改变
+## 14. Round2：上层需要同时拿到 reply 和持久化事实
+
+R1 只处理合法输入：上层已经选定一种状态变化，encoder 负责把它编码正确。这个结论已经通过，不重做。
+
+现在开始接回 handler，才会遇到一个 R1 不需要处理的新问题：encoder 也可能失败。R2/R3 要补的是命令结果的表示和最终接入顺序，不修改 R1 的三个函数与既有测试。
 
 R1 已经把一件事情做完整了：上层给出已经选定的命令和参数，encoder 就返回一条自己拥有的 RESP record。
 
@@ -538,9 +542,9 @@ SET / DEL / PEXPIREAT 的参数
 
 helper 已放进 `aof_record.cpp` 的匿名命名空间。public header 只保留三个业务入口。这个边界说明 R1 只负责“怎样编码”，没有决定“本次命令是否值得记录”。
 
-现在回到当前 `command_dispatcher.cpp`。
+### 14.1 R2 最终要补出的结果是什么
 
-你现在的 `execute_command()` 只返回已经编码的 reply bytes：
+你现在的 `execute_command()` 只返回 reply bytes：
 
 ```cpp
 std::string execute_command(
@@ -548,69 +552,311 @@ std::string execute_command(
     const std::vector<std::string>& arguments);
 ```
 
-这个返回值适合发给客户端，却不直接告诉持久化层“发生了哪种状态变化”。
-
-不要把 wire reply（准备发给客户端的协议 bytes）再解析回来推断内部事实。先沿当前 handler 的真实结果判断：
-
-| 命令 | 当前结果 | 是否生成记录 |
-|---|---|---:|
-| 合法 `SET k v` | 修改 value，并清除旧 TTL，回复 `+OK` | 总是 |
-| `DEL a b`，返回删除数大于 0 | 至少一个有效 key 被删除 | 是，记录原完整 DEL |
-| `DEL a b`，返回 0 | 没有新的逻辑状态变化 | 否 |
-| `EXPIRE k n`，返回 1 | 当前有效 key 得到期限或被非正期限删除 | 是，需转换成可重放表示 |
-| `EXPIRE k n`，返回 0 | 缺失或已失效 key 没有获得新期限 | 否 |
-| read-only command | 只产生回复 | 否 |
-| arity/range/protocol error | 命令没有按成功路径完成 | 否 |
-
-Round2 的唯一问题是：**怎样让 application owner 得到“reply + 可选状态变化”，而不是从 wire reply 倒推？**
-
-你当前的 handler 在修改 store 后只返回 reply，因此信息会在这里丢失：
+客户端能收到回复，但 application owner（应用层拥有者）拿不到“这次成功命令是否还要留下恢复记录”。R2 要让一次调用产生两个彼此独立的结果：
 
 ```text
-set_handler
--> store.set(...)
--> 只返回 +OK
-
-del_handler
--> 算出 del_count
--> 只返回整数 reply
-
-expire_handler
--> 得到是否成功修改期限
--> 只返回整数 reply
+CommandOutcome
+├─ reply
+│  └─ 准备发给客户端的 RESP bytes
+└─ persistence
+   ├─ none：这次没有需要恢复的写操作
+   └─ change：这次成功写操作需要留下什么
 ```
 
-R2 只要求补回这一份丢失的信息：caller 仍能取得 reply，同时能知道是否存在一条待持久化的状态变化。具体使用小结果类型、callback 还是其他最小方案，由你根据当前代码设计；本课不预先强制 command hierarchy 或通用事件总线。
+可以把它想成下面这个形状。它是结构示意，不是要求直接复制的可编译接口：
 
-## 15. Round3：客户端命令与日志命令不是同一份文字
+```text
+CommandOutcome {
+    reply: std::string
+    persistence: none 或一份 PersistenceChange
+}
+```
 
-客户端发送：
+`PersistenceChange` 只是“这次要留下什么”的占位名字，不要求照抄。先把两份结果交给调用者，再根据当前代码选择最小表示；R2 不要求设计通用命令层级或事件系统。
+
+R2 的硬要求只有一个：**reply 和持久化事实不能再混成一条协议字符串。**
+
+先看四次具体调用：
+
+| 调用 | `reply` | `persistence` |
+|---|---|---|
+| `SET code 1234` | `+OK` | `SET code 1234` |
+| `DEL missing`，删除数为 0 | `:0` | `none` |
+| `DEL code missing`，`code` 被删 | `:1` | 原顺序的 `DEL code missing` |
+| `GET code` | bulk string 或 null | `none` |
+
+`reply` 不能替代右边的信息。`:1` 既可能来自 `DEL`，也可能来自 `EXPIRE`；它没有 key，也没有原参数。把 reply 再 parse 一遍，仍然还原不出待恢复的写操作。
+
+### 14.2 为什么 `SET code 1234` 即使 value 相同也要记录
+
+先准备：
+
+```text
+value = 1234
+deadline = 12:01:00
+```
+
+现在执行：
+
+```text
+SET code 1234
+```
+
+执行后：
+
+```text
+value = 1234
+deadline = none
+```
+
+value bytes 没变，但旧 TTL 被清除了。若不记录这次 `SET`，重放后 `code` 仍会在旧期限到达时消失。
+
+因此本项目采用明确规则：**合法 `SET` 成功后总是产生 SET 持久化事实，不比较新旧 value 是否相同。** 这不是说每次 value bytes 都变化，而是说成功 SET 建立了“这个 value，并且没有旧 TTL”的状态。
+
+这个场景的最小测试要观察四件事：
+
+```text
+操作前：value=1234，存在 TTL
+执行：SET code 1234
+reply：+OK
+操作后：value=1234，TTL 已清除
+persistence：存在，并能 parse 回 SET code 1234
+```
+
+### 14.3 DEL、EXPIRE 和只读命令分别怎样判断
+
+沿 handler 已经得到的真实结果判断，不从 reply 倒推：
+
+| 命令 | handler 已知的事实 | R2 应交给 owner 的结果 |
+|---|---|---|
+| 合法 `SET k v` | SET 成功 | `reply=+OK`，持久化 SET |
+| `DEL a b` 返回大于 0 | 至少一个有效 key 被删除 | 整条原顺序 DEL |
+| `DEL a b` 返回 0 | 没有 key 被删除 | `none` |
+| `EXPIRE k n` 返回 1 | 期限真的改变，或 key 被立即删除 | 交给 R3 规范化 |
+| `EXPIRE k n` 返回 0 | 缺失或已失效 key 没有改变 | `none` |
+| `GET/PTTL/PING` | 只读取或生成回复 | `none` |
+| 参数、范围或协议错误 | 没有进入成功写路径 | 错误 reply，`none` |
+
+R2 可以先用三组测试闭合信息传递：
+
+1. 相同 value 但带旧 TTL 的 SET：仍有持久化事实。
+2. `DEL missing`：reply 为 0，持久化事实为空。
+3. `GET code`：能返回 value，但持久化事实为空。
+
+R2 仍不打开文件。它只保证 application owner 不再丢失“该不该记录、记录什么”这份内部事实。
+
+## 15. Round3：逐个收紧不能进入日志的情况
+
+R3 不再学习另一个大组件。它只把 R2 的成功路径放到五个具体反例下检查。
+
+最终顺序必须是：
+
+```text
+验证命令与记录能否表示
+-> 在局部变量里准备完整候选 record
+-> 准备成功后才修改 store
+-> 根据真实执行结果保留或丢弃候选 record
+-> 返回 reply + 可选持久化信息
+```
+
+这条顺序在 Day1 可以完整用于 SET、DEL 和已经拿到绝对时刻的 PEXPIREAT。正数 `EXPIRE` 目前只保留“期限修改成功、等待绝对时刻”的事实；Day4 补出绝对时刻后，才闭合它的候选 record。
+
+“准备完整”不表示写入文件。Day1 还没有 fd；它只保证 encoder 失败时，内存状态与成功回复都尚未提交。
+
+### 15.1 正数 `EXPIRE` 不能原样写进日志
+
+假设 12:00:00 执行：
 
 ```text
 EXPIRE code 120
 ```
 
-日志最终需要：
+它表达的实际期限是 12:02:00。若日志保存原文字，12:01:00 重启后会重新得到 120 秒，错误延期到 12:03:00。
+
+所以成功的正数 `EXPIRE` 必须经过：
 
 ```text
-PEXPIREAT code <absolute_wall_deadline_ms>
+EXPIRE code 120
+-> 得到原本的绝对日历到期时刻
+-> PEXPIREAT code <absolute_wall_deadline_ms>
 ```
 
-这个过程叫 **command normalization（命令规范化）**：客户端可以用一种方便的写法，日志把它收敛成恢复时语义明确的一种内部写法。
+Day1 已经能验证最后一步：
 
-Round3 再补：
+```cpp
+const auto record = encode_aof_pexpireat("code", 1'800'000'000'000LL);
+const auto parsed = parse_one(record);
 
-- relative EXPIRE 不能直接进入日志；
-- 空 DEL 与负绝对时刻稳定失败；
-- 超过现有 parser 限制的内部记录不能被生成；
-- encoder 失败时不留下半条 record；
-- 失败不能修改 store，也不能伪造成功 reply。
+EXPECT_EQ(parsed.arguments[0], "PEXPIREAT");
+EXPECT_EQ(parsed.arguments[1], "code");
+EXPECT_EQ(parsed.arguments[2], "1800000000000");
+```
 
-你当前的 `encode_aof_pexpireat()` 已经正确限定为“输入绝对毫秒，输出记录”。
+这里的 `parse_one` 表示复用现有 parser 取得一条 Complete request，名称按你的测试 helper 调整。
 
-它不读取 clock，也不负责把 `EXPIRE code 120` 换算成日历时刻。R3 先保证相对客户端命令不会被原样塞进日志。
+这个 test 证明 encoder 的入口是绝对时刻，**不能证明 120 秒怎样换成该时刻**。真正的日历时钟与单调时钟转换仍由 Day4 使用固定时钟测试。
 
-真正的 wall clock 与 monotonic clock 换算仍留在 Day4。
+在 Day4 提供绝对时刻以前，R2 可以保留“这次期限修改成功、还需要规范化”的内部事实，但不能为了提前得到 bytes 而退回 `EXPIRE code 120`。
+
+### 15.2 非正 `EXPIRE` 在本项目中规范化成 DEL
+
+先有：
+
+```text
+code -> 1234
+```
+
+再执行：
+
+```text
+EXPIRE code 0
+```
+
+当前项目的 TTL 规则会立即删除有效 key，并返回 1。Day1 选定的日志表示是：
+
+```text
+DEL code
+```
+
+重放 DEL 后，key 同样不存在，不需要伪造一个已经过去的绝对时刻。
+
+最小测试：
+
+```text
+初始：code 存在
+执行：EXPIRE code 0
+预期 reply：:1
+预期 store：code 不存在
+预期 record parse 结果：{"DEL", "code"}
+```
+
+若 key 原本不存在，`EXPIRE code 0` 返回 0，store 不变，也不产生 DEL record。
+[Redis EXPIRE 文档](https://redis.io/docs/latest/commands/expire/)确认非正期限会删除 key。
+把本项目的日志表示选成 DEL，则是 Mini Redis 自己的 contract，不宣称真实 Redis 内部一定用同一种日志命令。
+
+现在再给这两个动作取共同名字：**command normalization（命令规范化）**。它不是把客户端文字原样保存，而是根据已经发生的状态变化，选出重放时语义明确的内部命令：正期限最终变成 PEXPIREAT，非正期限导致的立即删除变成 DEL。
+
+### 15.3 空 DEL 与负绝对时刻怎样稳定失败
+
+这两个输入都不能描述一条合法的可重放状态变化：
+
+```text
+DEL            // 没有任何 key
+PEXPIREAT k -1 // 绝对 Unix 毫秒时刻为负
+```
+
+本项目把它们定义为 `std::invalid_argument`：
+
+```cpp
+EXPECT_THROW(
+    encode_aof_del(std::vector<std::string>{}),
+    std::invalid_argument);
+
+EXPECT_THROW(
+    encode_aof_pexpireat("code", -1),
+    std::invalid_argument);
+```
+
+“稳定”在这里指异常类型属于公开 contract。除非你把 message 也写进公开约定，否则测试不必绑定整段英文文案。
+
+### 15.4 每个 payload 合法，不代表整条 record 一定合法
+
+现有 parser 同时限制：
+
+```text
+单个 Bulk String 最大长度
+整条 request frame 最大长度
+Array element count
+```
+
+例如 key 和 value 各为 1 MiB。两项各自没有超过单 Bulk 上限，但加上 RESP 长度行、CRLF、命令名和 Array header 后，完整 SET record 是 2,097,189 bytes，比 2 MiB frame 上限多 37 bytes。
+
+```cpp
+const std::string key(1024U * 1024U, 'k');
+const std::string value(1024U * 1024U, 'v');
+
+EXPECT_THROW(
+    encode_aof_set(key, value),
+    std::length_error);
+```
+
+网络请求通常会先被 parser 拒绝；这个 test 仍有意义，因为 public encoder 也能被内部代码直接调用。它不能生成一条未来连自己的 replay parser 都拒绝的 record。
+
+实现时应以 parser 的现行三个上限为同一 contract 来源，不能在 encoder 里悄悄发明另一组数字。若常量当前不可共享，再决定最小的共享位置；本节不要求重构整个 parser。
+
+### 15.5 encoder 抛异常时，调用者不能拿到半条 record
+
+encoder 应先在局部 `std::string` 中构造并检查完整结果，成功后才按值返回。下面的 test 把调用者原有内容设成 `previous`：
+
+```cpp
+std::string committed_record = "previous";
+const std::string key(1024U * 1024U, 'k');
+const std::string value(1024U * 1024U, 'v');
+
+EXPECT_THROW(
+    committed_record = encode_aof_set(key, value),
+    std::length_error);
+EXPECT_EQ(committed_record, "previous");
+```
+
+右侧函数在赋值前失败，因此调用者仍只有旧内容，没有可见的半条新 record。
+
+这个 test 只证明**内存返回值**的完整性。文件只写进半条是 Day2 的 `write_all` 与 Day6 的坏尾部问题，不能拿这项测试冒充文件原子写入。
+
+### 15.6 record 准备失败时，store 与成功 reply 都不能先提交
+
+最后把组件错误放回命令路径。先准备：
+
+```text
+store[code] = old
+code 仍有 TTL
+```
+
+然后让一次 SET 的候选 record 因 frame 超限而失败。如果控制流先 `store.set()`、后调用 encoder，就会得到：
+
+```text
+store 已变成新值
+record 不存在
+重启后无法恢复这次变化
+```
+
+正确 test 应同时检查三件事：
+
+```text
+调用结果：抛出约定异常，或返回明确 Error；不能得到 +OK
+store value：仍为 old
+store TTL：仍为调用前的期限
+```
+
+若你把 R2 入口实现为返回 `CommandOutcome`，测试形状可以是：
+
+```cpp
+const auto before_value = store.get("code");
+const auto before_ttl = store.pttl("code");
+
+EXPECT_THROW(
+    run_command_with_persistence(store, oversized_set),
+    std::length_error);
+
+EXPECT_EQ(store.get("code"), before_value);
+EXPECT_EQ(store.pttl("code"), before_ttl);
+```
+
+`run_command_with_persistence`、`oversized_set` 和 `store.pttl` 都是占位名字，不要求照抄。它们分别代表你最终选定的 R2 入口、输入与查询方法。
+
+关键 oracle（判定依据）是：**失败发生在 store 修改与成功 outcome 产生之前。** 若你选择把内部异常转换成 RESP Error，则断言 Error 且不是 `+OK`。两种接口风格只能选定一种，不能一边改 store、一边返回成功。
+
+### 15.7 Round3 最后要留下哪些测试
+
+Round3 不是五个新功能。它用五个小场景攻击同一条边界：record 准备失败时，store 与成功 reply 都不能提前提交；命令实际没有改变状态时，已经准备的候选 record 可以丢弃。
+
+```text
+正数 EXPIRE：最终记录不能仍叫 EXPIRE
+非正 EXPIRE：有效 key 立即删除，并规范化成 DEL
+空 DEL / 负绝对时刻：invalid_argument
+整帧超限：length_error
+encoder 失败：无半条返回值、store 不变、无成功 reply
+```
 
 Day1 仍然不解决：
 
@@ -618,7 +864,7 @@ Day1 仍然不解决：
 - `write()` 短写与 `EINTR`；
 - `fsync/fdatasync`；
 - 启动时怎样读取整个文件；
-- wall clock 与 monotonic clock 怎样换算。
+- 日历时钟与单调时钟怎样换算。
 
 这些分别属于 Day2～Day4。
 
@@ -649,6 +895,9 @@ cmake -E chdir build ctest --output-on-failure
 4. 为什么相对 EXPIRE 不能原样重放。
 5. 你的内部 helper 怎样保证 DEL 顺序和 owning output。
 6. CTest 的实际结果；失败时保留第一条有效诊断。
+7. 为什么相同 value 的成功 SET 仍可能清除旧 TTL，因此仍要持久化。
+8. 本项目为什么把成功的非正 EXPIRE 规范化成 DEL。
+9. 任选一条 encoder 失败路径，记录调用前后的 value、TTL、reply 与 record 是否变化。
 
 今天的 note 重点是你对“什么值得恢复”和“记录怎样保持 exact bytes”的理解，不要求抄整篇教程。
 
