@@ -704,7 +704,7 @@ atomic/CAS、acquire/release、happens-before 第一层
 | Week11 | T6 | gradient/概率映射、stable softmax 与数值稳定性 |
 | Week12 | T8 / Theory Gate 1 | Ex1 或 T7 fallback 提供 linear evidence；T8 完成 multiclass softmax 与最小 ML workflow |
 | Week13 | T10 | PyTorch Tensor、Module、parameter、inference mode |
-| Week14 | T12 | autograd、MLP、training/inference flow |
+| Week14 | T12 | 两个logits到线性边界，再到MLP training/inference flow |
 | Week15 | T13 + T15~T16 | generalization 第一层、token/mask、single-head attention |
 | Week16 | 协调目标T16；T17～T18为进阶项 | 欠账如实登记，AI岗位按实际证据匹配；C++/后台试投不等待后置完整AI路线 |
 

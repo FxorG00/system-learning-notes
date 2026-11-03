@@ -263,7 +263,7 @@ AI 可持续计划值：每周 4~6 小时
 | Week11 | T6 | 2026.09 末 | finite difference、概率映射、stable softmax |
 | Week12 | T8 / Theory Gate 1 | 2026.10 上半 | Ex1 或 T7 fallback 提供 linear evidence；T8 提供 softmax 与 ML workflow |
 | Week13 | T10 | 2026.10 下半 | Tensor layout 与 Module inference |
-| Week14 | T12 | 2026.11 | autograd + MLP training/inference flow |
+| Week14 | T12 | 2026.11 | 两个logits到线性边界，再到MLP training/inference flow |
 | Week15 | T13 + T15~T16 | 2026.12 上半 | token/mask 与 single-head attention reference |
 | Week16 | 协调目标T16；T17～T18进阶 | 原估算2026.12下半 | 欠账如实登记；按实际AI证据匹配岗位，不把后置路线变成C++试投前置 |
 
