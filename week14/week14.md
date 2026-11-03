@@ -1,6 +1,6 @@
 # Week14：Mini Redis V3，让进程重启后重新长回原来的状态
 
-> 对齐日期：2026-11-02；Day1 R1 已以 98/100 正式通过，下一步进入 Day1 R2。
+> 对齐日期：2026-11-03；Day1 R1 已以 98/100 正式通过，下一步进入 Day1 R2。
 > 系统起点：Week13 已正式完成，当前 91 个整日通过、92 份 Daily 已生成。
 > 理论起点：T1～T11 与 Theory Gate 1 已通过，T11 整课 98/100，下一步 T12；理论线不阻塞本周工程。
 > Git：本周正式文件修改按 `MEMORY.md` §9.12 留下本地 commit；push 仍需单独授权。
@@ -77,9 +77,10 @@ flowchart LR
     A["客户端 RESP bytes"] --> B["Connection input"]
     B --> C["RESP parser"]
     C --> D["Command dispatcher"]
-    D --> E["修改内存中的 KvStore"]
-    E --> F["追加并同步 AOF"]
-    F --> G["成功 reply 进入 output"]
+    D --> E["准备可选的候选 AOF record"]
+    E --> F["执行命令；写命令修改 KvStore，并按结果保留或丢弃 record"]
+    F --> G["owner 追加并同步 record"]
+    G --> M["成功 reply 进入 output"]
 
     H["新进程启动"] --> I["读取 AOF"]
     I --> J["解析一条完整日志记录"]
@@ -256,7 +257,7 @@ command 已改变内存状态
 
 | 学习日 | 今天只解决的问题 | 主要产出 |
 |---|---|---|
-| [Day1](day1/day1.md) | 哪些状态变化必须留下，文件里的一条记录长什么样？ | R1已通过：按字节保存的RESP记录；下一步R2接回命令结果 |
+| [Day1](day1/day1.md) | 哪些状态变化必须留下，文件里的一条记录长什么样？ | R1已通过：按字节保存RESP记录；R2返回reply与可选完整record |
 | Day2 | 怎样把一整条记录可靠追加到一个由对象拥有的文件？ | AOF 写入组件、`write_all`、同步边界与构建入口 |
 | Day3 | 新进程怎样按顺序读完整记录，重新得到 SET/DEL 状态？ | 完整日志重放、启动前恢复、重放时不重复记日志 |
 | Day4 | TTL 在停机期间仍然流逝，怎样恢复剩余寿命？ | 绝对到期时刻、双时钟转换、受控时钟测试 |
@@ -319,8 +320,8 @@ private representation 由你决定，不先给完整实现。
 
 ### R2/R3 怎样跟进
 
-R2 让 application owner 同时取得 reply 与可选持久化事实：成功 SET 总是建立 value 与无 TTL 状态；
-DEL/EXPIRE 只有真正生效时才留下对应事实，不能从 wire reply 倒推。
+R2 让 application owner 同时取得 reply 与 `std::optional<std::string>` AOF record。SET、DEL 等差异在 handler 生成 record 时已经用完；
+record 生成以后 owner 只判断有没有值并追加，不再维护 `PersistenceChange` 类型，也不能从 wire reply 倒推。
 
 R3 再把“客户端怎样写”与“日志怎样统一保存”分开：客户端的
 `EXPIRE code 120` 会变成内部的 `PEXPIREAT code <绝对时刻>`。

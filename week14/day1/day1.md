@@ -1,9 +1,9 @@
 # Week14 Day1：把状态变化变成可重放的 RESP 记录
 
-> 版本：2026-11-02，R1 已以 98/100 正式通过；下一步进入 R2
+> 版本：2026-11-03，R1 已以 98/100 正式通过；下一步进入 R2
 > 前置：Week13 整周已通过，Mini Redis V2 已有 RESP parser、dispatcher、KvStore 与 TTL
 > 今日产出：不打开文件、不接服务器；只把已经确认的状态变化编码成独立、按字节保存的 RESP 记录
-> 学习方式：R1 独立实现记录编码；R2 让 reply 与可持久化事实一起返回；R3 再统一相对期限与失败边界
+> 学习方式：R1 独立实现记录编码；R2 返回 reply 与可选的完整 AOF record；R3 再统一相对期限与失败边界
 
 [TOC]
 
@@ -523,7 +523,7 @@ R1 的 PASS 条件：
 
 ---
 
-## 14. Round2：上层需要同时拿到 reply 和持久化事实
+## 14. Round2：上层需要同时拿到 reply 和可选 record
 
 R1 只处理合法输入：上层已经选定一种状态变化，encoder 负责把它编码正确。这个结论已经通过，不重做。
 
@@ -552,38 +552,46 @@ std::string execute_command(
     const std::vector<std::string>& arguments);
 ```
 
-客户端能收到回复，但 application owner（应用层拥有者）拿不到“这次成功命令是否还要留下恢复记录”。R2 要让一次调用产生两个彼此独立的结果：
+客户端能收到回复，但 application owner（应用层拥有者）拿不到“这次是否还有一条 record 要追加”。R2 要让一次调用产生两个彼此独立的结果：
 
 ```text
 CommandOutcome
 ├─ reply
 │  └─ 准备发给客户端的 RESP bytes
-└─ persistence
-   ├─ none：这次没有需要恢复的写操作
-   └─ change：这次成功写操作需要留下什么
+└─ aof_record
+   ├─ nullopt：这次没有 record
+   └─ string：一条已经完整编码的 RESP record
 ```
 
-可以把它想成下面这个形状。它是结构示意，不是要求直接复制的可编译接口：
+这正是你在 note 中收敛出的最小结果类型：
 
-```text
-CommandOutcome {
-    reply: std::string
-    persistence: none 或一份 PersistenceChange
-}
+```cpp
+#include <optional>
+#include <string>
+
+struct CommandOutcome {
+    std::string reply;
+    std::optional<std::string> aof_record;
+};
 ```
 
-`PersistenceChange` 只是“这次要留下什么”的占位名字，不要求照抄。先把两份结果交给调用者，再根据当前代码选择最小表示；R2 不要求设计通用命令层级或事件系统。
+`std::optional<std::string>` 在这里表示“可能有一条 record，也可能没有”。里面若有值，它已经是可以交给后续 AOF writer 的完整 bytes，不再是 SET、DEL 等待二次判断的描述对象。
 
-R2 的硬要求只有一个：**reply 和持久化事实不能再混成一条协议字符串。**
+为什么不再保留 `PersistenceChange::Set`、`PersistenceChange::Del` 之类的分类？
+因为 handler 在生成 record 时已经用过这项差异。
+record 生成以后，owner 对它们只做同一个动作：追加到 AOF。
+下游不再使用的差异，不必继续塞进返回类型。
+
+R2 的硬要求因此变得很具体：**reply 和可选 record 分开返回；owner 不解析 reply，也不重新判断 record 来自哪种命令。**
 
 先看四次具体调用：
 
-| 调用 | `reply` | `persistence` |
+| 调用 | `reply` | `aof_record` |
 |---|---|---|
-| `SET code 1234` | `+OK` | `SET code 1234` |
-| `DEL missing`，删除数为 0 | `:0` | `none` |
-| `DEL code missing`，`code` 被删 | `:1` | 原顺序的 `DEL code missing` |
-| `GET code` | bulk string 或 null | `none` |
+| `SET code 1234` | `+OK` | 有值；parse 后是 `SET code 1234` |
+| `DEL missing`，删除数为 0 | `:0` | `nullopt` |
+| `DEL code missing`，`code` 被删 | `:1` | 有值；parse 后保留 `DEL code missing` |
+| `GET code` | bulk string 或 null | `nullopt` |
 
 `reply` 不能替代右边的信息。`:1` 既可能来自 `DEL`，也可能来自 `EXPIRE`；它没有 key，也没有原参数。把 reply 再 parse 一遍，仍然还原不出待恢复的写操作。
 
@@ -611,7 +619,7 @@ deadline = none
 
 value bytes 没变，但旧 TTL 被清除了。若不记录这次 `SET`，重放后 `code` 仍会在旧期限到达时消失。
 
-因此本项目采用明确规则：**合法 `SET` 成功后总是产生 SET 持久化事实，不比较新旧 value 是否相同。** 这不是说每次 value bytes 都变化，而是说成功 SET 建立了“这个 value，并且没有旧 TTL”的状态。
+因此本项目采用明确规则：**合法 `SET` 成功后总是产生 SET record，不比较新旧 value 是否相同。** 这不是说每次 value bytes 都变化，而是说成功 SET 建立了“这个 value，并且没有旧 TTL”的状态。
 
 这个场景的最小测试要观察四件事：
 
@@ -620,30 +628,35 @@ value bytes 没变，但旧 TTL 被清除了。若不记录这次 `SET`，重放
 执行：SET code 1234
 reply：+OK
 操作后：value=1234，TTL 已清除
-persistence：存在，并能 parse 回 SET code 1234
+aof_record：有值，并能 parse 回 SET code 1234
 ```
 
-### 14.3 DEL、EXPIRE 和只读命令分别怎样判断
+### 14.3 命令差异在哪里用完
 
-沿 handler 已经得到的真实结果判断，不从 reply 倒推：
+你的判断是对的：SET 和 DEL 的参数已经在 `arguments` 里，不需要再造一个对象重复描述它们。区别只在各 handler 生成 record 的这一刻：
 
-| 命令 | handler 已知的事实 | R2 应交给 owner 的结果 |
+| 命令 | handler 怎样生成候选 record | 最终 `aof_record` |
 |---|---|---|
-| 合法 `SET k v` | SET 成功 | `reply=+OK`，持久化 SET |
-| `DEL a b` 返回大于 0 | 至少一个有效 key 被删除 | 整条原顺序 DEL |
-| `DEL a b` 返回 0 | 没有 key 被删除 | `none` |
-| `EXPIRE k n` 返回 1 | 期限真的改变，或 key 被立即删除 | 交给 R3 规范化 |
-| `EXPIRE k n` 返回 0 | 缺失或已失效 key 没有改变 | `none` |
-| `GET/PTTL/PING` | 只读取或生成回复 | `none` |
-| 参数、范围或协议错误 | 没有进入成功写路径 | 错误 reply，`none` |
+| 合法 `SET k v` | 把 `arguments[1]`、`arguments[2]` 交给 `encode_aof_set` | 总是有值 |
+| `DEL a b` | 把原 key 序列交给 `encode_aof_del`，执行后看删除数 | 大于 0 时保留，否则 `nullopt` |
+| 正数 `EXPIRE k n` | 不能照抄原参数；Day4 得到绝对时刻后生成 PEXPIREAT | Day4 才闭合 |
+| 非正 `EXPIRE k n` | 若有效 key 被立即删除，生成 `DEL k` | 删除成功时有值，否则 `nullopt` |
+| `GET/PTTL/PING` | 不调用 AOF encoder | `nullopt` |
+| 参数、范围或协议错误 | 不进入成功写路径 | `nullopt` |
+
+这里仍保留 `encode_aof_set()` 和 `encode_aof_del()` 两个公开入口。
+它们限制哪些命令形状可以成为内部日志，避免任意调用者把 GET、空 DEL 或其他未约定输入交给通用 helper。
+**业务入口可以区分，返回给 owner 的完整 record 不必再分类。**
 
 R2 可以先用三组测试闭合信息传递：
 
-1. 相同 value 但带旧 TTL 的 SET：仍有持久化事实。
-2. `DEL missing`：reply 为 0，持久化事实为空。
-3. `GET code`：能返回 value，但持久化事实为空。
+1. 相同 value 但带旧 TTL 的 SET：`aof_record.has_value()` 为 true。
+2. `DEL missing`：reply 为 0，`aof_record` 为 `nullopt`。
+3. `GET code`：能返回 value，但 `aof_record` 为 `nullopt`。
 
-R2 仍不打开文件。它只保证 application owner 不再丢失“该不该记录、记录什么”这份内部事实。
+R2 仍不打开文件。它只保证 `execute_command()` 能把 reply 和已经准备好的可选 record 一起交回 owner。
+正数 EXPIRE 依赖 Day4 的绝对时刻能力，因此当前不为它发明一个半成品 `PersistenceChange`。
+等 Day4 能生成最终 PEXPIREAT bytes 后，仍然放进同一个 `aof_record` 字段。
 
 ## 15. Round3：逐个收紧不能进入日志的情况
 
@@ -656,10 +669,12 @@ R3 不再学习另一个大组件。它只把 R2 的成功路径放到五个具�
 -> 在局部变量里准备完整候选 record
 -> 准备成功后才修改 store
 -> 根据真实执行结果保留或丢弃候选 record
--> 返回 reply + 可选持久化信息
+-> 返回 reply + std::optional<std::string> aof_record
 ```
 
-这条顺序在 Day1 可以完整用于 SET、DEL 和已经拿到绝对时刻的 PEXPIREAT。正数 `EXPIRE` 目前只保留“期限修改成功、等待绝对时刻”的事实；Day4 补出绝对时刻后，才闭合它的候选 record。
+这条顺序在 Day1 可以完整用于 SET、DEL 和已经拿到绝对时刻的 PEXPIREAT。
+正数 `EXPIRE` 还缺 Day4 的绝对时刻来源，因此 Day1 只验证 PEXPIREAT encoder。
+它不会把相对 EXPIRE 原文塞进 `aof_record`，也不为这段等待期增加新的返回类型。
 
 “准备完整”不表示写入文件。Day1 还没有 fd；它只保证 encoder 失败时，内存状态与成功回复都尚未提交。
 
@@ -696,7 +711,7 @@ EXPECT_EQ(parsed.arguments[2], "1800000000000");
 
 这个 test 证明 encoder 的入口是绝对时刻，**不能证明 120 秒怎样换成该时刻**。真正的日历时钟与单调时钟转换仍由 Day4 使用固定时钟测试。
 
-在 Day4 提供绝对时刻以前，R2 可以保留“这次期限修改成功、还需要规范化”的内部事实，但不能为了提前得到 bytes 而退回 `EXPIRE code 120`。
+在 Day4 提供绝对时刻以前，正数 EXPIRE 分支还不能交付最终 `aof_record`。这不会阻塞 SET、DEL 与只读命令对 `CommandOutcome` 的验证，因为 Day1 尚未把 AOF 接进真实 server；Day5 正式接入以前，Day4 会补齐这条分支。
 
 ### 15.2 非正 `EXPIRE` 在本项目中规范化成 DEL
 
@@ -828,21 +843,21 @@ store value：仍为 old
 store TTL：仍为调用前的期限
 ```
 
-若你把 R2 入口实现为返回 `CommandOutcome`，测试形状可以是：
+若 `execute_command()` 已改为返回 `CommandOutcome`，测试形状可以是：
 
 ```cpp
 const auto before_value = store.get("code");
 const auto before_ttl = store.pttl("code");
 
 EXPECT_THROW(
-    run_command_with_persistence(store, oversized_set),
+    (void)execute_command(store, oversized_set),
     std::length_error);
 
 EXPECT_EQ(store.get("code"), before_value);
 EXPECT_EQ(store.pttl("code"), before_ttl);
 ```
 
-`run_command_with_persistence`、`oversized_set` 和 `store.pttl` 都是占位名字，不要求照抄。它们分别代表你最终选定的 R2 入口、输入与查询方法。
+`oversized_set` 和 `store.pttl` 是场景占位名字，按你当前测试 helper 与固定时钟接口调整。`execute_command` 则继续使用你的真实入口，不再平行发明第二个 dispatcher。
 
 关键 oracle（判定依据）是：**失败发生在 store 修改与成功 outcome 产生之前。** 若你选择把内部异常转换成 RESP Error，则断言 Error 且不是 `+OK`。两种接口风格只能选定一种，不能一边改 store、一边返回成功。
 

@@ -1,6 +1,6 @@
 # Daily 教程总目录
 
-> 更新日期：2026-10-29（Week14 Day1 R1已以98/100通过，下一步R2）
+> 更新日期：2026-11-03（Week14 Day1 R1已以98/100通过，下一步R2）
 >
 > 收录范围：主线 Week1 Day1 至 Week14 Day1，共 92 份正式 daily 教程；91 个整日单元已正式通过，Week14 Day1 R1已通过、整日待完成。
 >
@@ -44,7 +44,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 | HTTP Server V1 | [Week11](#week11http-server-v1) | incremental request parser、response encoder、Reactor integration、keep-alive |
 | Mini Redis V1 | [Week12](#week12mini-redis-v1) | RESP2 encoder/parser、command dispatcher、KV store、multi-client integration |
 | 数据库与 Mini Redis V2 | [Week13](#week13mysql-与-mini-redis-v2) | Day1~Day7均正式通过；Day7整日98/100、R1历史95/100；累计91个整日通过，Week13整周完成 |
-| Mini Redis V3 | [Week14](#week14mini-redis-v3aof-与恢复) | Day1 R1已通过、下一步R2；把确认的状态变化接回命令结果 |
+| Mini Redis V3 | [Week14](#week14mini-redis-v3aof-与恢复) | Day1 R1已通过、下一步R2；返回reply与可选完整AOF record |
 
 ---
 
@@ -234,7 +234,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 
 | Day | 主要内容 | 主要产出 / 观察 | 检索关键词 |
 |---|---|---|---|
-| [Day1：可重放的 RESP 状态记录](week14/day1/day1.md) | 从进程退出后状态消失出发，区分写操作与只读命令；SET按字节保存，DEL保持参数序列，期限只接受绝对毫秒记录入口 | R1已以98/100通过；独立encoder、exact-byte/parser round-trip与绝对期限入口成立，下一步R2接命令结果 | AOF, replay, RESP record, SET, DEL, PEXPIREAT, binary-safe, absolute deadline |
+| [Day1：可重放的 RESP 状态记录](week14/day1/day1.md) | 从进程退出后状态消失出发，区分写操作与只读命令；SET按字节保存，DEL保持参数序列，期限只接受绝对毫秒记录入口 | R1已以98/100通过；下一步R2让execute_command返回reply与可选完整AOF record | AOF, replay, RESP record, SET, DEL, PEXPIREAT, binary-safe, absolute deadline |
 
 ---
 

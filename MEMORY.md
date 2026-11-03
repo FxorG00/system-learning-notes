@@ -178,7 +178,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-02）：Week13 Day7整日以98/100正式通过，R1历史95/100保持。Week13整周正式完成，系统主线91个整日通过、92份Daily生成。Week14 Day1 R1已以98/100正式通过，下一步R2；Day1整日尚未完成，周规划不计入Daily数量。
+当前快照（2026-11-03）：Week13 Day7整日以98/100正式通过，R1历史95/100保持。Week13整周正式完成，系统主线91个整日通过、92份Daily生成。Week14 Day1 R1已以98/100正式通过，下一步R2；Day1整日尚未完成，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T1～T11与Theory Gate 1已通过，理论下一步T12；T12～T21仍为未通过的提前稿，Theory Gate 2未通过。
 
@@ -2172,6 +2172,12 @@ C++ 进程数据与主机内存
 同一设计解决多个问题时，先由当天主线的具体场景产生主要需求，再推出接口与职责；其他收益放在该边界建立后解释，不让次要问题先行推出一套尚无动机的抽象。若当天主问题就是错误处理，仍从相应失败场景讲起，不把异常一律后置。接口中出现“从某对象取值、再传回该对象”的调用时，主动说明依赖由谁保存/验证、caller 为什么需要复用这个值，以及值的流动是否改变职责归属。例如命令共用时间读数由 EXISTS/DEL 的实际期限对照引出；clock 仍归 KvStore，handler 只协调本条命令使用同一个读数，错误来源区分是这个拆分的另一项收益。适用范围与后续升级在开头简短预告，不提前泄露独立首版的内部设计；主线三Part、分轮范围和理论线独立模板保持。
 
 一次引出多个新接口时，就地说明它们服务的具体路径和本次升级范围：只增加当前需求需要的最小能力，保留已经正确的旧入口，不把统一命名样式推广成“所有API都要新增对应版本”。更高层封装等未来方案，在当前需求尚未出现时不提前布置。例如本日显式时间入口只服务命令复用读数与已说明的错误边界，不顺势要求get_at/pttl_at或通用请求上下文。
+
+上游已经把不同语义收敛成同一种完整对象，而下游只对这些对象执行同一个动作时，结果类型只保留下游仍会使用的信息。不要为已经消费完的差异继续建立variant、hierarchy或中间描述。
+
+Week14 Day1中，各handler仍须分别判断SET、DEL、EXPIRE并生成正确record。
+一旦得到完整RESP bytes，application owner只需要`std::optional<std::string>`判断“有无record”并追加，不需要再区分record来自哪种命令。
+若下游确实存在不同同步策略、路由或错误处理，差异仍应保留。这条规则是按真实消费者收缩表示，不是“一律改成string”。
 
 例子优先连续复用，让同一对象沿数据流逐步变化。需要反例、极端值或非方阵来暴露新问题时，明确它与普通例子相比改变了什么，不为“只用一个例子”牺牲有效验证。从**最小但有意义的完整单位**开始，再推广到 batch/一般情形；softmax 的入口是一条输入对应的多个类别分数，不能为了固定 scalar -> vector 模板先造一个没有比较意义的单值任务。
 
@@ -9234,7 +9240,11 @@ T19只走一条对象链：`[B,V] logits -> greedy或temperature/top-k probabili
 
 用户口述正确掌握写操作与只读命令的持久化区别、二进制长度边界和相对TTL跨停机失真；两个精度点各扣1分：`SET k same`仍需总是记录的关键特例是成功SET会清除旧TTL，不能仅用“它是写操作”证明实际状态必然变化；exact-byte证明完整wire编码，parser round-trip还独立证明Complete、原arguments与精确consumed boundary。最终98/100，R1正式通过；机械测试由Codex编写不扣分，因为用户已经能解释核心oracle。本人`day1_note.md`保持只读，SHA256仍为`6C65747FF5AC61CFFE861630E90B842CAAFBBED80BFE28A521AF4AE785E395DD`。
 
-R1通过后按现行授权定向润色Day1 R2/R3：先复盘真实`arguments -> local vector -> internal helper -> owning string`链，再从当前handler只返回reply导致状态变化信息丢失的问题进入“reply + optional mutation”设计；不预先强制hierarchy/callback。R3明确现有PEXPIREAT encoder只接受已算好的绝对时刻，Day1禁止把相对EXPIRE原样写日志，wall/monotonic转换仍归Day4。当前仍91个整日通过/92份Daily生成，Day1整日未通过，下一步R2；理论下一步T12不变。
+R1通过后按现行授权定向润色Day1 R2/R3：先复盘真实`arguments -> local vector -> internal helper -> owning string`链。
+再从当前handler只返回reply导致状态变化信息丢失的问题进入“reply + optional mutation”临时占位；不预先强制hierarchy/callback。
+该占位随后依据用户R2笔记收敛为`reply + std::optional<std::string> aof_record`，详见2026-11-03记录。
+
+R3明确现有PEXPIREAT encoder只接受已算好的绝对时刻，Day1禁止把相对EXPIRE原样写日志，wall/monotonic转换仍归Day4。当前仍91个整日通过/92份Daily生成，Day1整日未通过，下一步R2；理论下一步T12不变。
 
 ## 2026-11-02：T21 prefill、decode与KV Cache提前稿生成
 
@@ -9250,6 +9260,33 @@ T21只沿一条状态链推进：同一条序列先做prefill并保存历史K/V�
 
 用户明确指出Day1 R2/R3把“相对EXPIRE、空DEL、整帧超限、半条record、失败后的store/reply”压成一串验收词，读者看不出每项实际会发生什么。R1已经以98/100正式通过，本轮不重新验收、不改三个encoder接口、既有R1测试或用户note；只从R1停止点以后定向重排R2/R3。
 
-R2现在先回答要补出什么结果：一次命令执行同时交给application owner客户端reply与可选持久化事实，不能从wire reply反推内部操作。用四次具体调用对齐两份结果，并用“相同value的SET仍会清除旧TTL”解释为什么成功SET总要记录。R3再逐个走过正数EXPIRE转绝对PEXPIREAT、成功的非正EXPIRE在本项目规范化成DEL、空DEL与负绝对时刻、单payload合法但完整frame超限、encoder失败不暴露半条返回值，以及集成失败时旧value/TTL与成功reply都不能先提交。每项均先给最小状态和输入，再给test形状与判定依据；最后的清单只负责压缩，不替代首次理解。正数EXPIRE的双时钟换算仍归Day4，文件短写与坏尾部仍归后续Daily。
+R2现在先回答要补出什么结果：一次命令执行同时交给application owner客户端reply与一条可选的完整AOF record，不能从wire reply反推内部操作。
+最初正文用`PersistenceChange`作“待持久化事实”的占位，随后依据用户R2笔记进一步收敛；当前版本见2026-11-03记录。
+用四次具体调用对齐两份结果，并用“相同value的SET仍会清除旧TTL”解释为什么成功SET总要记录。
+
+R3再逐个走过正数EXPIRE转绝对PEXPIREAT、成功的非正EXPIRE在本项目规范化成DEL、空DEL与负绝对时刻、单payload合法但完整frame超限、encoder失败不暴露半条返回值，以及集成失败时旧value/TTL与成功reply都不能先提交。
+每项均先给最小状态和输入，再给test形状与判定依据；最后的清单只负责压缩，不替代首次理解。
+正数EXPIRE的双时钟换算仍归Day4，文件短写与坏尾部仍归后续Daily。
 
 长期规则没有另建竞争条款，只在§9.3既有“边界测试先走场景”规则中补明确：并列多个失败约定时，每项至少交代调用前状态、触发输入、返回或异常、必须保持不变的对象。技术核对确认本项目非正TTL语义与Week13既有contract一致，2个1 MiB payload组成的SET record会因协议开销超过2 MiB完整frame上限；Redis官方资料只支持非正期限删除行为，日志选用DEL明确属于本项目选择。教学核对确认R2/R3仍沿“状态变化事实 -> 可重放record -> 失败前不提交”一根主线，三Part结构恢复，没有编辑历史外露。全局核对确认Week14周规划同步了R2/R3口径；总规划、理论规划、C++补缺规划和DAILY_INDEX的进度仍正确，因此不制造无关diff。当前仍为91个整日通过、92份Daily生成，Day1整日未通过、下一步R2；理论下一步T12不变。本轮没有SSH、编译或运行项目测试，不冒称新的动态证据。
+
+## 2026-11-03：Week14 Day1 R2结果类型按真实消费者收敛
+
+用户在`day1_note.md`提出：SET与DEL最终都只是把arguments编码成一条RESP record；owner拿到完整record后只负责写文件，继续区分SET/DEL没有用途。这个判断成立。
+
+当前设计收敛为`CommandOutcome { reply, std::optional<std::string> aof_record }`。
+命令差异只保留到各handler判断实际状态变化、选择规范化命令并完成编码为止。
+完整record返回以后，application owner只判断是否有值并追加，不再维护`PersistenceChange`枚举、variant或层级。
+SET继续调用语义明确的`encode_aof_set`，DEL继续调用`encode_aof_del`，因此公共业务入口仍限制合法日志形状；收缩的是跨层返回信息，不是把通用helper暴露出去。
+
+Day1 R2现用四次具体调用展示reply与`aof_record`的对应，并把用户note中的对象流融入正文。相同value的SET仍因清除旧TTL而产生record；DEL只有实际删除数大于0才保留预编码候选；只读命令返回`nullopt`。
+
+正数EXPIRE不能复用原arguments，也不能为了等待Day4而发明半成品类型。Day1只验证PEXPIREAT encoder，Day4取得绝对日历期限后再把最终bytes放进同一个字段，Day5正式接入前闭合该分支。非正EXPIRE删除成功时仍规范化成DEL。
+
+长期经验合并进§9.3既有最小能力规则：若上游已把差异收敛成完整对象，而下游只执行同一动作，返回类型只保留下游仍使用的信息；只有下游确实按类型采取不同策略时才保留分类。这与类型安全、行为先于机制和不过早抽象规则兼容，不是“一律返回string”的新模板。
+
+三遍审查分别检查技术顺序、学习主线和全局文件。
+Day1的candidate record在store修改前完成，实际结果决定保留或丢弃；正文从用户疑问直接推出最小结构，没有接口百科。
+Week14周图与R2/R3说明、总规划、C++补缺规划和DAILY_INDEX已同步本轮日期与结果类型；理论规划的进度表述仍正确，无需制造接口级diff。
+
+用户`day1_note.md`、代码、tests、CMake与T11相关文件均只读，不纳入提交。实际进度不变：91个整日通过、92份Daily生成，Week14 Day1 R1已通过98/100、下一步R2，理论下一步T12。本轮是教材与规则对齐，未运行SSH、编译或项目测试。
