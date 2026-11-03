@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="460" viewBox="0 0 760 460" role="img" aria-labelledby="title desc">
+  <title id="title">XOR points after the hidden transformation</title>
+  <desc id="desc">Both class zero inputs map to the origin. Class one inputs map to the two axis points and are separated by a line.</desc>
+  <rect width="760" height="460" fill="#ffffff"/>
+  <text x="380" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#17212b">After the hidden transformation</text>
+  <line x1="150" y1="370" x2="650" y2="370" stroke="#334155" stroke-width="3"/>
+  <line x1="150" y1="370" x2="150" y2="80" stroke="#334155" stroke-width="3"/>
+  <path d="M650 370 l-14 -8 v16 z" fill="#334155"/>
+  <path d="M150 80 l-8 14 h16 z" fill="#334155"/>
+  <text x="670" y="378" font-family="Arial, sans-serif" font-size="21" fill="#17212b">h0</text>
+  <text x="132" y="65" font-family="Arial, sans-serif" font-size="21" fill="#17212b">h1</text>
+  <line x1="190" y1="370" x2="190" y2="360" stroke="#64748b" stroke-width="2"/>
+  <line x1="590" y1="370" x2="590" y2="360" stroke="#64748b" stroke-width="2"/>
+  <line x1="150" y1="330" x2="160" y2="330" stroke="#64748b" stroke-width="2"/>
+  <line x1="150" y1="130" x2="160" y2="130" stroke="#64748b" stroke-width="2"/>
+  <text x="186" y="400" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#475569">0</text>
+  <text x="590" y="400" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#475569">1</text>
+  <text x="124" y="337" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#475569">0</text>
+  <text x="124" y="137" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#475569">1</text>
+  <line x1="190" y1="230" x2="390" y2="330" stroke="#16a34a" stroke-width="4" stroke-dasharray="12 9"/>
+  <text x="405" y="286" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#15803d">h0 + h1 = 0.5</text>
+  <circle cx="190" cy="330" r="23" fill="#2563eb" opacity="0.36"/>
+  <circle cx="190" cy="330" r="15" fill="#2563eb"/>
+  <text x="220" y="338" font-family="Arial, sans-serif" font-size="19" fill="#1d4ed8">class 0 x2  (0,0)</text>
+  <rect x="172" y="112" width="36" height="36" rx="4" fill="#f97316" transform="rotate(45 190 130)"/>
+  <rect x="572" y="312" width="36" height="36" rx="4" fill="#f97316" transform="rotate(45 590 330)"/>
+  <text x="218" y="112" font-family="Arial, sans-serif" font-size="19" fill="#c2410c">class 1  (0,1)</text>
+  <text x="435" y="338" font-family="Arial, sans-serif" font-size="19" fill="#c2410c">class 1  (1,0)</text>
+  <text x="380" y="430" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" fill="#475569">The dashed line separates the transformed classes.</text>
+</svg>

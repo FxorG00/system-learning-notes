@@ -419,7 +419,7 @@ Stretch：T17~T18，能够从 token IDs 串到 decoder-only logits
 T9 Tensor（已通过）
 -> T10 用已会线性分类器学习Module与状态
 -> T11 用已会标量链学习autograd
--> T12 首次从XOR进入多层模型、隐藏表示与ReLU
+-> T12 先从两个logits的判断推出直线边界，再用XOR进入多层模型、隐藏表示与ReLU
 -> T13 泛化/正则化 -> T14 CNN/ResNet（可延期）
 -> T15 token/embedding/mask -> T16 attention -> Theory Gate 2
 -> T17+ Transformer与LLM推理
@@ -684,7 +684,7 @@ atomic/CAS、acquire/release、happens-before 第一层
 | 顺序 | 系统主线 | 理论线协调目标 | 保持的边界 |
 |---|---|---|---|
 | 已完成Week13 | [Day7整周收口](week13/day7/day7.md)（整日98/100，R1历史95/100） | T11已完成：从标量链进入autograd | TTL、虚函数补缺和T11均已收口，不重做 |
-| 当前Week14 | [AOF/恢复周规划](week14/week14.md)，Day1整日已通过，Day2下一步R1 | T12：首次从XOR进入MLP | 不把恢复语义换成只会写文件 |
+| 当前Week14 | [AOF/恢复周规划](week14/week14.md)，Day1整日已通过，Day2下一步R1 | T12：先推出线性分类边界，再用XOR进入MLP | 不把恢复语义换成只会写文件 |
 | Week15 | 原故障测试、瓶颈定位与性能证据 | T13、T15～T16；T14可延期 | 用户掌握性能问题、测量与结论，机械脚手架可委托 |
 | Week16 | 原项目文档、表达与完整出口 | 复检理论欠账；T17～T18为进阶项 | 不拆提前投递版，不降低原项目标准 |
 | 原Week16正式完成后 | 整理简历、小范围试投、用反馈定位缺口 | 按真实完成能力呈现 | 此时再制定Week17以后实际课表 |
@@ -1268,7 +1268,7 @@ CUDA kernel correctness + profiler + benchmark
 ## 13. 当前下一步
 
 1. 系统主线的Week14 Day1已以分轮98/98/99完成整日验收；Day2教程已生成，下一步R1。Week13已整周通过，TTL与虚函数既有证据不重做。后续仍按原Week14～Week16完成恢复、性能与项目出口。
-2. 理论线进入T12：T10已完成线性分类器的Module/state与checkpoint恢复，T11已把同一标量链映射到autograd；T12先从XOR推出hidden representation、ReLU与MLP，再闭合训练/保存/fresh-load推理，随后只追一次更新的状态变化，以及“恢复预测”和“恢复训练”所需状态的区别。SGD/GELU/mini-batch留在核心后的选读区。T13主实验连续闭环，T14的BatchNorm为核心课后的选读扩展。
+2. 理论线进入T12：T10已完成线性分类器的Module/state与checkpoint恢复，T11已把同一标量链映射到autograd；T12先让两个logits完成一次分类并由相等条件推出直线边界，再用XOR产生hidden representation、ReLU与MLP的需要。随后闭合训练/保存/fresh-load推理，只追一次更新的状态变化，以及“恢复预测”和“恢复训练”所需状态的区别。SGD/GELU/mini-batch留在核心后的选读区。T13主实验连续闭环，T14的BatchNorm为核心课后的选读扩展。
 3. T11整课以98/100正式通过，T10整课与R1均为99/100；T12～T21提前稿仍未通过。T20已用同一个TinyMLP串起训练对象、fresh inference对象、权重容量和INT8表示误差；T21再用固定序列完成full recompute、连续KV Cache与block table寻址，但都不前移当前T12。T11以本人笔记为主证据，已覆盖一次反向传播、`.grad`与旧图保存状态的不同寿命，以及向量目标/记录范围/旧值修改三个边界。两处表述精度已在检阅中补准，不要求重写笔记。进入T12前只做相邻校准，不重讲T11，也不把提前稿或教材QA登记为学习通过；每课结束继续由用户亲自记笔记。
 4. C++类/对象/继承/虚函数补缺已随Week13 Day7收口；string/STL常见实现、LRU并发/大value、allocator第一层和系统面试横向题按Week15～16定向复盘，详见[补缺规划](C++项目伴随补缺规划.md)与[查漏地图](杂教程/C++与系统面试查漏地图.md)。不改Mini Redis架构来凑语法，也不通读全部STL源码。
 5. 第一段实习按三层岗位池准备：C++/Linux系统岗主投，AI平台后端/AI云原生并行投，核心推理引擎/CUDA少量冲刺。是否值得去看实际编码、系统问题、性能与协作内容，不只看职位标题。

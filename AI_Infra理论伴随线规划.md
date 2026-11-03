@@ -173,7 +173,7 @@ ML/ML_配套练习.md：有明确模块映射时，在真实课程数据上形�
 -> T9：Tensor / storage / layout / dtype / device（已通过）
 -> T10：用已会线性分类器学习Module、状态与保存恢复
 -> T11：用已会标量链学习autograd
--> T12：首次从XOR进入神经网络、隐藏层、ReLU与MLP训练
+-> T12：先推出线性分类边界，再用XOR进入神经网络、隐藏层、ReLU与MLP训练
 -> T13：泛化与正则化
 -> T14：CNN/ResNet第一层（原有可延期范围保持）
 -> T15：token / embedding / mask
@@ -1311,12 +1311,12 @@ autograd_inspect.py
 
 ## T12：MLP、activation、loss 与 optimizer
 
-本模块首次正式讲神经网络结构：XOR暴露单层线性分类器的局限 → 两次Linear仍可合并 → 需要非线性 → ReLU的四点变换 → 隐藏表示与MLP → 训练/保存/恢复。T10的状态管理与T11自动求导是已备好的工具，不倒过来要求T10先接受本模块结构。
+本模块首次正式讲神经网络结构：先让`Linear(2,2)`的两个logits实际完成一次类别判断，由`z1=z0`推出二维直线边界；再把XOR四点放进平面，说明单层模型为什么分不开。随后依次完成“两次Linear仍可合并 → 需要非线性 → ReLU逐点改变表示 → 隐藏表示与MLP → 训练/保存/恢复”。T10的状态管理与T11自动求导是已备好的工具，不倒过来要求T10先接受本模块结构。
 
 ### 学习内容
 
 ```text
-XOR暴露单层Linear的表达限制
+两个logits比大小 -> 相等处形成直线边界 -> XOR暴露单层Linear的表达限制
 两次Linear仍可合并 -> ReLU产生非线性隐藏表示
 TinyMLP logits -> CrossEntropyLoss
 zero_grad -> forward -> loss -> backward -> optimizer.step
