@@ -1361,6 +1361,8 @@ T12 与 Ex3/Ex4 都通过、且系统主线没有 correctness blocker 时，可�
 
 ## T13：generalization、regularization 与实验纪律
 
+**教材状态（2026-11-04）：[T13提前稿](ai_theory/T13/T13.md)已按T11学习者主线重新收束，尚未学习或通过。** 正文固定沿`baseline曲线 -> weight decay更新 -> 同起点对照 -> validation选checkpoint -> fresh model恢复 -> 最终test`推进；Dropout与实验纪律扩展在核心闭环之后。
+
 ### 学习内容
 
 ```text
@@ -1401,6 +1403,8 @@ T13 与 Ex5 都通过后，按 [ML/Kaggle入门实践.md](ML/Kaggle入门实践.
 
 ## T14：CNN 与 ResNet forward 第一层（可延期）
 
+**教材状态（2026-11-04）：[T14提前稿](ai_theory/T14/T14.md)已按T11学习者主线重新收束，尚未学习或通过。** 核心只沿`数值卷积 -> NCHW/shape -> residual mismatch -> projection -> 同一block的state与本次Tensor`推进。
+
 ### 为什么 AI Infra 仍要学一点 CNN
 
 CNN 是理解：
@@ -1422,16 +1426,17 @@ checkpoint execution
 ```text
 convolution input/output shape
 channel / kernel / stride / padding
-pooling
 residual connection
 ResNet block forward
 ```
+
+Pooling只在核心block完成后作stride convolution的短对照；BatchNorm继续是可选扩展。两者都不参与核心PASS。
 
 ### 学到什么程度
 
 能对一个小 ResNet block 标注每一步 shape；不要求手推完整 convolution backward。
 
-R1保持Conv/ReLU与独立shortcut设计。R2只解释projection怎样通过通道组合与stride同时对齐两条path，再简短对照真实BasicBlock的分支骨架。R3继续观察同一个无BatchNorm组件的参数、buffer、selected activations、hook与state_dict，不增加新层；buffer bytes为0是正确结果。
+R1只完成shape不变的Conv/ReLU/identity shortcut，并用真实Conv2d保留shape-changing addition失败。R2从这个失败推出projection怎样通过通道组合与stride同时对齐两条path，再升级同一个class并简短对照真实BasicBlock的分支骨架。R3继续观察同一个无BatchNorm组件的参数、buffer、selected activations与state_dict，不增加新层；buffer bytes为0是正确结果。Forward hook只在现有接口不方便观察中间shape时选用，不是核心能力。
 
 BatchNorm整块放在核心课完成后的可选扩展，从运行统计量的需求接回parameter/buffer、train/eval与state_dict变化。它不是T14核心通过条件，不要求为了对照真实ResNet改写已完成的教学block。
 
@@ -1453,7 +1458,7 @@ residual_block_forward.py
 
 ## T15：sequence、token、embedding 与 mask
 
-**教材状态（2026-10-21，进度校准至2026-10-27）：[T15提前稿](ai_theory/T15/T15.md)已按用户要求生成，尚未学习或通过。** 当前理论下一步是T12。T15沿原T13之后的安排学习，T14保留可延期边界；相邻前课通过或正式进入时，再根据最新真实产出校准。
+**教材状态（2026-11-04）：[T15提前稿](ai_theory/T15/T15.md)已按T11标杆复检，尚未学习或通过。** 当前理论下一步是T12。T15沿原T13之后的安排学习，T14保留可延期边界；相邻前课通过或正式进入时，再根据最新真实产出校准。
 
 本课分两段能力阶段，不机械套三轮：R1先把固定词表、两个不同长度的序列、右侧补位与embedding查表接通，得到编号`[B,S]`和向量`[B,S,H]`后暂停；R2在同一程序中引入“来源是否真实”与“是否在当前前缀内”，组成允许表并验证屏蔽后的softmax。Q/K/V分数来源留T16。
 
@@ -1499,7 +1504,7 @@ embedding_and_mask.py
 
 ## T16：self-attention 的 Q / K / V 主线
 
-**教材状态（2026-10-23，进度校准至2026-10-27）：[T16提前稿](ai_theory/T16/T16.md)已生成，尚未学习或通过。** 正式学习当前从T12推进；T15通过后或实际进入T16时，再按真实实现和笔记校准，不因生成教材自动通过Theory Gate 2。
+**教材状态（2026-11-04）：[T16提前稿](ai_theory/T16/T16.md)已按T11标杆复检，尚未学习或通过。** 正式学习当前从T12推进；T15通过后或实际进入T16时，再按真实实现和笔记校准，不因生成教材自动通过Theory Gate 2。
 
 讲解沿“输入位置需要别处内容 -> 按比例汇总 -> 怎样算比例 -> 查询与来源匹配 -> Q/K/V从X投影 -> 缩放/softmax/加权和”连续推进。R1先完成一条序列的手算与PyTorch计算，暂停；R2在同一程序接T15批次和True=允许的mask，验证未来/补位/跨序列隔离与允许来源的影响，再对照逐行参照。复用已会softmax和线性组合，不提前加入多头、训练语言模型或KV Cache。
 
@@ -1590,7 +1595,7 @@ mask复用T15非空、右补位规则；本函数只接完整`[S,S]`或`[B,S,S]`
 
 ## T17：multi-head attention 与 Transformer block
 
-**教材状态（2026-10-24）：[T17提前稿](ai_theory/T17/T17.md)已生成，尚未学习或通过。** 正式进入前核对T16及Theory Gate 2；生成文件不代表前置已过，不新增Week16首批C++/后台试投门槛。
+**教材状态（2026-11-04）：[T17提前稿](ai_theory/T17/T17.md)已按T11标杆复检，尚未学习或通过。** 正式进入前核对T16及Theory Gate 2；生成文件不代表前置已过，不新增Week16首批C++/后台试投门槛。
 
 R1只解决“同一位置怎样保留多组读取结果”：从T16逐头参照出发，具体编号演示拆头、交换轴和合并，再用输出投影组合结果。R1暂停后，R2才从“保留旧表示并取得更新”引出残差，从“分支输入尺度”引出LayerNorm，最后接逐位置FFN，完成同一个前置归一化block。首次术语沿具体动作出现，不把未来组件提前装进首版。
 
@@ -1629,7 +1634,7 @@ CPU float64，逐步assert shape；以逐头计算和手写LayerNorm公式核对
 
 ## T18：decoder-only Transformer 完整 forward
 
-**教材状态（2026-10-28）：[T18提前稿](ai_theory/T18/T18.md)已生成，尚未学习或通过。** 正式进入前先完成T15～T17；生成文件不前移理论任务，也不增加Week16首批C++/后台试投门槛。
+**教材状态（2026-11-04）：[T18提前稿](ai_theory/T18/T18.md)已按T11标杆复检，尚未学习或通过。** 正式进入前先完成T15～T17；生成文件不前移理论任务，也不增加Week16首批C++/后台试投门槛。
 
 ### 学习内容
 
@@ -1670,7 +1675,7 @@ decoder_only_forward.py
 
 ## T19：probability distribution 与 token sampling
 
-**教材状态（2026-10-28）：[T19提前稿](ai_theory/T19/T19.md)已生成，尚未学习或通过。** 它是T18 logits输出的后续进阶组件，不加入Week16首批C++/后台试投门槛，也不表示Week17以后课表已经排定。
+**教材状态（2026-11-04）：[T19提前稿](ai_theory/T19/T19.md)已按T11标杆复检，尚未学习或通过。** 它是T18 logits输出的后续进阶组件，不加入Week16首批C++/后台试投门槛，也不表示Week17以后课表已经排定。
 
 ### 学习内容
 
@@ -1712,7 +1717,7 @@ sampling_methods.py
 
 ## T20：training 与 inference 的对象、内存和计算差异
 
-**教材状态（2026-10-29）：[T20提前稿](ai_theory/T20/T20.md)已生成，尚未学习或通过。** 它接在T12训练、T10状态恢复与T11自动求导之后，用同一个TinyMLP逐项建立训练/新进程推理的对象账；不前移当前T12，不把逻辑payload估算冒充GPU峰值，也不增加Week16首批试投门槛。
+**教材状态（2026-11-04）：[T20提前稿](ai_theory/T20/T20.md)已按T11标杆复检，尚未学习或通过。** 它接在T12训练、T10状态恢复与T11自动求导之后，用同一个TinyMLP逐项建立训练/新进程推理的对象账；不前移当前T12，不把逻辑payload估算冒充GPU峰值，也不增加Week16首批试投门槛。
 
 ### 学习内容
 
@@ -1799,7 +1804,7 @@ model_memory_estimate.py
 
 ## T21：prefill、decode 与 KV Cache
 
-**教材状态（2026-11-02）：[T21提前稿](ai_theory/T21/T21.md)已生成，尚未学习或通过。** 它只沿一条固定序列推进：先用完整prefix建立参照，再让prefill留下连续K/V、让单步decode只追加新K/V，最后才把同一份cache放进block table模拟。它不前移当前T12，也不把CPU reference冒充serving性能证据。
+**教材状态（2026-11-04）：[T21提前稿](ai_theory/T21/T21.md)已按T11标杆复检，尚未学习或通过。** 它只沿一条固定序列推进：先用完整prefix建立参照，再让prefill留下连续K/V、让单步decode只追加新K/V，最后才把同一份cache放进block table模拟。它不前移当前T12，也不把CPU reference冒充serving性能证据。
 
 ### 本周问题
 

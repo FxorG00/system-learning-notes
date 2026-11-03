@@ -9350,3 +9350,15 @@ T12现在先把`train_model`的两条结果通道分开：传入的同一个`mod
 checkpoint段沿同一规则重排：先提出“旧进程对象消失后，文件能否恢复同一logits”，再显式拆出`state_dict`返回映射、`torch.save`写文件、`torch.load`返回映射、`load_state_dict`修改既有fresh model并返回装载诊断，最后才执行`eval`与forward。官方PyTorch 2.14/2.15文档确认`state_dict`、`torch.load`与`load_state_dict(strict=True)`的当前语义；19段Python围栏全部通过AST，162个代码围栏、34个display-math定界符成对，3个本地链接存在，无控制字符和非表格正文长行。Windows本地没有PyTorch，本轮也没有新的SSH运行授权，因此不冒称重新动态执行；此前固定seed训练、fresh load和状态顺序的Ubuntu教材QA仍只作既有技术证据。
 
 三遍检查相互独立。技术遍核对代码片段、API返回/副作用与官方文档；教学遍从头审查T12，确认CrossEntropyLoss、optimizer、训练函数、checkpoint和R2观察对象均先有用途再有接口，未发现同等级断层；全局遍核对Memory §4/§13、理论/总/C++规划、Week14、Daily索引与两份资料入口，真实状态仍为T1～T11通过、下一步T12，系统主线92个整日通过/93份Daily、Week14 Day2下一步R1。T12三轮、产出、通过标准及T13～T21依赖未变，因此不制造规划diff。用户已有T10/T11 note与正文、T11 PDF/assets、Week14 Day1 note和`杂教程/namespace.md`均保持不改、不提交。
+
+## 2026-11-04：T13～T21按T11学习者主线重新对齐
+
+用户要求以已经正式通过的T11为质量标杆，重审T13及之后全部已生成AI Theory教程，并严格同步规划与资料入口。这里复用§1.1、§9.3、§9.11已有规则，没有把T11的章节数量、三轮外形或篇幅机械复制成新模板。标杆只表示：一课先确定唯一认知主干；对象、行为和用途先于术语与接口；核心问题闭合后才展开相关知识；表格只压缩已经走过的具体过程。
+
+T13与T14是本轮主要结构调整。T13固定沿`baseline曲线 -> weight decay改变更新 -> 相同初始状态受控比较 -> validation选择checkpoint -> fresh model恢复winner -> 最终test`推进；`evaluate_mse`与训练helper在签名前先交代用途、输入、返回、状态变化和消费者。Dropout、data leakage、seed与early stopping保留在主实验完成后的扩展区。T14固定沿`具体卷积数值 -> NCHW与shape -> residual两条path不匹配 -> projection重新对齐 -> 同一个block的state与本次Tensor`推进；R1只完成identity block并保留真实mismatch，R2才解释1×1 projection并升级同一个class。Pooling、forward hook与BatchNorm不再抢占核心通过路径，其中hook只是接口不便时的可选观察工具，BatchNorm只在核心闭环后解释真实ResNet新增的运行统计状态。
+
+T15～T21原有对象链和停止边界整体成立，因此只补真实缺口，不为制造整齐而重写。`make_batch`、attention/block forward、decoder forward、sampling函数、内存计数helper和KV Cache reference现在都明确说明“要完成什么、接收什么、返回给谁、是否修改已有对象”。T16原接口契约已经足够，只更新复检状态。当前PyTorch stable文档为2.15；本轮用官方Conv2d、MaxPool2d、Module/state_dict、BatchNorm2d、AdamW、Embedding、pad_sequence与scaled-dot-product attention资料核对shape、状态、decoupled weight decay和bool mask语义，教程仍按仓库实际环境所需的版本边界表达，不把main分支的新能力反向塞入核心任务。
+
+同步`AI_Infra理论伴随线规划.md`、`plan_strengthened.md`和两份AIInfraGuide资料入口，统一记录T13～T21已于2026-11-04按T11标杆复检但尚未学习或通过。真实进度不变：T1～T11及Theory Gate 1通过，下一步仍是T12；T12～T21均为未通过提前稿，Theory Gate 2未通过。系统主线仍为92个整日通过、93份Daily生成、Week14 Day2下一步R1。
+
+三遍检查各自承担不同目的：第一遍核代码围栏、Python语法、公式/链接和PyTorch语义；第二遍核每课认知主干、术语出现顺序、任务契约和扩展边界；第三遍核进度、依赖、规划、资料入口、Git保护范围与发布状态。用户已有T10/T11/T12正文或note改动、T11 PDF/assets、Week14 notes、T14快捷方式及杂教程未跟踪文件均保持不改、不提交。本轮没有新的SSH或完整PyTorch动态运行，不冒称提前稿已经实测通过；只提交获准的教程、规划、映射与Memory，不push。
