@@ -178,7 +178,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-03）：Week13 Day7整日以98/100正式通过，R1历史95/100保持。Week13整周正式完成，系统主线91个整日通过、92份Daily生成。Week14 Day1 R1已以98/100正式通过，下一步R2；Day1整日尚未完成，周规划不计入Daily数量。
+当前快照（2026-11-03）：Week13整周正式完成；Week14 Day1分轮98/98/99并整日正式通过。系统主线92个整日通过、93份Daily生成。[Week14 Day2](week14/day2/day2.md)教程已生成，尚未开始验收，下一步R1；周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T1～T11与Theory Gate 1已通过，理论下一步T12；T12～T21仍为未通过的提前稿，Theory Gate 2未通过。
 
@@ -9290,3 +9290,19 @@ Day1的candidate record在store修改前完成，实际结果决定保留或丢�
 Week14周图与R2/R3说明、总规划、C++补缺规划和DAILY_INDEX已同步本轮日期与结果类型；理论规划的进度表述仍正确，无需制造接口级diff。
 
 用户`day1_note.md`、代码、tests、CMake与T11相关文件均只读，不纳入提交。实际进度不变：91个整日通过、92份Daily生成，Week14 Day1 R1已通过98/100、下一步R2，理论下一步T12。本轮是教材与规则对齐，未运行SSH、编译或项目测试。
+
+## 2026-11-03：Week14 Day1 R2/R3收口并整日通过
+
+Week14 Day1最终分轮为R1 98/100、R2 98/100、R3 99/100，整日正式通过。最终跨层结果为`CommandOutcome { reply, std::optional<std::string> aof_record }`：handler在命令差异仍有用时判断状态变化并生成完整record，application owner后续只消费有无record，不再保留多余命令分类。正数EXPIRE仍等待Day4取得绝对日历期限；成功的非正EXPIRE规范化成DEL。
+
+R3把record生成限制与parser限制对齐，覆盖单Bulk、元素数量和完整frame上限；空DEL与负PEXPIREAT稳定失败。SET及成功删除路径均先准备完整record，再修改store；encoder失败不会暴露半条返回值，也不会提前产生成功reply。用户完成其余实现，Codex按明确委托补充机械correctness tests与encoder边界检查。既有focused结果为`aof_record_test` 7/7、`command_dispatcher_test` 10/10、`ttl_command_test` 24/24，共41/41；这里记录既有验收，不冒记本次Day2生成时重新运行。
+
+Day1教程头部、停止点、周规划、总/理论/C++补缺规划、Daily索引和资料入口已从“R1已过、下一步R2”统一更新为“Day1整日通过、下一步Day2 R1”。用户`week14/day1/day1_note.md`及Ubuntu源码、tests、CMake保持不改。
+
+## 2026-11-03：Week14 Day2完整追加与同步边界教程生成
+
+新增`week14/day2/day2.md`。教程只沿一条对象链推进：Day1完整owning record -> `AofWriter`拥有append fd -> `write_all`按offset补齐 -> `fdatasync`满足显式同步边界 -> Day5才允许success reply进入Connection output。R1闭合正常追加、重新打开不截断与binary payload；R2从“刚写完能读到仍不等于满足同步边界”推出独立`sync()`；R3在真实普通文件不容易触发稀有分支后，才增加两个最小可控调用入口，逐个验证短写、EINTR、零进展、部分写入后EIO与同步失败。部分record已经写出后不假装回滚，直接连接Day6的不完整文件尾策略。
+
+本日C++补缺只围绕当前组件出现：头文件声明、源文件定义、object file、linker和CMake target。忘记把`.cpp`放进target时，用“编译看见声明但链接找不到定义”的具体失败解释；没有顺势展开static/extern/inline、ODR或完整编译原理。`UniqueFd`、`aof_record`、`CommandOutcome`与当前CMake均通过SSH只读核对；没有修改Ubuntu代码、tests、CMake或note，也没有冒称教材片段已经编译运行。
+
+本次按§9.11完成三遍独立检查。技术遍对照当前真实接口与Linux`write(2)`、`open(2)`、`fdatasync(2)`语义，补齐短写偏移、EINTR、零进展、errno保留、O_APPEND单次write边界和目录项停止边界。教学遍确认先给27-byte记录的具体失败，再提出四问；每个API先交代用途、调用前后状态与消费者，四个故障场景逐一走完后才压成表格。全局遍统一为92个整日通过、93份Daily生成、Day2下一步R1；检查相关本地链接、围栏、控制字符、Typora敏感HTML和正文长行，Day2为100个成对围栏、零控制字符、零超过150字符的行。用户已有T11正文/note/PDF/assets、Day1 note与namespace文件保持不改、不纳入本轮提交。

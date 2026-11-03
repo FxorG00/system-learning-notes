@@ -1,9 +1,9 @@
 # Week14 Day1：把状态变化变成可重放的 RESP 记录
 
-> 版本：2026-11-03，R1 已以 98/100 正式通过；下一步进入 R2
+> 版本：2026-11-03，R1 98/100、R2 98/100、R3 99/100，整日正式通过
 > 前置：Week13 整周已通过，Mini Redis V2 已有 RESP parser、dispatcher、KvStore 与 TTL
 > 今日产出：不打开文件、不接服务器；只把已经确认的状态变化编码成独立、按字节保存的 RESP 记录
-> 学习方式：R1 独立实现记录编码；R2 返回 reply 与可选的完整 AOF record；R3 再统一相对期限与失败边界
+> 学习方式：R1 独立实现记录编码；R2 返回 reply 与可选的完整 AOF record；R3 统一相对期限与失败边界
 
 [TOC]
 
@@ -918,14 +918,22 @@ cmake -E chdir build ctest --output-on-failure
 
 ## 18. 今天的停止边界
 
-R1 已经闭合下面这条链：
+Day1 已经闭合下面三段能力：
 
 ```text
-已确认的状态变化
--> AOF record encoder
--> 一条独立 RESP record
+R1
+-> 已确认的状态变化变成一条独立 RESP record
 -> exact bytes 正确
 -> 现有 parser 能完整还原 arguments
+
+R2
+-> execute_command 同时返回 reply 与可选完整 aof_record
+-> handler 用完命令差异，owner 只消费完整 record
+
+R3
+-> 非正 EXPIRE 规范化成 DEL
+-> 非法或超限 record 稳定失败
+-> record 准备失败时 store 与成功 reply 不提前提交
 ```
 
 今天还没有证明：
@@ -937,4 +945,4 @@ R1 已经闭合下面这条链：
 - TTL 能跨停机保持原到期时刻；
 - 真实 Redis 的 AOF 行为已经被复刻。
 
-接下来进入 R2：让当前 handler 在生成 reply 的同时，把“是否发生了可持久化状态变化”交给 application owner。文件追加仍然留给 Day2。
+接下来进入 [Week14 Day2](../day2/day2.md)：让 application owner 之后能够把完整 record 一字节不丢地追加进文件。
