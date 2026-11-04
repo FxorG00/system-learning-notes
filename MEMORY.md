@@ -182,7 +182,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-04）：Week13整周正式完成；Week14 Day1～Day2整日正式通过。系统主线93个整日通过、93份Daily生成。[Week14 Day2](week14/day2/day2.md)分轮99/99/97并以97/100正式通过，下一步生成Day3；周规划不计入Daily数量。
+当前快照（2026-11-04）：Week13整周正式完成；Week14 Day1～Day2整日正式通过。系统主线93个整日通过、94份Daily生成。[Week14 Day3](week14/day3/day3.md)教程已生成，R1待开始；生成教材不计学习通过，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T1～T11与Theory Gate 1已通过，理论下一步T12；T12～T21仍为未通过的提前稿，Theory Gate 2未通过。
 
@@ -3607,7 +3607,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day2均已正式完成。当前93个整日通过、93份Daily已生成；Week14下一步生成Day3。Day1、Day2与Week13既有实现、测试和笔记证据继续复用，不重做。理论T11整课已通过98/100，T10整课与R1历史99/100保持，下一步T12；Theory Gate 2未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day2均已正式完成。当前93个整日通过、94份Daily已生成；[Week14 Day3](week14/day3/day3.md)教程已生成，下一步进入R1。Day1、Day2与Week13既有实现、测试和笔记证据继续复用，不重做。理论T11整课已通过98/100，T10整课与R1历史99/100保持，下一步T12；Theory Gate 2未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -9408,3 +9408,11 @@ R3在保留production默认`::write`与`::fdatasync`的同时，增加只供可�
 最终97/100并正式通过。扣2分是R3改写后的public header丢失`#pragma once`或等价include guard：单独包含成功，但同一翻译单元重复包含会产生`AofWriter`重定义；同时直接include仍可更完整。扣1分是用户R3笔记把lambda第一次的底层动作写成调用`write_all`，实际应直接调用被注入的底层`::write`写指定前缀并返回结果；口述主线与实现并未混淆，因此不阻塞通过。这两项只记录为后续接入前的轻量整理，Codex没有修改用户header/source/note。
 
 Week14 Day2分轮为99/99/97，整日97/100。当前系统主线93个整日通过、93份Daily生成；Day3尚未生成，下一步生成Week14 Day3。理论下一步仍为T12。Ubuntu中的AOF相关新文件当前仍处于untracked状态，且CMake包含更早累积修改；本轮没有为追求形式留下一个依赖缺失的局部代码commit，后续应在用户整理完整项目提交边界时一并纳入。Windows端只提交获准的状态/规划更新，不push；用户Day2 `fdatasync`增补、Day2 note、T10～T12改动及杂教程保持不改、不提交。
+
+## 2026-11-04：Week14 Day3教程生成，R1待开始
+
+根据Week14既定AOF恢复链、Day1/Day2真实通过结果、用户笔记和Ubuntu当前接口，新增`week14/day3/day3.md`。本日只解决完整SET/DEL日志的启动前重放：从空`KvStore`出发，parser每次解析第一条`Complete`记录，replayer按`consumed_bytes`推进并应用状态变化；重放使用独立路径，不生成客户端reply，也不再次生成或追加AOF record。R1先完成内存bytes上的顺序恢复，R2再把真实文件读取接给同一个核心，R3只收紧完整RESP但不允许重放的命令、错误参数、残缺尾部与启动失败边界。PEXPIREAT与双时钟留Day4，真实server接线留Day5，尾部截断/中间损坏留Day6。
+
+教程已对照当前`RespRequestParser::parse(data,length)`、`RespRequestParseResult::consumed_bytes`、`KvStore::set/erase`、Day1 encoder、Day2 writer及现有CMake target；没有修改用户源码、tests、CMake、Day1/Day2教程增补或任何note。技术审查确认四条示例记录长度为32/32/30/23，总计117 bytes；另用Ubuntu当前`KvStore`和RESP parser做临时`-Werror`编译运行，覆盖顺序覆盖、binary bytes、空输入、拒绝GET和残缺尾部，全部成功，临时文件已清理。这是教材接口QA，不冒充用户已经实现或通过R1。
+
+三遍审查分别完成。第一遍核对真实接口、byte offset、parser状态、文件读取与启动失败边界；第二遍核对唯一认知主干，确保先走完一条记录，再推广循环，R2只补文件桥，R3才讲语法合法与AOF合法的区别；第三遍核对Memory §4/§13、总规划、理论规划、C++补缺、Week14、Daily索引和两份AI Infra资料入口，并检查链接、Markdown围栏、保护范围与Git差异。当前系统主线仍为93个整日通过，但Daily生成数增为94；下一步是Day3 R1。理论下一步仍为T12。正式文件只做本地Git提交，不push；用户T10～T12、Day2 `fdatasync`增补、notes/assets与杂教程改动继续保持不改、不提交。
