@@ -182,11 +182,11 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-03）：Week13整周正式完成；Week14 Day1分轮98/98/99并整日正式通过。系统主线92个整日通过、93份Daily生成。[Week14 Day2](week14/day2/day2.md)教程已生成，尚未开始验收，下一步R1；周规划不计入Daily数量。
+当前快照（2026-11-04）：Week13整周正式完成；Week14 Day1分轮98/98/99并整日正式通过。系统主线92个整日通过、93份Daily生成。[Week14 Day2](week14/day2/day2.md)教程已生成，尚未开始验收，下一步R1；周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T1～T11与Theory Gate 1已通过，理论下一步T12；T12～T21仍为未通过的提前稿，Theory Gate 2未通过。
 
-T11学习者主线版继续作为后续AI Theory讲解质量的标杆。本次主要证据是用户本人笔记，并逐项复用T4的手算/finite difference能力与T11既有教材QA；没有新增“只看笔记就自动通过”的规则，也没有把教材QA冒充用户运行证据。
+T11学习者主线版继续作为后续AI Theory讲解质量的标杆。本次主要证据是用户本人笔记，并逐项复用T4的手算/finite difference能力与T11既有教材QA；没有新增“只看笔记就自动通过”的规则，也没有把教材QA冒充用户运行证据。T13～T21已于2026-11-04按该标杆复检；这只更新教材组织，不改变尚未学习或通过的状态。
 
 Week14周规划生成（2026-10-26）：新增`week14/week14.md`，沿Week13已通过的Reactor/RESP/KvStore/TTL继续，不复制服务器。整周只追一条问题链：成功写操作留下按字节保存的RESP记录 -> 完整追加并满足同步边界 -> 新进程监听前重放完整日志 -> 绝对日历期限转换回新进程的单调期限 -> 原服务器停止与重启 -> 区分不完整文件尾和中间损坏 -> V3证据收口。Day1～Day7只是依赖规划，均未生成、未学习、未验收；当前仍91/91。
 
@@ -3613,7 +3613,7 @@ Week13整周与Week14 Day1均已正式完成；Day1分轮为98/98/99。当前92�
 
 教材准备以§4为唯一当前快照。按T8线性分类器 → T9 Tensor → T10 Module状态 → T11标量autograd → T12从logits决策与线性边界走到首次多层模型的依赖推进；不把提前稿或教材实测记为学习通过。
 
-T15～T21已按用户请求提前生成，路径按`ai_theory/Tn/Tn.md`组织；仅更新教材准备，当前理论下一步仍是T12。T15准备输入和读取规则，T16完成单头Q/K/V与内容汇总，T17扩多头并接前置LayerNorm表示更新block，T18再连接token/position embedding、1～2个block、final norm与LM head，停在最后真实位置的logits；T19把`[B,V]` logits接到greedy或temperature/top-k sampling，输出`[B]` next-token IDs；T20用同一个TinyMLP对照训练与fresh inference对象，再补权重容量和INT8表示reference；T21用固定序列对照full recompute、连续KV Cache与block table寻址。Top-p只在T19核心后建立直觉，完整生成循环、多个请求调度和性能结论继续后置。相邻前课通过后或实际进入时按真实结果校准；T14若延期，进入T15仍按最近已完成的前置校准，不把可延期课重新变成硬前置。T17～T21都是更后续材料，不加入Week16首批试投Gate，也不提前排Week17以后的实际课表。
+T13～T21已按用户请求提前生成，路径按`ai_theory/Tn/Tn.md`组织，并于2026-11-04按T11学习者主线标杆完成复检；这只是教材准备，当前理论下一步仍是T12。T13沿baseline曲线、weight decay受控对照、validation选择checkpoint、恢复与最终test闭环，Dropout等内容在核心之后；T14沿数值卷积、shape、residual mismatch、projection与同一无BatchNorm block的state观察推进，仍可延期。T15准备输入和读取规则，T16完成单头Q/K/V与内容汇总，T17扩多头并接前置LayerNorm表示更新block，T18再连接token/position embedding、1～2个block、final norm与LM head，停在最后真实位置的logits；T19把`[B,V]` logits接到greedy或temperature/top-k sampling，输出`[B]` next-token IDs；T20用同一个TinyMLP对照训练与fresh inference对象，再补权重容量和INT8表示reference；T21用固定序列对照full recompute、连续KV Cache与block table寻址。Top-p只在T19核心后建立直觉，完整生成循环、多个请求调度和性能结论继续后置。相邻前课通过后或实际进入时按真实结果校准；T14若延期，进入T15仍按最近已完成的前置校准，不把可延期课重新变成硬前置。T17～T21都是更后续材料，不加入Week16首批试投Gate，也不提前排Week17以后的实际课表。
 
 量化补强已登记为后续能力：T20从一个数讲刻度、取整/范围与恢复，保留原容量脚本；CPU浮点线性层正确后，在同一项目补INT8权重表示/反量化/输出误差与字节对照；真实低精度计算和部署再按匹配硬件/后端验证收益。详细要求唯一维护在`AI_Infra理论伴随线规划.md`的T20衔接段，总规划Gate B/C/D作阶段引用。数值参考可在CPU完成，恢复为浮点计算不声称INT8加速；用户独立负责性能问题、测量和最终结论，Codex可承担重复正确性测试与脚手架。这不改变当前Mini Redis、理论下一步T12、T1～T24编号或原Gate，不增加Week16首批试投门槛；Week16收口后才确定实际课次。
 
@@ -9362,3 +9362,11 @@ T15～T21原有对象链和停止边界整体成立，因此只补真实缺口�
 同步`AI_Infra理论伴随线规划.md`、`plan_strengthened.md`和两份AIInfraGuide资料入口，统一记录T13～T21已于2026-11-04按T11标杆复检但尚未学习或通过。真实进度不变：T1～T11及Theory Gate 1通过，下一步仍是T12；T12～T21均为未通过提前稿，Theory Gate 2未通过。系统主线仍为92个整日通过、93份Daily生成、Week14 Day2下一步R1。
 
 三遍检查各自承担不同目的：第一遍核代码围栏、Python语法、公式/链接和PyTorch语义；第二遍核每课认知主干、术语出现顺序、任务契约和扩展边界；第三遍核进度、依赖、规划、资料入口、Git保护范围与发布状态。用户已有T10/T11/T12正文或note改动、T11 PDF/assets、Week14 notes、T14快捷方式及杂教程未跟踪文件均保持不改、不提交。本轮没有新的SSH或完整PyTorch动态运行，不冒称提前稿已经实测通过；只提交获准的教程、规划、映射与Memory，不push。
+
+## 2026-11-04：T13～T21改版后的全局现行口径复核
+
+用户再次要求对齐所有文件。本轮把现行状态、课程依赖与发布保护分开检查，没有把命中旧日期记录的关键词误判为当前冲突。`plan_strengthened.md`、`AI_Infra理论伴随线规划.md`、`C++项目伴随补缺规划.md`、`DAILY_INDEX.md`、`week14/week14.md`和两份AI Infra资料入口已经一致，不为制造同步痕迹改写。
+
+唯一需要修正的是Memory现行入口：§4快照日期推进到2026-11-04，并明确T13～T21已经按T11标杆复检但仍未学习或通过；§13教材准备补入T13的受控实验闭环和T14的无BatchNorm核心边界。现行状态继续是系统主线92个整日通过、93份Daily生成、Week14 Day2下一步R1；理论T1～T11与Theory Gate 1通过、下一步T12，T12～T21和Theory Gate 2均未通过。
+
+三遍复核分别确认：第一遍核对T13～T21首页状态、轮次职责和前置关系；第二遍核对T13/T14核心与补充边界、T15～T21连续对象链及T11教学标杆；第三遍核对全部当前规划/索引/资料入口、相对链接、Git状态与保护清单。带日期的旧状态继续保留为历史证据；用户已有T10/T11/T12正文和notes、T11 PDF/assets、Week14 notes、T14快捷方式及杂教程文件均不修改、不提交。本轮没有新增运行、SSH或性能证据，不push。
