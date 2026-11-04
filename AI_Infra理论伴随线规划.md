@@ -1,7 +1,7 @@
 # AI Infra 理论伴随线规划
 
 > 对齐日期：2026-11-04。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)及[C++与系统面试查漏地图](杂教程/C++与系统面试查漏地图.md)。
-> 当前状态：T1～T11及Theory Gate 1已通过；T11整课98/100，T10整课与R1均为99/100，下一步T12。T12～T21是未通过的提前稿，Theory Gate 2未通过。T11学习者主线版继续作为后续AI Theory讲解标杆。
+> 当前状态：T1～T11及Theory Gate 1已通过；T12 R1已以97/100正式通过，下一步T12 R2。T12整课与T13～T21尚未通过，Theory Gate 2未通过。T11学习者主线版继续作为后续AI Theory讲解标杆。
 > Git留痕与发布权限统一按`MEMORY.md` §9.12：正式仓库文件有变化就本地commit；push需另行明确授权。
 > 系统主线：Week13 Day1～Day7与Week14 Day1～Day2均已通过；93个整日通过、94份Daily已生成。[Week14 Day3](week14/day3/day3.md)教程已生成，R1待开始。
 > 目标：LLM inference systems / serving与CUDA/Triton kernel optimization；本线不替代系统项目。
@@ -196,7 +196,7 @@ T9～T11是PyTorch对象、状态与求导的过渡，不依赖先学完整神�
 
 当前系统主线的Week14 Day1～Day2均已整日通过，Day2为97/100；Day3教程已生成，R1待开始；Week13 Day1～Day7均已通过。TTL组件、命令、主动清理、网络接入与虚函数补缺已经收口；原Week14～Week16继续AOF/恢复、故障/性能和项目出口。
 
-理论下一步T12，已通过的T1～T11不重做。Ex1与T7共用已有线性回归证据；T8/Gate 1与T9的等价产出已验收，不为统一文件名再造一份实现。
+理论下一步T12 R2，已通过的T1～T11与T12 R1不重做。Ex1与T7共用已有线性回归证据；T8/Gate 1与T9的等价产出已验收，不为统一文件名再造一份实现。
 
 理论线编号保持 `T1~T24`。它表达模块依赖，不把编号当自然周：
 
@@ -1203,7 +1203,7 @@ tensor_layout.py
 
 ## T10：`nn.Module`、parameter、forward 与 inference mode
 
-**T10于2026-10-25以99/100正式通过，R1历史99/100保持；后续T11已通过，当前下一步T12。** 用户笔记与Ubuntu真实脚本共同证明模型状态、两个运行开关和checkpoint恢复主线；实际main完成fresh load与同输入输出对照，私有32项补足四种mode状态、独立存储、尺寸失败和dtype转换。实际TinyClassifier未加入Dropout，train/eval输出差异由笔记等效证明，保留1分但不阻塞通过。机械检查未全部写进用户main不重复扣分。本课继续作为部署/状态前置，三轮证据不重做。
+**T10于2026-10-25以99/100正式通过，R1历史99/100保持；后续T11已通过，当前下一步T12 R2。** 用户笔记与Ubuntu真实脚本共同证明模型状态、两个运行开关和checkpoint恢复主线；实际main完成fresh load与同输入输出对照，私有32项补足四种mode状态、独立存储、尺寸失败和dtype转换。实际TinyClassifier未加入Dropout，train/eval输出差异由笔记等效证明，保留1分但不阻塞通过。机械检查未全部写进用户main不重复扣分。本课继续作为部署/状态前置，三轮证据不重做。
 
 第一版沿用T8已经会的线性多分类器：XW+b对应nn.Linear的一次乘加，不引入隐藏层、ReLU或MLP。先访问linear/weight/bias，再用debug_tensor区分普通属性与框架管理，解释登记后分别读named_modules和named_parameters的完整输出；此时才用树描述本例的包含关系。固定缩放需要共同保存时加入buffer，随后用state_dict收集数值并观察共享与快照。model(inputs)的正常用法就近给出，hook放选读；Dropout仅在R2用于观察模式，第一次出现先用普通概率和具体向量走通随机置零、缩放与eval原样通过，极端概率只作确定性验证。inference mode先用同一个标量乘加展示“不写仍能预测、写了不留求导记录”，再解释with范围并回到当前分类器；四组合必须有可运行观察代码，不只给职责表。保存恢复统一服务于“旧进程消失后，新进程用同类/配置/checkpoint恢复同一预测”，先交代数值文件与可执行对象各缺什么，再出现load链；Module.to另从真实dtype不匹配推出，不混作checkpoint步骤。按MEMORY §9.3保持同一对象的需求链，不按API目录横向展开。三轮任务、CPU环境和不新增训练的范围不变。
 
@@ -1255,7 +1255,7 @@ module_inference.py
 
 ## T11：computation graph、autograd 与 backpropagation
 
-**T11于2026-10-27以98/100正式通过。** 用户将R1～R3连续学完，以本人笔记作为主要证据；既有T4手算/finite difference能力与T11中的可执行片段共同覆盖三路求导关系，不要求为同一标量链再造独立脚本。两处非阻塞表述已补准：`6,2`与`14,-7`来自两组不同输入；旧图默认不能重复backward不等于没有`retain_graph=True`这一显式复用选项。下一步T12，本课证据不重做。
+**T11于2026-10-27以98/100正式通过。** 用户将R1～R3连续学完，以本人笔记作为主要证据；既有T4手算/finite difference能力与T11中的可执行片段共同覆盖三路求导关系，不要求为同一标量链再造独立脚本。两处非阻塞表述已补准：`6,2`与`14,-7`来自两组不同输入；旧图默认不能重复backward不等于没有`retain_graph=True`这一显式复用选项。T12 R1已经通过，下一步T12 R2；T11证据不重做。
 
 沿T4已经会的标量乘加/平方链学习，不依赖神经网络。`backward()`第一次调用时，先展示调用前`.grad=None`、方法返回`None`、调用后leaf梯度写入`.grad`、参数值保持不变；先让学习者会用API。随后沿同一条`loss -> error -> z -> product -> w/b`反向路径走一次：平方、减法、加法、乘法各推进一个局部导数动作，节点名紧跟对应动作出现。一次完整反传已经提供足够重复，模式出现后立即收束并命名computation graph，不拆成四篇同构说明。图只画当前理解所需的分叉与`w.grad/b.grad`落点，不把`AccumulateGrad`、`next_functions`等engine边界前置。首次使用`grad_fn`时拆明`grad = gradient`、`fn = function`，先给代表性输出，再解释它指向产生当前结果的最后一个运算求导节点，并与保存数值的`.grad`分开。R1完成manual、finite difference、autograd三路对照并保留累积预测；R2只处理梯度清理以及graph saved state与leaf `.grad`的不同寿命，`retain_grad()`降为短选看；R3连续检查最终scalar目标、记录范围与backward依赖旧值。向量输出先走通“上游权重怎样组成标量目标”，再命名VJP；动态分支不进入核心任务。
 
@@ -1310,6 +1310,8 @@ autograd_inspect.py
 ---
 
 ## T12：MLP、activation、loss 与 optimizer
+
+**R1于2026-11-04以97/100正式通过，下一步R2。** 用户已完成XOR训练、parameter变化、checkpoint保存、fresh model strict load与独立推理；R2只观察一次更新的状态顺序，不重做R1。整课与Theory Gate 2尚未通过。
 
 本模块首次正式讲神经网络结构：先让`Linear(2,2)`的两个logits实际完成一次类别判断，由`z1=z0`推出二维直线边界；再把XOR四点放进平面，说明单层模型为什么分不开。随后依次完成“两次Linear仍可合并 → 需要非线性 → ReLU逐点改变表示 → 隐藏表示与MLP → 训练/保存/恢复”。T10的状态管理与T11自动求导是已备好的工具，不倒过来要求T10先接受本模块结构。
 
@@ -1458,7 +1460,7 @@ residual_block_forward.py
 
 ## T15：sequence、token、embedding 与 mask
 
-**教材状态（2026-11-04）：[T15提前稿](ai_theory/T15/T15.md)已按T11标杆复检，尚未学习或通过。** 当前理论下一步是T12。T15沿原T13之后的安排学习，T14保留可延期边界；相邻前课通过或正式进入时，再根据最新真实产出校准。
+**教材状态（2026-11-04）：[T15提前稿](ai_theory/T15/T15.md)已按T11标杆复检，尚未学习或通过。** 当前理论下一步是T12 R2。T15沿原T13之后的安排学习，T14保留可延期边界；相邻前课通过或正式进入时，再根据最新真实产出校准。
 
 本课分两段能力阶段，不机械套三轮：R1先把固定词表、两个不同长度的序列、右侧补位与embedding查表接通，得到编号`[B,S]`和向量`[B,S,H]`后暂停；R2在同一程序中引入“来源是否真实”与“是否在当前前缀内”，组成允许表并验证屏蔽后的softmax。Q/K/V分数来源留T16。
 
@@ -2296,7 +2298,7 @@ Gate C 后：KuiperLlama / CUDA
 | T22~T23 | Continuous Batching、LLM 推理指标与瓶颈分析 | 复用自己的调度仿真和 benchmark；不把站内速度或利用率数字当作本机结果 |
 | Theory Gate 3 之后 | 与总规划 Gate C/D/E 对应的 CUDA、serving、通信文章 | 继续等待各 Gate 的实际前置；没有 GPU 时保留 CPU 路径，不照跑 CUDA 示例 |
 
-**当前T1~T11与Theory Gate 1已通过，下一步T12。** 新资料计入原有每天30~60分钟预算，替换重复的第二讲解，不额外加一份每日阅读任务。T13已有ML/T8 generalization基础，T14仍可延期；不能因为网站目录齐全就新增重复课程或改变求职日期。
+**当前T1~T11、Theory Gate 1与T12 R1已通过，下一步T12 R2。** 新资料计入原有每天30~60分钟预算，替换重复的第二讲解，不额外加一份每日阅读任务。T13已有ML/T8 generalization基础，T14仍可延期；不能因为网站目录齐全就新增重复课程或改变求职日期。
 
 生成或获准润色 T 教程时，Codex 先查映射、实读相关小节，再把有用解释编排在当前对象与需求出现的位置。必学机制仍由正文讲清；外部阅读标明用途和停止点。API、数值语义及硬件限制由官方文档复核，遵守 MEMORY §9.8 的资料分工与独立练习保护规则。
 
