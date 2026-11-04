@@ -1,6 +1,6 @@
 # Week14 Day2：把完整 AOF 记录一字节不丢地追加进文件
 
-> 版本：2026-11-03，教程已生成，尚未开始验收
+> 版本：2026-11-04，R1 已以 99/100 正式通过；下一步进入 R2
 > 前置：Week14 Day1 已整日通过，R1 98/100、R2 98/100、R3 99/100
 > 今日产出：一个拥有 AOF 文件描述符的 `AofWriter`，能完整追加记录并显式同步
 > 学习方式：R1 先闭合正常追加；R2 再区分追加与同步；R3 最后验证短写和失败路径
@@ -113,7 +113,8 @@ flowchart LR
     F --> G["Day5 才允许 success reply 进入 output"]
 ```
 
-今天只实现图中的 `AofWriter`、`write_all` 和 `sync()`。
+R1 先实现图中的 `AofWriter` 与 `write_all`。
+R2 再给同一个对象增加 `sync()`。
 
 `CommandOutcome` 与 `AofWriter` 的正式接线留在 Day5。
 这能让文件 I/O 先作为独立组件被验证。
@@ -297,7 +298,32 @@ remaining 没变
 
 ## 8. R1 的测试到底证明什么
 
-测试使用两条真实的 Day1 record：
+R1 用两个测试分别回答两个问题。
+
+### 8.1 文件还不存在时，writer 能否创建并精确追加
+
+第一个测试是：
+
+```cpp
+const auto record = encode_aof_set("plain", "value");
+
+AofWriter writer(path);
+writer.append(record);
+
+EXPECT_EQ(read_file_as_bytes(path), record);
+```
+
+调用前，`path` 指向的文件不存在。
+
+构造成功说明 `O_CREAT` 路径可用。
+读回结果与 `record` 逐字节相等，说明第一次追加没有丢失、重复或改写 bytes。
+
+这个测试也真实暴露了一个构造问题：使用 `O_CREAT` 时必须向 `open()` 传入文件权限。
+当前实现已经补为 `0644`。
+
+### 8.2 重新打开后，旧记录是否保留，binary bytes 是否完整
+
+第二个测试使用两条真实的 Day1 record：
 
 ```cpp
 const auto first = encode_aof_set("plain", "value");
@@ -307,7 +333,7 @@ const std::string binary_value{"v\r\n\0z", 5};
 const auto second = encode_aof_set(binary_key, binary_value);
 ```
 
-然后走两个 writer 生命周期：
+测试先创建一个合法的空文件，再走两个 writer 生命周期：
 
 ```cpp
 {
@@ -323,7 +349,7 @@ const auto second = encode_aof_set(binary_key, binary_value);
 EXPECT_EQ(read_file_as_bytes(path), first + second);
 ```
 
-这一个场景同时留下三份证据。
+这个场景留下三份证据。
 
 第一，第二个 writer 没有清空第一条记录。
 
@@ -335,12 +361,45 @@ EXPECT_EQ(read_file_as_bytes(path), first + second);
 测试中按 binary mode（二进制模式）读取文件。
 不要用 `strlen()` 或把内容当作以 `\0` 结束的 C string。
 
-### 8.1 这项测试还没有证明什么
+两个测试分开以后，失败时能更快定位：
+
+```text
+第一个失败
+-> 优先检查 open/create 与第一次 append
+
+第二个失败
+-> 优先检查 O_APPEND、重新打开和 binary length
+```
+
+### 8.3 这些测试还没有证明什么
 
 测试进程能重新读到 bytes，只说明内核已经接受了写入并允许后续读取。
 
 它还没有证明突然掉电后这些 bytes 一定存在。
 这个差别在 R2 才讲。
+
+### 8.4 R1 的实际验收结果
+
+本轮保留用户的 production code、note 与 CMake，只补并运行 R1 测试。
+
+实际证据是：
+
+```text
+focused AofWriterR1 tests
+-> 2 / 2 PASS
+
+full CTest regression
+-> 140 / 140 PASS
+
+fresh Debug build with -Werror
+-> build clean
+-> focused 2 / 2 PASS
+```
+
+R1 最终为 **99/100，正式通过**。
+
+唯一保留的 1 分是 include hygiene（直接包含自己使用的声明）仍可更清楚。
+这不影响本轮行为正确性，也不要求为了 R1 回头重写代码。
 
 ## 9. `.hpp`、`.cpp` 与 CMake 在这里怎样连起来
 
@@ -430,17 +489,22 @@ writer 只接收 bytes。只有测试为了制造真实 record，才调用 Day1 
 先完成并验证：
 
 ```text
-[ ] AofWriter 打开或创建文件，且不截断旧内容
-[ ] fd 由 UniqueFd 拥有
-[ ] append 使用 offset 处理短写
-[ ] EINTR 不推进 offset
-[ ] write 返回 0 时不会死循环
-[ ] 两次打开后，文件 bytes 等于 first + second
-[ ] binary payload 未被截断
-[ ] aof_writer_test 进入 CTest
+[x] AofWriter 打开或创建文件，且不截断旧内容
+[x] fd 由 UniqueFd 拥有
+[x] append 使用 offset 处理短写
+[x] EINTR 不推进 offset
+[x] write 返回 0 时不会死循环
+[x] 两次打开后，文件 bytes 等于 first + second
+[x] binary payload 未被截断
+[x] aof_writer_test 进入 CTest
 ```
 
+其中创建、重新打开、精确 bytes 与 CTest 已有动态证据。
+短写、`EINTR` 与零进展分支当前由源码检阅确认；R3 再用可控返回值补动态证据。
+
 到这里先停。
+
+**R1 已正式通过。后续保留现有 header、source、tests 与 CMake，R2 只增加同步能力。**
 
 你应该能脱离代码回答：
 
@@ -454,6 +518,15 @@ writer 只接收 bytes。只有测试为了制造真实 record，才调用 Day1 
 # Round 2：追加成功，不等于同步完成
 
 ## 11. R1 已经写完，为什么还要多一步
+
+当前真实的 `AofWriter` 已经拥有构造函数与 `append()`。
+R2 不重写这条追加路径，也不删除两个 R1 测试。
+
+现在只给同一个对象增加一个动作：
+
+```cpp
+void sync();
+```
 
 R1 的 `append()` 成功返回后，这段数据通常已经进入 kernel page cache（内核页缓存）。
 
@@ -474,12 +547,6 @@ record 在用户内存
 
 [`write(2)`](https://man7.org/linux/man-pages/man2/write.2.html)
 明确说明，成功返回不保证数据已经提交到磁盘。
-
-所以 R2 要给 `AofWriter` 增加一个明确动作：
-
-```cpp
-void sync();
-```
 
 ## 12. 为什么 `append()` 与 `sync()` 分成两个 API
 
@@ -557,7 +624,7 @@ sync 不抛异常
 strace -f \
   -e trace=openat,write,fdatasync,close \
   ./build/aof_writer_test \
-  --gtest_filter='AofWriterTest.AppendAndSync'
+  --gtest_filter='AofWriterR2.AppendAndSync'
 ```
 
 你要找的是：
@@ -589,6 +656,12 @@ R2 通过前，你需要能解释：
 # Round 3：让短写和错误路径真正发生
 
 ## 16. 正常文件测试为什么还不够
+
+当前 R1 的 `write_all` 在 `.cpp` 内部直接调用真实 `::write`。
+它的 offset 循环继续保留。
+
+R3 只把“这一次底层调用返回什么”变成测试可控，
+不会重写 R1 已经通过的文件 ownership、追加模式或循环规则。
 
 在本机普通文件上，一条 27 bytes 的记录很可能一次 `write()` 就全部完成。
 
