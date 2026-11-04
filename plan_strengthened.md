@@ -2,7 +2,7 @@
 
 > 对齐日期：2026-11-04。最新岗位与资料核对见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
 > 学习者：FxorG，中山大学计算机科学与技术专业，2029届。
-> 系统主线：Week1～Week13与Week14 Day1～Day2已通过。累计93个整日通过、94份Daily已生成；[Week14 Day3](week14/day3/day3.md)教程已生成，R1待开始。
+> 系统主线：Week1～Week13与Week14 Day1～Day2已通过。累计93个整日通过、95份Daily已生成；[Week14 Day3](week14/day3/day3.md)教程已生成，R1待开始；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。系统下一步仍是Day3 R1。
 > 理论线：T1～T11与Theory Gate 1已通过；T12 R1已以97/100正式通过，下一步T12 R2。T12整课与T13～T21尚未通过，Theory Gate 2未通过；T13～T21已于2026-11-04按T11学习者主线标杆复检，文件更新不等于学习通过。
 > Git：正式仓库文件有变化时按`MEMORY.md` §9.12完成本地commit；push与本地留痕分开授权，当前不自动推送。
 > 投递顺序：完整学完原Week16，再整理简历并向匹配中小厂试投。11月是期望窗口，不据此缩减项目。
@@ -679,12 +679,12 @@ atomic/CAS、acquire/release、happens-before 第一层
 
 ## 6. 双线推进顺序与时间边界
 
-当前系统主线的Week14 Day1已整日通过，分轮为98/98/99；Day2分轮99/99/97并以97/100整日通过；Day3教程已生成，R1待开始。理论线下一步T12 R2。Week13已整周通过，完整状态见文件开头，历史证据见MEMORY §4；旧月份与旧计数不再作为“当前任务”。
+当前系统主线的Week14 Day1已整日通过，分轮为98/98/99；Day2分轮99/99/97并以97/100整日通过；Day3教程已生成，R1待开始；Day4教程已提前生成，尚未开始。系统下一步仍是Day3 R1。理论线下一步T12 R2。Week13已整周通过，完整状态见文件开头，历史证据见MEMORY §4；旧月份与旧计数不再作为“当前任务”。
 
 | 顺序 | 系统主线 | 理论线协调目标 | 保持的边界 |
 |---|---|---|---|
 | 已完成Week13 | [Day7整周收口](week13/day7/day7.md)（整日98/100，R1历史95/100） | T11已完成：从标量链进入autograd | TTL、虚函数补缺和T11均已收口，不重做 |
-| 当前Week14 | [AOF/恢复周规划](week14/week14.md)，Day1～Day2整日已通过；[Day3](week14/day3/day3.md)教程已生成，R1待开始 | T12 R1已完成训练与fresh-load闭环，下一步R2观察一次更新 | 不把恢复语义换成只会写文件 |
+| 当前Week14 | [AOF/恢复周规划](week14/week14.md)，Day1～Day2整日已通过；[Day3](week14/day3/day3.md)教程已生成，R1待开始；[Day4](week14/day4/day4.md)教程已提前生成 | T12 R1已完成训练与fresh-load闭环，下一步R2观察一次更新 | 系统下一步仍是Day3 R1；不把恢复语义换成只会写文件 |
 | Week15 | 原故障测试、瓶颈定位与性能证据 | T13、T15～T16；T14可延期 | 用户掌握性能问题、测量与结论，机械脚手架可委托 |
 | Week16 | 原项目文档、表达与完整出口 | 复检理论欠账；T17～T18为进阶项 | 不拆提前投递版，不降低原项目标准 |
 | 原Week16正式完成后 | 整理简历、小范围试投、用反馈定位缺口 | 按真实完成能力呈现 | 此时再制定Week17以后实际课表 |
@@ -1013,7 +1013,7 @@ Gate D：先读 mini-sglang 的小型实现，再对照 vLLM V1 与 SGLang 的�
 | T20~T23 | 补内存账、KV Cache 分块、连续批处理和推理指标的第二解释 | 用自己的 reference/simulation 对照；CPU 仿真不能声称得到 GPU 性能结论 |
 | Gate C/D/E | 分别补 CUDA、单卡 serving、通信与多卡主题 | 继续遵守下列硬件与能力前置；既定 mini-sglang 路径不被替换成第二个完整框架项目 |
 
-它是第三方教学资料，不是 PyTorch/vLLM 的规范或招聘官方要求。已抽读的文章中存在 API 简化和无统一实验条件的性能概括，使用前按映射中的官方来源核验；面经先辨岗位内容，再决定是否补缺。本站的全栈顺序不替代本规划的项目优先级与求职时间锚点。当前主线Week13已完成；Week14 Day1～Day2均整日通过，Day2为97/100；Day3教程已生成，R1待开始。理论T12 R1已过97/100，下一步R2。
+它是第三方教学资料，不是 PyTorch/vLLM 的规范或招聘官方要求。已抽读的文章中存在 API 简化和无统一实验条件的性能概括，使用前按映射中的官方来源核验；面经先辨岗位内容，再决定是否补缺。本站的全栈顺序不替代本规划的项目优先级与求职时间锚点。当前主线Week13已完成；Week14 Day1～Day2均整日通过，Day2为97/100；Day3教程已生成，R1待开始；Day4教程已提前生成但尚未开始。理论T12 R1已过97/100，下一步R2。
 
 ### Gate A：AI workload literacy
 
@@ -1267,7 +1267,7 @@ CUDA kernel correctness + profiler + benchmark
 
 ## 13. 当前下一步
 
-1. 系统主线的Week14 Day1已以分轮98/98/99完成整日验收；Day2分轮99/99/97并以97/100完成整日验收；[Day3](week14/day3/day3.md)教程已生成，下一步进入R1。Week13已整周通过，TTL、虚函数和Day2既有证据不重做。后续仍按原Week14～Week16完成恢复、性能与项目出口。
+1. 系统主线的Week14 Day1已以分轮98/98/99完成整日验收；Day2分轮99/99/97并以97/100完成整日验收；[Day3](week14/day3/day3.md)教程已生成，下一步进入R1；[Day4](week14/day4/day4.md)教程已提前生成但尚未开始。Week13已整周通过，TTL、虚函数和Day2既有证据不重做。后续仍按原Week14～Week16完成恢复、性能与项目出口。
 2. 理论线进入T12 R2：R1已完成XOR从线性边界到hidden representation、ReLU、MLP训练、保存与fresh-load推理的闭环；R2只盯住一次更新，分清parameter、`.grad`与optimizer分别何时变化。R3再区分“恢复预测”和“恢复训练”所需状态。SGD/GELU/mini-batch留在核心后的选读区。T13主实验连续闭环，T14的BatchNorm为核心课后的选读扩展。
 3. T12 R1已以97/100正式通过；T12整课与T13～T21仍未通过。T20已用同一个TinyMLP串起训练对象、fresh inference对象、权重容量和INT8表示误差；T21再用固定序列完成full recompute、连续KV Cache与block table寻址，但都不前移当前T12 R2。T11既有证据不重做；T12 R1的Ubuntu脚本已完成1200次更新、fresh strict load和logits close，非阻塞项仅为`float(loss)`警告及少量机械断言/PASS标记未写入main。每课结束继续由用户亲自记笔记。
 4. C++类/对象/继承/虚函数补缺已随Week13 Day7收口；string/STL常见实现、LRU并发/大value、allocator第一层和系统面试横向题按Week15～16定向复盘，详见[补缺规划](C++项目伴随补缺规划.md)与[查漏地图](杂教程/C++与系统面试查漏地图.md)。不改Mini Redis架构来凑语法，也不通读全部STL源码。

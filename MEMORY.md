@@ -182,7 +182,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-04）：Week13整周正式完成；Week14 Day1～Day2整日正式通过。系统主线93个整日通过、94份Daily生成。[Week14 Day3](week14/day3/day3.md)教程已生成，R1待开始；生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-04）：Week13整周正式完成；Week14 Day1～Day2整日正式通过。系统主线93个整日通过、95份Daily生成。[Week14 Day3](week14/day3/day3.md)教程已生成，R1待开始；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。系统下一步仍是Day3 R1；生成教材不计学习通过，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T1～T11与Theory Gate 1已通过；T12 R1于2026-11-04以97/100正式通过，理论下一步T12 R2。T12整课与T13～T21仍未通过，Theory Gate 2未通过。
 
@@ -3607,7 +3607,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day2均已正式完成。当前93个整日通过、94份Daily已生成；[Week14 Day3](week14/day3/day3.md)教程已生成，下一步进入R1。Day1、Day2与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12 R1已通过97/100，下一步T12 R2；T12整课与Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day2均已正式完成。当前93个整日通过、95份Daily已生成；[Week14 Day3](week14/day3/day3.md)教程已生成，下一步进入R1；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。Day1、Day2与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12 R1已通过97/100，下一步T12 R2；T12整课与Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -9426,3 +9426,11 @@ Ubuntu脚本真实完成1200次AdamW更新，首轮loss为`0.6814755797`，更�
 R1最终97/100并正式通过。扣1分是`loss_list.append(float(loss))`在当前PyTorch 2.14产生requires-grad Tensor转scalar警告；正确的等价写法是`loss.item()`。另扣2分是用户main没有把所有finite、final loss低于initial、output shape、`requires_grad is False`及最终PASS标记全部写成机械断言；现有运行、预测、参数变化、strict load与logits close已经证明核心行为，因此这些不阻塞通过，也不要求重写训练逻辑。Codex未修改用户源码、note或`manual_seed`段。
 
 R2/R3已从磁盘最新版逐节复检，无需继续扩写：R2只沿同一个parameter观察`zero_grad -> forward/loss -> backward -> step`，R3只区分model-only预测恢复和包含optimizer/progress/random state的训练恢复，均与用户R1实现一致。当前理论下一步为T12 R2；T12整课、T13～T21及Theory Gate 2尚未通过。系统主线仍为93个整日通过、94份Daily生成，下一步Week14 Day3 R1。
+
+## 2026-11-04：Week14 Day4教程提前生成，Day3仍是系统下一步
+
+根据Week14既定恢复链、Day1/Day2真实通过结果、Day3预生成接口和Ubuntu当前`KvStore`/dispatcher/AOF encoder，新增`week14/day4/day4.md`。本日只解决TTL跨重启：live正数EXPIRE把`wall now + ttl`规范化成`PEXPIREAT key absolute_unix_ms`；重放时用`absolute_unix_ms - restart wall now`得到剩余TTL，再交给新进程现有`expire_ms_at`形成新的单调期限。R1先造只接收固定整数的`aof_expiry`桥接组件，R2才接正数EXPIRE与Day3 replayer，R3只用加法越界、非法绝对时刻、缺失key和墙上时钟跳变攻击同一条转换链。Day5真实server接线、Day6坏尾部与中间损坏均未前移。
+
+教程对照了Ubuntu当前真实接口：`KvStore::read_time_ms/expire_ms_at/pttl`、`CommandOutcome`、正数EXPIRE仍为`nullopt`、`encode_aof_pexpireat`及RESP parser限制；也明确Day3尚未实现，因此正式进入Day4前必须先完成Day3，届时只允许按实际函数名校准接线，不把预生成稿冒充已存在代码。Redis官方资料用于确认`PEXPIREAT`是Unix毫秒绝对期限、过去期限立即删除，以及绝对期限依赖稳定墙上时钟；C++时钟资料只校准`system_clock`和`steady_clock`角色。Ubuntu `/tmp` 中的临时期限制桥使用当前`KvStore`在`-Werror`下编译运行通过，覆盖90秒恢复、过期删除、后续SET清期限和绝对期限加法越界，临时目录自动清理；这是教材核心片段QA，不是用户R1实现或Day4通过。未修改Ubuntu源码、tests或CMake。
+
+三遍审查分别执行。技术遍核对四步公式、整数范围、先编码后修改、过去期限删除、SET清除旧TTL、依赖方向与测试oracle；教学遍确认先用120秒/停机30秒的单一场景产生绝对期限需求，再命名双时钟，R1只做桥接、R2接两条路径、R3不扩知识地图；全局遍同步Memory §4/§13、总规划、理论规划、C++补缺、Week14、Daily索引和两份AI Infra资料入口，并检查本地链接、Markdown、保护范围与Git差异。当前仍为93个整日通过，Daily生成数增为95；系统下一步仍是Day3 R1，理论下一步仍是T12 R2。正式文件只作本地Git提交，不push；用户T10～T12、Day2 `fdatasync`增补、notes/assets与杂教程改动继续保持不改、不提交。
