@@ -1,7 +1,7 @@
 # Week14 Day4：让停机时间也从 TTL 里扣掉
 
 > 版本：2026-11-04，教程提前生成，尚未开始学习
-> 当前前置：Week14 Day1、Day2 已整日通过；Day3 教程已生成，R1 尚未开始
+> 当前前置：Week14 Day1、Day2 已整日通过；Day3 R1 已以 96/100 正式通过，下一步 R2
 > 今日产出：一个 AOF expiry bridge（AOF 期限桥接）组件，把绝对日历期限换成新进程的剩余 TTL
 > 今日主线：写入绝对期限 -> 进程停机 -> 重启时扣掉停机时间 -> 写入新进程自己的单调期限
 
@@ -1174,7 +1174,8 @@ target_link_libraries(aof_replay PUBLIC
 )
 ```
 
-不要在 Day3 尚未实现时提前把不存在的 target 写进 CMake。
+Day3 的 `aof_replay` target 已经存在，但 Day4 仍要等 Day3 R2/R3 完整收口后再接线。
+届时复用真实 target，不另造一套重放 library。
 
 ## 28. 最终测试顺序
 

@@ -1,6 +1,6 @@
 # Week14 Day3：让空的 KvStore 按日志顺序重新长回 SET/DEL 状态
 
-> 版本：2026-11-04，教程已生成，R1 尚未开始
+> 版本：2026-11-05，R1 已以 96/100 正式通过；下一步 R2
 > 前置：Week14 Day1、Day2 已整日通过；Day2 最终 97/100
 > 今日产出：一个独立的 AOF replay（AOF 重放）组件，能从完整日志逐条恢复 SET/DEL
 > 今日主线：找到第一条完整记录 -> 应用状态变化 -> 按 `consumed_bytes` 前进 -> 直到文件结束
@@ -322,11 +322,16 @@ Day3 暂时还没有 TTL record。
 ["DEL", key1, key2, ...]
 ```
 
-动作是按记录中的顺序逐个调用：
+动作是按记录中的顺序逐个删除。你当前实现让同一条 DEL record 共用一个时刻：
 
 ```cpp
-store.erase(arguments[i]);
+const auto now_ms = store.read_time_ms();
+for (std::size_t i = 1; i < arguments.size(); ++i) {
+    store.erase_at(arguments[i], now_ms);
+}
 ```
+
+这样 `DEL a b` 不会因为读取两次时钟，把同一条记录拆成两个观察时刻。
 
 重放不需要计算客户端看到的删除数量。
 
@@ -343,9 +348,10 @@ DEL a a
 
 ## 7. 主循环只维护 `offset`
 
-R1 的实现路线如下。
+完整 Day3 的主循环最终要兑现下面这些动作。
 
-这不是要求逐字复制的完整答案，而是主循环必须兑现的动作：
+R1 先只用完整、合法的 SET/DEL 日志走通 `Complete` 分支；
+R3 再把同一个循环里的失败分支补成最终 contract。
 
 ```cpp
 offset = 0
@@ -375,13 +381,14 @@ return {records_applied, offset}
 
 这里的 EOF 是 end of file（文件结束位置）。
 
-今天输入已经是完整日志。
+R1 的通过输入已经是完整日志。
 
-因此 parser 在 EOF 前返回 `NeedMore`，不是“再等网络后缀”。
+如果以后在 EOF 前得到 `NeedMore`，它不是“再等网络后缀”。
 
 文件不会自己继续长出缺失 bytes。
 
-R1 先把它当作启动失败。
+Day3 的最终版本必须把它当作启动失败；当前 R1 还不能声称已经兑现这条边界，
+R3 会对照真实 `break` 分支补上。
 
 Day6 再专门区分可处理的不完整文件尾与中间损坏。
 
@@ -473,6 +480,11 @@ DEL 在 SET 之后生效
 
 能回答并跑通 R1 测试，再进入 R2。
 
+> **R1 实际验收（2026-11-05）：96/100，正式通过。** 当前实现已经完成完整
+> SET/DEL 日志的顺序重放；focused CTest 2/2、完整 CTest 148/148 通过。
+> `NeedMore`、parser `Error`、错误参数和不前进保护仍是本日 R3 的明确目标，
+> 不把这些后置边界倒算成 R1 未完成。
+
 ---
 
 # Round 2：把真实文件 bytes 交给同一个重放核心
@@ -480,6 +492,10 @@ DEL 在 SET 之后生效
 ## 10. R1 已经会重放，为什么还要 R2
 
 R1 的输入是一段 `string_view`。
+
+你当前的 `replay_aof_bytes()` 已经通过完整日志路径。
+
+R2 不回头重写这个循环，也不顺手处理 R3 的错误分支。
 
 真实启动时，bytes 还在 AOF 文件中。
 
@@ -690,6 +706,25 @@ DEL key [key ...]
 
 ## 16. 三种失败分别表示什么
 
+先对照 R1 当前代码，不把下面三项读成新的知识地图：
+
+```text
+NeedMore
+-> 当前是 break 后返回部分统计
+-> R3 改成明确的 incomplete failure
+
+Error
+-> 当前分支没有动作，offset 也没有前进
+-> R3 必须抛错，避免循环停在同一位置
+
+Complete
+-> 当前在访问 arguments[1]/arguments[2] 前没有验证命令与参数数量
+-> R3 先验证，再修改 store 和增加 records_applied
+```
+
+R3 还要检查 `consumed_bytes` 大于 0 且不超过 `remaining`。
+这只是保护 R1 已经会走的 offset，不是另一套重放算法。
+
 ### 16.1 `NeedMore`
 
 含义是：
@@ -872,7 +907,6 @@ target_compile_options(aof_replay_test PRIVATE
 target_link_libraries(aof_replay_test PRIVATE
     aof_replay
     aof_record
-    aof_writer
     GTest::gtest_main
     GTest::gtest
 )

@@ -182,7 +182,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-05）：Week13整周正式完成；Week14 Day1～Day2整日正式通过。系统主线93个整日通过、95份Daily生成。[Week14 Day3](week14/day3/day3.md)教程已生成，R1待开始；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。系统下一步仍是Day3 R1；生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-05）：Week13整周正式完成；Week14 Day1～Day2整日正式通过。系统主线93个整日通过、95份Daily生成。[Week14 Day3](week14/day3/day3.md) R1已以96/100正式通过，下一步R2；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。生成教材不计学习通过，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。当前T1～T12与Theory Gate 1已通过；理论下一步T13 R1。T13～T21仍未通过，Theory Gate 2未通过。
 
@@ -3607,7 +3607,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day2均已正式完成。当前93个整日通过、95份Daily已生成；[Week14 Day3](week14/day3/day3.md)教程已生成，下一步进入R1；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。Day1、Day2与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day2均已正式完成。当前93个整日通过、95份Daily已生成；[Week14 Day3](week14/day3/day3.md) R1已以96/100正式通过，下一步R2；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。Day1、Day2与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -9444,3 +9444,13 @@ R2/R3已从磁盘最新版逐节复检，无需继续扩写：R2只沿同一个p
 最终98/100并正式通过。唯一校准点是笔记中“训练比推理多出的状态”同时包含两层：activation、计算图与`.grad`属于一次iteration内的临时工作状态，通常不会作为标准resume checkpoint跨进程保存；要尽量续接原训练轨迹，持久状态通常是model state、optimizer state、step/epoch、random state，以及必要时的数据或sampler进度。labels与loss由训练输入和本轮计算重新产生，不是model-only checkpoint的一部分。用户已经掌握主因果链，因此该边界不阻塞通过，也不要求为R2/R3再写重复代码。
 
 现行理论状态推进为T1～T12与Theory Gate 1已通过，下一步T13 R1；T13～T21与Theory Gate 2尚未通过。相邻T13入口已按真实T12产出校准：直接复用TinyMLP、训练loop与checkpoint能力，从baseline train/validation curves开始，不重做XOR或optimizer状态练习。系统主线保持93个整日通过、95份Daily生成，下一步仍为Week14 Day3 R1。
+
+## 2026-11-05：Week14 Day3 R1正式通过96/100
+
+用户完成`replay_aof_bytes(KvStore&, std::string_view)`并用本人笔记准确概括R1主干：输入AOF raw bytes与store，按原顺序解析并执行SET/DEL，返回成功应用的record数量与`consumed_bytes`。实现以offset把尚未处理的后缀交给现有RESP parser；Complete后应用状态并前进。DEL记录只读一次store时钟，再对所有key调用`erase_at`，因此同一条记录共享一个时间视角。重放函数只接收store与bytes，没有writer或客户端reply路径。
+
+Codex此前按委托补入两项机械correctness tests；本轮重新构建并实测focused `AofReplayR1Test` 2/2、完整CTest 148/148全部通过。主场景证明后写SET覆盖旧值、binary key/value中的NUL与CRLF按长度恢复、SET后DEL生效、5条record全部消费且原AOF bytes不变；空输入返回0条/0 bytes并保持既有store状态。当前production header/source SHA256分别为`37b1fbf36b1ee3d5627840f03fa676ec73e8459f306f4ed52e94f396f4279861`与`739d0108f8ec39558ce51da98b75e62abae45b8998ddc6d812153f7b2c91122f`，测试与CMake分别为`1c8b395c8d3e26c98eb8cd5dbbb54d1988a1b74bb943cfc9a4d3f67a89273702`与`d073f1b4718bdbd73ffca3277443419222249540a5d490bea1f8d1caf9c3f09c`。
+
+最终96/100并正式通过。保留的4分全部属于已排定R3的恢复失败边界：当前`NeedMore`会`break`并返回部分成功，`Error`分支不抛错且offset不前进，Complete路径在索引arguments前尚未验证命令/参数数量，也未防御`consumed_bytes == 0`或超过remaining。它们不影响R1限定的完整合法SET/DEL输入域，但R3必须改成稳定失败，不能把当前全绿测试冒充这些边界已覆盖。R2只增加`path -> whole-file bytes -> replay_aof_bytes`的文件桥，不顺手重写parser loop。
+
+本轮没有修改用户production source、header或`day3_note.md`；note SHA256保持`A4AE0C07F1C4574B557ECC7FE74E0AE0F0DA17DA187A74E98AC294E8A6F31F9A`。Day3教程只按真实实现校准DEL共享时刻、R1验收证据及R2/R3入口。三遍检查分别核对源码/测试与分数边界、R1到R2/R3的单一恢复链、Memory/总规划/理论规划/C++补缺/Week14/Daily索引/两份资料入口与Git保护范围。当前仍为93个整日通过、95份Daily生成；Day3尚未整日通过，系统下一步R2。理论下一步仍为T13 R1。
