@@ -182,7 +182,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-05）：Week13整周正式完成；Week14 Day1～Day2整日正式通过。系统主线93个整日通过、95份Daily生成。[Week14 Day3](week14/day3/day3.md) R1已以96/100正式通过，下一步R2；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-05）：Week13整周正式完成；Week14 Day1～Day2整日正式通过。系统主线93个整日通过、95份Daily生成。[Week14 Day3](week14/day3/day3.md) R1 96/100、R2 98/100已正式通过，下一步R3；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。生成教材不计学习通过，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。当前T1～T12与Theory Gate 1已通过；理论下一步T13 R1。T13～T21仍未通过，Theory Gate 2未通过。
 
@@ -3607,7 +3607,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day2均已正式完成。当前93个整日通过、95份Daily已生成；[Week14 Day3](week14/day3/day3.md) R1已以96/100正式通过，下一步R2；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。Day1、Day2与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day2均已正式完成。当前93个整日通过、95份Daily已生成；[Week14 Day3](week14/day3/day3.md) R1 96/100、R2 98/100已正式通过，下一步R3；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。Day1、Day2与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -9454,3 +9454,13 @@ Codex此前按委托补入两项机械correctness tests；本轮重新构建并�
 最终96/100并正式通过。保留的4分全部属于已排定R3的恢复失败边界：当前`NeedMore`会`break`并返回部分成功，`Error`分支不抛错且offset不前进，Complete路径在索引arguments前尚未验证命令/参数数量，也未防御`consumed_bytes == 0`或超过remaining。它们不影响R1限定的完整合法SET/DEL输入域，但R3必须改成稳定失败，不能把当前全绿测试冒充这些边界已覆盖。R2只增加`path -> whole-file bytes -> replay_aof_bytes`的文件桥，不顺手重写parser loop。
 
 本轮没有修改用户production source、header或`day3_note.md`；note SHA256保持`A4AE0C07F1C4574B557ECC7FE74E0AE0F0DA17DA187A74E98AC294E8A6F31F9A`。Day3教程只按真实实现校准DEL共享时刻、R1验收证据及R2/R3入口。三遍检查分别核对源码/测试与分数边界、R1到R2/R3的单一恢复链、Memory/总规划/理论规划/C++补缺/Week14/Daily索引/两份资料入口与Git保护范围。当前仍为93个整日通过、95份Daily生成；Day3尚未整日通过，系统下一步R2。理论下一步仍为T13 R1。
+
+## 2026-11-05：Week14 Day3 R2正式通过98/100
+
+用户完成`read_all(int)`与`replay_aof_file(KvStore&, const std::string&)`，本人笔记准确抓住R2唯一主线：从文件读完bytes，再交给R1已经通过的重放核心。实现以`O_RDONLY | O_CLOEXEC`只读打开文件，`UniqueFd`管理生命周期；`read()`正数结果只追加真实读取区间，0表示EOF，`EINTR`重试，其余错误先保存`errno`再抛`system_error`。文件入口没有复制第二套parser loop。
+
+Codex此前按委托补入两项机械correctness tests。当前focused R1/R2 CTest 4/4、完整CTest 150/150全部通过；另在fresh Debug构建中启用`-Werror`，focused 4/4通过且无编译warning。空文件返回0条/0 bytes并保持空store；端到端场景经Day1 encoder与Day2 writer生成超过4096 bytes的真实文件，随后由fresh store恢复binary payload、覆盖后的最终值与DEL结果。临时fresh构建目录已经清理。
+
+最终98/100并正式通过。唯一扣2分是`replay_aof_file()`尚未立即检查`open()`结果：缺失path会先得到无效fd，再在`read(-1)`处抛`EBADF`，从而丢失原始`ENOENT`。这不影响R2限定的可读既有文件主线，但R3必须补“open失败保留原错误来源”的测试与实现。R3其余既定目标保持：`NeedMore`稳定失败；parser `Error`使用`error_message`与当前offset，而不是读取无关的`errno`；Complete后先验证命令/arity；`consumed_bytes`必须大于0且不超过remaining。
+
+本轮验收和状态对齐没有修改用户production source、header、tests、CMake或`day3_note.md`。当前header/source/test/CMake SHA256分别为`a404fff676d9064f8ee7dbaf13128f12f287fcde2d7790c0a350f8478f5e7a1a`、`06f8e7a36a474af8a95e5f617c13fb8bd4f0312cbf9d69d356f03bbfb1afe1e9`、`ccddfd9bceeeda7031a9b6fb8aec6fc3a93674d873ec34e27bf162c1b145cfd3`与`2be1044439bf009e3f580027aa634ee1cd5604c4d843a11162483b8cd104d3cf`；note SHA256为`A6661A31ECD8DC60A3CEE24F90F5E3D81849DB5373F6631B72985E5CA48A5874`。三遍检查分别核对实现/测试/评分边界、R2文件桥到R3失败边界的连续主线，以及Memory/总规划/理论规划/C++补缺/Week14/Daily索引/两份资料入口与Git保护范围。当前仍为93个整日通过、95份Daily生成；Day3尚未整日通过，系统下一步R3。理论下一步仍为T13 R1。

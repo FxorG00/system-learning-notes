@@ -1,6 +1,6 @@
 # Week14 Day3：让空的 KvStore 按日志顺序重新长回 SET/DEL 状态
 
-> 版本：2026-11-05，R1 已以 96/100 正式通过；下一步 R2
+> 版本：2026-11-05，R1 已以 96/100、R2 已以 98/100 正式通过；下一步 R3
 > 前置：Week14 Day1、Day2 已整日通过；Day2 最终 97/100
 > 今日产出：一个独立的 AOF replay（AOF 重放）组件，能从完整日志逐条恢复 SET/DEL
 > 今日主线：找到第一条完整记录 -> 应用状态变化 -> 按 `consumed_bytes` 前进 -> 直到文件结束
@@ -651,6 +651,13 @@ replay_aof_bytes
 
 不要在 `replay_aof_file()` 里再手写第二个 parser loop。
 
+> **R2 实际验收（2026-11-05）：98/100，正式通过。** 当前实现已经完成
+> `path -> O_RDONLY | O_CLOEXEC -> read 到 EOF -> replay_aof_bytes()` 的唯一文件桥。
+> focused R1/R2 CTest 4/4、完整 CTest 150/150，以及 fresh `-Werror` focused 4/4
+> 全部通过。空文件保持空 store；超过 4096 bytes 的真实文件也能把 binary SET、覆盖与 DEL
+> 恢复到一个全新的 `KvStore`。唯一后置项是 `open()` 失败尚未立即检查：缺失路径目前会在
+> 随后的 `read(-1)` 处变成 `EBADF`，R3 要保留原始 `ENOENT` 诊断。
+
 ---
 
 # Round 3：完整 RESP 不等于合法 AOF 状态记录
@@ -714,8 +721,9 @@ NeedMore
 -> R3 改成明确的 incomplete failure
 
 Error
--> 当前分支没有动作，offset 也没有前进
--> R3 必须抛错，避免循环停在同一位置
+-> 当前读取 errno 并抛 system_error
+-> 但 parser Error 不是系统调用失败，errno 可能是 0 或旧值
+-> R3 改用 parser 的 error_message，并附上当前 offset
 
 Complete
 -> 当前在访问 arguments[1]/arguments[2] 前没有验证命令与参数数量
@@ -808,6 +816,7 @@ R3 不再增加新的恢复功能。
 | 完整但无 key 的 `DEL` | 抛错并停止 | DEL 至少需要一个 key |
 | 最后一条缺一个 byte | 当前版本抛 incomplete error | Day3 不静默接受残缺尾部 |
 | 非 RESP 顶层 bytes | 保留 parser error 与 offset | 格式错误可定位 |
+| 不存在的 AOF path | 抛出的 `system_error` 保留 `ENOENT` | `open()` 失败不会被后续 `read(-1)` 伪装成 `EBADF` |
 
 这些测试没有要求你实现 Day6 的截断策略。
 

@@ -2,7 +2,7 @@
 
 > 对齐：2026-11-05，Day7整日已通过98/100，R1历史95/100；V2与虚函数补缺均已收口
 > 主线：Mini Redis V2已完成 -> AOF/恢复 -> 性能 -> 简历收口
-> 当前状态：Week1~Week13与Week14 Day1～Day2已通过，93个整日通过/95份Daily生成。[Week14 Day3](week14/day3/day3.md) R1已以96/100正式通过，下一步R2；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。完整进度见MEMORY §4
+> 当前状态：Week1~Week13与Week14 Day1～Day2已通过，93个整日通过/95份Daily生成。[Week14 Day3](week14/day3/day3.md) R1 96/100、R2 98/100已正式通过，下一步R3；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。完整进度见MEMORY §4
 
 **虚函数补缺已经完成，其余知识继续跟着项目出现的问题学。** 这是一份插入安排，不是另一套从头学习C++的课程。
 
