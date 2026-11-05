@@ -182,7 +182,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-05）：Week13整周正式完成；Week14 Day1～Day2整日正式通过。系统主线93个整日通过、95份Daily生成。[Week14 Day3](week14/day3/day3.md) R1 96/100、R2 98/100已正式通过，下一步R3；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-05）：Week13整周正式完成；Week14 Day1～Day3整日正式通过。系统主线94个整日通过、95份Daily生成。[Week14 Day3](week14/day3/day3.md)分轮96/98/98、整日98/100正式通过；[Week14 Day4](week14/day4/day4.md)前置已满足，当前进入R1。生成教材不计学习通过，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。当前T1～T12与Theory Gate 1已通过；理论下一步T13 R1。T13～T21仍未通过，Theory Gate 2未通过。
 
@@ -3607,7 +3607,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day2均已正式完成。当前93个整日通过、95份Daily已生成；[Week14 Day3](week14/day3/day3.md) R1 96/100、R2 98/100已正式通过，下一步R3；[Week14 Day4](week14/day4/day4.md)教程已提前生成，尚未开始。Day1、Day2与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day3均已正式完成。当前94个整日通过、95份Daily已生成；[Week14 Day3](week14/day3/day3.md)分轮96/98/98、整日98/100正式通过；[Week14 Day4](week14/day4/day4.md)前置已满足，当前进入R1。Day1～Day3与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -9464,3 +9464,15 @@ Codex此前按委托补入两项机械correctness tests。当前focused R1/R2 CT
 最终98/100并正式通过。唯一扣2分是`replay_aof_file()`尚未立即检查`open()`结果：缺失path会先得到无效fd，再在`read(-1)`处抛`EBADF`，从而丢失原始`ENOENT`。这不影响R2限定的可读既有文件主线，但R3必须补“open失败保留原错误来源”的测试与实现。R3其余既定目标保持：`NeedMore`稳定失败；parser `Error`使用`error_message`与当前offset，而不是读取无关的`errno`；Complete后先验证命令/arity；`consumed_bytes`必须大于0且不超过remaining。
 
 本轮验收和状态对齐没有修改用户production source、header、tests、CMake或`day3_note.md`。当前header/source/test/CMake SHA256分别为`a404fff676d9064f8ee7dbaf13128f12f287fcde2d7790c0a350f8478f5e7a1a`、`06f8e7a36a474af8a95e5f617c13fb8bd4f0312cbf9d69d356f03bbfb1afe1e9`、`ccddfd9bceeeda7031a9b6fb8aec6fc3a93674d873ec34e27bf162c1b145cfd3`与`2be1044439bf009e3f580027aa634ee1cd5604c4d843a11162483b8cd104d3cf`；note SHA256为`A6661A31ECD8DC60A3CEE24F90F5E3D81849DB5373F6631B72985E5CA48A5874`。三遍检查分别核对实现/测试/评分边界、R2文件桥到R3失败边界的连续主线，以及Memory/总规划/理论规划/C++补缺/Week14/Daily索引/两份资料入口与Git保护范围。当前仍为93个整日通过、95份Daily生成；Day3尚未整日通过，系统下一步R3。理论下一步仍为T13 R1。
+
+## 2026-11-05：Week14 Day3整日正式通过98/100
+
+用户完成Day3 R1～R3。最终实现沿同一条恢复主线闭合：`replay_aof_bytes`按`consumed_bytes`顺序解析并应用SET/DEL；`replay_aof_file`只负责读取完整文件并复用内存重放核心；R3把残缺尾部、parser Error、完整但不允许重放的命令、错误参数与缺失文件统一收成稳定失败。用户笔记准确区分了replayer输入、状态变化、文件桥和R3失败矩阵，作为本日理解的主要证据。
+
+R3 focused 7/7、AOF R1～R3合计11/11、完整CTest 157/157全部通过。另在fresh临时构建中启用`-Werror -fsanitize=address,undefined -fno-omit-frame-pointer`，AOF 11/11通过且无ASan/UBSan报告，临时目录已清理。当前header/source/test/CMake SHA256分别为`a404fff676d9064f8ee7dbaf13128f12f287fcde2d7790c0a350f8478f5e7a1a`、`8d2014d7b37fcbf2748a4313f70912f8b698a21f366e143f6fadb1f4a815daf6`、`841cc5a7dc62325713cab1f32d1f8dab93b7493148eb89a75f1761b7afac09b5`与`2be1044439bf009e3f580027aa634ee1cd5604c4d843a11162483b8cd104d3cf`；note SHA256为`47355F7AF7EA2F828B2046F59D27951A8B34DDE25577EB2DC06258C08590C7DA`。
+
+R3与整日最终98/100，正式通过。唯一扣2分是Complete分支在`offset += result.consumed_bytes`前没有显式防御`consumed_bytes == 0`或大于remaining；当前具体RESP parser的Complete contract保证`0 < consumed_bytes <= remaining`，现有外部输入无法触发该路径，因此这是防御性设计缺口，不阻塞通过，也不要求为此回改用户代码。R2的`open()`错误来源、R1的NeedMore/Error/arity问题均已在R3修复并由测试覆盖。
+
+本次正式检阅没有修改production header/source、CMake或用户`day3_note.md`；Codex此前按用户明确委托补入R3机械correctness tests，并为每个case加了说明场景与oracle的短注释。Ubuntu中的AOF相关文件仍处于尚未统一纳入源码Git边界的状态，不能为了形式留下依赖不完整的局部提交；本次Windows文档提交记录精确哈希与动态证据。三遍审查分别核对技术实现与证据、Day3到Day4的依赖连续性、全局状态与Git保护范围。
+
+现行系统状态推进为94个整日通过、95份Daily生成；Week14 Day1～Day3均已完成，下一步Day4 R1。理论T1～T12与Theory Gate 1已通过，下一步T13 R1。

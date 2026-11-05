@@ -1,6 +1,6 @@
 # Week14 Day3：让空的 KvStore 按日志顺序重新长回 SET/DEL 状态
 
-> 版本：2026-11-05，R1 已以 96/100、R2 已以 98/100 正式通过；下一步 R3
+> 版本：2026-11-05，R1 96/100、R2 98/100、R3 与整日 98/100 正式通过；下一步 Day4 R1
 > 前置：Week14 Day1、Day2 已整日通过；Day2 最终 97/100
 > 今日产出：一个独立的 AOF replay（AOF 重放）组件，能从完整日志逐条恢复 SET/DEL
 > 今日主线：找到第一条完整记录 -> 应用状态变化 -> 按 `consumed_bytes` 前进 -> 直到文件结束
@@ -868,6 +868,14 @@ client write after startup
 Day4 才加入 `PEXPIREAT` 与跨重启 TTL。
 
 Day6 才把“不完整尾部”和“中间损坏”分开处理。
+
+> **R3 与整日实际验收（2026-11-05）：98/100，正式通过。** R3 focused CTest
+> 7/7、AOF replay R1～R3 11/11、完整 CTest 157/157 通过；fresh `-Werror`
+> 与 ASan/UBSan 构建中的 AOF replay 11/11 也通过，临时目录已清理。当前实现会拒绝
+> 残缺尾部、parser Error、GET、错误 SET/DEL 参数，并为 parser Error 保留 offset、为
+> 缺失文件保留 `ENOENT`。唯一扣 2 分：`Complete` 后尚未显式检查
+> `0 < consumed_bytes <= remaining`；当前 concrete parser 已保证该不变量，因此不阻塞
+> 本日输入域通过，但该防御性约定仍保留为代码评审记录。
 
 ---
 
