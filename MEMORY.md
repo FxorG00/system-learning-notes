@@ -184,7 +184,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-06）：Week13整周正式完成；Week14 Day1～Day3整日正式通过。系统主线94个整日通过、95份Daily生成。[Week14 Day4](week14/day4/day4.md) R1/R2分别正式通过100/100，当前进入R3；整日尚未通过。生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-06）：Week13整周正式完成；Week14 Day1～Day4整日正式通过。系统主线95个整日通过、95份Daily生成。[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；系统下一步Week14 Day5。生成教材不计学习通过，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。当前T1～T12与Theory Gate 1已通过；理论下一步T13 R1。T13～T21仍未通过，Theory Gate 2未通过。
 
@@ -3609,7 +3609,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day3均已正式完成。当前94个整日通过、95份Daily已生成；[Week14 Day4](week14/day4/day4.md) R1/R2分别正式通过100/100，当前进入R3；整日尚未通过。Day1～Day3与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day4均已正式完成。当前95个整日通过、95份Daily已生成；[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；系统下一步Week14 Day5。Day1～Day4与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -9522,3 +9522,15 @@ R2端到端证据不只检查手写bytes：live `SET`与正数`EXPIRE`先产生�
 最终`command_dispatcher.hpp/.cpp`、`aof_replay.hpp/.cpp`、`command_dispatcher_test.cpp`、`aof_replay_test.cpp`、`ttl_command_test.cpp`、`mini_redis_server.cpp`与`CMakeLists.txt`的SHA256依次为`efce833af7f42f1566eeb17f61bd0ae9fb3df08c96207a3b1a1c925cd21707cc`、`c6275304f40e50f34fe0043282744e0a49c70e46e3e7758cd64a04b687ff042f`、`f71b69c024624cabf71773d8e12586e48df68add07d854d34d38b3164d11c2be`、`f15192d7b4fea354406989dcbc9192e990a338f5b47eb857f7e15a8d84d52fad`、`68fc528ea80980914dc88acf62e9ccd162ef7181b133a15e9ce2a53a3876ce78`、`55e840836e3fb094faa69c8834f6bcbf91507107b46bb9cd4e8bd1d5e4b53761`、`d59301041bf52bd411e356b28669ccc50b768176b1feed1b08b7c7e59d4784c4`、`e412b21077207100d2ea48ea0a0cb7ee9f0b0834a515daae0d845f70619c8857`与`41dd68542c9e7385094cdf6c736986f0db9a373655ddfad9da5c60abd20e1eb6`。
 
 R2最终100/100并正式通过，Day4整日尚未通过。R3只继续检查失败原子性、绝对期限/新单调期限越界的稳定映射、非法`PEXPIREAT`文本与arity、缺失key以及失败后store/reply/record保持；这些后置边界不追溯扣R2分。系统计数保持94个整日通过、95份Daily生成，当前进入Week14 Day4 R3；理论下一步仍为T13 R1。Ubuntu AOF文件仍未统一纳入源码Git边界，不创建依赖不完整的局部提交；Windows正式文档只作本地Git提交，不push，并排除用户既有dirty文件。
+
+## 2026-11-06：Week14 Day4 R3与整日正式通过100/100
+
+R3新增八项机械GoogleTest后第一次运行结果为`5/8`。三个失败精确暴露真实实现顺序：绝对Unix期限加法溢出后旧PTTL由5000被提前改成1000；正数`EXPIRE`的`PEXPIREAT` encoder失败后旧PTTL由5000被提前改成2000；负`UnixNow`抛出的异常类型不是约定的`invalid_argument`。其余五项已经成立：Unix时钟`system_error`保留原错误、重放新单调期限溢出保持旧状态、三类非法绝对期限文本稳定失败、错误arity不读墙上时钟且停止重放、缺失目标key不复活并继续处理后续记录。
+
+用户随后独立调整production顺序：正数`EXPIRE`先读取并验证时刻、计算绝对期限、完整编码record，最后才调用`expire_ms_at()`提交store；Unix时钟返回负值改为`invalid_argument`，底层`system_error`继续原样传播。源码复检确认绝对期限溢出映射为既有range reply且无record，encoder失败在store commit前向外传播，KvStore自身的单调期限越界仍由`expire_ms_at()`在修改前报告。
+
+修复后R3 focused tests为`8/8`；完整工程增量构建包含`mini_redis_server`并成功，完整CTest为`173/173`。fresh临时构建启用`-Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer`，三个受影响target的`CommandDispatcher/AofReplay/AofExpiry`矩阵为`37/37`，无ASan/UBSan诊断，临时构建已清理。
+
+用户`day4_note.md`保持只读，R1/R2主链已准确覆盖职责分离、双时钟转换、live/replay和失败前准备，最终SHA256为`E698A406E7D23C7266DB981DAAB05ABAC11EFCDC135368E7187F9BEF614E88E4`；R3只为同一主链补失败边界，不要求重复抄写机械测试。最终`aof_expiry.cpp`、`command_dispatcher.cpp`、`aof_replay.cpp`、`command_dispatcher_test.cpp`、`aof_replay_test.cpp`、`aof_expiry_test.cpp`与`CMakeLists.txt` SHA256依次为`b1a813069e89b62bb9289d359d4465fd982b8bf2a90dd29d0b7a65be4a347350`、`b87421a577452a55a47c96aa9abb38b432f919258c8a3c0ba81ea9887d732367`、`f15192d7b4fea354406989dcbc9192e990a338f5b47eb857f7e15a8d84d52fad`、`bd338d25526cc973b2fe5e137a83895b8ef23e8695f0f5c86d95a2eae493473e`、`19988d6c8c49c1b880911ae12191468a806a1821d0200115171bd3b1bcf1aecb`、`beadcf0adace9fd1d8aaf07e01319c06b89caf94c9cc6185d272a92c989c1344`与`41dd68542c9e7385094cdf6c736986f0db9a373655ddfad9da5c60abd20e1eb6`。
+
+R3与Day4整日最终均为100/100，正式通过。系统状态推进为95个整日通过、95份Daily生成，下一步Week14 Day5；理论下一步保持T13 R1。Ubuntu AOF相关文件仍未形成可独立提交的完整tracked边界，不创建只含局部测试的提交；Windows八份正式文档作本地Git提交、不push，并排除用户既有dirty文件。
