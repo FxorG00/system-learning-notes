@@ -1,7 +1,7 @@
 # Week14 Day4：让停机时间也从 TTL 里扣掉
 
-> 版本：2026-11-06，按“讲清行为合同、不提前交出核心实现”重新收束；前置已满足，R1 尚未开始（正文于 2026-11-04 提前生成）
-> 当前前置：Week14 Day1～Day3 已整日通过；Day3 最终 98/100，当前进入 Day4 R1
+> 版本：2026-11-06；R1 已按真实实现正式通过 100/100，当前进入 R2（正文于 2026-11-04 提前生成）
+> 当前前置：Week14 Day1～Day3 已整日通过；Day4 R1 已完成绝对期限桥，R2 接入 live/replay 两条路径
 > 今日产出：一个 AOF expiry bridge（AOF 期限桥接）组件，把绝对日历期限换成新进程的剩余 TTL
 > 今日主线：写入绝对期限 -> 进程停机 -> 重启时扣掉停机时间 -> 写入新进程自己的单调期限
 
@@ -609,6 +609,31 @@ R1 通过前，只回答四个问题：
 
 不要提前修改 command dispatcher 或 Day3 replayer。
 
+### 13.1 R1 已经留下的真实基线
+
+当前实现已经完成两个独立动作：
+
+```text
+checked_unix_deadline_ms
+-> 安全计算 wall now + positive TTL
+
+apply_aof_pexpireat
+-> 读取一次 monotonic now
+-> 用同一时刻判断 key 与应用剩余 TTL
+```
+
+未来期限交给 `expire_ms_at()`。
+
+已到或已过的期限通过显式时刻删除接口处理，因此不会再读第二次单调时钟。
+
+当前永久测试为 R1 `4/4`，完整 CTest 为 `161/161`。
+
+fresh build（全新构建）同时启用 `-Werror`、ASan 和 UBSan，R1 仍为 `4/4`。
+
+R2 保留这两个桥接函数，只把它们接进现有 dispatcher 与 replayer。
+
+加法越界的最终错误映射、非法 AOF 期限文本和失败时旧状态保持继续由 R3 收口。
+
 ---
 
 # Round 2：让 live EXPIRE 写绝对期限，让 replay 只恢复状态
@@ -647,6 +672,10 @@ PEXPIREAT code <absolute unix ms>
 这两条路径共享记录含义。
 
 它们不能共享客户端 dispatcher 的全部副作用。
+
+当前真实代码里，`execute_command(store, arguments)` 仍只有原入口，内部 `apply_replay_command()` 也只认识 `SET/DEL`。
+
+因此 R2 的新增量不是重写 R1 期限桥，而是为这两个既有入口补上可控墙上时钟，并在重放分支调用已经通过的桥。
 
 ## 15. 墙上时钟怎样变成可测试输入
 

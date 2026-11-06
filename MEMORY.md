@@ -184,7 +184,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-05）：Week13整周正式完成；Week14 Day1～Day3整日正式通过。系统主线94个整日通过、95份Daily生成。[Week14 Day3](week14/day3/day3.md)分轮96/98/98、整日98/100正式通过；[Week14 Day4](week14/day4/day4.md)前置已满足，当前进入R1。生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-06）：Week13整周正式完成；Week14 Day1～Day3整日正式通过。系统主线94个整日通过、95份Daily生成。[Week14 Day4](week14/day4/day4.md) R1正式通过100/100，当前进入R2；整日尚未通过。生成教材不计学习通过，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。当前T1～T12与Theory Gate 1已通过；理论下一步T13 R1。T13～T21仍未通过，Theory Gate 2未通过。
 
@@ -3609,7 +3609,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day3均已正式完成。当前94个整日通过、95份Daily已生成；[Week14 Day3](week14/day3/day3.md)分轮96/98/98、整日98/100正式通过；[Week14 Day4](week14/day4/day4.md)前置已满足，当前进入R1。Day1～Day3与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day3均已正式完成。当前94个整日通过、95份Daily已生成；[Week14 Day4](week14/day4/day4.md) R1正式通过100/100，当前进入R2；整日尚未通过。Day1～Day3与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -9498,3 +9498,15 @@ Day4 §9改为四行输入/结果合同，保留“合法期限、非法时钟�
 三遍审查完成。技术遍复核`wall now + ttl -> absolute deadline`与`deadline - restart wall now -> remaining ttl`语义、过去期限删除、缺失key不复活、单次单调时刻、错误传播与失败不改旧状态；修改没有改变测试oracle或项目接口。教学遍全篇搜索旧判断式、九步顺序、具体replay分支和解析实现提示，均已移除；必要的数据流与测试仍足以独立开工。全局遍同步`plan_strengthened.md`、`C++项目伴随补缺规划.md`与Week14周规划中的闸门说明，确认`AI_Infra理论伴随线规划.md`原有规则已经一致，无需制造重复diff；DAILY_INDEX、当前进度、课程范围与分数均不变。
 
 当前Day4正文SHA256为`6D7C85CF59B248FFF04C9E7433217AAB9589CCFBB18E8415046389659DB2AC49`；150个代码围栏成对，本地链接存在，无控制字符或超过180字符的普通正文行。用户`week14/day4/day4_note.md`保持只读，SHA256为`DD0E0B19953E31A152E11B7E0C151DFADBEAA229990AA75CB80BE5ACA6389081`。Day4仍为R1尚未开始，系统与理论下一步均不变；本轮没有修改production source、tests、CMake或用户笔记，也没有冒充动态构建或学习通过。
+
+## 2026-11-06：Week14 Day4 R1正式通过100/100
+
+用户完成绝对期限桥R1，并用本人`day4_note.md`准确抓住主线：写入时用`old wall now + ttl`得到可持久化Unix绝对期限；重放时用`deadline - new wall now`得到remaining，再交给新进程的单调时钟期限能力。笔记也明确`apply_aof_pexpireat`只读取一次store时刻、目标key必须有效，以及未来期限/已经到期/缺失key/非法墙上时钟四类结果。Codex保持笔记只读，最终SHA256为`CB8B1238EDD6BC17A677B4CA6E3E562AA457A4C3BF8659AAB082BF9067666FCE`。
+
+源码中`checked_unix_deadline_ms`使用安全加法检查生成绝对期限；`apply_aof_pexpireat`先验证两个墙上时钟整数，再读取一次单调时刻，并把同一份`now_ms`交给`exists_at`及`expire_ms_at/erase_at`。首次检阅发现已到期分支调用`erase()`会二次读取时钟，临时探针得到`clock_calls=2`并抛出第二次读取异常；用户随即改为显式时刻删除接口。该问题修复后，Codex在此前已获授权的机械测试范围内为`aof_expiry_test.cpp`补入单次单调时刻永久回归，没有修改用户production source、header、CMake或note。
+
+最终R1 focused CTest为`4/4`，完整工程CTest为`161/161`。fresh临时构建启用`-Werror -fsanitize=address,undefined -fno-omit-frame-pointer`，R1仍为`4/4`且无ASan/UBSan报告，临时脚本与构建目录已清理。最终header/source/test/CMake SHA256分别为`adc74d7d02ee8b351e10509768ba850358604aa932dbc4ea967b25e32f14ddff`、`98f1a245d79ed42f862095a55e5df4a356171731b06d1b085b478317f6f3c8e9`、`beadcf0adace9fd1d8aaf07e01319c06b89caf94c9cc6185d272a92c989c1344`与`686e2f7c2c5c558332d0a992bd91d4ce6c77f02e59bcea878ac0c42de83f21ad`。
+
+R1最终100/100并正式通过，整日尚未通过。R2/R3已按真实接口定向校准：保留R1两个桥接函数；当前dispatcher只有`execute_command(store, arguments)`原入口，replayer内部只认识SET/DEL，因此R2只为live/replay补可控墙上时钟并复用期限桥，不重写parser loop或客户端副作用。R3继续收绝对期限加法的最终错误映射、非法期限文本、缺失key和失败保持；这些后置边界不追溯扣R1分。
+
+本轮同步Memory当前进度/下一步、总规划、理论规划的系统状态、C++补缺、Week14、Daily索引和AI Infra资料入口；系统计数保持94个整日通过、95份Daily生成，当前进入Week14 Day4 R2。理论状态保持T1～T12与Theory Gate 1通过，下一步T13 R1。Ubuntu AOF新文件仍未统一纳入源码Git边界，不创建依赖不完整的局部提交；Windows正式文档只作本地Git提交，不push，并排除用户既有dirty文件。
