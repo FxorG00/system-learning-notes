@@ -1361,9 +1361,9 @@ T12 与 Ex3/Ex4 都通过、且系统主线没有 correctness blocker 时，可�
 
 ---
 
-## T13：generalization、regularization 与实验纪律
+## T13：generalization（泛化）、regularization（正则化）与实验纪律
 
-**当前状态（2026-11-05）：[T13](ai_theory/T13/T13.md)为理论下一步，R1尚未开始。** 教材已按T11学习者主线重新收束；正文固定沿`baseline曲线 -> weight decay更新 -> 同起点对照 -> validation选checkpoint -> fresh model恢复 -> 最终test`推进，Dropout与实验纪律扩展在核心闭环之后。
+**当前状态（2026-11-05）：[T13](ai_theory/T13/T13.md)为理论下一步，R1尚未开始。** 教材已在T12真实通过后再次按T11学习者主线收束；正文先用一组具体曲线产生问题，再沿`baseline曲线 -> weight decay更新 -> 同起点对照 -> validation选checkpoint -> fresh model恢复 -> 最终test`推进。Dropout与实验纪律扩展仍在核心闭环之后。
 
 ### 学习内容
 
@@ -1385,7 +1385,7 @@ overfit_observation.py
 
 在固定小数据集上观察train/validation curves，再配对加入一种regularization，比较实际变化。不把一定过拟合或一定改善当作通过条件。
 
-R1保持baseline观察。R2-A解释自己的曲线与weight decay后可暂停；R2-B继续安排公平比较和checkpoint选择，不插入另一种正则化。R3在同一个程序完成两组训练、恢复winner与最终test，再回答这次衰减是否有帮助。暂停不新增文件、实验或验收。
+R1保持baseline观察，并明确训练helper修改model、返回history这两条结果通道。R2是连续一轮：第一步解释自己的曲线与weight decay，第二步安排公平起点和checkpoint选择；中间可以暂停，但不插入另一种正则化。R3在同一个程序完成两组训练、恢复winner与最终test，再回答这次衰减是否有帮助。暂停不新增文件、实验或验收。
 
 ### 对应视频
 
