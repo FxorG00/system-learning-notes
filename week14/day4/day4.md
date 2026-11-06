@@ -1,6 +1,6 @@
 # Week14 Day4：让停机时间也从 TTL 里扣掉
 
-> 版本：2026-11-05，前置已满足，R1 尚未开始（正文于 2026-11-04 提前生成）
+> 版本：2026-11-06，按“讲清行为合同、不提前交出核心实现”重新收束；前置已满足，R1 尚未开始（正文于 2026-11-04 提前生成）
 > 当前前置：Week14 Day1～Day3 已整日通过；Day3 最终 98/100，当前进入 Day4 R1
 > 今日产出：一个 AOF expiry bridge（AOF 期限桥接）组件，把绝对日历期限换成新进程的剩余 TTL
 > 今日主线：写入绝对期限 -> 进程停机 -> 重启时扣掉停机时间 -> 写入新进程自己的单调期限
@@ -375,91 +375,49 @@ restored.pttl("code") == 90,000
 这条期限记录是否作用在一个当前有效的 key 上
 ```
 
-## 9. `checked_unix_deadline_ms` 应怎样判断
+## 9. `checked_unix_deadline_ms` 需要保证什么
 
 本函数只服务正数 `EXPIRE`。
 
-Day1 已经规定：
+Day1 已经规定，`EXPIRE key 0` 和 `EXPIRE key -5` 成功删除时记录成 `DEL`，不会进入这个函数。
+
+先看它对外必须兑现的四种结果：
+
+| 写入时 Unix 毫秒 | 正 TTL | 结果 |
+|---:|---:|---|
+| `1,000,000` | `120,000` | 返回 `1,120,000` |
+| `-1` | `120,000` | 拒绝无效的墙上时钟 |
+| `1,000,000` | `0` 或负数 | 拒绝不属于本路径的 TTL |
+| 已接近 `int64_t` 上限 | 仍会继续增大的 TTL | 报期限不可表示，不能产生一个回绕后的数 |
+
+这四行就是这个函数的合同：合法输入得到绝对期限；无效输入与不可表示的结果稳定失败。
+
+R1 的实现练习是你自己决定怎样组织检查，让程序在判断“能否表示”以前不会执行一场已经溢出的有符号加法。正文不再给固定的 `if` 顺序或可直接翻译的伪代码。R1 先覆盖正常换算，错误边界由 R3 的测试补齐；两轮都只从外部结果判断实现是否成立。
+
+## 10. `apply_aof_pexpireat` 需要兑现哪些状态结果
+
+这个函数接到的不是一段“再活多久”，而是日志里的绝对死亡时刻。它要把这个时刻放回当前新进程的 `KvStore`。
+
+继续使用 §8.2 的同一个对象：
 
 ```text
-EXPIRE key 0
-EXPIRE key -5
+日志中的 deadline = 1,120,000
+重启时 Unix now   = 1,030,000
+新进程 monotonic now = 7,000
 ```
 
-成功删除时记录成 `DEL`。
+这次记录作用完成后，`code` 应剩余 `90,000 ms`。如果重启时已经是 `1,120,000` 或更晚，`code` 应立即失效；如果 `code` 根本不存在，这条期限记录不能重新创建它。
 
-它们不进入本函数。
+| 调用前状态 | 墙上时钟关系 | 对外结果 |
+|---|---|---|
+| `code` 有效 | deadline 在未来 | 返回 `true`，PTTL 等于尚未经过的时间 |
+| `code` 有效 | deadline 已到或已过去 | 返回 `true`，立即删除 `code` |
+| `code` 不存在 | 任意合法时刻 | 返回 `false`，仍不创建 `code` |
+| 墙上时钟整数非法 | 无法比较 | 抛出 `std::invalid_argument`，store 保持原状态 |
 
-因此这里的顺序是：
+一次应用只使用一份新进程单调时刻，避免同一条期限记录在内部看到两个不同的“现在”。真正把剩余 TTL 接到单调期限时，继续复用 `KvStore` 已有的期限能力；它产生的范围错误也继续向上传播。
 
-```text
-unix_now_ms < 0
--> invalid_argument
-
-ttl_ms <= 0
--> invalid_argument
-
-ttl_ms > int64_max - unix_now_ms
--> overflow_error
-
-否则
--> return unix_now_ms + ttl_ms
-```
-
-先判断，再做加法。
-
-不要先计算以后再检查结果。
-
-## 10. `apply_aof_pexpireat` 应怎样换算
-
-先验证两个墙上时钟整数：
-
-```text
-unix_deadline_ms >= 0
-unix_now_ms >= 0
-```
-
-然后只从 `KvStore` 读取一次当前单调时刻：
-
-```cpp
-const KvStore::TimeMs monotonic_now_ms =
-    store.read_time_ms();
-```
-
-如果绝对期限已经到达：
-
-```text
-unix_deadline_ms <= unix_now_ms
-```
-
-就把剩余 TTL 当成 0：
-
-```cpp
-return store.expire_ms_at(
-    key,
-    0,
-    monotonic_now_ms);
-```
-
-当前 `KvStore` 对非正 TTL 的行为是立即删除有效 key。
-
-如果期限还在未来：
-
-```cpp
-const KvStore::TimeMs remaining_ms =
-    unix_deadline_ms - unix_now_ms;
-
-return store.expire_ms_at(
-    key,
-    remaining_ms,
-    monotonic_now_ms);
-```
-
-这里先确认 `deadline > now >= 0`。
-
-所以减法结果一定是正数，也不会发生有符号下溢。
-
-新单调期限的加法越界继续由现有 `expire_ms_at()` 检查。
+这里同样只规定结果与状态边界。怎样分支、怎样保存那一次单调时刻、怎样调用现有 store API，留给你的 R1 实现。
 
 ## 11. R1 三个测试分别证明什么
 
@@ -718,28 +676,13 @@ const UnixNow unix_now = [] {
 
 `GET`、`SET`、`PING` 不应该因为新增依赖而读取墙上时钟。
 
-保留现有两参数 `execute_command()` 供 server 使用。
+现有 server 调用方式必须继续可用，并在生产路径读取真实系统墙上时钟；测试则必须能够传入固定的 `UnixNow`。
 
-再增加一个可注入 `UnixNow` 的重载供测试和后续 owner 使用：
-
-```cpp
-CommandOutcome execute_command(
-    KvStore& store,
-    const std::vector<std::string>& arguments);
-
-CommandOutcome execute_command(
-    KvStore& store,
-    const std::vector<std::string>& arguments,
-    const UnixNow& unix_now);
-```
-
-两参数入口在内部使用真实系统墙上时钟。
-
-三参数入口只替换这一处时间来源。
+你可以根据当前 dispatcher 的实际结构选择重载、额外参数或一个很小的私有 helper。R2 只要求“生产取真实时间、测试可固定时间、无关命令不读时间”这三个结果，不预先指定唯一函数签名。
 
 不要为了一个时间依赖创建通用 `CommandContext` 框架。
 
-## 16. 正数 EXPIRE 的动作顺序
+## 16. 正数 EXPIRE 必须同时兑现哪两份结果
 
 当前 `expire_handler()` 已经完成：
 
@@ -750,23 +693,22 @@ CommandOutcome execute_command(
 -> expire_ms_at
 ```
 
-R2 只在状态修改前补齐绝对记录：
+R2 要让一次成功的正数 `EXPIRE` 同时产生两份一致结果：
 
 ```text
-1. 解析并验证 seconds
-2. checked seconds * 1000，得到 ttl_ms
-3. 读取一次 monotonic_now_ms
-4. 调用 UnixNow，得到 unix_now_ms
-5. checked_unix_deadline_ms，得到 unix_deadline_ms
-6. encode_aof_pexpireat，先准备完整 record
-7. store.expire_ms_at(key, ttl_ms, monotonic_now_ms)
-8. key 有效并修改成功：返回 :1 与 record
-9. key 不存在或已失效：返回 :0 与 nullopt
+当前进程：store 得到相对 TTL
+未来重放：CommandOutcome 带回同一语义的 PEXPIREAT record
 ```
 
-record 必须在第 7 步之前准备完。
+观察下面三种结果：
 
-否则 encoder 失败时，store 可能已经改变，却没有可追加的记录。
+| 场景 | reply / record | store |
+|---|---|---|
+| key 有效，期限与编码均成功 | `:1`，带完整 `PEXPIREAT` record | 得到新 TTL |
+| key 不存在或已经失效 | `:0`，没有 record | 保持缺失 |
+| 取时、期限换算或 record 编码失败 | 不能伪造成功 reply，也没有半条 record | 保持调用前状态 |
+
+第三行要求这次命令具备“要么两份结果都准备好，要么旧状态不动”的边界。怎样安排取时、编码和修改顺序，正是 R2 留给你的实现问题；正文不再把答案拆成九个可照抄步骤。
 
 非正 `EXPIRE` 继续走 Day1 已通过的 `DEL` 规范化路径。
 
@@ -780,6 +722,8 @@ record 必须在第 7 步之前准备完。
 不能把基础设施故障伪装成用户参数错误。
 
 ## 17. live path 的第一条证据
+
+下面的测试使用“额外传入 `UnixNow`”这一种调用形式。若你的注入接口不同，只调整调用点；场景、状态和断言不变。
 
 固定两种时钟：
 
@@ -843,25 +787,13 @@ TEST(AofExpiryR2Test,
 }
 ```
 
-## 18. replay path 怎样加入 PEXPIREAT
+## 18. replay path 加入 PEXPIREAT 后要表现成什么
 
 Day3 的 `apply_replay_command()` 已经区分 SET 与 DEL。
 
-R2 再增加一个分支：
+R2 要让它再接受一种可重放记录：`PEXPIREAT key unix_deadline_ms`。
 
-```text
-name == PEXPIREAT
-```
-
-这个分支按顺序做：
-
-```text
-参数数量必须是 3
--> 第三个参数必须是完整 int64 文本
--> 数值必须非负
--> 调用一次 UnixNow
--> apply_aof_pexpireat(store, key, deadline, unix_now)
-```
+这条记录只有三个参数、期限文本是完整非负整数时才合法。合法记录只改变新 store 的期限；它不产生客户端 reply，也不生成另一条 AOF record。目标 key 不存在时保持不存在，但这不妨碍 replayer 继续处理后面的合法记录。
 
 这里不要调用 `execute_command()`。
 
@@ -869,23 +801,7 @@ name == PEXPIREAT
 
 replayer 只需要状态变化。
 
-若 Day3 保留预生成接口，就给 `replay_aof_bytes()` 增加一个
-接收 `UnixNow` 的重载：
-
-```cpp
-AofReplayResult replay_aof_bytes(
-    KvStore& store,
-    std::string_view aof_bytes);
-
-AofReplayResult replay_aof_bytes(
-    KvStore& store,
-    std::string_view aof_bytes,
-    const UnixNow& unix_now);
-```
-
-原两参数入口调用真实系统时钟。
-
-测试使用固定时钟入口。
+原有 `replay_aof_bytes(store, bytes)` 调用仍要可用，测试还需要一种传入固定墙上时钟的方式。具体用重载还是内部依赖传递，由你结合 Day3 的真实接口决定；不要为这一项能力复制第二套 parser loop。
 
 ## 19. 一条日志从写入到重放的完整测试
 
@@ -936,7 +852,8 @@ R2 完成后，你应能沿同一条 record 说明：
 
 ```text
 正数 EXPIRE
--> 为什么先准备 PEXPIREAT bytes
+-> 为什么当前 TTL 与 PEXPIREAT bytes 必须表达同一份期限
+-> 为什么 record 构造失败时 store 必须保持旧状态
 -> 当前 store 怎样得到相对 TTL
 -> 新进程为什么用墙上时钟扣掉停机时间
 -> 剩余 TTL 怎样进入新单调时钟
@@ -999,7 +916,7 @@ value 仍为 old
 PTTL 仍为 5,000
 ```
 
-这个测试证明 record 准备失败发生在状态修改之前。
+这个测试证明无法准备完整 record 时，命令不能留下部分状态变化。
 
 另补一个基础设施故障场景：
 
@@ -1077,9 +994,7 @@ replay 报错
 server 尚未 listen
 ```
 
-`12x` 必须检查 `from_chars` 的结束指针到达文本末尾。
-
-只看“前缀 12 能解析”是不够的。
+`12x` 的前缀虽然像整数，整段文本却不是合法期限。测试只规定“必须完整拒绝”；你可以复用项目现有的整数解析能力，不在教程里预写具体解析分支。
 
 ## 25. 场景四：目标 key 不存在
 
@@ -1211,7 +1126,7 @@ cmake -E chdir build ctest --output-on-failure
 4. 重启时怎样得到 remaining TTL。
 5. remaining TTL 怎样交给新进程 `KvStore`。
 6. 绝对期限已经过去、key 不存在、后来 SET 覆盖时分别发生什么。
-7. live path 为什么先准备 record 再修改 store。
+7. live path 为什么在 record 构造失败时必须保持 store 的旧状态。
 8. replay path 为什么不能调用客户端 `execute_command()`。
 9. 墙上时钟跳变为什么是本版明确限制。
 10. 实际 focused CTest、完整 CTest 和 sanitizer 证据；没跑的不写成通过。
