@@ -1,7 +1,7 @@
 # Week14 Day4：让停机时间也从 TTL 里扣掉
 
-> 版本：2026-11-06；R1 已按真实实现正式通过 100/100，当前进入 R2（正文于 2026-11-04 提前生成）
-> 当前前置：Week14 Day1～Day3 已整日通过；Day4 R1 已完成绝对期限桥，R2 接入 live/replay 两条路径
+> 版本：2026-11-06；R1/R2 已按真实实现分别正式通过 100/100，当前进入 R3（正文于 2026-11-04 提前生成）
+> 当前前置：Week14 Day1～Day3 已整日通过；Day4 R1 已完成绝对期限桥，R2 已接通 live/replay 两条路径
 > 今日产出：一个 AOF expiry bridge（AOF 期限桥接）组件，把绝对日历期限换成新进程的剩余 TTL
 > 今日主线：写入绝对期限 -> 进程停机 -> 重启时扣掉停机时间 -> 写入新进程自己的单调期限
 
@@ -891,7 +891,31 @@ R2 完成后，你应能沿同一条 record 说明：
 
 到这里先跑 focused tests 和完整 CTest。
 
-不要在 R2 顺手处理文件尾损坏或 server 接线。
+生产入口在 R2 只补真实 `system_clock` 毫秒时钟，不改其他 server 行为。
+
+不要在 R2 顺手处理文件尾损坏。
+
+### 20.1 R2 已经留下的真实基线
+
+R2 已经完整走通 happy path（正常成功路径）：
+
+```text
+live positive EXPIRE
+-> 用注入的 UnixNow 生成 PEXPIREAT record
+-> 把真实 record bytes 交给 fresh store
+-> restart 时重新读取 UnixNow
+-> 扣掉停机时间
+-> 恢复剩余 TTL
+```
+
+生产 server 提供 `system_clock` 的 Unix 毫秒；测试可以注入固定时刻。
+`SET`、`DEL` 等不需要墙上时钟的命令不会读取 `UnixNow`。
+
+真实验证结果：R2 focused tests `4/4`，完整构建成功，完整 CTest `165/165`；
+受影响目标在 fresh `-Werror`、ASan/UBSan 构建中 `49/49` 通过且无诊断。
+
+因此 R3 不再重做正常链。R3 只检查：链中后一步失败时，前面的 store、reply 与 record
+是否仍保持一致，以及非法 AOF 输入能否稳定失败。
 
 ---
 

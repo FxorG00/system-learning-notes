@@ -184,7 +184,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-06）：Week13整周正式完成；Week14 Day1～Day3整日正式通过。系统主线94个整日通过、95份Daily生成。[Week14 Day4](week14/day4/day4.md) R1正式通过100/100，当前进入R2；整日尚未通过。生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-06）：Week13整周正式完成；Week14 Day1～Day3整日正式通过。系统主线94个整日通过、95份Daily生成。[Week14 Day4](week14/day4/day4.md) R1/R2分别正式通过100/100，当前进入R3；整日尚未通过。生成教材不计学习通过，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。当前T1～T12与Theory Gate 1已通过；理论下一步T13 R1。T13～T21仍未通过，Theory Gate 2未通过。
 
@@ -3609,7 +3609,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day3均已正式完成。当前94个整日通过、95份Daily已生成；[Week14 Day4](week14/day4/day4.md) R1正式通过100/100，当前进入R2；整日尚未通过。Day1～Day3与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day3均已正式完成。当前94个整日通过、95份Daily已生成；[Week14 Day4](week14/day4/day4.md) R1/R2分别正式通过100/100，当前进入R3；整日尚未通过。Day1～Day3与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -9510,3 +9510,15 @@ Day4 §9改为四行输入/结果合同，保留“合法期限、非法时钟�
 R1最终100/100并正式通过，整日尚未通过。R2/R3已按真实接口定向校准：保留R1两个桥接函数；当前dispatcher只有`execute_command(store, arguments)`原入口，replayer内部只认识SET/DEL，因此R2只为live/replay补可控墙上时钟并复用期限桥，不重写parser loop或客户端副作用。R3继续收绝对期限加法的最终错误映射、非法期限文本、缺失key和失败保持；这些后置边界不追溯扣R1分。
 
 本轮同步Memory当前进度/下一步、总规划、理论规划的系统状态、C++补缺、Week14、Daily索引和AI Infra资料入口；系统计数保持94个整日通过、95份Daily生成，当前进入Week14 Day4 R2。理论状态保持T1～T12与Theory Gate 1通过，下一步T13 R1。Ubuntu AOF新文件仍未统一纳入源码Git边界，不创建依赖不完整的局部提交；Windows正式文档只作本地Git提交，不push，并排除用户既有dirty文件。
+
+## 2026-11-06：Week14 Day4 R2正式通过100/100
+
+用户完成Day4 R2的live/replay接线，并在`day4_note.md`中准确说明KvStore继续保持AOF无感，dispatcher负责把正数`EXPIRE`转换为`PEXPIREAT`，replayer负责把绝对期限换回新进程的剩余TTL。`UnixNow`以依赖注入方式进入两条路径；生产`mini_redis_server`最终使用`std::chrono::system_clock`提供Unix毫秒。用户笔记保持只读，最终SHA256为`599E888D30F29FCB05C3EC39BA679ADDA905C5653D33EB3E173557F06B85B39E`。
+
+首次完整检阅时，R2核心实现和focused tests已成立，但`apps/mini_redis_server.cpp`仍调用旧的两参数`execute_command`，导致完整工程不能编译，因此只暂评95/100且不通过。用户随后为生产入口补上真实墙上时钟provider；完整增量构建成功，原扣5分全部撤销。最终R2 focused tests为`4/4`，完整CTest为`165/165`；此前受影响目标的fresh `-Werror -fsanitize=address,undefined -fno-omit-frame-pointer`构建为`49/49`且无诊断。
+
+R2端到端证据不只检查手写bytes：live `SET`与正数`EXPIRE`先产生真实`CommandOutcome` records，再把同一串bytes交给fresh store重放；重启晚500ms后，2000ms绝对寿命只剩1500ms。另有用例证明`SET/DEL`不读取Unix墙上时钟，replay也不会再次生成record。Codex只在用户明确委托的机械测试范围内补充这些GoogleTest及必要CMake接线，没有修改用户production source、header或note。
+
+最终`command_dispatcher.hpp/.cpp`、`aof_replay.hpp/.cpp`、`command_dispatcher_test.cpp`、`aof_replay_test.cpp`、`ttl_command_test.cpp`、`mini_redis_server.cpp`与`CMakeLists.txt`的SHA256依次为`efce833af7f42f1566eeb17f61bd0ae9fb3df08c96207a3b1a1c925cd21707cc`、`c6275304f40e50f34fe0043282744e0a49c70e46e3e7758cd64a04b687ff042f`、`f71b69c024624cabf71773d8e12586e48df68add07d854d34d38b3164d11c2be`、`f15192d7b4fea354406989dcbc9192e990a338f5b47eb857f7e15a8d84d52fad`、`68fc528ea80980914dc88acf62e9ccd162ef7181b133a15e9ce2a53a3876ce78`、`55e840836e3fb094faa69c8834f6bcbf91507107b46bb9cd4e8bd1d5e4b53761`、`d59301041bf52bd411e356b28669ccc50b768176b1feed1b08b7c7e59d4784c4`、`e412b21077207100d2ea48ea0a0cb7ee9f0b0834a515daae0d845f70619c8857`与`41dd68542c9e7385094cdf6c736986f0db9a373655ddfad9da5c60abd20e1eb6`。
+
+R2最终100/100并正式通过，Day4整日尚未通过。R3只继续检查失败原子性、绝对期限/新单调期限越界的稳定映射、非法`PEXPIREAT`文本与arity、缺失key以及失败后store/reply/record保持；这些后置边界不追溯扣R2分。系统计数保持94个整日通过、95份Daily生成，当前进入Week14 Day4 R3；理论下一步仍为T13 R1。Ubuntu AOF文件仍未统一纳入源码Git边界，不创建依赖不完整的局部提交；Windows正式文档只作本地Git提交，不push，并排除用户既有dirty文件。
