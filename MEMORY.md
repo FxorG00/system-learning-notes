@@ -184,7 +184,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-06）：Week13整周正式完成；Week14 Day1～Day4整日正式通过。系统主线95个整日通过、95份Daily生成。[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；系统下一步Week14 Day5。生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-06）：Week13整周正式完成；Week14 Day1～Day4整日正式通过，Day5教程已生成并等待R1。系统主线95个整日通过、96份Daily生成。[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；系统下一步Week14 Day5 R1。生成教材不计学习通过，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。当前T1～T12与Theory Gate 1已通过；理论下一步T13 R1。T13～T21仍未通过，Theory Gate 2未通过。
 
@@ -3609,7 +3609,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day4均已正式完成。当前95个整日通过、95份Daily已生成；[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；系统下一步Week14 Day5。Day1～Day4与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day4均已正式完成，Day5教程已生成并等待R1。当前95个整日通过、96份Daily已生成；[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；系统下一步Week14 Day5 R1。Day1～Day4与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -9534,3 +9534,13 @@ R3新增八项机械GoogleTest后第一次运行结果为`5/8`。三个失败精
 用户`day4_note.md`保持只读，R1/R2主链已准确覆盖职责分离、双时钟转换、live/replay和失败前准备，最终SHA256为`E698A406E7D23C7266DB981DAAB05ABAC11EFCDC135368E7187F9BEF614E88E4`；R3只为同一主链补失败边界，不要求重复抄写机械测试。最终`aof_expiry.cpp`、`command_dispatcher.cpp`、`aof_replay.cpp`、`command_dispatcher_test.cpp`、`aof_replay_test.cpp`、`aof_expiry_test.cpp`与`CMakeLists.txt` SHA256依次为`b1a813069e89b62bb9289d359d4465fd982b8bf2a90dd29d0b7a65be4a347350`、`b87421a577452a55a47c96aa9abb38b432f919258c8a3c0ba81ea9887d732367`、`f15192d7b4fea354406989dcbc9192e990a338f5b47eb857f7e15a8d84d52fad`、`bd338d25526cc973b2fe5e137a83895b8ef23e8695f0f5c86d95a2eae493473e`、`19988d6c8c49c1b880911ae12191468a806a1821d0200115171bd3b1bcf1aecb`、`beadcf0adace9fd1d8aaf07e01319c06b89caf94c9cc6185d272a92c989c1344`与`41dd68542c9e7385094cdf6c736986f0db9a373655ddfad9da5c60abd20e1eb6`。
 
 R3与Day4整日最终均为100/100，正式通过。系统状态推进为95个整日通过、95份Daily生成，下一步Week14 Day5；理论下一步保持T13 R1。Ubuntu AOF相关文件仍未形成可独立提交的完整tracked边界，不创建只含局部测试的提交；Windows八份正式文档作本地Git提交、不push，并排除用户既有dirty文件。
+
+## 2026-11-06：Week14 Day5教程生成，R1待开始
+
+根据Week14既定AOF恢复链、Day1～Day4正式通过结果、Day4用户笔记与Ubuntu磁盘最新版，新增`week14/day5/day5.md`。当前真实`mini_redis_server.cpp`只使用`CommandOutcome.reply`，尚未消费可选AOF record，也没有启动重放；现有`AofWriter`、`replay_aof_file`、`execute_command`和`Acceptor::start()`接口已经足够完成接线。本日只解决application owner中的两条顺序：启动时先恢复再监听，运行时有record的命令先append/sync再把reply交给Connection；不重写Reactor、RESP、KvStore、writer、replayer或期限桥。
+
+R1独立范围固定为`apps/mini_redis_server.cpp`与`CMakeLists.txt`，外部入口使用独立AOF path，首次启动须创建空文件，真实停止与重启checker可由Codex按最终接口补全。R2再核对无record命令不写盘、reply进入发送路径的准确边界与原protocol行为；R3才补启动失败、append/sync致命失败、关闭边界和完整回归。Day6的不完整尾部/中间损坏策略、后台同步、性能结论和graceful signal handling均未前移。
+
+系统状态更新为95个整日通过、96份Daily生成，当前Week14 Day5 R1；理论状态保持T1～T12与Theory Gate 1通过，下一步T13 R1。Ubuntu源码、tests、CMake与全部用户note只读核对，没有修改；Windows正式仓库只纳入新教程与受影响的现行进度/索引/资料入口，不改Day1～Day4冻结正文，不push。
+
+生成后的三轮校查已分别完成。第一轮按Ubuntu真实源码核对`AofWriter`的创建语义、`replay_aof_file`签名、`Acceptor::start()`的监听边界、`Connection -> EventLoop -> main`异常传播与CMake缺失链接；第二轮核对单一认知主干、R1/R2/R3停止点、术语入口、Day6边界和Markdown结构；第三轮核对九份正式文件的现行状态、96份Daily实数、相对链接、冻结/用户文件保护与Git范围。三轮均通过，没有修改Ubuntu源码、tests、CMake或任何用户note。
