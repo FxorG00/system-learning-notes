@@ -184,7 +184,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-06）：Week13整周正式完成；Week14 Day1～Day4整日正式通过，Day5教程已生成并等待R1。系统主线95个整日通过、96份Daily生成。[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；系统下一步Week14 Day5 R1。生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-10）：Week13整周正式完成；Week14 Day1～Day4整日正式通过，Day5 R1以100/100正式通过、整日待R2/R3。系统主线95个整日通过、96份Daily生成。[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；系统下一步Week14 Day5 R2。生成教材不计学习通过，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。当前T1～T12与Theory Gate 1已通过；理论下一步T13 R1。T13～T21仍未通过，Theory Gate 2未通过。
 
@@ -3609,7 +3609,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day4均已正式完成，Day5教程已生成并等待R1。当前95个整日通过、96份Daily已生成；[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；系统下一步Week14 Day5 R1。Day1～Day4与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day4均已正式完成，Day5 R1以100/100正式通过、整日待R2/R3。当前95个整日通过、96份Daily已生成；[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；系统下一步Week14 Day5 R2。Day1～Day4与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -9544,3 +9544,17 @@ R1独立范围固定为`apps/mini_redis_server.cpp`与`CMakeLists.txt`，外部�
 系统状态更新为95个整日通过、96份Daily生成，当前Week14 Day5 R1；理论状态保持T1～T12与Theory Gate 1通过，下一步T13 R1。Ubuntu源码、tests、CMake与全部用户note只读核对，没有修改；Windows正式仓库只纳入新教程与受影响的现行进度/索引/资料入口，不改Day1～Day4冻结正文，不push。
 
 生成后的三轮校查已分别完成。第一轮按Ubuntu真实源码核对`AofWriter`的创建语义、`replay_aof_file`签名、`Acceptor::start()`的监听边界、`Connection -> EventLoop -> main`异常传播与CMake缺失链接；第二轮核对单一认知主干、R1/R2/R3停止点、术语入口、Day6边界和Markdown结构；第三轮核对九份正式文件的现行状态、96份Daily实数、相对链接、冻结/用户文件保护与Git范围。三轮均通过，没有修改Ubuntu源码、tests、CMake或任何用户note。
+
+## 2026-11-10：Week14 Day5 R1正式通过100/100
+
+用户完成真实Mini Redis owner接线。启动链为`AofWriter创建或打开AOF -> replay_aof_file恢复共享KvStore -> acceptor.start开始监听`；在线链为`execute_command -> aof_record有值才append -> sync -> connection.send(reply)`。`KvStore`、`AofWriter`和`UnixNow`均由`main_()`所在application owner持有，生命周期覆盖所有Connection callback；AOF异常经`Connection::try_message_callback`关闭当前连接后继续抛出，最终由`main()`保留诊断并非零退出。
+
+Codex按用户明确委托新增机械脚手架`tests/mini_redis_aof_restart_check.py`，没有修改用户production source、CMake或`day5_note.md`。脚手架只管理自己启动的两个进程：首进程写入含NUL/CRLF的binary SET、一个仍存活TTL key和一个停机期间到期key；收到每条成功reply后才终止；第二进程用同一路径重启，验证binary exact恢复、TTL扣除停机时间、过期key不复活、恢复数据仍可DEL，以及两条Connection继续PING。脚手架结束后6380无监听、无残留server。机械socket/RESP/进程管理不承载本轮核心推理，因此不扣用户分。
+
+当前源码在独立`/tmp`目录完成fresh Debug `-Werror`全量构建，完整CTest `173/173`通过，真实restart checker输出`MINI REDIS AOF RESTART CHECK PASS`。同一哈希版本还验证了缺少AOF参数与父目录不存在均返回1，后者保留`AofWriter`的`ENOENT`来源且没有开始监听。`mini_redis_server.cpp`、`CMakeLists.txt`、restart checker与用户note的SHA256依次为`af98df83e4bbedd8e9117b531de9668a7e5ee7de30043a02c8b505d2c4b7a043`、`736301edb5219839e5b24fde54cd6c48f5ee5b9ce42ca25ad1ad37715436c142`、`2ec79ccd2105600722d66cba882d19e0095758b39be09a7724a36ad3c5959457`与`6FF54F5C2ED1BD84EE78DEEB7858926FAA6F6FE7600C14BCBF9362BFF77D9795`。
+
+用户笔记准确抓住“Mini Redis旧入口没有消费AOF record，也没有启动重放”这一升级点，并用同一张图连接创建writer、恢复、监听及`record -> append -> sync -> reply`。笔记代码片段中的`append(*aof_record)`按前面流程图理解为只处于optional有值分支；这不是实现错误，也不要求为机械完整性重写笔记。R1最终100/100并正式通过；整日尚未通过，后置R2/R3边界不追溯扣R1分。
+
+R1通过后已按实际接口校准后半：R2直接扩展现有restart checker，在首条有效SET后记录文件长度，用exact reply与长度不变证明`nullopt`命令不写盘，再保留原protocol checker；R3基于现有`AofWriter(WriteFn, SyncFn)`和inline message callback留下最小owner测试边界，用send spy证明append/sync失败不安排成功reply，不引入通用persistence hierarchy或生产故障注入命令行。启动非法日志与残缺尾部继续在R3形成永久证据，Day6才决定尾部恢复策略。
+
+系统状态仍为95个整日通过、96份Daily生成，当前进入Week14 Day5 R2；理论状态保持T1～T12与Theory Gate 1通过，下一步T13 R1。Ubuntu AOF相关源码仍未形成可独立提交的完整tracked边界，不创建只含局部脚手架的提交；Windows正式文档按§9.12只作本地Git提交，不push，并排除用户既有dirty文件。

@@ -1,9 +1,9 @@
 # Week14 Day5：把 AOF 恢复与写盘接回真实 Mini Redis
 
-> 版本：2026-11-06，教程生成，R1 待开始
+> 版本：2026-11-10，R1 以 100/100 正式通过，R2 待开始
 > 前置：Week14 Day1～Day4 已整日通过；Day4 R1/R2/R3 与整日均为 100/100
 > 今日产出：原 `mini_redis_server` 接收一条 AOF 路径；启动时先恢复，运行时先追加并同步，再安排写命令的成功回复
-> 学习方式：R1 独立完成 `main_()` 里的真实接线；R2 核对无状态变化命令与回复边界；R3 补启动失败、运行时致命失败和完整回归
+> 学习方式：R1 已独立完成 `main_()` 里的真实接线；R2 核对无状态变化命令与回复边界；R3 补启动失败、运行时致命失败和完整回归
 
 [TOC]
 
@@ -505,6 +505,39 @@ R1 通过前，只回答五个问题：
 
 不要提前修改 tail recovery、信号处理或 async writer。
 
+## 13.1 R1 实际验收结果
+
+R1 于 2026-11-10 以 `100/100` 正式通过。
+
+当前真实接线已经形成两条顺序：
+
+```text
+AofWriter 创建或打开文件
+-> replay_aof_file 恢复共享 KvStore
+-> acceptor.start 开始监听
+
+execute_command
+-> aof_record 有值时 append
+-> sync
+-> connection.send(reply)
+```
+
+`KvStore`、`AofWriter` 与 `UnixNow` 均由 `main_()` 所在的 application owner 持有，
+生命周期覆盖所有 Connection callback。机械重启脚手架由 Codex 按授权补入，不扣实现与理解分。
+
+最新动态证据：
+
+```text
+fresh Debug + -Werror 全量构建通过
+完整 CTest 173/173 通过
+MINI REDIS AOF RESTART CHECK PASS
+缺少参数与父目录不存在均非零退出
+脚手架结束后没有残留 server，也没有占用 6380
+```
+
+用户笔记准确抓住“先恢复再监听”和“有 record 才 append/sync，再安排 reply”的主线。
+R2/R3 不追溯重做这条已经通过的 owner 接线。
+
 ---
 
 # Round 2：核对没有状态变化的命令与真实回复边界
@@ -597,6 +630,19 @@ AOF 文件长度只能证明 append 后可观察到更多 bytes。
 
 同步语义继续由 Day2 的注入测试、当前 source 顺序和后面的失败测试共同支持。
 
+R1 已经留下可直接扩展的：
+
+```text
+tests/mini_redis_aof_restart_check.py
+```
+
+R2 不需要再造一套 socket/RESP 框架。第一次进程完成首条有效 `SET` 后，记录 AOF 长度 `S`；
+随后依次发送本节表中的无 record 命令，每次核对 exact reply，并确认文件长度仍为 `S`。
+再发送一条确实产生 record 的命令，确认成功 reply 返回时文件长度已经增加。
+
+这些 checker 扩展属于可委托的机械 correctness 脚手架。用户需要解释的是：
+为什么判据读取 `CommandOutcome.aof_record`，而不是根据命令名、reply 或 value 是否相同自行猜测。
+
 R2 到这里停止。
 
 不要把 `GET`、`PING` 也变成同步操作，也不要为今天加入批量同步策略。
@@ -660,7 +706,18 @@ Day6 才决定怎样识别最后一条完整记录，并处理可截断的尾部
 
 这些是测试场景，不是三项新功能。
 
-具体怎样给 owner 留下最小测试接缝，要等 R1 实际代码出现后再决定。
+R1 的实际代码把持久化顺序直接写在 Connection message callback 中；
+生产入口使用 `AofWriter(path)`，而 `AofWriter` 本身已经有接受 `WriteFn` / `SyncFn` 的测试构造函数。
+
+因此 R3 只需要为“处理一个已经得到的 `CommandOutcome`”留下最小可测试边界：
+
+```text
+输入：outcome、现有 writer、可观察的 reply 发送动作
+输出：要么完成既定顺序，要么保留原异常
+```
+
+测试需要能分别观察 append、sync 与 send 是否被调用。
+它不需要抽象新的 persistence interface，也不需要把故障注入选项放进生产命令行。
 
 不要为了测试先设计通用 persistence hierarchy，也不要把测试 callable 塞进生产命令行。
 
@@ -687,6 +744,10 @@ C++ 异常导致的 fatal path 则会正常展开栈对象，`UniqueFd` 负责�
 两种退出方式不要混成一个结论。
 
 ## 20. R3 完整回归与停止点
+
+R1 验收已经实测缺少参数与父目录不存在两条失败路径。
+R3 要做的是把启动失败矩阵保存为可重复证据，并继续补完整但不允许重放的命令、残缺尾部和运行时 append/sync 故障；
+不是再次手动重复 R1 的 happy-path restart。
 
 最终至少运行：
 
