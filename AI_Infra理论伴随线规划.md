@@ -1363,7 +1363,7 @@ T12 与 Ex3/Ex4 都通过、且系统主线没有 correctness blocker 时，可�
 
 ## T13：generalization（泛化）、regularization（正则化）与实验纪律
 
-**当前状态（2026-11-10）：[T13](ai_theory/T13/T13.md)为理论下一步，R1尚未开始。** 教材已在T12真实通过后按T11学习者主线收束，并完成一次定向复检：先用同一个model在epoch 20/40/60的参数变化解释train/validation/test职责；从单个平方项完整求出$\lambda\theta$后才压成weight-decay更新；真正需要取回中途参数时才用具体时间线引入checkpoint，并明确R1只记分数、R3才保存state。正文继续沿`baseline曲线 -> weight decay更新 -> 同起点对照 -> validation选checkpoint -> fresh model恢复 -> 最终test`推进，Dropout与实验纪律扩展仍在核心闭环之后。
+**当前状态（2026-11-11）：[T13](ai_theory/T13/T13.md)为理论下一步，R1尚未开始。** 教材已按T11学习者主线和T12真实通过版本校准：T12实际采用自定义`TinyMLP`与`AdamW(lr=0.03, weight_decay=0.0)`，T13直接复用自定义Module和AdamW的组织方式，只因标量回归任务调整输入输出、hidden层数与本课固定learning rate，不再重新提供SGD或`nn.Sequential`分支。正文先用同一个model在epoch 20/40/60的参数变化解释train/validation/test职责；从单个平方项完整求出$\lambda\theta$后才压成weight-decay更新；真正需要取回中途参数时才用具体时间线引入checkpoint，并明确R1只记分数、R3才保存state。核心继续沿`baseline曲线 -> weight decay更新 -> 同起点对照 -> validation选checkpoint -> fresh model恢复 -> 最终test`推进，Dropout与实验纪律扩展仍在闭环之后。
 
 ### 学习内容
 
