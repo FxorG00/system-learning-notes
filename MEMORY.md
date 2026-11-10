@@ -9578,3 +9578,9 @@ R1公开合同在现有`AofReplayResult`上增加`incomplete_tail_found`，`byte
 本次只读核对当前replayer/writer/server/CMake与既有AOF tests；官方资料使用Redis持久化说明、Linux/POSIX `ftruncate`及Linux `fdatasync/open`手册校准截断尾部、中间损坏、失败不改文件、文件长度元数据同步与`O_APPEND`边界。Ubuntu源码、tests、CMake和全部用户note均未修改。系统状态为96个整日通过、97份Daily生成，当前Week14 Day6 R1；理论下一步保持T13 R1。
 
 生成后的三遍校查各有独立目标。技术遍确认现有`AofReplayResult`、bytes/file两层职责、`O_RDONLY -> O_RDWR`升级、截断后同步与writer既有`O_APPEND`可以沿当前接口完成；Day3旧“残缺尾部必失败”测试由Day6新合同定向升级，中间Error与完整非法命令仍保持失败。教学遍确认唯一主线为`完整前缀 -> EOF NeedMore -> last_good_offset -> truncate -> sync -> listen`，R1停止后才进入修复失败，R3只整理append/sync/reply窗口。全局遍修正周规划中残留的旧R2“部分写入/ENOSPC”安排，统一为truncate/sync故障；磁盘正式Daily实数为97，本轮九份正式文件本地链接零缺失、Markdown围栏成对、控制字符为零，用户`day5_note.md`哈希仍为`6FF54F5C2ED1BD84EE78DEEB7858926FAA6F6FE7600C14BCBF9362BFF77D9795`。正式文件只作本地Git提交，不push，其他用户dirty文件不纳入。
+
+## 2026-11-10：T13按T11标杆完成定向润色，进度仍待R1
+
+根据用户与网页版GPT对整篇T13的审阅，只修复已经明确的学习断层，不推倒实验主线、不重排编号，也不增加新知识点。用户在磁盘最新版中新增的Epoch解释原样保留。§3删除“三次训练产生三组W/b、validation选择A”的压缩入口，改用同一个model在epoch 20/40/60依次持有不同参数的具体时间线，再说明train负责更新、validation只比较已产生状态、test最后使用。§10.1从单个$\lambda\theta_j^2/2$完整求导到$\lambda\theta_j$，再推广成向量gradient与update；T8的系数对齐后置，不再挡在主推导前。§12集中用同一时间线解释“最低分数不等于已经保留最佳模型”，明确R1只记录history，R3才深拷贝best state并恢复。
+
+前半认知密度同步下调：R1只先取得baseline曲线，weight decay与checkpoint按实际问题后置；AdamW第一次出现时只补“为什么本课选它”的一句用途，具体机制仍留§10.2；噪声期望与generalization gap标为可选直觉，不成为两项新任务。该修改继续执行现有“行为/对象先于机制、具体重复先于压缩、API用途先行与单一认知主干”规则，没有新增冲突条款。教材修改不计学习通过，当前理论下一步仍为T13 R1；系统下一步仍为Week14 Day6 R1。

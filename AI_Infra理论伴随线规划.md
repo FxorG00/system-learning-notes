@@ -1363,7 +1363,7 @@ T12 与 Ex3/Ex4 都通过、且系统主线没有 correctness blocker 时，可�
 
 ## T13：generalization（泛化）、regularization（正则化）与实验纪律
 
-**当前状态（2026-11-05）：[T13](ai_theory/T13/T13.md)为理论下一步，R1尚未开始。** 教材已在T12真实通过后再次按T11学习者主线收束；正文先用一组具体曲线产生问题，再沿`baseline曲线 -> weight decay更新 -> 同起点对照 -> validation选checkpoint -> fresh model恢复 -> 最终test`推进。Dropout与实验纪律扩展仍在核心闭环之后。
+**当前状态（2026-11-10）：[T13](ai_theory/T13/T13.md)为理论下一步，R1尚未开始。** 教材已在T12真实通过后按T11学习者主线收束，并完成一次定向复检：先用同一个model在epoch 20/40/60的参数变化解释train/validation/test职责；从单个平方项完整求出$\lambda\theta$后才压成weight-decay更新；真正需要取回中途参数时才用具体时间线引入checkpoint，并明确R1只记分数、R3才保存state。正文继续沿`baseline曲线 -> weight decay更新 -> 同起点对照 -> validation选checkpoint -> fresh model恢复 -> 最终test`推进，Dropout与实验纪律扩展仍在核心闭环之后。
 
 ### 学习内容
 
