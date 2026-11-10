@@ -1,8 +1,8 @@
 # Daily 教程总目录
 
-> 更新日期：2026-11-10（Week14 Day1～Day4整日已通过；Day5 R1以100/100正式通过，系统下一步Day5 R2）
+> 更新日期：2026-11-10（Week14 Day1～Day5整日已通过；Day5整日99/100，系统下一步生成Day6）
 >
-> 收录范围：主线 Week1 Day1 至 Week14 Day5，共 96 份正式 daily 教程；95 个整日单元已正式通过。
+> 收录范围：主线 Week1 Day1 至 Week14 Day5，共 96 份正式 daily 教程；96 个整日单元已正式通过。
 >
 > 用途：快速定位“某个知识点在哪一天学过、当天写了什么、应该回看哪份教程”。
 
@@ -21,8 +21,8 @@ MEMORY.md：长期规则、进度与历次检阅结论
 - Week1 Day7的backup不重复收录；Week8 Day7的README不单独计为Daily。
 - Week1～Week12已通过；Week13 Day1～Day7整日均已通过，分数依次为98、100、98、99、100、96、98。
 - Week13 Day6整日通过96/100，R1历史98/100；Day7整日通过98/100，R1历史95/100；Week13整周正式通过。
-- 当前95个整日通过、96份Daily已生成。历史测试数量、分轮成绩和修复经过见MEMORY §4。
-- [Week14 Day1](week14/day1/day1.md)分轮98/98/99并整日通过；[Week14 Day2](week14/day2/day2.md)分轮99/99/97并以97/100整日通过；[Week14 Day3](week14/day3/day3.md)分轮96/98/98并以98/100整日通过；[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；[Week14 Day5](week14/day5/day5.md) R1以100/100正式通过，整日待R2/R3。周规划不计为Daily。
+- 当前96个整日通过、96份Daily已生成。历史测试数量、分轮成绩和修复经过见MEMORY §4。
+- [Week14 Day1](week14/day1/day1.md)分轮98/98/99并整日通过；[Week14 Day2](week14/day2/day2.md)分轮99/99/97并以97/100整日通过；[Week14 Day3](week14/day3/day3.md)分轮96/98/98并以98/100整日通过；[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；[Week14 Day5](week14/day5/day5.md)分轮100/99/100并以99/100整日通过。Day6尚未生成，周规划不计为Daily。
 - 教材QA不计用户通过。索引负责快速查阅，不在这里维护第二份验收日志。
 
 ---
@@ -44,7 +44,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 | HTTP Server V1 | [Week11](#week11http-server-v1) | incremental request parser、response encoder、Reactor integration、keep-alive |
 | Mini Redis V1 | [Week12](#week12mini-redis-v1) | RESP2 encoder/parser、command dispatcher、KV store、multi-client integration |
 | 数据库与 Mini Redis V2 | [Week13](#week13mysql-与-mini-redis-v2) | Day1~Day7均正式通过；Day7整日98/100、R1历史95/100；累计91个整日通过，Week13整周完成 |
-| Mini Redis V3 | [Week14](#week14mini-redis-v3aof-与恢复) | Day1～Day4整日已通过；Day5 R1为100/100，当前进入R2 |
+| Mini Redis V3 | [Week14](#week14mini-redis-v3aof-与恢复) | Day1～Day5整日已通过；Day5分轮100/99/100、整日99/100，下一步生成Day6 |
 
 ---
 
@@ -238,7 +238,7 @@ MEMORY.md：长期规则、进度与历次检阅结论
 | [Day2：完整追加 AOF 记录](week14/day2/day2.md) | 从一次write可能短写出发，用offset补齐剩余bytes；再区分append与fdatasync，并用可控调用验证错误路径 | 分轮99/99/97，整日97/100正式通过；fresh全量`-Werror`构建与CTest 146/146通过，R3 sanitizer 6/6无报告 | AofWriter, write_all, short write, EINTR, O_APPEND, fdatasync, system_error, linker |
 | [Day3：启动前重放完整 SET/DEL 日志](week14/day3/day3.md) | 从空KvStore出发，每次解析第一条Complete记录，按`consumed_bytes`前进并应用SET/DEL；重放不产生reply或新record | 分轮96/98/98，整日98/100正式通过；R3 focused 7/7、AOF 11/11、完整CTest 157/157、fresh sanitizer 11/11 | AOF replay, consumed_bytes, startup recovery, SET, DEL, binary-safe, unsupported record |
 | [Day4：让停机时间也从 TTL 里扣掉](week14/day4/day4.md) | 用绝对Unix毫秒记录期限；重放时扣除停机时间，再写入新进程单调期限；live与replay路径不混用副作用 | R1/R2/R3与整日均为100/100；focused 8/8、完整173/173、fresh sanitizer 37/37 | PEXPIREAT, Unix deadline, wall clock, monotonic clock, remaining TTL, restart recovery |
-| [Day5：把 AOF 恢复与写盘接回真实服务器](week14/day5/day5.md) | application owner启动时先replay再listen；在线命令有record时先append/sync，再把reply交给Connection | R1 100/100正式通过；fresh `-Werror`构建、完整CTest 173/173与真实restart checker通过，当前进入R2 | application owner, startup replay, append, fdatasync, reply ordering, fatal path, restart recovery |
+| [Day5：把 AOF 恢复与写盘接回真实服务器](week14/day5/day5.md) | application owner启动时先replay再listen；在线命令有record时先append/sync，再把reply交给Connection | 分轮100/99/100、整日99/100正式通过；完整CTest 173/173、网络回归、启动失败与append/sync故障矩阵均通过 | application owner, startup replay, append, fdatasync, reply ordering, fatal path, restart recovery |
 
 ---
 

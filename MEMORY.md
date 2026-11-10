@@ -184,7 +184,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-10）：Week13整周正式完成；Week14 Day1～Day4整日正式通过，Day5 R1以100/100正式通过、整日待R2/R3。系统主线95个整日通过、96份Daily生成。[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；系统下一步Week14 Day5 R2。生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-10）：Week13整周正式完成；Week14 Day1～Day5整日正式通过，Day5分轮100/99/100、整日99/100。系统主线96个整日通过、96份Daily生成；系统下一步是按真实进展生成Week14 Day6，Day6尚未生成。生成教材不计学习通过，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。当前T1～T12与Theory Gate 1已通过；理论下一步T13 R1。T13～T21仍未通过，Theory Gate 2未通过。
 
@@ -3609,7 +3609,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day4均已正式完成，Day5 R1以100/100正式通过、整日待R2/R3。当前95个整日通过、96份Daily已生成；[Week14 Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；系统下一步Week14 Day5 R2。Day1～Day4与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day5均已正式完成。Day5分轮100/99/100、整日99/100；当前96个整日通过、96份Daily已生成。系统下一步是按真实进展生成Week14 Day6，Day6尚未生成；Day1～Day5与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -9558,3 +9558,13 @@ Codex按用户明确委托新增机械脚手架`tests/mini_redis_aof_restart_che
 R1通过后已按实际接口校准后半：R2直接扩展现有restart checker，在首条有效SET后记录文件长度，用exact reply与长度不变证明`nullopt`命令不写盘，再保留原protocol checker；R3基于现有`AofWriter(WriteFn, SyncFn)`和inline message callback留下最小owner测试边界，用send spy证明append/sync失败不安排成功reply，不引入通用persistence hierarchy或生产故障注入命令行。启动非法日志与残缺尾部继续在R3形成永久证据，Day6才决定尾部恢复策略。
 
 系统状态仍为95个整日通过、96份Daily生成，当前进入Week14 Day5 R2；理论状态保持T1～T12与Theory Gate 1通过，下一步T13 R1。Ubuntu AOF相关源码仍未形成可独立提交的完整tracked边界，不创建只含局部脚手架的提交；Windows正式文档按§9.12只作本地Git提交，不push，并排除用户既有dirty文件。
+
+## 2026-11-10：Week14 Day5整日正式通过99/100
+
+用户以口述完成R2/R3收口。R2准确说明owner只依据`CommandOutcome.aof_record`决定是否append/sync，无新状态的命令保持AOF不变；也准确区分了AOF同步边界与客户端收包边界。唯一校准是`Connection::send()`追加output后会立即调用`handle_send()`尝试写socket，只有partial write或`EAGAIN/EWOULDBLOCK`留下suffix时才等待`EPOLLOUT`；即使内核接受bytes，也不能证明客户端已经读取。R2最终99/100。
+
+R3准确识别为既有失败contract的证据补全，不是新增持久化算法。Codex按既定分工完成机械私有验收：完整CTest `173/173`；restart、smoke、protocol与TTL checker均通过；无record命令reply正确且AOF长度不变；完整但不允许重放的命令和残缺尾部均在监听前失败；append `EIO`与sync `EIO`均未产生成功reply且进程非零退出；无record的PING不调用writer并保持服务可用。临时故障注入库、脚本和构建目录均已清理，6380无残留监听。R3最终100/100，委托机械脚手架不扣用户理解分。
+
+Day5分轮成绩为100/99/100，整日99/100正式通过。用户`day5_note.md`保持只读，SHA256仍为`6FF54F5C2ED1BD84EE78DEEB7858926FAA6F6FE7600C14BCBF9362BFF77D9795`；本轮没有修改Ubuntu production source、tests或CMake。系统状态推进为96个整日通过、96份Daily生成；Day6尚未生成，系统下一步为按真实进展生成Week14 Day6。理论下一步保持T13 R1。Windows正式文档只作本地Git提交，不push，并排除用户既有dirty文件。
+
+三遍收尾检查分别完成。技术遍再次只读核对`Connection::send -> handle_send -> ::send`及`EAGAIN/EWOULDBLOCK -> EPOLLOUT`实际分支，R1三个文件哈希保持；教学/阶段遍确认Day5的唯一主线已闭合，Day6尾部恢复策略没有前移，理论下一步仍为T13 R1；全局遍确认96份Daily、96个整日通过、Day6文件不存在、九份正式文件本地链接零缺失、用户note哈希不变，且临时验收文件、进程和6380监听均已清理。
