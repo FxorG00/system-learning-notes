@@ -1,7 +1,7 @@
 # Week14：Mini Redis V3，让进程重启后重新长回原来的状态
 
 > 对齐日期：2026-11-10；Day1 以 R1 98、R2 98、R3 99 完成；Day2 分轮 99/99/97、整日 97/100；Day3 分轮 96/98/98、整日 98/100；Day4 R1/R2/R3 与整日均为 100/100；Day5 分轮 100/99/100、整日 99/100。
-> 系统起点：Week13 与 Week14 Day1～Day5 已正式完成，当前 96 个整日通过、96 份 Daily 已生成；下一步生成 Day6。
+> 系统起点：Week13 与 Week14 Day1～Day5 已正式完成，当前 96 个整日通过、97 份 Daily 已生成；Day6 教程已生成，待 R1。
 > 理论起点：T1～T12 与 Theory Gate 1 已通过，T12 整课已以 98/100 通过，下一步 T13 R1；理论线不阻塞本周工程。
 > Git：本周正式文件修改按 `MEMORY.md` §9.12 留下本地 commit；push 仍需单独授权。
 
@@ -262,7 +262,7 @@ command 已改变内存状态
 | [Day3](day3/day3.md) | 新进程怎样按顺序读完整记录，重新得到 SET/DEL 状态？ | 分轮96/98/98，整日98/100正式通过：顺序重放、真实文件桥与稳定失败边界均闭合 |
 | [Day4](day4/day4.md) | TTL 在停机期间仍然流逝，怎样恢复剩余寿命？ | R1/R2/R3与整日均为100/100，正式通过 |
 | [Day5](day5/day5.md) | 怎样把追加与重放接回原服务器，又不破坏连接与回复边界？ | 分轮100/99/100，整日99/100正式通过：启动恢复、在线append/sync、回复边界与致命失败证据闭合 |
-| Day6 | 最后一条只写了一半或日志中间损坏时，服务器怎样决定？ | 最后一条完整记录的位置、尾部策略、日志损坏与故障注入 |
+| [Day6](day6/day6.md) | 最后一条只写了一半或日志中间损坏时，服务器怎样决定？ | 教程已生成，待R1：last-good边界、EOF尾部修复、截断同步与中间损坏拒绝 |
 | Day7 | 这套恢复到底证明了什么，与真实 Redis/MySQL 日志哪里相同、哪里不同？ | V3 收口、回归、恢复证据与限制说明 |
 
 ```mermaid
@@ -503,7 +503,9 @@ start server with empty AOF
 
 ---
 
-## 13. Day6：最后一条只有一半，怎么办
+## 13. [Day6：最后一条只有一半，怎么办](day6/day6.md)
+
+> 当前状态：教程已按Day5真实接线生成，待R1；Day1～Day5既有证据直接复用。
 
 ### 13.1 先看两个完全不同的坏文件
 
@@ -538,19 +540,21 @@ start server with empty AOF
 
 R1 先完成 last-good tracking、最终残缺记录的截断，以及修复后文件长度的同步。
 
-R2 再用故障注入区分部分写入、`ENOSPC`（设备空间不足）、`EIO`（输入输出错误）、
-同步失败和中间格式损坏。
+R2 再只攻击修复动作本身：`ftruncate` 被 `EINTR` 打断后重试、
+`ftruncate` 返回 `EIO`，以及截断成功后 `fdatasync` 返回 `EIO`。
+Day2 已经通过的 short write、append `EIO` 与 sync `EIO` 不在这里重做。
 
-R3 收住三个状态：
+R3 把四个时刻放回同一条时间线：
 
 ```text
-accepted by application
-written to page cache（已写入内核页缓存）
-synced under current policy
+dispatcher 已改变内存状态并生成 record
+append 已完成
+sync 已按当前策略成功
+client 已收到 reply
 ```
 
-不把 `flush()`（刷新用户态缓冲）、`close()` 或正常进程退出，
-自动等同于“所有故障下都已持久保存”。
+重点是区分 partial append、完整 append 但 sync 失败、
+以及 sync 成功但 reply 尚未到达客户端；不把其中任意两个时刻混成同一个状态。
 
 ---
 

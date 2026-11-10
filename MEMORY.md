@@ -184,7 +184,7 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-10）：Week13整周正式完成；Week14 Day1～Day5整日正式通过，Day5分轮100/99/100、整日99/100。系统主线96个整日通过、96份Daily生成；系统下一步是按真实进展生成Week14 Day6，Day6尚未生成。生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-10）：Week13整周正式完成；Week14 Day1～Day5整日正式通过，Day5分轮100/99/100、整日99/100。系统主线96个整日通过、97份Daily生成；Week14 Day6教程已生成，当前待R1。生成教材不计学习通过，周规划不计入Daily数量。
 
 T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。当前T1～T12与Theory Gate 1已通过；理论下一步T13 R1。T13～T21仍未通过，Theory Gate 2未通过。
 
@@ -3609,7 +3609,7 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day5均已正式完成。Day5分轮100/99/100、整日99/100；当前96个整日通过、96份Daily已生成。系统下一步是按真实进展生成Week14 Day6，Day6尚未生成；Day1～Day5与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day5均已正式完成。Day5分轮100/99/100、整日99/100；当前96个整日通过、97份Daily已生成。[Week14 Day6](week14/day6/day6.md)教程已生成，当前待R1；Day1～Day5与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
@@ -3638,7 +3638,7 @@ Milestone H / Week16：原定完整项目出口、文档与表达收口
 
 执行不按自然周机械计时，而按 milestone exit evidence 推进。Reactor/HTTP 是 Mini Redis 的技术底座和副项目；BlockingQueue/ThreadPool/AsyncLogger 是内部组件证据，不强行各包装成一个简历项目。第一段实习按三层岗位池准备：C++/Linux系统、存储、网络主投；AI平台后端、推理服务外围与AI云原生并行投；核心推理引擎/CUDA少量冲刺。目标是获得可迁移到AI Infra的真实系统经验，而不是追求职位标题先一步变成目标名称。C++面试题状态、Week15～16补缺与停止边界见`杂教程/C++与系统面试查漏地图.md`。
 
-**Week16后实际课表待原Week16收口再制定。** 届时先按§9.8重新核对匹配招聘、公开项目/简历与优质教学资源，再结合真实学习状态编排；当前只保留方向/Gate，下一步生成Week14 Day3并继续T12，不抢跑或改动既定Mini Redis安排。T16是与Week16协调的AI目标，未达时如实记账；不取消原理论Gate，也不把后置完整AI路线变成C++/后台首批试投的新资格。
+**Week16后实际课表待原Week16收口再制定。** 届时先按§9.8重新核对匹配招聘、公开项目/简历与优质教学资源，再结合真实学习状态编排；当前只保留方向/Gate，系统下一步Week14 Day6 R1，理论下一步T13 R1，不抢跑或改动既定Mini Redis安排。T16是与Week16协调的AI目标，未达时如实记账；不取消原理论Gate，也不把后置完整AI路线变成C++/后台首批试投的新资格。
 
 AI Infra 理论伴随线概览（路线建立于2026-08，当前范围以独立规划为准）：
 
@@ -9568,3 +9568,13 @@ R3准确识别为既有失败contract的证据补全，不是新增持久化算�
 Day5分轮成绩为100/99/100，整日99/100正式通过。用户`day5_note.md`保持只读，SHA256仍为`6FF54F5C2ED1BD84EE78DEEB7858926FAA6F6FE7600C14BCBF9362BFF77D9795`；本轮没有修改Ubuntu production source、tests或CMake。系统状态推进为96个整日通过、96份Daily生成；Day6尚未生成，系统下一步为按真实进展生成Week14 Day6。理论下一步保持T13 R1。Windows正式文档只作本地Git提交，不push，并排除用户既有dirty文件。
 
 三遍收尾检查分别完成。技术遍再次只读核对`Connection::send -> handle_send -> ::send`及`EAGAIN/EWOULDBLOCK -> EPOLLOUT`实际分支，R1三个文件哈希保持；教学/阶段遍确认Day5的唯一主线已闭合，Day6尾部恢复策略没有前移，理论下一步仍为T13 R1；全局遍确认96份Daily、96个整日通过、Day6文件不存在、九份正式文件本地链接零缺失、用户note哈希不变，且临时验收文件、进程和6380监听均已清理。
+
+## 2026-11-10：Week14 Day6教程生成，R1待开始
+
+根据Day5整日通过结果、用户口述、Day5笔记、Week14既定恢复链与Ubuntu磁盘最新版，新增`week14/day6/day6.md`。当前`replay_aof_bytes`在完整前缀后遇到`NeedMore`会抛`aof record must be complete!`，`replay_aof_file`以`O_RDONLY`打开并复用该严格行为；真实server已保证重放返回后才`acceptor.start()`。Day6只升级这一处：完整合法前缀继续恢复，EOF处残缺record报告最后有效byte边界，文件层截断并同步成功后才返回；parser Error、完整非法命令和参数错误仍然失败且不自动修改文件。
+
+R1公开合同在现有`AofReplayResult`上增加`incomplete_tail_found`，`bytes_consumed`在残缺尾部场景表示`last_good_offset`；`replay_aof_bytes`只报告完整前缀与尾部状态，`replay_aof_file`才拥有fd并执行物理修复。R1只改replayer header/source/test，不改server、writer、RESP、KvStore或dispatcher。R2再用可注入truncate/sync callable区分`EINTR`、truncate `EIO`与截断成功后sync `EIO`；R3把partial append、完整append但sync失败、sync成功但reply未到三种进程窗口放回同一条时间线，不重写Day2/Day5组件。
+
+本次只读核对当前replayer/writer/server/CMake与既有AOF tests；官方资料使用Redis持久化说明、Linux/POSIX `ftruncate`及Linux `fdatasync/open`手册校准截断尾部、中间损坏、失败不改文件、文件长度元数据同步与`O_APPEND`边界。Ubuntu源码、tests、CMake和全部用户note均未修改。系统状态为96个整日通过、97份Daily生成，当前Week14 Day6 R1；理论下一步保持T13 R1。
+
+生成后的三遍校查各有独立目标。技术遍确认现有`AofReplayResult`、bytes/file两层职责、`O_RDONLY -> O_RDWR`升级、截断后同步与writer既有`O_APPEND`可以沿当前接口完成；Day3旧“残缺尾部必失败”测试由Day6新合同定向升级，中间Error与完整非法命令仍保持失败。教学遍确认唯一主线为`完整前缀 -> EOF NeedMore -> last_good_offset -> truncate -> sync -> listen`，R1停止后才进入修复失败，R3只整理append/sync/reply窗口。全局遍修正周规划中残留的旧R2“部分写入/ENOSPC”安排，统一为truncate/sync故障；磁盘正式Daily实数为97，本轮九份正式文件本地链接零缺失、Markdown围栏成对、控制字符为零，用户`day5_note.md`哈希仍为`6FF54F5C2ED1BD84EE78DEEB7858926FAA6F6FE7600C14BCBF9362BFF77D9795`。正式文件只作本地Git提交，不push，其他用户dirty文件不纳入。
