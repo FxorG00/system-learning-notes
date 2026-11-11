@@ -9608,3 +9608,9 @@ Codex另用不落盘的独立检查器验证：模型三层weight shape与`[B,1]
 最终98/100并正式通过。扣1分是回归程序沿用了T12分类命名：注释仍写class logits，训练变量也叫`logits`，实际对象是单值regression prediction。另扣1分是当前history只有`epoch/train_mse/validation_mse`，R2加入第二个run时还需在合并输出处补`run/weight_decay`标签；这属于后续比较接线，不追溯阻塞R1。当前固定seed 2026与教材参考seed 13不同，但本次可复现且R2将恢复同一initial state，故不扣分，也不要求回改已通过R1。
 
 R1通过后只定向校准T13后半：R2从当前实际三点记录进入过拟合与weight decay；明确当前seed 2026和§15参考seed 13不应逐项同值；复用已通过的三层模型、`evaluate_mse()`、训练loop和绘图，只在双run输出中补配置标签。用户Ubuntu源码与`T13_note.md`均未被Codex修改。当前理论下一步推进为T13 R2；T13整课、T14～T21与Theory Gate 2尚未通过。系统下一步保持Week14 Day6 R1。
+
+## 2026-11-11：T13 checkpoint选择段删除防御式讲解
+
+用户指出T13 §12在已经给出checkpoint选择规则后，又连续解释错误比较、固定2000次、提前停止、fresh-process边界、winner与test回看，主干被多层防误解说明淹没。该反馈成立。本轮没有新增教学规则，而是落实既有“整节只保留一根认知主干、技术边界不提前堆叠”要求：把原六段防御性文字收成一条对象链——两组各自保存best checkpoint，用同一validation规则选winner，在新model恢复，复测validation，最后报告test；只保留一句说明checkpoint选择不等于提前结束训练。
+
+§11～§13随后按同一标准复查。initial state深拷贝和新optimizer仍直接服务公平起点，best state深拷贝仍直接服务恢复，因此保留；没有借本次反馈重写其他正确段落、改变R2/R3任务或增加新知识点。用户最新`T13_note.md`保持只读，修改前SHA256为`BD39492FF951A2FFE5E0F04D4C429B27189C19F1BEABF7037A7407C5DFC33306`。当前理论进度仍为T13 R2。
