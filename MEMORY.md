@@ -184,11 +184,11 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-10）：Week13整周正式完成；Week14 Day1～Day5整日正式通过，Day5分轮100/99/100、整日99/100。系统主线96个整日通过、97份Daily生成；Week14 Day6教程已生成，当前待R1。生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-11）：Week13整周正式完成；Week14 Day1～Day5整日正式通过，Day5分轮100/99/100、整日99/100。系统主线96个整日通过、97份Daily生成；Week14 Day6教程已生成，当前待R1。生成教材不计学习通过，周规划不计入Daily数量。
 
-T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。当前T1～T12与Theory Gate 1已通过；理论下一步T13 R1。T13～T21仍未通过，Theory Gate 2未通过。
+T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。T13 R1于2026-11-11以98/100正式通过。当前T1～T12、T13 R1与Theory Gate 1已通过；理论下一步T13 R2。T13整课及T14～T21仍未通过，Theory Gate 2未通过。
 
-T11学习者主线版继续作为后续AI Theory讲解质量的标杆。本次主要证据是用户本人笔记，并逐项复用T4的手算/finite difference能力与T11既有教材QA；没有新增“只看笔记就自动通过”的规则，也没有把教材QA冒充用户运行证据。T13已于2026-11-05在正式进入前再次按该标杆对齐；T14～T21保留2026-11-04复检结果。这些修改只更新教材组织，不改变尚未学习或通过的状态。
+T11学习者主线版继续作为后续AI Theory讲解质量的标杆。T13 R1的主要理解证据是用户笔记、本人完成的模型/训练主流程及当前baseline曲线；Codex补写的CSV/绘图脚手架和独立检查只归为机械证据，不冒充用户理解。T14～T21保留2026-11-04复检结果；文件更新仍不等于学习通过。
 
 Week14周规划生成（2026-10-26）：新增`week14/week14.md`，沿Week13已通过的Reactor/RESP/KvStore/TTL继续，不复制服务器。整周只追一条问题链：成功写操作留下按字节保存的RESP记录 -> 完整追加并满足同步边界 -> 新进程监听前重放完整日志 -> 绝对日历期限转换回新进程的单调期限 -> 原服务器停止与重启 -> 区分不完整文件尾和中间损坏 -> V3证据收口。Day1～Day7只是依赖规划，均未生成、未学习、未验收；当前仍91/91。
 
@@ -3609,15 +3609,15 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day5均已正式完成。Day5分轮100/99/100、整日99/100；当前96个整日通过、97份Daily已生成。[Week14 Day6](week14/day6/day6.md)教程已生成，当前待R1；Day1～Day5与Week13既有实现、测试和笔记证据继续复用，不重做。理论T12整课已通过98/100，下一步T13 R1；Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day5均已正式完成。Day5分轮100/99/100、整日99/100；当前96个整日通过、97份Daily已生成。[Week14 Day6](week14/day6/day6.md)教程已生成，当前待R1；Day1～Day5与Week13既有实现、测试和笔记证据继续复用，不重做。理论T13 R1已通过98/100，下一步T13 R2；Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
 教材准备以§4为唯一当前快照。按T8线性分类器 → T9 Tensor → T10 Module状态 → T11标量autograd → T12从logits决策与线性边界走到首次多层模型的依赖推进；不把提前稿或教材实测记为学习通过。
 
-T13～T21已按用户请求提前生成，路径按`ai_theory/Tn/Tn.md`组织；T13于2026-11-05在正式进入前再次按T11学习者主线标杆对齐，T14～T21保留2026-11-04复检结果。这只是教材准备。T12现已正式通过，当前理论下一步是T13 R1。T13先用一组具体curve产生问题，R1明确model被更新与history被返回两条结果通道，再沿baseline、weight decay受控对照、validation选择checkpoint、恢复与最终test闭环；Dropout等内容在核心之后。T14沿数值卷积、shape、residual mismatch、projection与同一无BatchNorm block的state观察推进，仍可延期。T15准备输入和读取规则，T16完成单头Q/K/V与内容汇总，T17扩多头并接前置LayerNorm表示更新block，T18再连接token/position embedding、1～2个block、final norm与LM head，停在最后真实位置的logits；T19把`[B,V]` logits接到greedy或temperature/top-k sampling，输出`[B]` next-token IDs；T20用同一个TinyMLP对照训练与fresh inference对象，再补INT8表示reference；T21用固定序列对照full recompute、连续KV Cache与block table寻址。Top-p只在T19核心后建立直觉，完整生成循环、多个请求调度和性能结论继续后置。相邻前课通过后或实际进入时按真实结果校准；T14若延期，进入T15仍按最近已完成的前置校准，不把可延期课重新变成硬前置。T17～T21都是更后续材料，不加入Week16首批试投Gate，也不提前排Week17以后的实际课表。
+T13～T21已按用户请求提前生成，路径按`ai_theory/Tn/Tn.md`组织；T13 R1现已正式通过，当前理论下一步是T13 R2。R1已经用真实baseline曲线明确model被更新与history被返回两条结果通道；后续只沿weight decay受控对照、validation选择checkpoint、恢复与最终test闭环，Dropout等内容在核心之后。T14～T21仍是尚未通过的提前稿：T14沿数值卷积、shape、residual mismatch、projection与同一无BatchNorm block的state观察推进，仍可延期；T15准备输入和读取规则，T16完成单头Q/K/V与内容汇总，T17扩多头并接前置LayerNorm表示更新block，T18再连接token/position embedding、1～2个block、final norm与LM head，T19把`[B,V]` logits接到token选择，T20补训练/推理对象与INT8表示，T21完成KV Cache与block table寻址。相邻前课通过后或实际进入时继续按真实结果校准；不把提前稿登记为已学，也不提前排Week17以后的实际课表。
 
-量化补强已登记为后续能力：T20从一个数讲刻度、取整/范围与恢复，保留原容量脚本；CPU浮点线性层正确后，在同一项目补INT8权重表示/反量化/输出误差与字节对照；真实低精度计算和部署再按匹配硬件/后端验证收益。详细要求唯一维护在`AI_Infra理论伴随线规划.md`的T20衔接段，总规划Gate B/C/D作阶段引用。数值参考可在CPU完成，恢复为浮点计算不声称INT8加速；用户独立负责性能问题、测量和最终结论，Codex可承担重复正确性测试与脚手架。这不改变当前Mini Redis、理论下一步T13 R1、T1～T24编号或原Gate，不增加Week16首批试投门槛；Week16收口后才确定实际课次。
+量化补强已登记为后续能力：T20从一个数讲刻度、取整/范围与恢复，保留原容量脚本；CPU浮点线性层正确后，在同一项目补INT8权重表示/反量化/输出误差与字节对照；真实低精度计算和部署再按匹配硬件/后端验证收益。详细要求唯一维护在`AI_Infra理论伴随线规划.md`的T20衔接段，总规划Gate B/C/D作阶段引用。数值参考可在CPU完成，恢复为浮点计算不声称INT8加速；用户独立负责性能问题、测量和最终结论，Codex可承担重复正确性测试与脚手架。这不改变当前Mini Redis、理论下一步T13 R2、T1～T24编号或原Gate，不增加Week16首批试投门槛；Week16收口后才确定实际课次。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。例如 Week11 Day3 与 Day4 的 R1 正式通过时已执行该规则；后续仍从最新磁盘版本编辑，保留用户新增内容。
 
@@ -9596,3 +9596,15 @@ R1公开合同在现有`AofReplayResult`上增加`incomplete_tail_found`，`byte
 用户已经独立写出T13 baseline训练与history主流程，并明确委托Codex补机械CSV、曲线和摘要输出。写回前读取Ubuntu磁盘最新版；原`history.append((evaluate_mse))`保存的是函数对象而非epoch 0测量值，因此在不改训练循环核心的前提下，把每条记录统一为带名字的`epoch/train_mse/validation_mse`字典。新增`save_history_csv`、`save_curves`和`print_history_summary`：CSV使用明确表头，Matplotlib在SSH下使用`Agg`后端，最低validation按`(validation_mse, epoch)`选择以稳定处理同分，并打印initial/final/best三条记录。注释解释了history字段、epoch 0、图对象关闭和输出目录来源。
 
 Ubuntu正式脚本运行exit 0，CSV为1行表头加101条测量记录，epoch覆盖0～2000；本次实际摘要为initial `(0, 1.058978, 0.898309)`、final `(2000, 0.043503, 0.115694)`、best validation `(220, 0.049206, 0.109906)`。`curves.png`为896×672有效PNG并已目视确认两条非空曲线。正式输出位于`ai-theory/t13/out/`，Ubuntu本地提交为`abf724a feat: add T13 baseline history outputs`，只含脚本、CSV和PNG，未push；临时验收目录已清理。该动作只完成用户委托的输出脚手架，不等于T13 R1通过，课程状态继续为R1待检阅。
+
+## 2026-11-11：T13 R1正式通过98/100
+
+用户在已完成训练主流程与Codex机械输出脚手架的基础上，把模型补齐为固定的`Linear(1,64) -> ReLU -> Linear(64,64) -> ReLU -> Linear(64,1)`。本人`T13_note.md`准确记录MSE含义、三层回归结构、2000次full-batch更新、每20次测量、CSV/曲线产出与R1停止边界；笔记保持只读，SHA256为`03F08AD86BA3756DFEF1DB24E1391E3486157B44B888E497FD86264E10ECBA5A`。
+
+Ubuntu正式程序重新运行exit 0。当前101条记录覆盖epoch 0～2000且全部有限、非负；initial为`(0, 0.929628, 0.836038)`，最低validation记录为`(160, 0.048386, 0.101535)`，final为`(2000, 0.028581, 0.121651)`。因此从epoch 160继续到2000时，train MSE继续下降而validation MSE回升，已经形成T13后半真正需要解释的baseline证据。CSV为102行，PNG为896×672并目视确认两条非空曲线。
+
+Codex另用不落盘的独立检查器验证：模型三层weight shape与`[B,1]`输出正确；三份split为float32；`evaluate_mse()`不修改parameters并恢复调用前train/eval模式；`train_and_measure()`确实修改模型、返回精确的`0,20,...,2000`共101条记录，且曲线满足本轮观察关系。源码、CSV、PNG的SHA256分别为`08867D49E06A9536F58EB85679D2276CAE3CB57E0DD5E69162A82ED9EF689F`、`C9E957C10901CA6E80F2998C15F2A01DD76B42A37E406B1044355065A65CA0F6`与`CD5B2AED4F99E7DDB54F610D0E5DFCA87872898841333ACB0373D0C9E72239FB`。
+
+最终98/100并正式通过。扣1分是回归程序沿用了T12分类命名：注释仍写class logits，训练变量也叫`logits`，实际对象是单值regression prediction。另扣1分是当前history只有`epoch/train_mse/validation_mse`，R2加入第二个run时还需在合并输出处补`run/weight_decay`标签；这属于后续比较接线，不追溯阻塞R1。当前固定seed 2026与教材参考seed 13不同，但本次可复现且R2将恢复同一initial state，故不扣分，也不要求回改已通过R1。
+
+R1通过后只定向校准T13后半：R2从当前实际三点记录进入过拟合与weight decay；明确当前seed 2026和§15参考seed 13不应逐项同值；复用已通过的三层模型、`evaluate_mse()`、训练loop和绘图，只在双run输出中补配置标签。用户Ubuntu源码与`T13_note.md`均未被Codex修改。当前理论下一步推进为T13 R2；T13整课、T14～T21与Theory Gate 2尚未通过。系统下一步保持Week14 Day6 R1。
