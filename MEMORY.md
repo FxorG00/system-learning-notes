@@ -9590,3 +9590,9 @@ R1公开合同在现有`AofReplayResult`上增加`incomplete_tail_found`，`byte
 用户指出T13 §4.2仍用“若T12选择SGD”“自定义Module或Sequential均可”等假设语气，未对齐已经正式通过的T12。该反馈成立。只读核对Ubuntu最终`mlp_train_and_infer.py`、T12正文、用户笔记与验收记录后确认：真实实现是自定义`TinyMLP(nn.Module)`，forward为`linear1 -> ReLU -> linear2`，训练函数使用`AdamW(lr=0.03, weight_decay=0.0)`。T13现直接复用自定义Module和AdamW的组织方式；由于本课改为标量回归并固定使用`1 -> 64 -> 64 -> 1`结构，明确说明需要按同一种写法建立新的regression model，而不是把T12 class原封不动复用。baseline固定`AdamW(lr=0.01, weight_decay=0.0)`，R2只在本课两组之间把衰减改为`0.1`。
 
 长期规则合并进既有相邻T校准条款：前课已通过后，真实选定的class组织、optimizer、数据表示和接口成为后课的具体前置；后课必须说清直接复用与因新任务调整的部分，不能重新打开已经关闭的实现选择题，除非比较这些选项正是本课目标。本轮没有修改T12正文、用户笔记或Ubuntu代码，理论进度仍为T13 R1待开始，系统进度仍为Week14 Day6 R1。
+
+## 2026-11-11：T13 R1输出脚手架补全，尚未正式验收
+
+用户已经独立写出T13 baseline训练与history主流程，并明确委托Codex补机械CSV、曲线和摘要输出。写回前读取Ubuntu磁盘最新版；原`history.append((evaluate_mse))`保存的是函数对象而非epoch 0测量值，因此在不改训练循环核心的前提下，把每条记录统一为带名字的`epoch/train_mse/validation_mse`字典。新增`save_history_csv`、`save_curves`和`print_history_summary`：CSV使用明确表头，Matplotlib在SSH下使用`Agg`后端，最低validation按`(validation_mse, epoch)`选择以稳定处理同分，并打印initial/final/best三条记录。注释解释了history字段、epoch 0、图对象关闭和输出目录来源。
+
+Ubuntu正式脚本运行exit 0，CSV为1行表头加101条测量记录，epoch覆盖0～2000；本次实际摘要为initial `(0, 1.058978, 0.898309)`、final `(2000, 0.043503, 0.115694)`、best validation `(220, 0.049206, 0.109906)`。`curves.png`为896×672有效PNG并已目视确认两条非空曲线。正式输出位于`ai-theory/t13/out/`，Ubuntu本地提交为`abf724a feat: add T13 baseline history outputs`，只含脚本、CSV和PNG，未push；临时验收目录已清理。该动作只完成用户委托的输出脚手架，不等于T13 R1通过，课程状态继续为R1待检阅。
