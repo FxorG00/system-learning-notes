@@ -3,7 +3,7 @@
 > 对齐日期：2026-11-11。最新岗位与资料核对见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)。
 > 学习者：FxorG，中山大学计算机科学与技术专业，2029届。
 > 系统主线：Week1～Week13与Week14 Day1～Day5已通过；Day5分轮100/99/100、整日99/100。累计96个整日通过、97份Daily已生成；[Week14 Day6](week14/day6/day6.md)教程已生成，当前待R1。
-> 理论线：T1～T12、T13 R1与Theory Gate 1已通过；T13 R1于2026-11-11以98/100正式通过，下一步T13 R2。T13整课及T14～T21尚未通过，Theory Gate 2未通过；T14～T21保留2026-11-04复检结果，文件更新不等于学习通过。
+> 理论线：T1～T13与Theory Gate 1已通过；T13整课于2026-11-11以98/100正式通过。T14按既定范围延期，下一步T15 R1；T14～T21尚未通过，Theory Gate 2未通过。提前稿与复检结果不等于学习通过。
 > Git：正式仓库文件有变化时按`MEMORY.md` §9.12完成本地commit；push与本地留痕分开授权，当前不自动推送。
 > 投递顺序：完整学完原Week16，再整理简历并向匹配中小厂试投。11月是期望窗口，不据此缩减项目。
 > 长期方向：LLM inference systems / serving与CUDA/Triton kernel optimization。
@@ -427,9 +427,9 @@ T9 Tensor（已通过）
 
 Tn.md是当前主教材；ML.md、吴恩达和李沐课程按本T的具体需要调用，官方文档用于查证。当前不要求顺序读完ML.md剩余算法，也不用先补完整DL才能进入T12。既有作业等价验收、Kaggle与Gate范围保持，具体规则见理论规划§2.5～§2.6。此处只明确交接，不改变Mini Redis主线、里程碑或投递顺序。
 
-提前稿后半编排校准：T13于2026-11-05在T12真实通过后再次对齐；R1现已用真实baseline曲线正式通过，R2从train继续改善而validation回升的现象进入weight decay，随后再完成同起点对照、validation选checkpoint、恢复与最终test。相关方法和实验纪律扩展随后选读。T14保留2026-11-04复检结果：核心完成数值卷积、NCHW/shape、residual mismatch与projection，并在同一无BatchNorm组件上观察state与Tensor字节；pooling、hook、BatchNorm均不抢核心主线。详细任务与PASS统一见[理论规划T13/T14](AI_Infra理论伴随线规划.md)。这只调整教材组织与核心/补充边界，不改变T14可延期、既有Kaggle或Theory Gate范围。
+提前稿后半编排校准：T13于2026-11-05在T12真实通过后再次对齐，并已于2026-11-11沿`baseline曲线 -> weight decay -> 同起点对照 -> validation选best state -> fresh model恢复`完成验收。相关方法和实验纪律扩展继续选读。T14保留2026-11-04复检结果：核心完成数值卷积、NCHW/shape、residual mismatch与projection，并在同一无BatchNorm组件上观察state与Tensor字节；pooling、hook、BatchNorm均不抢核心主线。详细任务与PASS统一见[理论规划T13/T14](AI_Infra理论伴随线规划.md)。这只调整教材组织与核心/补充边界，不改变T14可延期、既有Kaggle或Theory Gate范围。
 
-教材准备（2026-11-04复检）：[T15](ai_theory/T15/T15.md)建立编号/嵌入/补齐与允许表；[T16](ai_theory/T16/T16.md)完成单头内容汇总、批次和位置隔离；[T17](ai_theory/T17/T17.md)扩为多头并完成前置LayerNorm、残差与逐位置FFN的block；[T18](ai_theory/T18/T18.md)把同一block接到token/position embedding、final norm与LM head之间；[T19](ai_theory/T19/T19.md)把`[B,V]` logits接到token选择；[T20](ai_theory/T20/T20.md)建立训练/推理对象与INT8表示账；[T21](ai_theory/T21/T21.md)完成full recompute、连续KV Cache与block table寻址。各篇首次自定义函数均补齐用途、返回与状态变化；提前稿不前移学习任务，当前下一步是T13 R2，Theory Gate 2未通过。
+教材准备（2026-11-04复检）：[T15](ai_theory/T15/T15.md)建立编号/嵌入/补齐与允许表；[T16](ai_theory/T16/T16.md)完成单头内容汇总、批次和位置隔离；[T17](ai_theory/T17/T17.md)扩为多头并完成前置LayerNorm、残差与逐位置FFN的block；[T18](ai_theory/T18/T18.md)把同一block接到token/position embedding、final norm与LM head之间；[T19](ai_theory/T19/T19.md)把`[B,V]` logits接到token选择；[T20](ai_theory/T20/T20.md)建立训练/推理对象与INT8表示账；[T21](ai_theory/T21/T21.md)完成full recompute、连续KV Cache与block table寻址。各篇首次自定义函数均补齐用途、返回与状态变化；T13现已通过，T14按规划延期，当前下一步是T15 R1，Theory Gate 2未通过。
 
 可展示的代码证据优先是：
 
@@ -679,12 +679,12 @@ atomic/CAS、acquire/release、happens-before 第一层
 
 ## 6. 双线推进顺序与时间边界
 
-当前系统主线的Week14 Day1已整日通过，分轮为98/98/99；Day2分轮99/99/97并以97/100整日通过；Day3分轮96/98/98并以98/100整日通过；Day4 R1/R2/R3与整日均为100/100；Day5分轮100/99/100并以99/100整日通过。Week14 Day6教程已生成，当前待R1；理论线下一步T13 R2。Week13已整周通过，完整状态见文件开头，历史证据见MEMORY §4；旧月份与旧计数不再作为“当前任务”。
+当前系统主线的Week14 Day1已整日通过，分轮为98/98/99；Day2分轮99/99/97并以97/100整日通过；Day3分轮96/98/98并以98/100整日通过；Day4 R1/R2/R3与整日均为100/100；Day5分轮100/99/100并以99/100整日通过。Week14 Day6教程已生成，当前待R1；T13已通过，T14按规划延期，理论线下一步T15 R1。Week13已整周通过，完整状态见文件开头，历史证据见MEMORY §4；旧月份与旧计数不再作为“当前任务”。
 
 | 顺序 | 系统主线 | 理论线协调目标 | 保持的边界 |
 |---|---|---|---|
 | 已完成Week13 | [Day7整周收口](week13/day7/day7.md)（整日98/100，R1历史95/100） | T11已完成：从标量链进入autograd | TTL、虚函数补缺和T11均已收口，不重做 |
-| 当前Week14 | [AOF/恢复周规划](week14/week14.md)，Day1～Day5整日已通过；[Day6](week14/day6/day6.md)已生成待R1 | T13 R1已取得baseline曲线，下一步R2 | 只修复EOF残缺尾部，中间损坏仍失败 |
+| 当前Week14 | [AOF/恢复周规划](week14/week14.md)，Day1～Day5整日已通过；[Day6](week14/day6/day6.md)已生成待R1 | T13已通过；T14延期，下一步T15 R1 | 只修复EOF残缺尾部，中间损坏仍失败 |
 | Week15 | 原故障测试、瓶颈定位与性能证据 | T13、T15～T16；T14可延期 | 用户掌握性能问题、测量与结论，机械脚手架可委托 |
 | Week16 | 原项目文档、表达与完整出口 | 复检理论欠账；T17～T18为进阶项 | 不拆提前投递版，不降低原项目标准 |
 | 原Week16正式完成后 | 整理简历、小范围试投、用反馈定位缺口 | 按真实完成能力呈现 | 此时再制定Week17以后实际课表 |
@@ -1013,7 +1013,7 @@ Gate D：先读 mini-sglang 的小型实现，再对照 vLLM V1 与 SGLang 的�
 | T20~T23 | 补内存账、KV Cache 分块、连续批处理和推理指标的第二解释 | 用自己的 reference/simulation 对照；CPU 仿真不能声称得到 GPU 性能结论 |
 | Gate C/D/E | 分别补 CUDA、单卡 serving、通信与多卡主题 | 继续遵守下列硬件与能力前置；既定 mini-sglang 路径不被替换成第二个完整框架项目 |
 
-它是第三方教学资料，不是 PyTorch/vLLM 的规范或招聘官方要求。已抽读的文章中存在 API 简化和无统一实验条件的性能概括，使用前按映射中的官方来源核验；面经先辨岗位内容，再决定是否补缺。本站的全栈顺序不替代本规划的项目优先级与求职时间锚点。当前主线Week13与Week14 Day1～Day5均已完成，Day5整日99/100；Day6已生成待R1。理论T13 R1已过98/100，下一步T13 R2。
+它是第三方教学资料，不是 PyTorch/vLLM 的规范或招聘官方要求。已抽读的文章中存在 API 简化和无统一实验条件的性能概括，使用前按映射中的官方来源核验；面经先辨岗位内容，再决定是否补缺。本站的全栈顺序不替代本规划的项目优先级与求职时间锚点。当前主线Week13与Week14 Day1～Day5均已完成，Day5整日99/100；Day6已生成待R1。理论T13已过98/100，T14延期，下一步T15 R1。
 
 ### Gate A：AI workload literacy
 
@@ -1270,8 +1270,8 @@ CUDA kernel correctness + profiler + benchmark
 ## 13. 当前下一步
 
 1. 系统主线的Week14 Day1已以分轮98/98/99完成整日验收；Day2分轮99/99/97并以97/100完成整日验收；[Day3](week14/day3/day3.md)分轮96/98/98并以98/100整日通过；[Day4](week14/day4/day4.md) R1/R2/R3与整日均为100/100；[Day5](week14/day5/day5.md)分轮100/99/100并以99/100整日通过。[Day6](week14/day6/day6.md)教程已生成，当前待R1；Week13及Day1～Day5既有证据不重做。后续仍按原Week14～Week16完成恢复、性能与项目出口。
-2. 理论线进入T13 R2：R1已经取得baseline的train/validation curves，并观察到后期train继续改善而validation回升。R2据此理解weight decay并准备同起点比较；checkpoint选择仍在后续主链中。T14的BatchNorm仍为核心课后的选读扩展。
-3. T12整课已于2026-11-05以98/100正式通过；T13 R1于2026-11-11以98/100通过，T13整课与T14～T21仍未通过。T20已用同一个TinyMLP串起训练对象、fresh inference对象、权重容量和INT8表示误差；T21再用固定序列完成full recompute、连续KV Cache与block table寻址，但都不前移当前T13 R2。每课结束继续由用户亲自记笔记。
+2. 理论线已完成T13：真实实验观察后期train继续改善而validation回升，并完成weight decay同起点比较与best-state恢复。T14按规划延期；下一步T15 R1。T14的BatchNorm仍为核心课后的选读扩展。
+3. T12整课已于2026-11-05以98/100正式通过；T13整课于2026-11-11以98/100通过。T14按规划延期，T15～T21仍未通过。T20已用同一个TinyMLP串起训练对象、fresh inference对象、权重容量和INT8表示误差；T21再用固定序列完成full recompute、连续KV Cache与block table寻址，但都不前移当前T15 R1。每课结束继续由用户亲自记笔记。
 4. C++类/对象/继承/虚函数补缺已随Week13 Day7收口；string/STL常见实现、LRU并发/大value、allocator第一层和系统面试横向题按Week15～16定向复盘，详见[补缺规划](C++项目伴随补缺规划.md)与[查漏地图](杂教程/C++与系统面试查漏地图.md)。不改Mini Redis架构来凑语法，也不通读全部STL源码。
 5. 第一段实习按三层岗位池准备：C++/Linux系统岗主投，AI平台后端/AI云原生并行投，核心推理引擎/CUDA少量冲刺。是否值得去看实际编码、系统问题、性能与协作内容，不只看职位标题。
 6. 本轮岗位与官方资料只补充阶段对应的参考入口、实验口径和缺口判断，不开新的整套课程，不提前启动完整推理框架、CUDA或分布式路线。

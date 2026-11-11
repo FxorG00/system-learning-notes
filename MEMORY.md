@@ -186,9 +186,9 @@ io_uring 深入
 
 当前快照（2026-11-11）：Week13整周正式完成；Week14 Day1～Day5整日正式通过，Day5分轮100/99/100、整日99/100。系统主线96个整日通过、97份Daily生成；Week14 Day6教程已生成，当前待R1。生成教材不计学习通过，周规划不计入Daily数量。
 
-T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。T13 R1于2026-11-11以98/100正式通过。当前T1～T12、T13 R1与Theory Gate 1已通过；理论下一步T13 R2。T13整课及T14～T21仍未通过，Theory Gate 2未通过。
+T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。T13 R1历史98/100，整课于2026-11-11以98/100正式通过。当前T1～T13与Theory Gate 1已通过；T14按既定范围延期，理论下一步T15 R1。T14～T21仍未通过，Theory Gate 2未通过。
 
-T11学习者主线版继续作为后续AI Theory讲解质量的标杆。T13 R1的主要理解证据是用户笔记、本人完成的模型/训练主流程及当前baseline曲线；Codex补写的CSV/绘图脚手架和独立检查只归为机械证据，不冒充用户理解。T14～T21保留2026-11-04复检结果；文件更新仍不等于学习通过。
+T11学习者主线版继续作为后续AI Theory讲解质量的标杆。T13的主要理解证据是用户笔记、本人完成的模型/训练主流程、weight decay推导与同起点对照；Codex补写的CSV/绘图脚手架和独立检查只归为机械证据，不冒充用户理解。T14～T21保留既有提前稿与复检结果；文件更新仍不等于学习通过。
 
 Week14周规划生成（2026-10-26）：新增`week14/week14.md`，沿Week13已通过的Reactor/RESP/KvStore/TTL继续，不复制服务器。整周只追一条问题链：成功写操作留下按字节保存的RESP记录 -> 完整追加并满足同步边界 -> 新进程监听前重放完整日志 -> 绝对日历期限转换回新进程的单调期限 -> 原服务器停止与重启 -> 区分不完整文件尾和中间损坏 -> V3证据收口。Day1～Day7只是依赖规划，均未生成、未学习、未验收；当前仍91/91。
 
@@ -3609,15 +3609,15 @@ GPU硬件与软件状态分开记。2026-10-21 Windows只读`nvidia-smi`确认RT
 
 ## 13. 当前下一步
 
-Week13整周与Week14 Day1～Day5均已正式完成。Day5分轮100/99/100、整日99/100；当前96个整日通过、97份Daily已生成。[Week14 Day6](week14/day6/day6.md)教程已生成，当前待R1；Day1～Day5与Week13既有实现、测试和笔记证据继续复用，不重做。理论T13 R1已通过98/100，下一步T13 R2；Theory Gate 2尚未通过，完整证据见§4。
+Week13整周与Week14 Day1～Day5均已正式完成。Day5分轮100/99/100、整日99/100；当前96个整日通过、97份Daily已生成。[Week14 Day6](week14/day6/day6.md)教程已生成，当前待R1；Day1～Day5与Week13既有实现、测试和笔记证据继续复用，不重做。理论T13整课已通过98/100；T14按规划延期，下一步T15 R1；Theory Gate 2尚未通过，完整证据见§4。
 
 当前学习状态与验收证据统一见 §4，不在这里维护第二份长快照。本节继续执行下面的路线、分工和理论线规则；旧课程记录从“历史课程与环境记录”开始。
 
 教材准备以§4为唯一当前快照。按T8线性分类器 → T9 Tensor → T10 Module状态 → T11标量autograd → T12从logits决策与线性边界走到首次多层模型的依赖推进；不把提前稿或教材实测记为学习通过。
 
-T13～T21已按用户请求提前生成，路径按`ai_theory/Tn/Tn.md`组织；T13 R1现已正式通过，当前理论下一步是T13 R2。R1已经用真实baseline曲线明确model被更新与history被返回两条结果通道；后续只沿weight decay受控对照、validation选择checkpoint、恢复与最终test闭环，Dropout等内容在核心之后。T14～T21仍是尚未通过的提前稿：T14沿数值卷积、shape、residual mismatch、projection与同一无BatchNorm block的state观察推进，仍可延期；T15准备输入和读取规则，T16完成单头Q/K/V与内容汇总，T17扩多头并接前置LayerNorm表示更新block，T18再连接token/position embedding、1～2个block、final norm与LM head，T19把`[B,V]` logits接到token选择，T20补训练/推理对象与INT8表示，T21完成KV Cache与block table寻址。相邻前课通过后或实际进入时继续按真实结果校准；不把提前稿登记为已学，也不提前排Week17以后的实际课表。
+T13～T21已按用户请求提前生成，路径按`ai_theory/Tn/Tn.md`组织；T13现已以98/100正式通过。真实实验从共同initial state完成baseline与`weight_decay=0.1`对照，各有101个记录点；baseline最低validation MSE为`0.101535`，regularized为`0.105286`，因此本次选择baseline，fresh model恢复后复测仍为`0.101535`。用户明确以笔记和内存中best-state恢复作为核心证据，已经掌握的checkpoint落盘、固定输出和最终test脚手架不再重复誊写，也不冒充已执行。T14仍按规划延期；当前理论下一步为T15 R1。T15准备输入和读取规则，T16完成单头Q/K/V与内容汇总，T17扩多头并接前置LayerNorm表示更新block，T18再连接token/position embedding、1～2个block、final norm与LM head，T19把`[B,V]` logits接到token选择，T20补训练/推理对象与INT8表示，T21完成KV Cache与block table寻址。相邻前课通过后或实际进入时继续按真实结果校准；不把提前稿登记为已学，也不提前排Week17以后的实际课表。
 
-量化补强已登记为后续能力：T20从一个数讲刻度、取整/范围与恢复，保留原容量脚本；CPU浮点线性层正确后，在同一项目补INT8权重表示/反量化/输出误差与字节对照；真实低精度计算和部署再按匹配硬件/后端验证收益。详细要求唯一维护在`AI_Infra理论伴随线规划.md`的T20衔接段，总规划Gate B/C/D作阶段引用。数值参考可在CPU完成，恢复为浮点计算不声称INT8加速；用户独立负责性能问题、测量和最终结论，Codex可承担重复正确性测试与脚手架。这不改变当前Mini Redis、理论下一步T13 R2、T1～T24编号或原Gate，不增加Week16首批试投门槛；Week16收口后才确定实际课次。
+量化补强已登记为后续能力：T20从一个数讲刻度、取整/范围与恢复，保留原容量脚本；CPU浮点线性层正确后，在同一项目补INT8权重表示/反量化/输出误差与字节对照；真实低精度计算和部署再按匹配硬件/后端验证收益。详细要求唯一维护在`AI_Infra理论伴随线规划.md`的T20衔接段，总规划Gate B/C/D作阶段引用。数值参考可在CPU完成，恢复为浮点计算不声称INT8加速；用户独立负责性能问题、测量和最终结论，Codex可承担重复正确性测试与脚手架。这不改变当前Mini Redis、理论下一步T15 R1、T1～T24编号或原Gate，不增加Week16首批试投门槛；Week16收口后才确定实际课次。
 
 用户允许把重复 GoogleTest scaffold、parameterized cases 与构建 glue 委托给 Codex，但 parser 的状态模型、boundary decision 与修复仍由用户掌握。普通后续问题默认只在对话中回答，不擅自修改 daily；R1 正式验收通过时，必须在同一轮依据真实 source/note/tests/diff 定向修改完整 R2/R3。例如 Week11 Day3 与 Day4 的 R1 正式通过时已执行该规则；后续仍从最新磁盘版本编辑，保留用户新增内容。
 
@@ -3638,7 +3638,7 @@ Milestone H / Week16：原定完整项目出口、文档与表达收口
 
 执行不按自然周机械计时，而按 milestone exit evidence 推进。Reactor/HTTP 是 Mini Redis 的技术底座和副项目；BlockingQueue/ThreadPool/AsyncLogger 是内部组件证据，不强行各包装成一个简历项目。第一段实习按三层岗位池准备：C++/Linux系统、存储、网络主投；AI平台后端、推理服务外围与AI云原生并行投；核心推理引擎/CUDA少量冲刺。目标是获得可迁移到AI Infra的真实系统经验，而不是追求职位标题先一步变成目标名称。C++面试题状态、Week15～16补缺与停止边界见`杂教程/C++与系统面试查漏地图.md`。
 
-**Week16后实际课表待原Week16收口再制定。** 届时先按§9.8重新核对匹配招聘、公开项目/简历与优质教学资源，再结合真实学习状态编排；当前只保留方向/Gate，系统下一步Week14 Day6 R1，理论下一步T13 R1，不抢跑或改动既定Mini Redis安排。T16是与Week16协调的AI目标，未达时如实记账；不取消原理论Gate，也不把后置完整AI路线变成C++/后台首批试投的新资格。
+**Week16后实际课表待原Week16收口再制定。** 届时先按§9.8重新核对匹配招聘、公开项目/简历与优质教学资源，再结合真实学习状态编排；当前只保留方向/Gate，系统下一步Week14 Day6 R1，理论下一步T15 R1，不抢跑或改动既定Mini Redis安排。T16是与Week16协调的AI目标，未达时如实记账；不取消原理论Gate，也不把后置完整AI路线变成C++/后台首批试投的新资格。
 
 AI Infra 理论伴随线概览（路线建立于2026-08，当前范围以独立规划为准）：
 
@@ -9614,3 +9614,13 @@ R1通过后只定向校准T13后半：R2从当前实际三点记录进入过拟�
 用户指出T13 §12在已经给出checkpoint选择规则后，又连续解释错误比较、固定2000次、提前停止、fresh-process边界、winner与test回看，主干被多层防误解说明淹没。该反馈成立。本轮没有新增教学规则，而是落实既有“整节只保留一根认知主干、技术边界不提前堆叠”要求：把原六段防御性文字收成一条对象链——两组各自保存best checkpoint，用同一validation规则选winner，在新model恢复，复测validation，最后报告test；只保留一句说明checkpoint选择不等于提前结束训练。
 
 §11～§13随后按同一标准复查。initial state深拷贝和新optimizer仍直接服务公平起点，best state深拷贝仍直接服务恢复，因此保留；没有借本次反馈重写其他正确段落、改变R2/R3任务或增加新知识点。用户最新`T13_note.md`保持只读，修改前SHA256为`BD39492FF951A2FFE5E0F04D4C429B27189C19F1BEABF7037A7407C5DFC33306`。当前理论进度仍为T13 R2。
+
+## 2026-11-11：T13整课正式通过98/100
+
+用户已连续完成R2与R3，并以本人笔记作为主要理解证据。笔记能从基础SGD的`w_new = w - eta*g`完整推出L2项带来的`lambda*w`，再说明为什么Adam中的梯度惩罚与AdamW的decoupled weight decay通常不等价；同时准确记录train/validation/test职责、共同initial state、独立optimizer、best-state深拷贝、winner选择与fresh model恢复。`T13_note.md`由用户维护，本轮保持只读，最新SHA256为`BED7BD2910B3CB00804F4CEF3AEE3489235E6D8DD86215A34B8CB0DA35B186AA`。
+
+首次整课检阅发现baseline与regularized模型按随机序列连续构造，导致epoch 0 validation MSE分别为`0.836038`与`0.803770`，不能把差异只归因于weight decay；并列时旧`<`分支会选择regularized。用户随后用一个共同model state恢复出两组新对象，并把比较改为`<=`优先baseline。最终源码SHA256为`f6b923504fe3ebb89d4c81839dac36d8479f760281f5c307ff10bb27b7a15f96`。正式运行exit 0，两组epoch 0的train/validation MSE均为`0.929628/0.836038`；baseline最低validation MSE为`0.101535`，regularized为`0.105286`，因此本次winner是baseline，fresh model恢复后复测仍为`0.101535`。
+
+Codex另用不落盘私有检查验证：两个run从逐Tensor相等的state开始，各有`0,20,...,2000`共101条记录；两组epoch 0指标相同；返回best MSE分别等于各自history最低值；按并列优先baseline的规则恢复winner后，validation复测与记录值在容差内一致。用户明确checkpoint文件落盘、固定摘要/PASS输出和最终test调用属于已在T10/T12掌握的机械工作，本课选择不重复誊写；验收接受内存中的best-state选择/恢复与笔记职责说明作为核心等价证据，但不把省略动作登记为已执行。保留2分：其一是这部分工程收尾未实际落盘/运行，其二是笔记中“bias不需要惩罚”表述略绝对，真实项目是否排除bias/norm属于配置选择。本次最终98/100，正式通过。
+
+当前理论状态推进为T1～T13与Theory Gate 1已通过；T14按既定范围延期，下一步T15 R1。Theory Gate 2仍需T15～T16证据。系统主线保持Week14 Day6 R1。T13用户源码与笔记均未由Codex修改；状态文件只作本地Git提交，不push。
