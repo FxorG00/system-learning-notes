@@ -9624,3 +9624,13 @@ R1通过后只定向校准T13后半：R2从当前实际三点记录进入过拟�
 Codex另用不落盘私有检查验证：两个run从逐Tensor相等的state开始，各有`0,20,...,2000`共101条记录；两组epoch 0指标相同；返回best MSE分别等于各自history最低值；按并列优先baseline的规则恢复winner后，validation复测与记录值在容差内一致。用户明确checkpoint文件落盘、固定摘要/PASS输出和最终test调用属于已在T10/T12掌握的机械工作，本课选择不重复誊写；验收接受内存中的best-state选择/恢复与笔记职责说明作为核心等价证据，但不把省略动作登记为已执行。保留2分：其一是这部分工程收尾未实际落盘/运行，其二是笔记中“bias不需要惩罚”表述略绝对，真实项目是否排除bias/norm属于配置选择。本次最终98/100，正式通过。
 
 当前理论状态推进为T1～T13与Theory Gate 1已通过；T14按既定范围延期，下一步T15 R1。Theory Gate 2仍需T15～T16证据。系统主线保持Week14 Day6 R1。T13用户源码与笔记均未由Codex修改；状态文件只作本地Git提交，不push。
+
+## 2026-11-11：T15按最近反馈完成发布前三遍复检
+
+用户要求不能把此前的“状态对齐”冒充T15正文已经完成校准。本轮重新读取磁盘最新版T15、现行Memory教学规则、总规划、理论规划、T14/T16相邻合同与资料映射，再做三遍目标不同的审查。T15仍未学习或通过；理论下一步保持T15 R1，T14继续按既定范围延期。
+
+第一遍只查技术链。固定词表、PAD/UNK、`nn.Embedding`查表、right padding、`[B,S] -> [B,S,H]`、padding/causal允许关系、softmax前负无穷屏蔽及真实读取行判据均保持正确。官方PyTorch 2.14课程接口与当前2.15文档对`padding_idx`、`pad_sequence`和SDPA/MHA布尔极性的说明一致；临时脚本在Ubuntu Python 3.12 / PyTorch 2.14.0+cpu实际通过首批、`B=3,S=4`第二批、逐格oracle和概率检查，输出`T15 RELEASE AUDIT PASS`，未在远端落文件。
+
+第二遍只查教学与独立实现边界。R1的`make_batch`现先用具体调用说明为什么需要它、输入交给谁、返回值由谁消费以及不修改什么，再出现签名和任务。R2保留固定3×3矩阵、一般条件、目标shape、可用API与外部oracle，但收回`valid[:,None,:]`和最终逻辑与的成品表达式，避免把核心广播降成誊写。原五步验收表收成“允许表正确、屏蔽真的改变概率、第二批不写死shape”三类证据；one-hot与框架mask极性降为核心后的短补充，主线保持`token -> ID -> padding -> embedding -> valid -> allowed -> masked softmax`。
+
+第三遍只查全局一致性与文件边界。总规划、理论规划和AIInfraGuide阅读映射已同步T15的三遍复检、R2独立闸门与外部完整代码后读顺序；T16继续消费`[B,S,H]`和True=允许的`[B,S,S]`，合同不变，因此不制造T16正文diff。T14延期、Theory Gate 2未通过、系统Week14 Day6 R1等状态均未改变；C++补缺、Week14、DAILY_INDEX与参考资料README核对后无需修改。T15的12段Python围栏全部通过AST，围栏/公式成对、本地链接存在、无控制字符、重复标题、旧成品表达式或超过180字符的行；Ubuntu用户代码、全部note及工作区既有dirty文件保持不改，正式文件只纳入本轮目标提交且不push。

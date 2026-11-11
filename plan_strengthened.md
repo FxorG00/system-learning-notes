@@ -429,7 +429,11 @@ Tn.md是当前主教材；ML.md、吴恩达和李沐课程按本T的具体需要
 
 提前稿后半编排校准：T13于2026-11-05在T12真实通过后再次对齐，并已于2026-11-11沿`baseline曲线 -> weight decay -> 同起点对照 -> validation选best state -> fresh model恢复`完成验收。相关方法和实验纪律扩展继续选读。T14保留2026-11-04复检结果：核心完成数值卷积、NCHW/shape、residual mismatch与projection，并在同一无BatchNorm组件上观察state与Tensor字节；pooling、hook、BatchNorm均不抢核心主线。详细任务与PASS统一见[理论规划T13/T14](AI_Infra理论伴随线规划.md)。这只调整教材组织与核心/补充边界，不改变T14可延期、既有Kaggle或Theory Gate范围。
 
-教材准备（2026-11-04复检）：[T15](ai_theory/T15/T15.md)建立编号/嵌入/补齐与允许表；[T16](ai_theory/T16/T16.md)完成单头内容汇总、批次和位置隔离；[T17](ai_theory/T17/T17.md)扩为多头并完成前置LayerNorm、残差与逐位置FFN的block；[T18](ai_theory/T18/T18.md)把同一block接到token/position embedding、final norm与LM head之间；[T19](ai_theory/T19/T19.md)把`[B,V]` logits接到token选择；[T20](ai_theory/T20/T20.md)建立训练/推理对象与INT8表示账；[T21](ai_theory/T21/T21.md)完成full recompute、连续KV Cache与block table寻址。各篇首次自定义函数均补齐用途、返回与状态变化；T13现已通过，T14按规划延期，当前下一步是T15 R1，Theory Gate 2未通过。
+教材准备：[T15](ai_theory/T15/T15.md)已于2026-11-11按最新教学规则再次完成三遍复检，建立编号、嵌入、补齐与允许表，并保留R2核心广播的独立实现闸门。
+[T16](ai_theory/T16/T16.md)完成单头内容汇总、批次和位置隔离；[T17](ai_theory/T17/T17.md)扩为多头并完成前置LayerNorm、残差与逐位置FFN的block。
+[T18](ai_theory/T18/T18.md)把同一block接到token/position embedding、final norm与LM head之间；[T19](ai_theory/T19/T19.md)把`[B,V]` logits接到token选择。
+[T20](ai_theory/T20/T20.md)建立训练/推理对象与INT8表示账；[T21](ai_theory/T21/T21.md)完成full recompute、连续KV Cache与block table寻址。
+T16～T21仍沿既有提前稿状态，文件存在不等于学习通过；T13现已通过，T14按规划延期，当前下一步是T15 R1，Theory Gate 2未通过。
 
 可展示的代码证据优先是：
 
