@@ -1,13 +1,13 @@
 # AIInfraGuide 怎样用于我们的学习
 
-> 映射对齐：2026-11-11（T13整课以98/100通过；T14延期，下一步T15 R1；系统Day5整日以99/100通过，Day6已生成待R1）。T14～T21保留既有复检结果。教材准备不算学习通过，本文也不是另一份必修课表。
+> 映射对齐：2026-11-12（T13整课以98/100通过；T14延期，下一步T15 R1；系统Day5整日以99/100通过，Day6已生成待R1）。T14～T22保留既有复检结果。教材准备不算学习通过，本文也不是另一份必修课表。
 > 来源：[网站][site]、[GitHub][repo]。本次抽读代表文章，未逐篇审校或固定全站 commit；真正使用某篇时重新核对链接与相关事实。
 
 **有帮助，最适合补上“模型在算什么 -> 占用什么资源 -> 推理服务怎样安排这些工作”这条连接。** Mini Redis主线保持；理论T13已通过、下一步T15 R1，不按网站目录重新学一遍数学、C++或机器学习。
 
 ## 1. 当前怎么用
 
-现在主线为Week13已正式完成，Week14 Day1～Day5均整日通过；[Week14 Day5](../../week14/day5/day5.md)分轮100/99/100、整日99/100；[Week14 Day6](../../week14/day6/day6.md)已生成待R1。理论T1~T13与Theory Gate 1已通过；T14按规划延期，下一步T15 R1。T14~T21尚未通过，按相邻前课通过后的真实结果或正式进入时校准；不因文件存在就登记已学。
+现在主线为Week13已正式完成，Week14 Day1～Day5均整日通过；[Week14 Day5](../../week14/day5/day5.md)分轮100/99/100、整日99/100；[Week14 Day6](../../week14/day6/day6.md)已生成待R1。理论T1~T13与Theory Gate 1已通过；T14按规划延期，下一步T15 R1。T14~T22尚未通过，按相邻前课通过后的真实结果或正式进入时校准；不因文件存在就登记已学。
 
 进入 T9 时，由我们的讲义先把 NumPy 数组接到 PyTorch Tensor；若需要第二种解释，再读下面指定的小节。网站同一篇文章可能同时含入门、完整实现和 GPU 优化，**只读对应部分，不默认一路读到底**。外部完整代码留在本课独立练习之后；选择性的补充阅读占用原有理论时间，不叠加新课程或重复作业。
 
@@ -27,10 +27,10 @@
 | T19 | [vLLM快速入门][vllm-quickstart] §4.1、§6.1 | 先沿[本地T19](../../ai_theory/T19/T19.md)用固定logits独立完成greedy、temperature、top-k、seed与EOS边界；核心通过后才用此页辨认`SamplingParams`怎样把这些名字装进框架接口。只认参数角色，不安装vLLM、不跟跑服务；页面中的默认值、处理顺序、`temperature=0`约定和推荐组合都必须按实际框架版本与任务重新核对。 |
 | T20 | [分布式训练总论][training] §2；[LLM 推理基础][inference] §2.3 | 先沿[本地T20](../../ai_theory/T20/T20.md)让同一TinyMLP的参数、激活、梯度、优化器状态与fresh inference对象逐项出现，再对照外部显存账。本地正文另用一个数讲清INT8刻度、近似误差与辅助信息；本阶段停在对象/容量与CPU数值reference，不启动分布式训练或量化运行时。 |
 | T21 | [LLM 推理基础][inference] §1~§2；[PagedAttention][paged] §1~§4 | 先沿[本地T21](../../ai_theory/T21/T21.md)用固定序列证明full-prefix重算与连续KV Cache逐步数值等价，再从容量增长进入block table寻址。prefix reuse、引用数、淘汰和跨prefill/decode状态交接只学第一层contract；本站 §8 参数配置与 §9 框架源码后置 Gate D。 |
-| T22 | [Continuous Batching][batching] §1~§4、§7 | 先完成自己的调度仿真，再比较整批等待和按迭代接纳/退出。识别吞吐、排队和延迟的取舍，停止在策略解释；§6 源码留到 Gate D。 |
+| T22 | [Continuous Batching][batching] §1~§4、§7；[Chunked Prefill][chunked-prefill] §1~§3、§7 | 先完成[本地T22](../../ai_theory/T22/T22.md)的固定A/B/C trace，再用D/L请求观察token budget和long prefill。外部材料只作第二解释；源码、性能数字与真实PD/EPD部署留到对应Gate。 |
 | T23 | [LLM 推理基础][inference] §3~§4；[PyTorch 入门][pytorch] §6 选看 | 已有本地计时结果后，再连接首词延迟、逐词延迟、吞吐与计算/访存估算。GPU profiler 示例只在具备硬件后使用；CPU 计时、仿真或上游数字均不能充当本机 GPU 证据。 |
 
-T13继续复用ML/T8基础，先从一组具体train/validation曲线产生问题，再沿baseline、weight decay、公平对照、checkpoint与最终test完成一个实验闭环；R1训练helper的model状态变化与history返回必须分别说清，不为引用此站再训练同构模型。T14核心只保留数值卷积、NCHW/shape、residual mismatch、projection与同一block的state；pooling、hook和BatchNorm均不抢核心主线。T14仍可延期，Week16的AI协调目标保持T1～T13与T15～T16；T17～T18为后续进阶项，不给C++试投追加完整AI路线前置。T19～T21提前稿继续只服务后续sampling、memory与KV Cache，不改变这条Gate。
+T13继续复用ML/T8基础，先从一组具体train/validation曲线产生问题，再沿baseline、weight decay、公平对照、checkpoint与最终test完成一个实验闭环；R1训练helper的model状态变化与history返回必须分别说清，不为引用此站再训练同构模型。T14核心只保留数值卷积、NCHW/shape、residual mismatch、projection与同一block的state；pooling、hook和BatchNorm均不抢核心主线。T14仍可延期，Week16的AI协调目标保持T1～T13与T15～T16；T17～T18为后续进阶项，不给C++试投追加完整AI路线前置。T19～T22提前稿只服务后续sampling、memory、KV Cache与调度，不改变这条Gate。
 
 ML/DL基础视频优先吴恩达、李沐；后续系统/GPU阶段可按问题选用官方、CS336或GPU MODE资料，不新增完整刷课线。指标与API采用前核对官方版本，TPOT/ITL等不能只据中文简写混用，见[本轮调研](2026-10-22_规划对齐与岗位资料更新.md)。
 
@@ -85,6 +85,7 @@ PagedAttention 的分页类比也要限定在相应块池：按需分块减少�
 [inference]: https://caomaolufei.github.io/AIInfraGuide/inference/模块四-推理优化/第1章-llm推理基础/11-llm推理基础/
 [paged]: https://caomaolufei.github.io/AIInfraGuide/inference/模块四-推理优化/第2章-推理引擎核心技术/21-pagedattention/
 [batching]: https://caomaolufei.github.io/AIInfraGuide/inference/模块四-推理优化/第2章-推理引擎核心技术/22-continuous-batching/
+[chunked-prefill]: https://caomaolufei.github.io/AIInfraGuide/inference/模块四-推理优化/第2章-推理引擎核心技术/24-chunked-prefill-与统一调度/
 [cuda]: https://caomaolufei.github.io/AIInfraGuide/cuda/模块二-cuda编程与算子优化/cuda编程入门指南/
 [interviews]: https://caomaolufei.github.io/AIInfraGuide/interview/
 [tencent-a]: https://caomaolufei.github.io/AIInfraGuide/interview/腾讯-ai-infra-实习/

@@ -1,7 +1,7 @@
 # AI Infra 理论伴随线规划
 
-> 对齐日期：2026-11-11。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)及[C++与系统面试查漏地图](杂教程/C++与系统面试查漏地图.md)。
-> 当前状态：T1～T13及Theory Gate 1已通过；T13整课于2026-11-11以98/100正式通过。T14按既定范围延期，下一步T15 R1；T14～T21尚未通过，Theory Gate 2未通过。T11学习者主线版继续作为后续AI Theory讲解标杆。
+> 对齐日期：2026-11-12。岗位与官方资料补充见[本轮调研](reference_materials/ai_infra/2026-10-22_规划对齐与岗位资料更新.md)及[C++与系统面试查漏地图](杂教程/C++与系统面试查漏地图.md)。
+> 当前状态：T1～T13及Theory Gate 1已通过；T13整课于2026-11-11以98/100正式通过。T14按既定范围延期，下一步T15 R1；T14～T22尚未通过，Theory Gate 2未通过。T11学习者主线版继续作为后续AI Theory讲解标杆。
 > Git留痕与发布权限统一按`MEMORY.md` §9.12：正式仓库文件有变化就本地commit；push需另行明确授权。
 > 系统主线：Week13 Day1～Day7与Week14 Day1～Day5均已通过；Day5分轮100/99/100、整日99/100；96个整日通过、97份Daily已生成。[Week14 Day6](week14/day6/day6.md)教程已生成，当前待R1。
 > 目标：LLM inference systems / serving与CUDA/Triton kernel optimization；本线不替代系统项目。
@@ -1875,6 +1875,8 @@ T21 必须由教程、shape 推导和 `kv_cache_reference.py` 建立机制，不
 
 ## T22：batching、padding、continuous batching 直觉
 
+**教材状态（2026-11-12）：[T22提前稿](ai_theory/T22/T22.md)已生成，尚未学习或通过。** 它先用固定A/B/C请求比较整批等待与逐步接纳，再用D/L请求引出token budget和chunked prefill，最后才连接backpressure与PD/EPD边界；CPU离散仿真不冒充真实serving性能。
+
 ### 学习内容
 
 ```text
@@ -1915,7 +1917,7 @@ Reactor
 batch_scheduler_sim.py
 ```
 
-只做 CPU 上的离散 simulation：不同 arrival time、prompt length、generation length，比较 static batching 与简单 continuous batching 的 idle/padding 情况；再加入 token budget，观察 long prefill 对 decode latency 的影响。不实现真正的 distributed PD/EPD。
+只做 CPU 上的离散 simulation：R1用固定A/B/C请求比较 static batching 与 continuous batching 的 slot trace；R2用一个已进入decode的D和一个长prompt请求L加入token budget，对比整段prefill、decode优先与chunked prefill；R3解释waiting增长和PD/EPD边界。不实现真正的 distributed PD/EPD。
 
 ### 对应视频
 

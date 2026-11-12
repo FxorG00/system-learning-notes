@@ -184,11 +184,11 @@ io_uring 深入
 
 ## 4. 当前实际进度
 
-当前快照（2026-11-11）：Week13整周正式完成；Week14 Day1～Day5整日正式通过，Day5分轮100/99/100、整日99/100。系统主线96个整日通过、97份Daily生成；Week14 Day6教程已生成，当前待R1。生成教材不计学习通过，周规划不计入Daily数量。
+当前快照（2026-11-12）：Week13整周正式完成；Week14 Day1～Day5整日正式通过，Day5分轮100/99/100、整日99/100。系统主线96个整日通过、97份Daily生成；Week14 Day6教程已生成，当前待R1。生成教材不计学习通过，周规划不计入Daily数量。
 
-T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。T13 R1历史98/100，整课于2026-11-11以98/100正式通过。当前T1～T13与Theory Gate 1已通过；T14按既定范围延期，理论下一步T15 R1。T14～T21仍未通过，Theory Gate 2未通过。
+T11整课于2026-10-27以98/100正式通过，T10整课与R1历史99/100保持。T12整课于2026-11-05以98/100正式通过，R1历史97/100保持。T13 R1历史98/100，整课于2026-11-11以98/100正式通过。当前T1～T13与Theory Gate 1已通过；T14按既定范围延期，理论下一步T15 R1。T14～T22仍未通过，Theory Gate 2未通过。
 
-T11学习者主线版继续作为后续AI Theory讲解质量的标杆。T13的主要理解证据是用户笔记、本人完成的模型/训练主流程、weight decay推导与同起点对照；Codex补写的CSV/绘图脚手架和独立检查只归为机械证据，不冒充用户理解。T14～T21保留既有提前稿与复检结果；文件更新仍不等于学习通过。
+T11学习者主线版继续作为后续AI Theory讲解质量的标杆。T13的主要理解证据是用户笔记、本人完成的模型/训练主流程、weight decay推导与同起点对照；Codex补写的CSV/绘图脚手架和独立检查只归为机械证据，不冒充用户理解。T14～T22保留既有提前稿与复检结果；文件更新仍不等于学习通过。
 
 Week14周规划生成（2026-10-26）：新增`week14/week14.md`，沿Week13已通过的Reactor/RESP/KvStore/TTL继续，不复制服务器。整周只追一条问题链：成功写操作留下按字节保存的RESP记录 -> 完整追加并满足同步边界 -> 新进程监听前重放完整日志 -> 绝对日历期限转换回新进程的单调期限 -> 原服务器停止与重启 -> 区分不完整文件尾和中间损坏 -> V3证据收口。Day1～Day7只是依赖规划，均未生成、未学习、未验收；当前仍91/91。
 
@@ -3615,7 +3615,7 @@ Week13整周与Week14 Day1～Day5均已正式完成。Day5分轮100/99/100、整
 
 教材准备以§4为唯一当前快照。按T8线性分类器 → T9 Tensor → T10 Module状态 → T11标量autograd → T12从logits决策与线性边界走到首次多层模型的依赖推进；不把提前稿或教材实测记为学习通过。
 
-T13～T21已按用户请求提前生成，路径按`ai_theory/Tn/Tn.md`组织；T13现已以98/100正式通过。真实实验从共同initial state完成baseline与`weight_decay=0.1`对照，各有101个记录点；baseline最低validation MSE为`0.101535`，regularized为`0.105286`，因此本次选择baseline，fresh model恢复后复测仍为`0.101535`。用户明确以笔记和内存中best-state恢复作为核心证据，已经掌握的checkpoint落盘、固定输出和最终test脚手架不再重复誊写，也不冒充已执行。T14仍按规划延期；当前理论下一步为T15 R1。T15准备输入和读取规则，T16完成单头Q/K/V与内容汇总，T17扩多头并接前置LayerNorm表示更新block，T18再连接token/position embedding、1～2个block、final norm与LM head，T19把`[B,V]` logits接到token选择，T20补训练/推理对象与INT8表示，T21完成KV Cache与block table寻址。相邻前课通过后或实际进入时继续按真实结果校准；不把提前稿登记为已学，也不提前排Week17以后的实际课表。
+T13～T22已按用户请求提前生成，路径按`ai_theory/Tn/Tn.md`组织；T13现已以98/100正式通过。真实实验从共同initial state完成baseline与`weight_decay=0.1`对照，各有101个记录点；baseline最低validation MSE为`0.101535`，regularized为`0.105286`，因此本次选择baseline，fresh model恢复后复测仍为`0.101535`。用户明确以笔记和内存中best-state恢复作为核心证据，已经掌握的checkpoint落盘、固定输出和最终test脚手架不再重复誊写，也不冒充已执行。T14仍按规划延期；当前理论下一步为T15 R1。T15准备输入和读取规则，T16完成单头Q/K/V与内容汇总，T17扩多头并接前置LayerNorm表示更新block，T18再连接token/position embedding、1～2个block、final norm与LM head，T19把`[B,V]` logits接到token选择，T20补训练/推理对象与INT8表示，T21完成KV Cache与block table寻址，T22用固定请求trace进入continuous batching、token budget、chunked prefill与backpressure。相邻前课通过后或实际进入时继续按真实结果校准；不把提前稿登记为已学，也不提前排Week17以后的实际课表。
 
 量化补强已登记为后续能力：T20从一个数讲刻度、取整/范围与恢复，保留原容量脚本；CPU浮点线性层正确后，在同一项目补INT8权重表示/反量化/输出误差与字节对照；真实低精度计算和部署再按匹配硬件/后端验证收益。详细要求唯一维护在`AI_Infra理论伴随线规划.md`的T20衔接段，总规划Gate B/C/D作阶段引用。数值参考可在CPU完成，恢复为浮点计算不声称INT8加速；用户独立负责性能问题、测量和最终结论，Codex可承担重复正确性测试与脚手架。这不改变当前Mini Redis、理论下一步T15 R1、T1～T24编号或原Gate，不增加Week16首批试投门槛；Week16收口后才确定实际课次。
 
@@ -9634,3 +9634,11 @@ Codex另用不落盘私有检查验证：两个run从逐Tensor相等的state开�
 第二遍只查教学与独立实现边界。R1的`make_batch`现先用具体调用说明为什么需要它、输入交给谁、返回值由谁消费以及不修改什么，再出现签名和任务。R2保留固定3×3矩阵、一般条件、目标shape、可用API与外部oracle，但收回`valid[:,None,:]`和最终逻辑与的成品表达式，避免把核心广播降成誊写。原五步验收表收成“允许表正确、屏蔽真的改变概率、第二批不写死shape”三类证据；one-hot与框架mask极性降为核心后的短补充，主线保持`token -> ID -> padding -> embedding -> valid -> allowed -> masked softmax`。
 
 第三遍只查全局一致性与文件边界。总规划、理论规划和AIInfraGuide阅读映射已同步T15的三遍复检、R2独立闸门与外部完整代码后读顺序；T16继续消费`[B,S,H]`和True=允许的`[B,S,S]`，合同不变，因此不制造T16正文diff。T14延期、Theory Gate 2未通过、系统Week14 Day6 R1等状态均未改变；C++补缺、Week14、DAILY_INDEX与参考资料README核对后无需修改。T15的12段Python围栏全部通过AST，围栏/公式成对、本地链接存在、无控制字符、重复标题、旧成品表达式或超过180字符的行；Ubuntu用户代码、全部note及工作区既有dirty文件保持不改，正式文件只纳入本轮目标提交且不push。
+
+## 2026-11-12：T22 batching与token-budget调度提前稿生成
+
+新增`ai_theory/T22/T22.md`与`assets/t22_static_continuous.svg`。教材只沿一条请求调度主线：A/B/C固定批次产生3个padding slot-steps，迭代边界重新组批后C从step 5提前到step 2；随后用已进入decode的D和8-token prompt请求L比较整段prefill优先、decode优先不切块与4-token chunk三种trace；最后才从waiting增长进入backpressure，并把PD/EPD限制在阶段交接边界。R1/R2只给接口、固定输入、trace和oracle，不给模拟器循环实现；R3复用同一trace补状态证据。CPU离散token预算不是毫秒、FLOPs、显存字节或GPU性能结论。
+
+三遍审查分别完成。技术遍独立重算两张decode trace与三张token-budget trace，确认A/B/C有用工作次数为2/5/2、static/continuous长度为7/5、padding为3/0，D/L三种策略均满足预算8、D decode 4次、L prefill 8并decode 1次；6个Python块通过AST，SVG通过XML解析并已渲染目视检查。教学遍确认具体行为先于continuous batching、chunked prefill与backpressure命名，函数用途、输入、返回与内部状态先于签名，补入`waiting_ids`使R3观察不再凭空增设接口，并保留R1/R2停止点、独立实现空间和课后亲自记笔记提醒。全局遍核对T21输入、T23后续边界、总/理论/周规划、Memory当前入口和两份资料映射；本地链接、围栏、公式、控制字符、Typora敏感HTML与Git空白检查通过。
+
+当前真实进度不变：T1～T13与Theory Gate 1通过；T14延期，下一步仍是T15 R1；T14～T22均未通过，Theory Gate 2未通过。系统主线仍为Week14 Day6 R1。官方Orca、vLLM scheduler/disaggregated prefill和SGLang PD/EPD资料只用于校准概念边界，AIInfraGuide作为第二解释；没有运行真实模型、GPU benchmark、vLLM/SGLang服务或PD/EPD部署。用户已有T10/T11/T12、Week14、notes与杂教程dirty文件保持不改、不提交；本轮正式文件只作本地Git提交，不push。

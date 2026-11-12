@@ -12,9 +12,9 @@
 
 原[10月19日预调研](2026-10-19_Week16后岗位与资源预调研.md)与[AI不止算法课程映射](2026-10-22_AI不止算法_课程对齐.md)保留为各自日期和主题的记录，不相互覆盖。
 
-当前学习状态对齐至2026-11-11：Week13正式完成，Week14 Day1～Day5均整日通过；[Week14 Day5](../../week14/day5/day5.md)分轮100/99/100、整日99/100；[Week14 Day6](../../week14/day6/day6.md)已生成，当前待R1。
+当前学习状态对齐至2026-11-12：Week13正式完成，Week14 Day1～Day5均整日通过；[Week14 Day5](../../week14/day5/day5.md)分轮100/99/100、整日99/100；[Week14 Day6](../../week14/day6/day6.md)已生成，当前待R1。
 
-T13整课已于2026-11-11以98/100通过。T14按规划延期，理论下一步T15 R1；T14～T21仍未通过，文件更新不代表学习通过。
+T13整课已于2026-11-11以98/100通过。T14按规划延期，理论下一步T15 R1；T14～T22仍未通过，文件更新不代表学习通过。
 
 后续实际课表等原Week16收口后安排；本次状态同步不代表重新调研全部资料。
 
@@ -72,7 +72,7 @@ T13整课已于2026-11-11以98/100通过。T14按规划延期，理论下一步T
 | `llm_infer/LLM_sampling.ipynb` | temperature、top-k、top-p 等 sampling 行为 | T19；T5/T6 只建立概率与 stable softmax 基础 |
 | `llm_infer/nano_vllm.ipynb` | Sequence、block table、KV block 与简化 serving flow | 先完成[本地T21](../../ai_theory/T21/T21.md)的连续KV reference与block table模拟；T21~T23核心完成后再对照，不提前抄serving实现 |
 | `llm_infer/vllm_mem_snapshot.ipynb` | vLLM memory snapshot 的最小观察 | T20~T21，配合内存估算与实测 |
-| `llm_infer/vllm_basic_scheduler.ipynb` | waiting/running sequence 与 batch scheduling | T22；先写自己的 batching simulation，再对照 |
+| `llm_infer/vllm_basic_scheduler.ipynb` | waiting/running sequence 与 batch scheduling | 先完成[本地T22](../../ai_theory/T22/T22.md)的固定请求trace与token-budget simulation，再只对照waiting/running对象；不抄allocator或真实scheduler实现 |
 | `llm_infer/quantization.ipynb` | 量化实验的第二解释与对照线索 | CPU浮点reference正确后的补强或正式推理优化阶段；T20只补概念与容量，不以完整notebook作前置 |
 | `llm_infer/parallel_strategies.ipynb` | tensor/pipeline/data parallel 的映射 | 单 GPU serving 稳定后的 distributed gate |
 | `deeplearning_framework/collective_operations.ipynb` | collective communication 基本操作 | NCCL / distributed inference gate，不提前进入当前主线 |
@@ -165,7 +165,7 @@ SGLang latest GitHub release：v0.5.19（2026-09-05）
 
 - 网站：[AIInfraGuide](https://caomaolufei.github.io/AIInfraGuide/)
 - 上游：[caomaolufei/AIInfraGuide](https://github.com/caomaolufei/AIInfraGuide)
-- 具体使用：[AIInfraGuide 阅读映射](AIInfraGuide_阅读映射.md)，核对日期 2026-11-04。
+- 具体使用：[AIInfraGuide 阅读映射](AIInfraGuide_阅读映射.md)，核对日期 2026-11-12。
 
 用途是辅助解释 PyTorch -> Transformer -> 推理内存/调度，并提供按岗位筛选的面试问题线索。T9～T12、T15～T18、T20～T23分别调用对应小节；T13沿自己的受控实验，T14沿自己的卷积/残差主线，不为引用网站增加平行作业。CUDA、完整serving源码与多卡内容仍由总规划Gate C/D/E控制。已有书籍负责量化分析、InfraTech提供实验线索，本网站补中文教学；同一疑问择优使用，不让学生重复刷三份材料。
 
