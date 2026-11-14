@@ -214,6 +214,35 @@ requires_grad=True 表示：我之后可能要求这个Tensor的梯度，请在�
 如果我们得到某个对象的计算，放到了 with torch.inference_mode(): 内，那么不会建立 autograd 记录，该对象 .requires_grad 为 False。
 ```
 
+### detach
+
+**对，这里只是比较两个Tensor的数值，`.detach()`并不是必需的。** 可以直接写：
+
+```python
+torch.testing.assert_close(
+    inference_scores,
+    ordinary_scores,
+    rtol=1e-5,
+    atol=1e-6,
+)
+```
+
+`assert_close`默认不要求两者的`requires_grad`相同，所以一个为True、另一个为False，仍然可以比较数值。
+
+**`.detach()`的作用是：返回一个数值相同、但与原求导过程断开联系的Tensor。**
+
+```python
+comparison_scores = ordinary_scores.detach()
+
+# 数值相同
+# ordinary_scores.requires_grad 仍为 True
+# comparison_scores.requires_grad 为 False
+```
+
+它**不修改原Tensor，也不复制底层数据**，两者共享存储。
+
+所以原代码里的意思只是：“取一份不参与求导的结果来比较。”但这个检查本身用不到求导，**直接比较就够了；这里加`detach()`反而提前引入了一个不必要的新概念。**
+
 ## R3
 
 ### 干啥的
@@ -233,7 +262,7 @@ requires_grad=True 表示：我之后可能要求这个Tensor的梯度，请在�
 
 **checkpoint就是模型在某一时刻保存下来的一份状态快照，用于以后恢复。**
 
-当前保存的是`model.state_dict()`，所以里面是那一刻的**参数和持久化buffer**，不包含模型类代码。
+当前保存的是`model.state_dict()`，所以里面是那一刻的**parameters 和持久化buffer**，不包含模型类代码。
 
 以后为了恢复训练，也可以把优化器状态、训练轮数等一起放进checkpoint。
 

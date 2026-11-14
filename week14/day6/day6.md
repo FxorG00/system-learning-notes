@@ -97,7 +97,7 @@ parser 已经确认前两条完整。
 [完整 SET][不是 RESP 的 bytes][后面还有其他 bytes]
 ```
 
-parser 返回 `Error`。
+**parser 返回 `Error`。**
 
 此时不能从错误位置继续猜下一条 record 从哪里开始。
 
